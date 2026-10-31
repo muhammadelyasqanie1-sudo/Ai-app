@@ -14,7 +14,6 @@ import { AfgToolsCenter } from './components/afg/AfgToolsCenter';
 import { AfgHistoryView } from './components/afg/AfgHistoryView';
 import { AfgSettingsView } from './components/afg/AfgSettingsView';
 import { AfgAdminPanel } from './components/afg/AfgAdminPanel';
-import { AfgWalletModal } from './components/afg/AfgWalletModal';
 import { AfgSideMenu } from './components/afg/AfgSideMenu';
 import { AfgLanguageModal } from './components/afg/AfgLanguageModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
@@ -34,7 +33,6 @@ const DEFAULT_USER: UserProfile = {
   nameEn: 'Syed Firuz',
   email: 'syedfiruz@gmail.com',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
-  coins: 1250,
   isPremium: true,
   tier: 'Pro++',
 };
@@ -71,7 +69,6 @@ export default function App() {
   const [initialPromptForChat, setInitialPromptForChat] = useState<string | undefined>(undefined);
 
   // Modals state
-  const [isWalletOpen, setIsWalletOpen] = useState(false);
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
@@ -101,7 +98,6 @@ export default function App() {
         e.preventDefault();
         setIsShortcutsOpen(prev => !prev);
       } else if (e.key === 'Escape') {
-        setIsWalletOpen(false);
         setIsSideMenuOpen(false);
         setIsLanguageModalOpen(false);
         setIsShortcutsOpen(false);
@@ -117,18 +113,6 @@ export default function App() {
 
   const handleToggleTheme = () => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
-  };
-
-  const handleDeductCoins = (amount: number): boolean => {
-    if (user.coins >= amount) {
-      setUser(prev => ({ ...prev, coins: prev.coins - amount }));
-      return true;
-    }
-    return false;
-  };
-
-  const handleAddCoins = (amount: number) => {
-    setUser(prev => ({ ...prev, coins: prev.coins + amount }));
   };
 
   const handleStartChatWithPrompt = (promptText: string) => {
@@ -274,7 +258,6 @@ export default function App() {
         user={user}
         onToggleLanguage={handleToggleLanguage}
         onToggleTheme={handleToggleTheme}
-        onOpenWallet={() => setIsWalletOpen(true)}
         onOpenSettings={() => setCurrentTab('settings')}
         onOpenMenu={() => setIsSideMenuOpen(true)}
       />
@@ -293,7 +276,6 @@ export default function App() {
             language={language}
             user={user}
             onChangeTab={setCurrentTab}
-            onOpenWallet={() => setIsWalletOpen(true)}
             onStartChatWithPrompt={handleStartChatWithPrompt}
           />
         )}
@@ -313,8 +295,6 @@ export default function App() {
           <AfgImageGenView
             language={language}
             user={user}
-            onDeductCoins={handleDeductCoins}
-            onOpenWallet={() => setIsWalletOpen(true)}
           />
         )}
 
@@ -322,8 +302,6 @@ export default function App() {
           <AfgVideoGenView
             language={language}
             user={user}
-            onDeductCoins={handleDeductCoins}
-            onOpenWallet={() => setIsWalletOpen(true)}
           />
         )}
 
@@ -339,17 +317,6 @@ export default function App() {
           />
         )}
 
-        {currentTab === 'wallet' && (
-          <div className="max-w-xl mx-auto px-4 py-8">
-            <AfgWalletModal
-              isOpen={true}
-              onClose={() => setCurrentTab('home')}
-              language={language}
-              user={user}
-              onAddCoins={handleAddCoins}
-            />
-          </div>
-        )}
 
         {currentTab === 'settings' && (
           <AfgSettingsView
@@ -358,7 +325,6 @@ export default function App() {
             user={user}
             onToggleLanguage={handleToggleLanguage}
             onToggleTheme={handleToggleTheme}
-            onOpenWallet={() => setIsWalletOpen(true)}
             onOpenShortcuts={() => setIsShortcutsOpen(true)}
           />
         )}
@@ -368,16 +334,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Wallet Modal (when opened from header or card) */}
-      {isWalletOpen && (
-        <AfgWalletModal
-          isOpen={isWalletOpen}
-          onClose={() => setIsWalletOpen(false)}
-          language={language}
-          user={user}
-          onAddCoins={handleAddCoins}
-        />
-      )}
 
       {/* Slide-over Side Menu Drawer */}
       <AfgSideMenu
@@ -387,7 +343,6 @@ export default function App() {
         onChangeTab={setCurrentTab}
         language={language}
         user={user}
-        onOpenWallet={() => setIsWalletOpen(true)}
       />
 
       {/* Language Picker Modal */}
