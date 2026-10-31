@@ -47,34 +47,43 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       return;
     }
     if (!model) {
-      sendJson(res, 400, { error: 'Please select a model in the app.' });
+      sendJson(res, 400, { error: 'Please select a Claude model in the app.' });
       return;
     }
 
-    const apiKey = process.env.OPENAI_API_KEY?.trim();
+    const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
     if (!apiKey) {
-      sendJson(res, 503, { error: 'OpenAI API is not configured. Add OPENAI_API_KEY in Render Environment.' });
+      sendJson(res, 503, { error: 'Claude API is not configured. Add ANTHROPIC_API_KEY in Render Environment.' });
       return;
     }
+
+    const systemMessages = messages
+      .filter((m) => m && m.role === 'system')
+      .map((m) => String(m.content ?? ''));
+    if (customInstructions) systemMessages.unshift(customInstructions);
 
     const upstreamMessages = messages
-      .filter((m) => m && (m.role === 'user' || m.role === 'assistant' || m.role === 'system'))
-      .map((m) => ({ role: m.role, content: String(m.content ?? '') }));
+      .filter((m) => m && (m.role === 'user' || m.role === 'assistant'))
+      .map((m) => ({ role: m.role, content: String(m.content ?? '') }))
+      .filter((m) => m.content.length > 0);
 
-    if (customInstructions) {
-      upstreamMessages.unshift({ role: 'system', content: customInstructions });
+    if (upstreamMessages.length === 0) {
+      sendJson(res, 400, { error: 'At least one user or assistant message is required.' });
+      return;
     }
 
-    const baseUrl = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
-    const upstream = await fetch(`${baseUrl}/chat/completions`, {
+    const upstream = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
       },
       body: JSON.stringify({
         model,
+        max_tokens: 4096,
+        system: systemMessages.join('\n\n'),
         messages: upstreamMessages,
         stream: true,
       }),
@@ -82,9 +91,9 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
 
     if (!upstream.ok) {
       const details = await upstream.text();
-      console.error('OpenAI API request failed:', upstream.status, details.slice(0, 1200));
+      console.error('Claude API request failed:', upstream.status, details.slice(0, 1200));
       sendJson(res, upstream.status, {
-        error: 'OpenAI API request failed',
+        error: 'Claude API request failed',
         status: upstream.status,
         details: details.slice(0, 700),
       });
@@ -92,7 +101,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (!upstream.body) {
-      sendJson(res, 502, { error: 'OpenAI API returned an empty response stream' });
+      sendJson(res, 502, { error: 'Claude API returned an empty response stream' });
       return;
     }
 
@@ -112,36 +121,25 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() || '';
+        const events = buffer.split(/\r?\n\r?\n/);
+        buffer = events.pop() || '';
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data:')) continue;
-          const data = trimmed.slice(5).trim();
+        for (const eventText of events) {
+          const dataLine = eventText.split(/\r?\n/).find((line) => line.startsWith('data:'));
+          if (!dataLine) continue;
+          const data = dataLine.slice(5).trim();
           if (!data || data === '[DONE]') continue;
           try {
             const event = JSON.parse(data);
-            const piece = event.choices?.[0]?.delta?.content;
+            const piece = event.type === 'content_block_delta' ? event.delta?.text : undefined;
             if (typeof piece === 'string' && piece.length > 0) {
               res.write(`data: ${JSON.stringify({ type: 'content', text: piece })}\n\n`);
             }
-          } catch {
-            // Ignore non-JSON keepalive/event lines.
-          }
-        }
-      }
-      if (buffer.trim().startsWith('data:')) {
-        const data = buffer.trim().slice(5).trim();
-        if (data && data !== '[DONE]') {
-          try {
-            const event = JSON.parse(data);
-            const piece = event.choices?.[0]?.delta?.content;
-            if (typeof piece === 'string' && piece.length > 0) {
-              res.write(`data: ${JSON.stringify({ type: 'content', text: piece })}\n\n`);
+            if (event.type === 'error') {
+              console.error('Claude stream error:', JSON.stringify(event.error || event));
             }
           } catch {
-            // Ignore incomplete final event.
+            // Ignore non-JSON SSE events.
           }
         }
       }
@@ -151,11 +149,11 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       reader.releaseLock();
     }
   } catch (error: any) {
-    console.error('Chat API error:', error?.message || error);
+    console.error('Claude API error:', error?.message || error);
     if (!res.headersSent) {
       sendJson(res, 500, { error: 'Internal server error' });
     } else {
-      res.write(`data: ${JSON.stringify({ type: 'error', error: 'OpenAI stream failed' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'error', error: 'Claude stream failed' })}\n\n`);
       res.end();
     }
   }
