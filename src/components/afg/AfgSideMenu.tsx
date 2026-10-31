@@ -85,16 +85,6 @@ export const AfgSideMenu: React.FC<AfgSideMenuProps> = ({
 
           {/* User Profile Card (Screenshot 4) */}
           <div className="mt-4 p-3 rounded-2xl bg-cyan-950/30 border border-cyan-800/30 flex items-center gap-3">
-            <div className="relative">
-              <img
-                src={user.avatar}
-                alt={user.name}
-                className="w-11 h-11 rounded-xl object-cover ring-2 ring-cyan-400"
-              />
-              <span className="absolute -top-1 -right-1 bg-amber-400 text-amber-950 p-0.5 rounded-full">
-                <Crown className="w-2.5 h-2.5 fill-current" />
-              </span>
-            </div>
             <div className="min-w-0">
               <h4 className="text-xs font-bold text-white truncate">
                 {language === 'dari' ? user.name : user.nameEn}
