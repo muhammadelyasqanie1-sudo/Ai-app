@@ -2,6 +2,11 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: 'Optional HTTPS base URL for the deployed AFG AI chat API'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -28,6 +33,8 @@ jobs:
         run: npm install
 
       - name: Build web app
+        env:
+          VITE_API_BASE_URL: ${{ inputs.api_base_url }}
         run: npm run build
 
       - name: Generate Android project
