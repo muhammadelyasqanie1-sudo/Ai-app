@@ -116,24 +116,6 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444]" />
             )}
           </button>
-
-          {/* User Avatar with Pro++ Crown (Matching Syed Firuz in mockups) */}
-          <div 
-            onClick={onOpenSettings}
-            className="relative flex items-center gap-2 pl-1 cursor-pointer group"
-          >
-            <div className="relative">
-              <img
-                src={user.avatar}
-                alt={user.name}
-                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover ring-2 ring-cyan-400/80 shadow-[0_0_10px_rgba(0,229,255,0.4)] group-hover:scale-105 transition-transform"
-              />
-              <span className="absolute -top-1 -right-1 bg-amber-400 text-amber-950 p-0.5 rounded-full shadow-md">
-                <Crown className="w-2.5 h-2.5 fill-current" />
-              </span>
-            </div>
-          </div>
-
         </div>
 
       </div>
