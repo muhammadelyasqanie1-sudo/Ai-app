@@ -11,6 +11,7 @@ import {
   FileCode,
   Image as ImageIcon,
 } from 'lucide-react';
+import { formatTokenLimitProgress } from '../utils/chatLogic';
 
 interface AttachmentFile {
   name: string;
@@ -24,6 +25,7 @@ interface ChatInputProps {
   onStopStreaming: () => void;
   isStreaming: boolean;
   disabled?: boolean;
+  conversationTokenCount?: number;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -31,6 +33,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onStopStreaming,
   isStreaming,
   disabled,
+  conversationTokenCount,
 }) => {
   const [text, setText] = useState('');
   const [webSearch, setWebSearch] = useState(false);
@@ -130,7 +133,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  const canSubmit = text.trim().length > 0 || attachments.length > 0;
+  const progress = formatTokenLimitProgress(text.length, 4000);
+  const canSubmit = (text.trim().length > 0 || attachments.length > 0) && !progress.isOverLimit;
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4 pb-3 pt-2">
@@ -177,6 +181,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           className="w-full max-h-52 bg-transparent text-[15px] leading-relaxed text-neutral-900 dark:text-neutral-100 placeholder-neutral-500 dark:placeholder-neutral-400 border-none outline-none resize-none px-1 py-1 font-sans"
           aria-label="Chat input"
         />
+
+        {/* Over-limit warning */}
+        {progress.isOverLimit && (
+          <div className="text-rose-500 dark:text-rose-400 text-xs px-1 pt-1 font-medium animate-in fade-in">
+            Message exceeds the 4,000 character limit by {(progress.count - progress.max).toLocaleString()} characters.
+          </div>
+        )}
 
         {/* Bottom controls bar */}
         <div className="flex items-center justify-between pt-2 mt-1">
@@ -233,8 +244,58 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             </button>
           </div>
 
-          {/* Right action buttons: Mic & Send */}
-          <div className="flex items-center gap-1.5">
+          {/* Right action buttons: Character Counter, Mic & Send */}
+          <div className="flex items-center gap-2">
+            {/* Real-time Character Counter & Token limit progress meter */}
+            <div
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono transition-all select-none border ${
+                progress.isOverLimit
+                  ? 'bg-rose-100 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-600 dark:text-rose-400 font-semibold'
+                  : progress.isWarning
+                  ? 'bg-amber-100 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-400 font-medium'
+                  : 'bg-white/80 dark:bg-neutral-800/80 border-neutral-200/80 dark:border-neutral-700 text-neutral-500 dark:text-neutral-400'
+              }`}
+              aria-label={`Character count: ${progress.count} of ${progress.max}, estimated ${progress.estimatedTokens} tokens`}
+              title={`Prompt: ${progress.count.toLocaleString()} / ${progress.max.toLocaleString()} characters (~${progress.estimatedTokens.toLocaleString()} tokens)`}
+            >
+              {/* Circular gauge */}
+              <svg className="w-3 h-3 -rotate-90 shrink-0" viewBox="0 0 20 20">
+                <circle
+                  cx="10"
+                  cy="10"
+                  r="7"
+                  fill="none"
+                  className="stroke-neutral-300 dark:stroke-neutral-700"
+                  strokeWidth="2.5"
+                />
+                <circle
+                  cx="10"
+                  cy="10"
+                  r="7"
+                  fill="none"
+                  className={
+                    progress.isOverLimit
+                      ? 'stroke-rose-500'
+                      : progress.isWarning
+                      ? 'stroke-amber-500'
+                      : 'stroke-emerald-500'
+                  }
+                  strokeWidth="2.5"
+                  strokeDasharray={2 * Math.PI * 7}
+                  strokeDashoffset={2 * Math.PI * 7 * (1 - Math.min(progress.percentage, 100) / 100)}
+                  strokeLinecap="round"
+                />
+              </svg>
+
+              <span>
+                {progress.count.toLocaleString()} / {progress.max.toLocaleString()}
+              </span>
+
+              <span className="hidden sm:inline text-neutral-400 dark:text-neutral-500 font-sans text-[10px]">
+                (~{progress.estimatedTokens} tok)
+              </span>
+            </div>
+
             <button
               type="button"
               onClick={toggleVoiceRecording}
@@ -279,9 +340,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </div>
       </div>
 
-      <div className="text-center text-[11px] text-neutral-400 dark:text-neutral-500 mt-2 select-none">
-        ChatGPT can make mistakes. Check important info.
+      <div className="flex items-center justify-center gap-2 text-center text-[11px] text-neutral-400 dark:text-neutral-500 mt-2 select-none">
+        <span>ChatGPT can make mistakes. Check important info.</span>
+        {typeof conversationTokenCount === 'number' && conversationTokenCount > 0 && (
+          <>
+            <span>•</span>
+            <span title="Total conversation context tokens used against 128k limit">
+              Context: ~{conversationTokenCount.toLocaleString()} / 128,000 tokens
+            </span>
+          </>
+        )}
       </div>
     </div>
   );
 };
+

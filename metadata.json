@@ -1,6 +1,6 @@
 {
   "name": "ChatGPT",
-  "description": "A full-featured ChatGPT clone featuring conversational AI, chat history, model selection, reasoning thoughts, custom instructions, and authentic OpenAI UI.",
+  "description": "AFG AI (هوش مصنوعی افغانستان) - Your Smart AI Assistant built with pride for Afghanistan. Featuring smart chat, image & video generation, coding tools, and bilingual Dari/English support.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

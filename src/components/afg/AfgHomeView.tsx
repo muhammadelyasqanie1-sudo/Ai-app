@@ -1,0 +1,428 @@
+import React, { useState } from 'react';
+import { 
+  MessageSquare, 
+  Image as ImageIcon, 
+  Video, 
+  Code2, 
+  Languages, 
+  FileText, 
+  FolderArchive, 
+  Mic, 
+  Grid, 
+  ArrowRight, 
+  Sparkles, 
+  Search, 
+  Crown, 
+  ShieldCheck, 
+  Zap, 
+  Heart,
+  ChevronRight,
+  TrendingUp,
+  Coins
+} from 'lucide-react';
+import type { TabType, Language, UserProfile } from '../../types/afg';
+import { translations } from '../../utils/afgTranslations';
+
+interface AfgHomeViewProps {
+  language: Language;
+  user: UserProfile;
+  onChangeTab: (tab: TabType) => void;
+  onOpenWallet: () => void;
+  onStartChatWithPrompt?: (prompt: string) => void;
+}
+
+export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
+  language,
+  user,
+  onChangeTab,
+  onOpenWallet,
+  onStartChatWithPrompt,
+}) => {
+  const t = translations[language];
+  const [quickQuery, setQuickQuery] = useState('');
+
+  const handleQuickAsk = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (quickQuery.trim()) {
+      if (onStartChatWithPrompt) {
+        onStartChatWithPrompt(quickQuery);
+      } else {
+        onChangeTab('chat');
+      }
+    }
+  };
+
+  const coreTools = [
+    {
+      id: 'image-gen' as TabType,
+      title: language === 'dari' ? 'ساخت عکس' : 'Create Image',
+      desc: language === 'dari' ? 'تولید تصویر با هوش مصنوعی' : 'AI Image Studio',
+      icon: ImageIcon,
+      color: 'from-blue-500 to-cyan-400',
+      textColor: 'text-cyan-400',
+      bgColor: 'bg-cyan-500/10',
+      borderColor: 'border-cyan-500/30',
+    },
+    {
+      id: 'video-gen' as TabType,
+      title: language === 'dari' ? 'ساخت ویدیو' : 'Create Video',
+      desc: language === 'dari' ? 'تولید ویدیو از روی متن' : 'Video Generation',
+      icon: Video,
+      color: 'from-purple-500 to-indigo-500',
+      textColor: 'text-purple-400',
+      bgColor: 'bg-purple-500/10',
+      borderColor: 'border-purple-500/30',
+    },
+    {
+      id: 'chat' as TabType,
+      title: language === 'dari' ? 'کمک برنامه‌نویسی' : 'Code Help',
+      desc: language === 'dari' ? 'کدنویسی به بیش از ۲۰ زبان' : 'Write & Fix Code',
+      icon: Code2,
+      color: 'from-emerald-500 to-teal-400',
+      textColor: 'text-emerald-400',
+      bgColor: 'bg-emerald-500/10',
+      borderColor: 'border-emerald-500/30',
+    },
+    {
+      id: 'tools' as TabType,
+      title: language === 'dari' ? 'ترجمه هوشمند' : 'Translate',
+      desc: language === 'dari' ? 'فارسی، پشتو، انگلیسی' : 'Text & Voice Translation',
+      icon: Languages,
+      color: 'from-sky-500 to-blue-600',
+      textColor: 'text-sky-400',
+      bgColor: 'bg-sky-500/10',
+      borderColor: 'border-sky-500/30',
+    },
+    {
+      id: 'tools' as TabType,
+      title: language === 'dari' ? 'ابزار PDF' : 'PDF Tools',
+      desc: language === 'dari' ? 'خلاصه‌سازی و استخراج متن' : 'Read, Extract & Edit',
+      icon: FileText,
+      color: 'from-rose-500 to-pink-500',
+      textColor: 'text-rose-400',
+      bgColor: 'bg-rose-500/10',
+      borderColor: 'border-rose-500/30',
+    },
+    {
+      id: 'tools' as TabType,
+      title: language === 'dari' ? 'صدا و گفتار' : 'Voice Tools',
+      desc: language === 'dari' ? 'تبدیل صوت به متن و بالعکس' : 'Speech to Text & TTS',
+      icon: Mic,
+      color: 'from-amber-500 to-orange-400',
+      textColor: 'text-amber-400',
+      bgColor: 'bg-amber-500/10',
+      borderColor: 'border-amber-500/30',
+    },
+    {
+      id: 'tools' as TabType,
+      title: language === 'dari' ? 'مدیریت فایل' : 'File Tools',
+      desc: language === 'dari' ? 'فشرده‌سازی و ابزارها' : 'File Management',
+      icon: FolderArchive,
+      color: 'from-teal-500 to-emerald-500',
+      textColor: 'text-teal-400',
+      bgColor: 'bg-teal-500/10',
+      borderColor: 'border-teal-500/30',
+    },
+    {
+      id: 'tools' as TabType,
+      title: language === 'dari' ? 'بیشتر ابزارها' : 'More Tools',
+      desc: language === 'dari' ? 'محاسبه‌گر، QR و موارد دیگر' : 'Calc, QR & All Tools',
+      icon: Grid,
+      color: 'from-indigo-500 to-purple-600',
+      textColor: 'text-indigo-400',
+      bgColor: 'bg-indigo-500/10',
+      borderColor: 'border-indigo-500/30',
+    },
+  ];
+
+  return (
+    <div className="w-full max-w-6xl mx-auto px-4 py-4 sm:py-8 space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+      
+      {/* Hero Welcome Card with Afghan Landmark Illustration Backdrop (Screenshot 2 & 3) */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0c1838] via-[#08122c] to-[#040817] border border-cyan-500/30 p-5 sm:p-8 shadow-[0_15px_40px_rgba(0,0,0,0.6),0_0_25px_rgba(0,229,255,0.15)]">
+        
+        {/* Background Afghan Mountains & Citadel SVG Graphic */}
+        <div className="absolute inset-0 opacity-20 pointer-events-none mix-blend-screen overflow-hidden">
+          <svg viewBox="0 0 1000 300" fill="none" className="w-full h-full object-cover">
+            {/* Mountains Silhouette */}
+            <path d="M0 250 L120 160 L240 220 L380 120 L500 200 L650 90 L800 210 L920 140 L1000 250 L1000 300 L0 300 Z" fill="#00b4d8" />
+            <path d="M100 250 L260 170 L400 240 L550 140 L700 220 L850 130 L1000 230 L1000 300 L100 300 Z" fill="#0077b6" opacity="0.6" />
+            {/* Herat Citadel / Historic Towers Silhouette */}
+            <rect x="220" y="190" width="40" height="60" fill="#03045e" rx="4" />
+            <rect x="270" y="180" width="50" height="70" fill="#03045e" rx="4" />
+            <rect x="330" y="195" width="35" height="55" fill="#03045e" rx="4" />
+          </svg>
+        </div>
+
+        {/* Ambient Top Glow */}
+        <div className="absolute -top-24 -right-24 w-72 h-72 bg-cyan-500/20 blur-3xl rounded-full pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          
+          {/* User Info & Greeting */}
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <img
+                src={user.avatar}
+                alt={user.name}
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover ring-2 ring-cyan-400 shadow-[0_0_20px_rgba(0,229,255,0.5)]"
+              />
+              <span className="absolute -bottom-1 -right-1 bg-gradient-to-r from-amber-400 to-amber-600 text-amber-950 p-1 rounded-full shadow-md">
+                <Crown className="w-3.5 h-3.5 fill-current" />
+              </span>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                  {language === 'dari' ? user.name : user.nameEn}
+                </h1>
+                <span className="text-sm">👋</span>
+              </div>
+              <p className="text-xs sm:text-sm text-cyan-300 font-medium mt-0.5">
+                {t.welcomeBack}
+              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-[11px] font-semibold text-emerald-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  {t.online}
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-[11px] font-bold text-amber-300">
+                  <Crown className="w-3 h-3 text-amber-400 fill-amber-400" />
+                  {t.premiumUser}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Wallet / Coins Balance Box */}
+          <div 
+            onClick={onOpenWallet}
+            className="w-full md:w-auto flex items-center justify-between md:justify-start gap-4 p-3.5 sm:p-4 rounded-2xl bg-[#091534]/90 border border-amber-500/30 hover:border-amber-400/60 shadow-[0_4px_20px_rgba(245,158,11,0.15)] cursor-pointer transition-all hover:scale-102"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-xl">
+                🪙
+              </div>
+              <div>
+                <span className="text-[11px] text-amber-300/80 font-medium block">
+                  {t.buyCoin}
+                </span>
+                <span className="text-xl font-black text-amber-300">
+                  {user.coins.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            <button className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-amber-950 font-bold text-xs shadow-md hover:brightness-110">
+              {t.topUp}
+            </button>
+          </div>
+
+        </div>
+
+        {/* Instant Search / Ask Anything Bar (Screenshot 3) */}
+        <form onSubmit={handleQuickAsk} className="mt-6 relative">
+          <div className="relative flex items-center rounded-2xl bg-slate-900/90 border border-cyan-500/40 shadow-[0_4px_20px_rgba(0,0,0,0.5)] focus-within:border-cyan-400 focus-within:shadow-[0_0_20px_rgba(0,229,255,0.3)] transition-all">
+            <Search className="w-5 h-5 text-cyan-400 ml-4 shrink-0" />
+            <input
+              type="text"
+              value={quickQuery}
+              onChange={(e) => setQuickQuery(e.target.value)}
+              placeholder={t.askAnythingPlaceholder}
+              className="w-full py-3.5 px-3 bg-transparent text-sm sm:text-base text-white placeholder-slate-400 focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="mr-2 px-4 py-2 rounded-xl gradient-btn-cyan text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-md shrink-0"
+            >
+              <span>{language === 'dari' ? 'بپرس' : 'Ask'}</span>
+              <Sparkles className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </form>
+
+      </div>
+
+      {/* Quick Access Section (Matching Screenshot 3) */}
+      <div>
+        <div className="flex items-center justify-between mb-3 px-1">
+          <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-cyan-400" />
+            {t.quickAccess}
+          </h2>
+          <button 
+            onClick={() => onChangeTab('tools')}
+            className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1"
+          >
+            <span>{t.seeAll}</span>
+            <ArrowRight className={`w-3.5 h-3.5 ${language === 'dari' ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          
+          {/* Card 1: AI Chat */}
+          <div
+            onClick={() => onChangeTab('chat')}
+            className="relative overflow-hidden rounded-2xl p-4 bg-gradient-to-br from-[#0c1c44] to-[#08122c] border border-cyan-500/40 hover:border-cyan-400 hover:scale-102 cursor-pointer transition-all shadow-[0_8px_25px_rgba(0,0,0,0.4)] group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
+                <MessageSquare className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm sm:text-base text-white">
+                  {t.toolChat}
+                </h3>
+                <p className="text-xs text-cyan-300/80">
+                  {t.smartChatDesc}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Image Gen */}
+          <div
+            onClick={() => onChangeTab('image-gen')}
+            className="relative overflow-hidden rounded-2xl p-4 bg-gradient-to-br from-[#1b1244] to-[#0d0a2c] border border-purple-500/40 hover:border-purple-400 hover:scale-102 cursor-pointer transition-all shadow-[0_8px_25px_rgba(0,0,0,0.4)] group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
+                <ImageIcon className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm sm:text-base text-white">
+                  {t.toolImageGen}
+                </h3>
+                <p className="text-xs text-purple-300/80">
+                  {t.createArtDesc}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: Video Gen */}
+          <div
+            onClick={() => onChangeTab('video-gen')}
+            className="relative overflow-hidden rounded-2xl p-4 bg-gradient-to-br from-[#1e1338] to-[#0f0924] border border-pink-500/40 hover:border-pink-400 hover:scale-102 cursor-pointer transition-all shadow-[0_8px_25px_rgba(0,0,0,0.4)] group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-pink-500/15 border border-pink-500/30 flex items-center justify-center text-pink-400 group-hover:scale-110 transition-transform">
+                <Video className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm sm:text-base text-white">
+                  {t.toolVideoGen}
+                </h3>
+                <p className="text-xs text-pink-300/80">
+                  {t.makeVideoDesc}
+                </p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Grid of Core Tools (Matching Screenshot 2 & 3) */}
+      <div>
+        <h2 className="text-base sm:text-lg font-bold text-white mb-3 px-1 flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-cyan-400" />
+          {t.toolsCenter}
+        </h2>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+          {coreTools.map((tool, idx) => {
+            const Icon = tool.icon;
+            return (
+              <div
+                key={idx}
+                onClick={() => onChangeTab(tool.id)}
+                className={`p-4 rounded-2xl bg-[#091126]/80 hover:bg-[#0d1838] border ${tool.borderColor} hover:scale-103 cursor-pointer transition-all shadow-[0_4px_15px_rgba(0,0,0,0.4)] group flex flex-col items-center sm:items-start text-center sm:text-left`}
+              >
+                <div className={`w-12 h-12 rounded-2xl ${tool.bgColor} flex items-center justify-center ${tool.textColor} mb-3 group-hover:scale-110 transition-transform`}>
+                  <Icon className="w-6 h-6" />
+                </div>
+                <h3 className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
+                  {tool.title}
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
+                  {tool.desc}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* VIP AFG AI Pro++ Gold Banner (Screenshot 2 & 3) */}
+      <div 
+        onClick={onOpenWallet}
+        className="relative overflow-hidden rounded-3xl p-5 sm:p-6 bg-gradient-to-r from-amber-600/30 via-yellow-600/20 to-amber-700/30 border border-amber-500/50 shadow-[0_10px_30px_rgba(245,158,11,0.25)] cursor-pointer hover:border-amber-400 transition-all group"
+      >
+        <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4 text-center sm:text-left">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-400 to-yellow-300 p-0.5 shadow-lg shrink-0">
+              <div className="w-full h-full rounded-2xl bg-[#1a1202] flex items-center justify-center text-amber-300">
+                <Crown className="w-7 h-7 fill-current" />
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-amber-200 flex items-center gap-2 justify-center sm:justify-start">
+                <span>{t.vipBannerTitle}</span>
+                <span className="text-xs bg-amber-400 text-amber-950 font-black px-2 py-0.5 rounded-full">
+                  VIP
+                </span>
+              </h3>
+              <p className="text-xs text-amber-100/80 mt-1">
+                {t.vipBannerDesc}
+              </p>
+            </div>
+          </div>
+
+          <button className="px-5 py-2.5 rounded-xl gradient-btn-gold text-amber-950 font-black text-xs sm:text-sm flex items-center gap-1.5 shrink-0 group-hover:scale-105 transition-transform">
+            <span>{t.btnUpgradePro}</span>
+            <ArrowRight className={`w-4 h-4 ${language === 'dari' ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Trust & Performance Pillars (Matching Screenshot 3 Bottom Bar) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+        <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-900/60 border border-cyan-900/40">
+          <Zap className="w-5 h-5 text-cyan-400 shrink-0" />
+          <div>
+            <h4 className="text-xs font-bold text-white">Fast & Reliable</h4>
+            <p className="text-[10px] text-slate-400">Always Online</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-900/60 border border-cyan-900/40">
+          <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+          <div>
+            <h4 className="text-xs font-bold text-white">Safe & Secure</h4>
+            <p className="text-[10px] text-slate-400">Your Data is Safe</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-900/60 border border-cyan-900/40">
+          <Sparkles className="w-5 h-5 text-amber-400 shrink-0" />
+          <div>
+            <h4 className="text-xs font-bold text-white">Premium Features</h4>
+            <p className="text-[10px] text-slate-400">Simple & Beautiful</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-900/60 border border-cyan-900/40">
+          <Heart className="w-5 h-5 text-rose-400 shrink-0" />
+          <div>
+            <h4 className="text-xs font-bold text-white">Made with Pride 🇦🇫</h4>
+            <p className="text-[10px] text-slate-400">For Afghanistan</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
+};

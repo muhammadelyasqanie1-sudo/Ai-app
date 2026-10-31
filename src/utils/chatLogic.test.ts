@@ -6,6 +6,8 @@ import {
   filterConversations,
   parseMarkdownBlocks,
   estimateTokens,
+  cleanTextForSpeech,
+  formatTokenLimitProgress,
   type Conversation,
 } from './chatLogic';
 
@@ -95,3 +97,42 @@ test('estimateTokens calculates estimated token count', () => {
   assert.equal(estimateTokens('Hello world this is a test'), 7);
   assert.equal(estimateTokens(''), 0);
 });
+
+test('cleanTextForSpeech cleans markdown for natural speech playback', () => {
+  const md = `### Hello World
+This is **bold** and *italic* and \`inline code\`.
+- Point one
+- Point two
+\`\`\`python
+print("hello")
+\`\`\`
+Check [OpenAI](https://openai.com) now!`;
+
+  const speechText = cleanTextForSpeech(md);
+  assert.ok(!speechText.includes('###'));
+  assert.ok(!speechText.includes('**'));
+  assert.ok(!speechText.includes('```'));
+  assert.ok(speechText.includes('bold and italic and inline code'));
+  assert.ok(speechText.includes('Here is a code example in python'));
+  assert.ok(speechText.includes('Check OpenAI now!'));
+});
+
+test('formatTokenLimitProgress accurately calculates limits, percentage, and warnings', () => {
+  const normal = formatTokenLimitProgress(100, 4000);
+  assert.equal(normal.count, 100);
+  assert.equal(normal.max, 4000);
+  assert.equal(normal.estimatedTokens, 25);
+  assert.equal(normal.percentage, 3); // 2.5% rounded
+  assert.equal(normal.isWarning, false);
+  assert.equal(normal.isOverLimit, false);
+
+  const warning = formatTokenLimitProgress(3500, 4000);
+  assert.equal(warning.isWarning, true);
+  assert.equal(warning.isOverLimit, false);
+
+  const over = formatTokenLimitProgress(4050, 4000);
+  assert.equal(over.isOverLimit, true);
+  assert.equal(over.percentage, 100);
+});
+
+

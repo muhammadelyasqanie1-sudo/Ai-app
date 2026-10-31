@@ -2,44 +2,93 @@
 
 @layer base {
   :root {
-    --bg-main: #ffffff;
-    --bg-sidebar: #f9f9f9;
-    --bg-surface: #f4f4f4;
-    --bg-surface-hover: #ececec;
-    --border-color: #e5e5e5;
-    --text-primary: #0d0d0d;
-    --text-secondary: #707070;
-    --text-muted: #8e8ea0;
-    --accent-green: #10a37f;
-    --code-bg: #1e1e1e;
-    --code-header: #2d2d2d;
+    --bg-main: #f4f7fc;
+    --bg-surface: #ffffff;
+    --bg-surface-subtle: #edf2f9;
+    --bg-surface-hover: #e4ebf5;
+    --border-color: #dbe4f0;
+    --text-primary: #0a1128;
+    --text-secondary: #4a5568;
+    --text-muted: #718096;
+    --accent-cyan: #00b4d8;
+    --accent-blue: #0077b6;
+    --accent-glow: rgba(0, 180, 216, 0.25);
+    --card-shadow: 0 10px 25px -5px rgba(0, 50, 120, 0.08), 0 8px 10px -6px rgba(0, 50, 120, 0.04);
   }
 
   .dark {
-    --bg-main: #212121;
-    --bg-sidebar: #171717;
-    --bg-surface: #2f2f2f;
-    --bg-surface-hover: #383838;
-    --border-color: #383838;
-    --text-primary: #ececec;
-    --text-secondary: #b4b4b4;
-    --text-muted: #8e8ea0;
-    --accent-green: #10a37f;
-    --code-bg: #0d0d0d;
-    --code-header: #1e1e1e;
+    --bg-main: #060b18;
+    --bg-surface: #0b1329;
+    --bg-surface-subtle: #0f1c3d;
+    --bg-surface-hover: #16254f;
+    --border-color: #1a2a54;
+    --text-primary: #f0f6fc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent-cyan: #00e5ff;
+    --accent-blue: #0284c7;
+    --accent-glow: rgba(0, 229, 255, 0.35);
+    --card-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5), 0 0 20px -2px rgba(0, 229, 255, 0.12);
+  }
+
+  html[dir="rtl"] {
+    font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  html[dir="ltr"] {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
 
   body {
     background-color: var(--bg-main);
     color: var(--text-primary);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     margin: 0;
     padding: 0;
     overflow-x: hidden;
+    min-height: 100vh;
   }
 }
 
-/* Custom scrollbars matching ChatGPT */
+/* Custom AFG AI Neon and Glassmorphism styles */
+.neon-glow-cyan {
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.4), 0 0 40px rgba(0, 229, 255, 0.2);
+}
+
+.neon-glow-cyan-sm {
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.45);
+}
+
+.neon-border-cyan {
+  border-color: #00e5ff;
+  box-shadow: 0 0 15px rgba(0, 229, 255, 0.35), inset 0 0 15px rgba(0, 229, 255, 0.15);
+}
+
+.neon-card {
+  background: radial-gradient(circle at top right, rgba(0, 180, 216, 0.1), transparent 60%),
+              radial-gradient(circle at bottom left, rgba(99, 102, 241, 0.08), transparent 50%),
+              var(--bg-surface);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--card-shadow);
+}
+
+.gradient-btn-cyan {
+  background: linear-gradient(135deg, #00d2ff 0%, #0072ff 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 18px rgba(0, 210, 255, 0.4);
+}
+
+.gradient-btn-cyan:hover {
+  background: linear-gradient(135deg, #24d8ff 0%, #1a85ff 100%);
+  box-shadow: 0 6px 24px rgba(0, 210, 255, 0.6);
+}
+
+.gradient-btn-gold {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 18px rgba(245, 158, 11, 0.35);
+}
+
+/* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -50,26 +99,26 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(128, 128, 128, 0.3);
+  background: rgba(100, 116, 139, 0.3);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(128, 128, 128, 0.5);
+  background: rgba(14, 165, 233, 0.5);
 }
 
-/* Blinking cursor for streaming */
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+/* Animated pulse for Brain AI orb */
+@keyframes brain-pulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 15px rgba(0, 229, 255, 0.6));
+  }
+  50% {
+    transform: scale(1.05);
+    filter: drop-shadow(0 0 25px rgba(0, 229, 255, 0.9));
+  }
 }
 
-.streaming-cursor {
-  display: inline-block;
-  width: 7px;
-  height: 15px;
-  margin-left: 2px;
-  background-color: currentColor;
-  vertical-align: middle;
-  animation: blink 0.8s infinite;
+.animate-brain-pulse {
+  animation: brain-pulse 3s infinite ease-in-out;
 }

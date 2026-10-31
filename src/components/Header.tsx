@@ -10,6 +10,7 @@ import {
   Lock,
   Plus,
   HelpCircle,
+  Keyboard,
 } from 'lucide-react';
 import { OpenAiLogo } from './OpenAiLogo';
 
@@ -25,6 +26,7 @@ interface HeaderProps {
   onNewChat: () => void;
   onOpenShareModal: () => void;
   onOpenSettingsModal: () => void;
+  onOpenShortcuts: () => void;
   hasActiveMessages: boolean;
 }
 
@@ -38,6 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
   onNewChat,
   onOpenShareModal,
   onOpenSettingsModal,
+  onOpenShortcuts,
   hasActiveMessages,
 }) => {
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
@@ -222,6 +225,16 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Share</span>
           </button>
         )}
+
+        {/* Keyboard shortcuts quick button */}
+        <button
+          onClick={onOpenShortcuts}
+          className="p-2 rounded-lg text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+          aria-label="Keyboard shortcuts (Ctrl+/)"
+          title="Keyboard shortcuts (Ctrl+/)"
+        >
+          <Keyboard className="w-4 h-4" />
+        </button>
 
         {/* User avatar / profile button */}
         <button

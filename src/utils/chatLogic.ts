@@ -196,3 +196,78 @@ export function estimateTokens(text: string): number {
   if (!text) return 0;
   return Math.ceil(text.length / 4);
 }
+
+/**
+ * Prepares markdown text for natural, human-sounding Web Speech readout
+ */
+export function cleanTextForSpeech(markdown: string): string {
+  if (!markdown) return '';
+
+  let cleaned = markdown;
+
+  // Replace code blocks with natural audio summary
+  cleaned = cleaned.replace(/```(\w+)?[\s\S]*?```/g, (_, lang) => {
+    return lang ? ` Here is a code example in ${lang}. ` : ' Here is a code example. ';
+  });
+
+  // Replace markdown links [title](url) -> title
+  cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+
+  // Remove heading hashes
+  cleaned = cleaned.replace(/^#{1,6}\s+/gm, '');
+
+  // Remove blockquotes >
+  cleaned = cleaned.replace(/^>\s+/gm, '');
+
+  // Remove bullet points - or *
+  cleaned = cleaned.replace(/^[-*]\s+/gm, '');
+
+  // Remove inline code ticks
+  cleaned = cleaned.replace(/`([^`]+)`/g, '$1');
+
+  // Remove bold and italics
+  cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, '$1');
+  cleaned = cleaned.replace(/\*([^*]+)\*/g, '$1');
+  cleaned = cleaned.replace(/__([^_]+)__/g, '$1');
+  cleaned = cleaned.replace(/_([^_]+)_/g, '$1');
+
+  // Collapse multiple whitespaces and newlines
+  cleaned = cleaned
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join('. ');
+
+  return cleaned.replace(/\.{2,}/g, '.').replace(/\s+/g, ' ').trim();
+}
+
+export interface TokenLimitProgress {
+  count: number;
+  max: number;
+  percentage: number;
+  estimatedTokens: number;
+  isWarning: boolean;
+  isOverLimit: boolean;
+}
+
+/**
+ * Calculates character and estimated token usage towards context/prompt limit
+ */
+export function formatTokenLimitProgress(charCount: number, maxChars: number = 4000): TokenLimitProgress {
+  const count = Math.max(0, charCount);
+  const percentage = Math.min(100, Math.round((count / maxChars) * 100));
+  const estimatedTokens = Math.ceil(count / 4);
+  const isWarning = count >= maxChars * 0.8 && count <= maxChars;
+  const isOverLimit = count > maxChars;
+
+  return {
+    count,
+    max: maxChars,
+    percentage,
+    estimatedTokens,
+    isWarning,
+    isOverLimit,
+  };
+}
+
+

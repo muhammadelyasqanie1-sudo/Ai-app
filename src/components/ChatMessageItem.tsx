@@ -19,6 +19,8 @@ import type { Message } from '../utils/chatLogic';
 interface ChatMessageItemProps {
   message: Message;
   isLastAssistant: boolean;
+  isSpeakingCurrentMessage?: boolean;
+  onToggleSpeech?: () => void;
   onRegenerate?: () => void;
   onEditUserMessage?: (newText: string) => void;
 }
@@ -26,12 +28,13 @@ interface ChatMessageItemProps {
 export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   message,
   isLastAssistant,
+  isSpeakingCurrentMessage,
+  onToggleSpeech,
   onRegenerate,
   onEditUserMessage,
 }) => {
   const [copied, setCopied] = useState(false);
   const [liked, setLiked] = useState<boolean | null>(null);
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.content);
   const [showReasoning, setShowReasoning] = useState(false);
@@ -44,24 +47,6 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
     } catch {
       // fallback
     }
-  };
-
-  const handleSpeech = () => {
-    if (!('speechSynthesis' in window)) return;
-
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-      return;
-    }
-
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(message.content.replace(/[#*`_]/g, ''));
-    utterance.rate = 1.05;
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    window.speechSynthesis.speak(utterance);
-    setIsSpeaking(true);
   };
 
   if (message.role === 'user') {
@@ -166,14 +151,16 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
             </button>
 
             <button
-              onClick={handleSpeech}
-              className={`p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors cursor-pointer ${
-                isSpeaking ? 'text-emerald-500' : ''
+              onClick={onToggleSpeech}
+              className={`p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer ${
+                isSpeakingCurrentMessage
+                  ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40'
+                  : 'hover:text-neutral-700 dark:hover:text-neutral-200'
               }`}
-              aria-label="Read response aloud"
-              title={isSpeaking ? 'Stop speech' : 'Read aloud'}
+              aria-label={isSpeakingCurrentMessage ? 'Stop reading response aloud' : 'Read response aloud'}
+              title={isSpeakingCurrentMessage ? 'Stop reading aloud' : 'Read aloud'}
             >
-              {isSpeaking ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              {isSpeakingCurrentMessage ? <VolumeX className="w-4 h-4 text-emerald-500" /> : <Volume2 className="w-4 h-4" />}
             </button>
 
             <button

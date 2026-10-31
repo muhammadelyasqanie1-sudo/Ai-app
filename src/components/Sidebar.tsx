@@ -13,6 +13,7 @@ import {
   User,
   Check,
   X,
+  Keyboard,
 } from 'lucide-react';
 import { OpenAiLogo } from './OpenAiLogo';
 import { groupConversationsByDate, type Conversation } from '../utils/chatLogic';
@@ -29,6 +30,7 @@ interface SidebarProps {
   onOpenSearchModal: () => void;
   onOpenExploreGpts: () => void;
   onOpenSettings: () => void;
+  onOpenShortcuts: () => void;
   onOpenShareModal: (conversation: Conversation) => void;
 }
 
@@ -44,6 +46,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenSearchModal,
   onOpenExploreGpts,
   onOpenSettings,
+  onOpenShortcuts,
   onOpenShareModal,
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -137,6 +140,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <Compass className="w-4 h-4 text-emerald-500" />
             <span>Explore GPTs</span>
+          </button>
+
+          <button
+            onClick={onOpenShortcuts}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 transition-colors cursor-pointer text-left"
+            aria-label="Keyboard shortcuts"
+          >
+            <div className="flex items-center gap-2.5">
+              <Keyboard className="w-4 h-4 text-neutral-400" />
+              <span>Shortcuts</span>
+            </div>
+            <span className="text-[10px] font-sans px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-500">
+              Ctrl /
+            </span>
           </button>
         </div>
 
