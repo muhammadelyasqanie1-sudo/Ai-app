@@ -18,7 +18,6 @@ import {
   Heart,
   ChevronRight,
   TrendingUp,
-  Coins
 } from 'lucide-react';
 import type { TabType, Language, UserProfile } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
@@ -27,7 +26,6 @@ interface AfgHomeViewProps {
   language: Language;
   user: UserProfile;
   onChangeTab: (tab: TabType) => void;
-  onOpenWallet: () => void;
   onStartChatWithPrompt?: (prompt: string) => void;
 }
 
@@ -35,7 +33,6 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
   language,
   user,
   onChangeTab,
-  onOpenWallet,
   onStartChatWithPrompt,
 }) => {
   const t = translations[language];
@@ -195,30 +192,6 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
             </div>
           </div>
 
-          {/* Quick Wallet / Coins Balance Box */}
-          <div 
-            onClick={onOpenWallet}
-            className="w-full md:w-auto flex items-center justify-between md:justify-start gap-4 p-3.5 sm:p-4 rounded-2xl bg-[#091534]/90 border border-amber-500/30 hover:border-amber-400/60 shadow-[0_4px_20px_rgba(245,158,11,0.15)] cursor-pointer transition-all hover:scale-102"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-xl">
-                🪙
-              </div>
-              <div>
-                <span className="text-[11px] text-amber-300/80 font-medium block">
-                  {t.buyCoin}
-                </span>
-                <span className="text-xl font-black text-amber-300">
-                  {user.coins.toLocaleString()}
-                </span>
-              </div>
-            </div>
-
-            <button className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-amber-950 font-bold text-xs shadow-md hover:brightness-110">
-              {t.topUp}
-            </button>
-          </div>
-
         </div>
 
         {/* Instant Search / Ask Anything Bar (Screenshot 3) */}
@@ -355,38 +328,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
           })}
         </div>
       </div>
-
-      {/* VIP AFG AI Pro++ Gold Banner (Screenshot 2 & 3) */}
-      <div 
-        onClick={onOpenWallet}
-        className="relative overflow-hidden rounded-3xl p-5 sm:p-6 bg-gradient-to-r from-amber-600/30 via-yellow-600/20 to-amber-700/30 border border-amber-500/50 shadow-[0_10px_30px_rgba(245,158,11,0.25)] cursor-pointer hover:border-amber-400 transition-all group"
-      >
-        <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-4 text-center sm:text-left">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-400 to-yellow-300 p-0.5 shadow-lg shrink-0">
-              <div className="w-full h-full rounded-2xl bg-[#1a1202] flex items-center justify-center text-amber-300">
-                <Crown className="w-7 h-7 fill-current" />
-              </div>
-            </div>
-            <div>
-              <h3 className="text-lg font-black text-amber-200 flex items-center gap-2 justify-center sm:justify-start">
-                <span>{t.vipBannerTitle}</span>
-                <span className="text-xs bg-amber-400 text-amber-950 font-black px-2 py-0.5 rounded-full">
-                  VIP
-                </span>
-              </h3>
-              <p className="text-xs text-amber-100/80 mt-1">
-                {t.vipBannerDesc}
-              </p>
-            </div>
-          </div>
-
-          <button className="px-5 py-2.5 rounded-xl gradient-btn-gold text-amber-950 font-black text-xs sm:text-sm flex items-center gap-1.5 shrink-0 group-hover:scale-105 transition-transform">
-            <span>{t.btnUpgradePro}</span>
-            <ArrowRight className={`w-4 h-4 ${language === 'dari' ? 'rotate-180' : ''}`} />
-          </button>
-        </div>
-      </div>
+      
 
       {/* Trust & Performance Pillars (Matching Screenshot 3 Bottom Bar) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
