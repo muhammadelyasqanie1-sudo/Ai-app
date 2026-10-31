@@ -98,7 +98,6 @@ export const translations = {
     btnGenerateVideo: 'ساخت ویدیو 🎬',
     myVideos: 'ویدیوهای من',
 
-    // Wallet
 
     // History
     historyTitle: 'تاریخچه گفتگوها',
@@ -239,7 +238,6 @@ export const translations = {
     btnGenerateVideo: 'Generate Video 🎬',
     myVideos: 'My Videos',
 
-    // Wallet
 
     // History
     historyTitle: 'Conversation History',
