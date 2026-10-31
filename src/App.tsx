@@ -294,14 +294,12 @@ export default function App() {
         {currentTab === 'image-gen' && (
           <AfgImageGenView
             language={language}
-            user={user}
           />
         )}
 
         {currentTab === 'video-gen' && (
           <AfgVideoGenView
             language={language}
-            user={user}
           />
         )}
 
