@@ -75,7 +75,7 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
           </span>
         </div>
 
-        {/* Right Section: Coins, Language Switch, Theme, Notifications & User Avatar */}
+        {/* Right Section: Language Switch, Theme, Notifications & User Avatar */}
         <div className="flex items-center gap-1.5 sm:gap-2.5">
 
           {/* Language Switcher */}
