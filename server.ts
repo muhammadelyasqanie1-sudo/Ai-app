@@ -23,7 +23,8 @@ app.get('/api/models', async (_req, res) => {
     return;
   }
   try {
-    const baseUrl = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\\/$/, '');
+    const configuredBaseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+    const baseUrl = configuredBaseUrl.endsWith('/') ? configuredBaseUrl.slice(0, -1) : configuredBaseUrl;
     const response = await fetch(`${baseUrl}/models`, {
       headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
     });
