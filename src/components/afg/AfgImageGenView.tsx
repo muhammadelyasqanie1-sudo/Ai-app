@@ -11,7 +11,7 @@ import {
   Wand2,
   Check
 } from 'lucide-react';
-import type { Language, GeneratedImage, UserProfile } from '../../types/afg';
+import type { Language, GeneratedImage } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
 
 interface AfgImageGenViewProps {
