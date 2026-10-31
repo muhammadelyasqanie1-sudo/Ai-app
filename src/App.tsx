@@ -68,6 +68,8 @@ export default function App() {
   const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
   const [messages, setMessages] = useState<AfgMessage[]>(INITIAL_MESSAGES);
   const [isLoading, setIsLoading] = useState(false);
+  const [availableModels, setAvailableModels] = useState<string[]>(['deepseek-ai/deepseek-v4-flash']);
+  const [selectedModel, setSelectedModel] = useState('deepseek-ai/deepseek-v4-flash');
   const [initialPromptForChat, setInitialPromptForChat] = useState<string | undefined>(undefined);
 
   // Modals state
@@ -92,6 +94,19 @@ export default function App() {
     }
     localStorage.setItem('afg_theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/models`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Could not load models');
+        const data = await response.json();
+        if (Array.isArray(data.models) && data.models.length > 0) {
+          setAvailableModels(data.models);
+          setSelectedModel((current) => data.models.includes(current) ? current : data.models[0]);
+        }
+      })
+      .catch((error) => console.error('Could not load NVIDIA models:', error));
+  }, []);
 
   // Global Keyboard Shortcuts (Ctrl+/ or Cmd+/)
   useEffect(() => {
@@ -157,7 +172,7 @@ export default function App() {
             role: m.role,
             content: m.content,
           })),
-          model: 'nvidia-nim',
+          model: selectedModel,
           customInstructions: language === 'dari'
             ? 'پاسخ‌های شما باید به زبان فارسی/دری شیوا، دقیق و صمیمانه باشد و در صورت لزوم از شعرها یا نمونه‌های مرتبط با افغانستان استفاده نمایید.'
             : 'Respond insightfully, clearly, and supportively as the AFG AI assistant.',
@@ -279,6 +294,9 @@ export default function App() {
             language={language}
             user={user}
             initialPrompt={initialPromptForChat}
+            availableModels={availableModels}
+            selectedModel={selectedModel}
+            onSelectModel={setSelectedModel}
           />
         )}
 
