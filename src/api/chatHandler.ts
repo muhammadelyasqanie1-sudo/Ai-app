@@ -48,7 +48,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
-    const model = process.env.NVIDIA_MODEL?.trim() || 'deepseek-ai/deepseek-v4-flash';
+    const requestedModel = String(body.model || '').trim();
+    const model = requestedModel || process.env.NVIDIA_MODEL?.trim() || 'deepseek-ai/deepseek-v4-flash';
     const upstreamMessages = messages
       .filter((m) => m && (m.role === 'user' || m.role === 'assistant' || m.role === 'system'))
       .map((m) => ({ role: m.role, content: String(m.content ?? '') }));
