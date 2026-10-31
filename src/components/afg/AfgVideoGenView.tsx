@@ -11,7 +11,7 @@ import {
   Film,
   Maximize2
 } from 'lucide-react';
-import type { Language, GeneratedVideo, UserProfile } from '../../types/afg';
+import type { Language, GeneratedVideo } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
 
 interface AfgVideoGenViewProps {
