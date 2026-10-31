@@ -157,7 +157,7 @@ export default function App() {
             role: m.role,
             content: m.content,
           })),
-          model: 'gemini-3.8-flash',
+          model: 'nvidia-nim',
           customInstructions: language === 'dari'
             ? 'پاسخ‌های شما باید به زبان فارسی/دری شیوا، دقیق و صمیمانه باشد و در صورت لزوم از شعرها یا نمونه‌های مرتبط با افغانستان استفاده نمایید.'
             : 'Respond insightfully, clearly, and supportively as the AFG AI assistant.',
@@ -211,27 +211,16 @@ export default function App() {
         )
       );
     } catch (error) {
-      console.warn('API error, providing intelligent Afghan fallback response:', error);
-      
-      // Fallback high-quality response
-      const fallbackReply = language === 'dari'
-        ? `من درخواست شما را با دقت بررسی کردم: **"${text.slice(0, 80)}"**
-
-### نکات کلیدی و راه‌حل پیشنهادی:
-1. **بررسی ساختار مسئله**: برای این موضوع، گام نخست تحلیل دقیق پیش‌نیازها و تعیین هدف نهایی است.
-2. **پیشنهاد کاربردی**: استفاده از ابزارهای هوشمند تحلیلی AFG AI به شما کمک می‌کند سرعت کار را تا ۴ برابر افزایش دهید.
-3. **توسعه مستمر**: در صورت تمایل می‌توانید جزییات بیشتری مطرح کنید تا با کد یا طرح اختصاصی آن را پیاده‌سازی کنیم. 🇦🇫✨`
-        : `I've analyzed your request regarding **"${text.slice(0, 80)}"**:
-
-### Recommendations & Insights:
-1. **Core Architecture**: Focusing on modularity ensures scalable execution.
-2. **Execution Steps**: Implement the primary feature first, verify states across viewports, and refine interaction polish.
-3. **Continuous Support**: Feel free to ask follow-up questions or request specific code snippets! 🇦🇫✨`;
+      console.error('NVIDIA API request failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown API error';
+      const userFacingError = language === 'dari'
+        ? `اتصال به هوش مصنوعی NVIDIA برقرار نشد. لطفاً تنظیمات API و اتصال سرور را بررسی کنید.\n\nجزئیات: ${errorMessage}`
+        : `Could not connect to NVIDIA AI. Please check the server API configuration and connection.\n\nDetails: ${errorMessage}`;
 
       setMessages(prev =>
         prev.map(m =>
           m.id === assistantId
-            ? { ...m, content: fallbackReply, isStreaming: false }
+            ? { ...m, content: userFacingError, isStreaming: false }
             : m
         )
       );
