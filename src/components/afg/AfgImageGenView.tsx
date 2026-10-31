@@ -149,8 +149,6 @@ export const AfgImageGenView: React.FC<AfgImageGenViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-        </div>
       </div>
 
       {/* Main Studio Controls Box */}
