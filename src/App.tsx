@@ -105,7 +105,7 @@ export default function App() {
           setSelectedModel((current) => data.models.includes(current) ? current : data.models[0]);
         }
       })
-      .catch((error) => console.error('Could not load Claude models:', error));
+      .catch((error) => console.error('Could not load Cloudflare Workers AI models:', error));
   }, []);
 
   // Global Keyboard Shortcuts (Ctrl+/ or Cmd+/)
@@ -226,11 +226,11 @@ export default function App() {
         )
       );
     } catch (error) {
-      console.error('Claude API request failed:', error);
+      console.error('Cloudflare Workers AI request failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown API error';
       const userFacingError = language === 'dari'
-        ? `اتصال به هوش مصنوعی برقرار نشد. لطفاً کلید Claude و مدل انتخاب‌شده را در تنظیمات سرور بررسی کنید.\n\nجزئیات: ${errorMessage}`
-        : `Could not connect to AI. Please check the Claude API key and selected model on the server.\n\nDetails: ${errorMessage}`;
+        ? `اتصال به هوش مصنوعی برقرار نشد. لطفاً توکن Cloudflare، شناسه حساب و مدل انتخاب‌شده را در تنظیمات سرور بررسی کنید.\n\nجزئیات: ${errorMessage}`
+        : `Could not connect to AI. Please check the Cloudflare Workers AI token, account ID, and selected model on the server.\n\nDetails: ${errorMessage}`;
 
       setMessages(prev =>
         prev.map(m =>
