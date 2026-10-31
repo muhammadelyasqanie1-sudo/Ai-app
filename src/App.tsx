@@ -180,7 +180,14 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error('Chat API returned an error');
+        let detail = `HTTP ${response.status}`;
+        try {
+          const payload = await response.json();
+          detail = payload.details || payload.error || detail;
+        } catch {
+          // Keep the HTTP status when the server response is not JSON.
+        }
+        throw new Error(detail);
       }
 
       const reader = response.body?.getReader();
