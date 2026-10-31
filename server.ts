@@ -17,25 +17,32 @@ app.all('/api/chat', (req, res) => {
 });
 
 app.get('/api/models', async (_req, res) => {
-  const apiKey = process.env.NVIDIA_API_KEY?.trim();
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
-    res.status(503).json({ error: 'NVIDIA API is not configured' });
+    res.status(503).json({ error: 'OpenAI API is not configured' });
     return;
   }
   try {
-    const response = await fetch('https://integrate.api.nvidia.com/v1/models', {
+    const baseUrl = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\\/$/, '');
+    const response = await fetch(`${baseUrl}/models`, {
       headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
     });
     if (!response.ok) {
-      res.status(response.status).json({ error: 'Could not load NVIDIA models' });
+      const details = await response.text();
+      console.error('OpenAI model list failed:', response.status, details.slice(0, 800));
+      res.status(response.status).json({ error: 'Could not load OpenAI models' });
       return;
     }
     const payload = await response.json() as { data?: Array<{ id?: string }> };
-    const models = (payload.data || []).map((item) => item.id).filter((id): id is string => Boolean(id));
+    const models = (payload.data || [])
+      .map((item) => item.id)
+      .filter((id): id is string => Boolean(id))
+      .sort((a, b) => a.localeCompare(b));
+    res.setHeader('Cache-Control', 'no-store');
     res.json({ models });
   } catch (error) {
-    console.error('NVIDIA model list failed:', error);
-    res.status(502).json({ error: 'Could not load NVIDIA models' });
+    console.error('OpenAI model list failed:', error);
+    res.status(502).json({ error: 'Could not load OpenAI models' });
   }
 });
 
