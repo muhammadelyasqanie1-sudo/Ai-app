@@ -50,6 +50,8 @@ const INITIAL_MESSAGES: AfgMessage[] = [
   },
 ];
 
+const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
 export default function App() {
   // App State
   const [language, setLanguage] = useState<Language>(() => {
@@ -147,7 +149,7 @@ export default function App() {
     setMessages(prev => [...prev, initialAssistantMessage]);
 
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
