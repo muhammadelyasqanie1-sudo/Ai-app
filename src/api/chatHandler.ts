@@ -46,14 +46,15 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       sendJson(res, 400, { error: 'Missing messages array' });
       return;
     }
-    if (!model) {
-      sendJson(res, 400, { error: 'Please select a Claude model in the app.' });
+    if (!model || !/^@cf\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(model)) {
+      sendJson(res, 400, { error: 'Please select a valid Cloudflare Workers AI model in the app.' });
       return;
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
-    if (!apiKey) {
-      sendJson(res, 503, { error: 'Claude API is not configured. Add ANTHROPIC_API_KEY in Render Environment.' });
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
+    const apiToken = process.env.CLOUDFLARE_API_TOKEN?.trim();
+    if (!accountId || !apiToken) {
+      sendJson(res, 503, { error: 'Cloudflare Workers AI is not configured. Add CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in Render Environment.' });
       return;
     }
 
@@ -62,38 +63,35 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       .map((m) => String(m.content ?? ''));
     if (customInstructions) systemMessages.unshift(customInstructions);
 
-    const upstreamMessages = messages
+    const upstreamMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
+    if (systemMessages.join('\n\n').trim()) {
+      upstreamMessages.push({ role: 'system', content: systemMessages.join('\n\n') });
+    }
+    upstreamMessages.push(...messages
       .filter((m) => m && (m.role === 'user' || m.role === 'assistant'))
-      .map((m) => ({ role: m.role, content: String(m.content ?? '') }))
-      .filter((m) => m.content.length > 0);
+      .map((m) => ({ role: m.role as 'user' | 'assistant', content: String(m.content ?? '') }))
+      .filter((m) => m.content.length > 0));
 
-    if (upstreamMessages.length === 0) {
-      sendJson(res, 400, { error: 'At least one user or assistant message is required.' });
+    if (!upstreamMessages.some((m) => m.role === 'user')) {
+      sendJson(res, 400, { error: 'At least one user message is required.' });
       return;
     }
 
-    const upstream = await fetch('https://api.anthropic.com/v1/messages', {
+    const upstream = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`, {
       method: 'POST',
       headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
+        Authorization: `Bearer ${apiToken}`,
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
       },
-      body: JSON.stringify({
-        model,
-        max_tokens: 4096,
-        system: systemMessages.join('\n\n'),
-        messages: upstreamMessages,
-        stream: true,
-      }),
+      body: JSON.stringify({ messages: upstreamMessages, stream: true }),
     });
 
     if (!upstream.ok) {
       const details = await upstream.text();
-      console.error('Claude API request failed:', upstream.status, details.slice(0, 1200));
+      console.error('Cloudflare Workers AI request failed:', upstream.status, details.slice(0, 1200));
       sendJson(res, upstream.status, {
-        error: 'Claude API request failed',
+        error: 'Cloudflare Workers AI request failed',
         status: upstream.status,
         details: details.slice(0, 700),
       });
@@ -101,7 +99,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (!upstream.body) {
-      sendJson(res, 502, { error: 'Claude API returned an empty response stream' });
+      sendJson(res, 502, { error: 'Cloudflare returned an empty response stream.' });
       return;
     }
 
@@ -131,12 +129,16 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
           if (!data || data === '[DONE]') continue;
           try {
             const event = JSON.parse(data);
-            const piece = event.type === 'content_block_delta' ? event.delta?.text : undefined;
+            const piece =
+              typeof event.response === 'string' ? event.response :
+              typeof event.text === 'string' ? event.text :
+              typeof event.choices?.[0]?.delta?.content === 'string' ? event.choices[0].delta.content :
+              undefined;
             if (typeof piece === 'string' && piece.length > 0) {
               res.write(`data: ${JSON.stringify({ type: 'content', text: piece })}\n\n`);
             }
-            if (event.type === 'error') {
-              console.error('Claude stream error:', JSON.stringify(event.error || event));
+            if (event.error) {
+              console.error('Cloudflare stream error:', JSON.stringify(event.error).slice(0, 800));
             }
           } catch {
             // Ignore non-JSON SSE events.
@@ -149,11 +151,11 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       reader.releaseLock();
     }
   } catch (error: any) {
-    console.error('Claude API error:', error?.message || error);
+    console.error('Cloudflare Workers AI error:', error?.message || error);
     if (!res.headersSent) {
       sendJson(res, 500, { error: 'Internal server error' });
     } else {
-      res.write(`data: ${JSON.stringify({ type: 'error', error: 'Claude stream failed' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'error', error: 'Cloudflare AI stream failed' })}\n\n`);
       res.end();
     }
   }
