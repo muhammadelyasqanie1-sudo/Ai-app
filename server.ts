@@ -17,24 +17,26 @@ app.all('/api/chat', (req, res) => {
 });
 
 app.get('/api/models', async (_req, res) => {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
-    res.status(503).json({ error: 'OpenAI API is not configured' });
+    res.status(503).json({ error: 'Claude API is not configured. Add ANTHROPIC_API_KEY in Render Environment.' });
     return;
   }
   try {
-    const configuredBaseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
-    const baseUrl = configuredBaseUrl.endsWith('/') ? configuredBaseUrl.slice(0, -1) : configuredBaseUrl;
-    const response = await fetch(`${baseUrl}/models`, {
-      headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+    const response = await fetch('https://api.anthropic.com/v1/models', {
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        Accept: 'application/json',
+      },
     });
     if (!response.ok) {
       const details = await response.text();
-      console.error('OpenAI model list failed:', response.status, details.slice(0, 800));
-      res.status(response.status).json({ error: 'Could not load OpenAI models' });
+      console.error('Claude model list failed:', response.status, details.slice(0, 800));
+      res.status(response.status).json({ error: 'Could not load Claude models' });
       return;
     }
-    const payload = await response.json() as { data?: Array<{ id?: string }> };
+    const payload = await response.json() as { data?: Array<{ id?: string; display_name?: string }> };
     const models = (payload.data || [])
       .map((item) => item.id)
       .filter((id): id is string => Boolean(id))
@@ -42,8 +44,8 @@ app.get('/api/models', async (_req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.json({ models });
   } catch (error) {
-    console.error('OpenAI model list failed:', error);
-    res.status(502).json({ error: 'Could not load OpenAI models' });
+    console.error('Claude model list failed:', error);
+    res.status(502).json({ error: 'Could not load Claude models' });
   }
 });
 
