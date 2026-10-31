@@ -68,8 +68,8 @@ export default function App() {
   const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
   const [messages, setMessages] = useState<AfgMessage[]>(INITIAL_MESSAGES);
   const [isLoading, setIsLoading] = useState(false);
-  const [availableModels, setAvailableModels] = useState<string[]>(['deepseek-ai/deepseek-v4-flash']);
-  const [selectedModel, setSelectedModel] = useState('deepseek-ai/deepseek-v4-flash');
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState('');
   const [initialPromptForChat, setInitialPromptForChat] = useState<string | undefined>(undefined);
 
   // Modals state
@@ -226,11 +226,11 @@ export default function App() {
         )
       );
     } catch (error) {
-      console.error('NVIDIA API request failed:', error);
+      console.error('OpenAI API request failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown API error';
       const userFacingError = language === 'dari'
-        ? `اتصال به هوش مصنوعی NVIDIA برقرار نشد. لطفاً تنظیمات API و اتصال سرور را بررسی کنید.\n\nجزئیات: ${errorMessage}`
-        : `Could not connect to NVIDIA AI. Please check the server API configuration and connection.\n\nDetails: ${errorMessage}`;
+        ? `اتصال به هوش مصنوعی برقرار نشد. لطفاً کلید OpenAI و مدل انتخاب‌شده را در تنظیمات سرور بررسی کنید.\n\nجزئیات: ${errorMessage}`
+        : `Could not connect to AI. Please check the OpenAI API key and selected model on the server.\n\nDetails: ${errorMessage}`;
 
       setMessages(prev =>
         prev.map(m =>
