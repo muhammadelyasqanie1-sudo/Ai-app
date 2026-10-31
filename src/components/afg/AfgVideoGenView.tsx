@@ -16,9 +16,6 @@ import { translations } from '../../utils/afgTranslations';
 
 interface AfgVideoGenViewProps {
   language: Language;
-  user: UserProfile;
-  onDeductCoins: (amount: number) => boolean;
-  onOpenWallet: () => void;
 }
 
 const SAMPLE_VIDEOS: GeneratedVideo[] = [
@@ -53,9 +50,6 @@ const SAMPLE_VIDEOS: GeneratedVideo[] = [
 
 export const AfgVideoGenView: React.FC<AfgVideoGenViewProps> = ({
   language,
-  user,
-  onDeductCoins,
-  onOpenWallet,
 }) => {
   const t = translations[language];
   const [prompt, setPrompt] = useState(
@@ -85,13 +79,6 @@ export const AfgVideoGenView: React.FC<AfgVideoGenViewProps> = ({
 
   const handleGenerate = () => {
     if (!prompt.trim()) return;
-
-    const success = onDeductCoins(25);
-    if (!success) {
-      alert(language === 'dari' ? 'سکه کافی ندارید! لطفا کیف پول خود را شارژ کنید.' : 'Insufficient coins! Please top up your wallet.');
-      onOpenWallet();
-      return;
-    }
 
     setIsGenerating(true);
     if (isPlaying && videoRef.current) {
@@ -128,10 +115,6 @@ export const AfgVideoGenView: React.FC<AfgVideoGenViewProps> = ({
             {t.videoGenSubtitle}
           </p>
         </div>
-
-        <span className="text-xs text-amber-300 bg-amber-500/15 border border-amber-500/30 px-3 py-1 rounded-full font-bold">
-          25 {t.coins} / ویدیو
-        </span>
       </div>
 
       {/* Video Generation Studio Box */}
