@@ -9,7 +9,6 @@ import {
   Settings, 
   LogOut, 
   Crown,
-  Coins,
   History,
   ShieldAlert
 } from 'lucide-react';
@@ -24,7 +23,6 @@ interface AfgSideMenuProps {
   onChangeTab: (tab: TabType) => void;
   language: Language;
   user: UserProfile;
-  onOpenWallet: () => void;
 }
 
 export const AfgSideMenu: React.FC<AfgSideMenuProps> = ({
@@ -34,7 +32,6 @@ export const AfgSideMenu: React.FC<AfgSideMenuProps> = ({
   onChangeTab,
   language,
   user,
-  onOpenWallet,
 }) => {
   if (!isOpen) return null;
 
@@ -46,7 +43,6 @@ export const AfgSideMenu: React.FC<AfgSideMenuProps> = ({
     { id: 'image-gen' as TabType, label: t.navImage, icon: ImageIcon },
     { id: 'tools' as TabType, label: t.navTools, icon: Wrench },
     { id: 'history' as TabType, label: t.navHistory, icon: History },
-    { id: 'wallet' as TabType, label: t.navWallet, icon: Coins },
     { id: 'settings' as TabType, label: t.navSettings, icon: Settings },
     { id: 'admin' as TabType, label: t.navAdmin, icon: ShieldAlert },
   ];
@@ -106,16 +102,6 @@ export const AfgSideMenu: React.FC<AfgSideMenuProps> = ({
               <p className="text-[10px] text-cyan-300">
                 {t.premiumUser}
               </p>
-              <button 
-                onClick={() => {
-                  onOpenWallet();
-                  onClose();
-                }}
-                className="mt-1 text-[10px] text-amber-300 font-bold hover:underline flex items-center gap-1"
-              >
-                <span>🪙 {user.coins.toLocaleString()} {t.coins}</span>
-                <span className="text-amber-200">({t.topUp})</span>
-              </button>
             </div>
           </div>
 

@@ -3,7 +3,6 @@ import {
   Home, 
   MessageSquare, 
   Wrench, 
-  Wallet, 
   User, 
   Sparkles,
   History,
@@ -32,7 +31,6 @@ export const AfgNavigation: React.FC<AfgNavigationProps> = ({
     { id: 'chat' as TabType, label: t.navChat, icon: MessageSquare },
     { id: 'image-gen' as TabType, label: t.navImage, icon: ImageIcon },
     { id: 'tools' as TabType, label: t.navTools, icon: Wrench },
-    { id: 'wallet' as TabType, label: t.navWallet, icon: Wallet },
     { id: 'history' as TabType, label: t.navHistory, icon: History },
   ];
 

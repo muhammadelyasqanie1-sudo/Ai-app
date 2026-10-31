@@ -12,9 +12,6 @@ export const translations = {
     greeting: 'سلام، سید فیروز!',
     welcomeBack: 'به AFG AI خوش آمدید',
     premiumUser: 'کاربر ویژه Pro++',
-    buyCoin: 'خرید سکه',
-    coins: 'سکه',
-    topUp: 'شارژ حساب',
     askAnythingPlaceholder: 'سوال خود را بنویسید...',
     
     // Navigation
@@ -23,7 +20,6 @@ export const translations = {
     navTools: 'ابزارها',
     navImage: 'تولید عکس',
     navVideo: 'ساخت ویدیو',
-    navWallet: 'کیف پول',
     navHistory: 'تاریخچه',
     navSettings: 'تنظیمات',
     navAdmin: 'مدیریت',
@@ -89,7 +85,7 @@ export const translations = {
     imgPromptPlaceholder: 'یک کوهستان زیبا در افغانستان با برف و آسمان آبی و انعکاس در دریاچه...',
     imgStyle: 'سبک تصویر',
     imgAspect: 'نسبت ابعاد',
-    btnGenerateImage: 'تولید تصویر 🪄 (۱۰ سکه)',
+    btnGenerateImage: 'تولید تصویر 🪄',
     myCreations: 'ساخته‌های من',
     download: 'دانلود',
     share: 'اشتراک‌گذاری',
@@ -99,20 +95,9 @@ export const translations = {
     videoGenTitle: 'استودیوی ساخت ویدیو',
     videoGenSubtitle: 'تولید ویدیوی هوش مصنوعی از روی متن',
     videoPromptPlaceholder: 'پرواز یک عقاب باشکوه بر فراز کوه‌های هندوکش هنگام غروب آفتاب...',
-    btnGenerateVideo: 'ساخت ویدیو 🎬 (۲۵ سکه)',
+    btnGenerateVideo: 'ساخت ویدیو 🎬',
     myVideos: 'ویدیوهای من',
 
-    // Wallet
-    walletTitle: 'کیف پول و خرید سکه',
-    currentBalance: 'موجودی سکه شما:',
-    vipBannerTitle: 'اشتراک ویژه AFG AI Pro++',
-    vipBannerDesc: 'دسترسی نامحدود به سریع‌ترین مدل‌ها، تولید تصویر 4K و پشتیبانی اختصاصی',
-    btnUpgradePro: 'ارتقا به پرو++',
-    package1Title: 'بسته پایه',
-    package2Title: 'بسته محبوب',
-    package3Title: 'بسته طلایی ویژه',
-    popularBadge: 'محبوب‌ترین',
-    bestValueBadge: 'بهترین قیمت',
 
     // History
     historyTitle: 'تاریخچه گفتگوها',
@@ -167,9 +152,6 @@ export const translations = {
     greeting: 'Hello, Syed Firuz!',
     welcomeBack: 'Welcome back to AFG AI',
     premiumUser: 'Pro++ Premium User',
-    buyCoin: 'Buy Coin',
-    coins: 'Coins',
-    topUp: 'Top Up',
     askAnythingPlaceholder: 'Ask anything...',
     
     // Navigation
@@ -178,7 +160,6 @@ export const translations = {
     navTools: 'Tools',
     navImage: 'Image Gen',
     navVideo: 'Video Gen',
-    navWallet: 'Wallet',
     navHistory: 'History',
     navSettings: 'Settings',
     navAdmin: 'Admin',
@@ -244,7 +225,7 @@ export const translations = {
     imgPromptPlaceholder: 'A majestic mountain valley in Afghanistan with turquoise lakes, snow peaks and cherry blossoms...',
     imgStyle: 'Image Style',
     imgAspect: 'Aspect Ratio',
-    btnGenerateImage: 'Generate Image 🪄 (10 Coins)',
+    btnGenerateImage: 'Generate Image 🪄',
     myCreations: 'My Creations',
     download: 'Download',
     share: 'Share',
@@ -254,20 +235,9 @@ export const translations = {
     videoGenTitle: 'Video Generator Studio',
     videoGenSubtitle: 'Generate cinematic AI videos from descriptive text',
     videoPromptPlaceholder: 'Cinematic drone shot soaring over historic Afghan citadel at golden hour sunset...',
-    btnGenerateVideo: 'Generate Video 🎬 (25 Coins)',
+    btnGenerateVideo: 'Generate Video 🎬',
     myVideos: 'My Videos',
 
-    // Wallet
-    walletTitle: 'Wallet & Buy Coins',
-    currentBalance: 'Your Coin Balance:',
-    vipBannerTitle: 'AFG AI Pro++ Membership',
-    vipBannerDesc: 'Unlimited ultra-fast reasoning, 4K image generation, HD videos, and priority servers',
-    btnUpgradePro: 'Upgrade to Pro++',
-    package1Title: 'Starter Pack',
-    package2Title: 'Popular Pack',
-    package3Title: 'Best Value Pack',
-    popularBadge: 'Popular',
-    bestValueBadge: 'Best Value',
 
     // History
     historyTitle: 'Conversation History',

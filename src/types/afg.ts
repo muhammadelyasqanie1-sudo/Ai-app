@@ -7,8 +7,7 @@ export type TabType =
   | 'image-gen' 
   | 'video-gen' 
   | 'tools' 
-  | 'history' 
-  | 'wallet' 
+  | 'history'
   | 'settings' 
   | 'admin';
 
@@ -28,7 +27,6 @@ export interface UserProfile {
   nameEn: string;
   email: string;
   avatar: string;
-  coins: number;
   isPremium: boolean;
   tier: string;
 }
@@ -81,11 +79,3 @@ export interface GeneratedVideo {
   timestamp: number;
 }
 
-export interface CoinPackage {
-  id: string;
-  coins: number;
-  price: string;
-  bonus?: number;
-  popular?: boolean;
-  bestValue?: boolean;
-}

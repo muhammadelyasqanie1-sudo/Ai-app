@@ -11,14 +11,11 @@ import {
   Wand2,
   Check
 } from 'lucide-react';
-import type { Language, GeneratedImage, UserProfile } from '../../types/afg';
+import type { Language, GeneratedImage } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
 
 interface AfgImageGenViewProps {
   language: Language;
-  user: UserProfile;
-  onDeductCoins: (amount: number) => boolean;
-  onOpenWallet: () => void;
 }
 
 const SAMPLE_CREATIONS: GeneratedImage[] = [
@@ -66,9 +63,6 @@ const SAMPLE_CREATIONS: GeneratedImage[] = [
 
 export const AfgImageGenView: React.FC<AfgImageGenViewProps> = ({
   language,
-  user,
-  onDeductCoins,
-  onOpenWallet,
 }) => {
   const t = translations[language];
   const [prompt, setPrompt] = useState(
@@ -88,14 +82,6 @@ export const AfgImageGenView: React.FC<AfgImageGenViewProps> = ({
 
   const handleGenerate = () => {
     if (!prompt.trim()) return;
-
-    // Deduct 10 coins
-    const success = onDeductCoins(10);
-    if (!success) {
-      alert(language === 'dari' ? 'سکه کافی ندارید! لطفا کیف پول خود را شارژ کنید.' : 'Insufficient coins! Please top up your wallet.');
-      onOpenWallet();
-      return;
-    }
 
     setIsGenerating(true);
 
@@ -163,11 +149,6 @@ export const AfgImageGenView: React.FC<AfgImageGenViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-amber-300 bg-amber-500/15 border border-amber-500/30 px-3 py-1 rounded-full font-bold">
-            10 {t.coins} / تصویر
-          </span>
-        </div>
       </div>
 
       {/* Main Studio Controls Box */}
