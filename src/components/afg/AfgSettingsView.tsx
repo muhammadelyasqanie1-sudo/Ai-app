@@ -54,16 +54,6 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
       {/* User Profile Card (Matching Screenshot 2) */}
       <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-[#0c1a40] to-[#07112c] border border-cyan-500/40 shadow-xl flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="relative">
-            <img
-              src={user.avatar}
-              alt={user.name}
-              className="w-16 h-16 rounded-2xl object-cover ring-2 ring-cyan-400 shadow-[0_0_15px_rgba(0,229,255,0.4)]"
-            />
-            <span className="absolute -top-1 -right-1 bg-amber-400 text-amber-950 p-1 rounded-full shadow">
-              <Crown className="w-3.5 h-3.5 fill-current" />
-            </span>
-          </div>
           <div>
             <h2 className="text-base sm:text-lg font-black text-white">
               {language === 'dari' ? user.name : user.nameEn}
