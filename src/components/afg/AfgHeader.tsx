@@ -4,7 +4,6 @@ import {
   Bell, 
   Sun, 
   Moon, 
-  Coins, 
   Globe, 
   Crown,
   Sparkles,
@@ -20,7 +19,6 @@ interface AfgHeaderProps {
   user: UserProfile;
   onToggleLanguage: () => void;
   onToggleTheme: () => void;
-  onOpenWallet: () => void;
   onOpenSettings: () => void;
   onOpenMenu: () => void;
   unreadNotifications?: number;
@@ -32,7 +30,6 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
   user,
   onToggleLanguage,
   onToggleTheme,
-  onOpenWallet,
   onOpenSettings,
   onOpenMenu,
   unreadNotifications = 1,
@@ -80,21 +77,6 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
 
         {/* Right Section: Coins, Language Switch, Theme, Notifications & User Avatar */}
         <div className="flex items-center gap-1.5 sm:gap-2.5">
-          
-          {/* Buy Coin / Top Up Pill (Matching Screenshot 2 & 3) */}
-          <button
-            onClick={onOpenWallet}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border border-amber-500/40 text-amber-300 hover:border-amber-400 hover:scale-102 transition-all shadow-[0_0_15px_rgba(245,158,11,0.2)]"
-            title={t.buyCoin}
-          >
-            <span className="text-sm">🪙</span>
-            <span className="text-xs sm:text-sm font-bold tracking-tight text-amber-300">
-              {user.coins.toLocaleString()}
-            </span>
-            <span className="hidden sm:inline-block text-[11px] font-medium bg-amber-500/25 px-1.5 py-0.5 rounded-full text-amber-200">
-              {t.topUp}
-            </span>
-          </button>
 
           {/* Language Switcher */}
           <button
