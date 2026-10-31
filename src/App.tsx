@@ -29,10 +29,10 @@ import type {
 } from './types/afg';
 
 const DEFAULT_USER: UserProfile = {
-  name: 'سید فیروز',
-  nameEn: 'Syed Firuz',
-  email: 'syedfiruz@gmail.com',
-  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
+  name: 'Unknown',
+  nameEn: 'Unknown',
+  email: 'unknown',
+  avatar: '',
   isPremium: true,
   tier: 'Pro',
 };
