@@ -77,14 +77,21 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
-    const upstream = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`, {
+    // Use Cloudflare's OpenAI-compatible Chat Completions endpoint.
+    // The universal /ai/run endpoint requires a different input schema for
+    // each model, so sending { messages } there breaks many catalog entries.
+    const upstream = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1/chat/completions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiToken}`,
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
       },
-      body: JSON.stringify({ messages: upstreamMessages, stream: true }),
+      body: JSON.stringify({
+        model,
+        messages: upstreamMessages,
+        stream: true,
+      }),
     });
 
     if (!upstream.ok) {
