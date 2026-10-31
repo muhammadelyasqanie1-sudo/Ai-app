@@ -3,7 +3,11 @@ import type { IncomingMessage, ServerResponse } from 'http';
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
 function sendJson(res: ServerResponse, status: number, payload: unknown) {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Access-Control-Allow-Origin': '*',
+  });
   res.end(JSON.stringify(payload));
 }
 
@@ -36,32 +40,33 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     const body = JSON.parse(bodyStr || '{}');
     const messages = body.messages as ChatMessage[] | undefined;
     const customInstructions = String(body.customInstructions || '');
+    const model = String(body.model || '').trim();
 
     if (!Array.isArray(messages) || messages.length === 0) {
       sendJson(res, 400, { error: 'Missing messages array' });
       return;
     }
-
-    const apiKey = process.env.NVIDIA_API_KEY?.trim();
-    if (!apiKey) {
-      sendJson(res, 503, { error: 'NVIDIA API is not configured. Set NVIDIA_API_KEY on the server.' });
+    if (!model) {
+      sendJson(res, 400, { error: 'Please select a model in the app.' });
       return;
     }
 
-    const requestedModel = String(body.model || '').trim();
-    const model = requestedModel || process.env.NVIDIA_MODEL?.trim() || 'deepseek-ai/deepseek-v4-flash';
+    const apiKey = process.env.OPENAI_API_KEY?.trim();
+    if (!apiKey) {
+      sendJson(res, 503, { error: 'OpenAI API is not configured. Add OPENAI_API_KEY in Render Environment.' });
+      return;
+    }
+
     const upstreamMessages = messages
       .filter((m) => m && (m.role === 'user' || m.role === 'assistant' || m.role === 'system'))
       .map((m) => ({ role: m.role, content: String(m.content ?? '') }));
 
     if (customInstructions) {
-      upstreamMessages.unshift({
-        role: 'system',
-        content: customInstructions,
-      });
+      upstreamMessages.unshift({ role: 'system', content: customInstructions });
     }
 
-    const upstream = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    const baseUrl = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
+    const upstream = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -71,25 +76,23 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       body: JSON.stringify({
         model,
         messages: upstreamMessages,
-        temperature: 0.6,
-        max_tokens: 4096,
         stream: true,
       }),
     });
 
     if (!upstream.ok) {
       const details = await upstream.text();
-      console.error('NVIDIA NIM request failed:', upstream.status, details.slice(0, 1500));
+      console.error('OpenAI API request failed:', upstream.status, details.slice(0, 1200));
       sendJson(res, upstream.status, {
-        error: 'NVIDIA API request failed',
+        error: 'OpenAI API request failed',
         status: upstream.status,
-        details: details.slice(0, 1000),
+        details: details.slice(0, 700),
       });
       return;
     }
 
     if (!upstream.body) {
-      sendJson(res, 502, { error: 'NVIDIA API returned an empty response stream' });
+      sendJson(res, 502, { error: 'OpenAI API returned an empty response stream' });
       return;
     }
 
@@ -109,7 +112,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split(/\\r?\\n/);
+        const lines = buffer.split(/\r?\n/);
         buffer = lines.pop() || '';
 
         for (const line of lines) {
@@ -117,19 +120,32 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
           if (!trimmed.startsWith('data:')) continue;
           const data = trimmed.slice(5).trim();
           if (!data || data === '[DONE]') continue;
-
           try {
             const event = JSON.parse(data);
             const piece = event.choices?.[0]?.delta?.content;
             if (typeof piece === 'string' && piece.length > 0) {
-              res.write(`data: ${JSON.stringify({ type: 'content', text: piece })}\\n\\n`);
+              res.write(`data: ${JSON.stringify({ type: 'content', text: piece })}\n\n`);
             }
           } catch {
-            // Ignore non-JSON keepalive/event lines from the upstream stream.
+            // Ignore non-JSON keepalive/event lines.
           }
         }
       }
-      res.write('data: [DONE]\\n\\n');
+      if (buffer.trim().startsWith('data:')) {
+        const data = buffer.trim().slice(5).trim();
+        if (data && data !== '[DONE]') {
+          try {
+            const event = JSON.parse(data);
+            const piece = event.choices?.[0]?.delta?.content;
+            if (typeof piece === 'string' && piece.length > 0) {
+              res.write(`data: ${JSON.stringify({ type: 'content', text: piece })}\n\n`);
+            }
+          } catch {
+            // Ignore incomplete final event.
+          }
+        }
+      }
+      res.write('data: [DONE]\n\n');
       res.end();
     } finally {
       reader.releaseLock();
@@ -139,7 +155,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     if (!res.headersSent) {
       sendJson(res, 500, { error: 'Internal server error' });
     } else {
-      res.write(`data: ${JSON.stringify({ type: 'error', error: 'NVIDIA stream failed' })}\\n\\n`);
+      res.write(`data: ${JSON.stringify({ type: 'error', error: 'OpenAI stream failed' })}\n\n`);
       res.end();
     }
   }
