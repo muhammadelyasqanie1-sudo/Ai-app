@@ -12,7 +12,6 @@ import {
   LogOut, 
   Crown, 
   ChevronRight, 
-  Coins, 
   ExternalLink,
   Heart,
   Send,
@@ -28,7 +27,6 @@ interface AfgSettingsViewProps {
   user: UserProfile;
   onToggleLanguage: () => void;
   onToggleTheme: () => void;
-  onOpenWallet: () => void;
   onOpenShortcuts: () => void;
 }
 
@@ -38,7 +36,6 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
   user,
   onToggleLanguage,
   onToggleTheme,
-  onOpenWallet,
   onOpenShortcuts,
 }) => {
   const t = translations[language];
@@ -78,19 +75,9 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
               <span className="text-[11px] font-bold text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full border border-amber-500/40">
                 {t.premiumUser}
               </span>
-              <span className="text-[11px] font-bold text-cyan-300 bg-cyan-500/20 px-2 py-0.5 rounded-full">
-                🪙 {user.coins.toLocaleString()}
-              </span>
             </div>
           </div>
         </div>
-
-        <button
-          onClick={onOpenWallet}
-          className="px-3.5 py-2 rounded-xl gradient-btn-cyan text-slate-950 font-bold text-xs shrink-0"
-        >
-          {t.topUp}
-        </button>
       </div>
 
       {/* Settings Options List */}
