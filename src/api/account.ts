@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createHash } from 'crypto';
 import { pool } from './database.ts';
-import { authenticateRequest, verifyCsrf, readJsonBody, sendAuthJson, hashPassword, verifyPassword, clearSessionCookies, recordSecurityNotification } from './auth.ts';
+import { authenticateRequest, verifyCsrf, readJsonBody, sendAuthJson, hashPassword, verifyPassword, clearSessionCookies, recordSecurityNotification, recordAuthSecurityEvent } from './auth.ts';
 
 function reply(res: ServerResponse, status: number, body: Record<string, unknown>) { sendAuthJson(res, status, body); }
 const SENSITIVE_MEMORY_PATTERN = /\b(password|passcode|secret|api.?key|token|otp|verification.?code|recovery.?code|private.?key|credential|passport|national.?id|identity.?card|social.?security|ssn|driver.?license|medical|diagnosis|medication|prescription|hospital|doctor|disease|symptom|health|diabetes|cancer|pregnan|depression|anxiety|allergy|blood.?pressure|bank.?account|account.?number|credit.?card|debit.?card|cvv|iban)\b|رمز|پاسورد|تذکره|پاسپورت|کارت هویت|شماره هویت|کلید خصوصی|کد تایید|کد تأیید|رمز یکبار مصرف|صحت|مریض|دوا|دارو|تشخیص|بیماری|شفاخانه|داکتر|دکتر|حساسیت|فشار خون|شکر|سرطان|حاملگی|بارداری|افسردگی|اضطراب|حساب بانکی|شماره حساب|کارت بانکی/i;
@@ -113,12 +113,12 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
 
   if(pathname==='/api/account/sessions'&&req.method==='GET'){
     const currentHash=secretHash(cookieToken(req,'afg_session'));
-    const result=await pool.query('SELECT id,created_at AS "createdAt",last_seen_at AS "lastSeenAt",expires_at AS "expiresAt",(token_hash=$2) AS current FROM sessions WHERE user_id=$1 AND expires_at>now() ORDER BY last_seen_at DESC LIMIT 50',[user.id,currentHash]);
+    const result=await pool.query('SELECT id,created_at AS "createdAt",last_seen_at AS "lastSeenAt",expires_at AS "expiresAt",(token_hash=$2) AS current FROM sessions WHERE user_id=$1 AND expires_at>now() AND revoked_at IS NULL ORDER BY last_seen_at DESC LIMIT 50',[user.id,currentHash]);
     reply(res,200,{sessions:result.rows});return true;
   }
   const sessionMatch=pathname.match(/^\/api\/account\/sessions\/([0-9a-f-]{36})$/i);
   if(sessionMatch&&req.method==='DELETE'){
-    const result=await pool.query('DELETE FROM sessions WHERE id=$1 AND user_id=$2',[sessionMatch[1],user.id]);
+    const result=await pool.query('UPDATE sessions SET revoked_at=now() WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL',[sessionMatch[1],user.id]);
     reply(res,result.rowCount?200:404,result.rowCount?{revoked:true}:{error:'Session not found.'});return true;
   }
   if(pathname==='/api/account/password'&&req.method==='POST'){
@@ -128,7 +128,7 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
       const stored=await pool.query('SELECT password_hash FROM users WHERE id=$1',[user.id]);
       if(!stored.rows[0]?.password_hash||!await verifyPassword(current,stored.rows[0].password_hash)){reply(res,401,{error:'Current password is incorrect.'});return true;}
       await pool.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[await hashPassword(next),user.id]);
-      await pool.query('DELETE FROM sessions WHERE user_id=$1 AND token_hash<>$2',[user.id,secretHash(cookieToken(req,'afg_session'))]);
+      await pool.query('UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND token_hash<>$2 AND revoked_at IS NULL',[user.id,secretHash(cookieToken(req,'afg_session'))]);
       await recordSecurityNotification(user.id,'security.password_changed','Password changed','Your AFG AI account password was changed.');
       reply(res,200,{changed:true,otherSessionsRevoked:true});
     }catch{reply(res,400,{error:'Could not change password.'});}return true;
@@ -155,6 +155,9 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
       if(body.confirmation!=='DELETE MY ACCOUNT'){reply(res,400,{error:'Type DELETE MY ACCOUNT to confirm.'});return true;}
       const stored=await pool.query('SELECT password_hash FROM users WHERE id=$1',[user.id]);
       if(stored.rows[0]?.password_hash && (typeof body.currentPassword!=='string'||!await verifyPassword(body.currentPassword,stored.rows[0].password_hash))){reply(res,401,{error:'Current password is required and must be correct.'});return true;}
+      await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',[user.id,'account.self_delete','user',user.id,JSON.stringify({source:'account-settings'})]);
+      await recordAuthSecurityEvent(req,user.id,'auth.account_deleted','warning');
+      await pool.query('UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL',[user.id]);
       await pool.query('DELETE FROM users WHERE id=$1',[user.id]);
       clearSessionCookies(res);
       reply(res,200,{deleted:true});
