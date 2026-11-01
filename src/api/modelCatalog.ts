@@ -17,7 +17,7 @@ export async function getProviderModelCatalog(): Promise<VerifiedModelCatalog> {
     status: catalog.status,
     body: {
       ...(catalog.error ? { error: catalog.error } : {}),
-      models: catalog.models.map((model) => model.id),
+      models: catalog.models.map((model) => model.providerId + '::' + model.id),
       ...(catalog.verified ? { source: 'provider-registry-live-catalog', checkedAt: catalog.checkedAt } : {}),
       verified: catalog.verified,
     },
