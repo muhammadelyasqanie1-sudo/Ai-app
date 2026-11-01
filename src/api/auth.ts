@@ -220,7 +220,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
 
 
   if (pathname === '/api/auth/providers' && req.method === 'GET') {
-    sendAuthJson(res, 200, { googleEnabled: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && configuredAppOrigin()) });
+    sendAuthJson(res, 200, { googleEnabled: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && configuredAppOrigin()), emailEnabled: Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM) });
     return true;
   }
 
