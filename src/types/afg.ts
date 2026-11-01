@@ -58,6 +58,7 @@ export interface AfgChatSession {
   timestamp: number;
   messages: AfgMessage[];
   category: 'general' | 'image' | 'code' | 'translation' | 'tools';
+  isPinned?: boolean;
 }
 
 export interface GeneratedImage {
