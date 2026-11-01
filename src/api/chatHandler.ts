@@ -240,7 +240,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
 
     // Bound the complete upstream generation, including provider retries and stream reads.
     requestTimer = setTimeout(() => { timedOut = true; abortController.abort(); }, 60_000);
-    const prepared = await prepareVerifiedChat({ model, messages: upstreamMessages, signal: abortController.signal, noFallback: body.no_fallback === true, onModelSelected: (_providerId, selectedModelId) => { activeModelId = selectedModelId; } });
+    const prepared = await prepareVerifiedChat({ model, messages: upstreamMessages, signal: abortController.signal, noFallback: body.no_fallback === true, onModelSelected: (_providerId, selectedModelId) => { if (activeModelId !== selectedModelId) { activeModelId = selectedModelId; if (res.headersSent && !res.writableEnded) res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: selectedModelId })}\\n\\n`); } } });
     const { providerId, modelId, stream } = prepared;
     activeModelId = modelId;
     res.writeHead(200, {
@@ -271,11 +271,13 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       res.write('data: [DONE]\n\n');
       res.end();
     } catch (error) {
+      const streamErrorCode = classifyError(error);
+      const streamRetryable = !['invalid_request','content_policy','auth'].includes(streamErrorCode);
       console.error('AI_PROVIDER_STREAM_FAILED', JSON.stringify({
         requestId: id,
         provider: prepared.providerId,
         model: prepared.modelId,
-        code: classifyError(error),
+        code: streamErrorCode,
         providerCode: error instanceof ProviderAdapterError ? error.code : 'unexpected_stream_error',
         userId: requestUserId,
         modelId: activeModelId,
@@ -285,8 +287,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         res.write(`data: ${JSON.stringify({
           type: 'error',
           error: 'The AI response stream was interrupted. Your prompt is still available to retry.',
-          errorCode: classifyError(error),
-          retryable: true,
+          errorCode: streamErrorCode,
+          retryable: streamRetryable,
           requestId: id,
         })}\n\n`);
         res.end();
