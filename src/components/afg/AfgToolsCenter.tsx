@@ -153,7 +153,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   // Translation uses the selected verified text-generation model.
   const handleTranslationFile = async (file?: File) => {
     if (!file) return;
-    if (file.size > 45_000) { setTransOutput(language === 'dari' ? 'فایل متنی باید کمتر از ۱ مگابایت باشد.' : 'Text document must be 45 KB or smaller.'); return; }
+    if (file.size > 45_000) { setTransOutput(language === 'dari' ? 'فایل متنی باید کمتر از ۴۵ کیلوبایت باشد.' : 'Text document must be 45 KB or smaller.'); return; }
     const extension = file.name.split('.').pop()?.toLowerCase();
     if (!['txt', 'md', 'csv', 'json'].includes(extension || '')) { setTransOutput(language === 'dari' ? 'فعلاً فقط فایل‌های TXT، MD، CSV و JSON متنی پشتیبانی می‌شوند.' : 'Only text-based TXT, MD, CSV and JSON documents are supported here.'); return; }
     try { setTransInput(await file.text()); setTranslationFileName(file.name); setTransOutput(''); }
@@ -423,7 +423,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
               disabled={!codePrompt.trim()}
               className="px-4 py-2.5 rounded-xl gradient-btn-cyan text-slate-950 font-bold text-xs"
             >
-              Generate Code
+              {language === 'dari' ? 'تولید کد' : 'Generate Code'}
             </button>
           </div>
 
@@ -439,7 +439,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
           <p className="text-xs text-slate-400">{language === 'dari' ? 'جستجو فقط با TAVILY_API_KEY تنظیم‌شده در سرور کار می‌کند. لینک‌ها عیناً از نتیجه جستجو گرفته می‌شوند.' : 'Search runs only when TAVILY_API_KEY is configured on the server. Source URLs are passed through from the search response.'}</p>
           <div className="flex gap-2"><input value={researchQuery} onChange={(e) => setResearchQuery(e.target.value)} maxLength={500} placeholder={language === 'dari' ? 'موضوع پژوهش را بنویسید...' : 'What would you like to research?'} className="min-w-0 flex-1 rounded-xl bg-slate-900 border border-blue-900/50 p-3 text-sm text-white" /><button onClick={handleResearch} disabled={!researchQuery.trim() || researchLoading} className="rounded-xl bg-blue-500 px-4 text-sm font-bold text-white disabled:opacity-40">{researchLoading ? '…' : (language === 'dari' ? 'جستجو' : 'Search')}</button></div>
           {researchError && <p className="text-sm text-amber-200">{researchError}</p>}
-          {researchSources.length > 0 && <div className="space-y-3"><h3 className="text-sm font-bold text-emerald-300">{language === 'dari' ? 'منابع تأییدشده' : 'Verified sources'}</h3>{researchSources.map((source, index) => <article key={source.url} className="rounded-xl border border-slate-700 bg-slate-900/70 p-3 space-y-1"><a href={source.url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-cyan-300 underline break-all">{index + 1}. {source.title}</a><p className="text-xs text-slate-400">{source.snippet}</p><p className="text-[11px] text-slate-500 break-all">{source.url}</p></article>)}<button onClick={() => onRunTool('Analyze the following verified web research results. Separate verified sources from your interpretation. Cite only the exact URLs included below.\\n\\n'+researchSources.map((s,i)=>`[${i+1}] ${s.title}\\nURL: ${s.url}\\nExcerpt: ${s.snippet}`).join('\\n\\n'), { toolMode: 'research' })} className="w-full rounded-xl bg-emerald-500 py-3 font-bold text-slate-950">{language === 'dari' ? 'تحلیل منابع با هوش مصنوعی' : 'AI interpretation of sources'}</button></div>}
+          {researchSources.length > 0 && <div className="space-y-3"><h3 className="text-sm font-bold text-emerald-300">{language === 'dari' ? 'منابع تأییدشده' : 'Verified sources'}</h3>{researchSources.map((source, index) => <article key={source.url} className="rounded-xl border border-slate-700 bg-slate-900/70 p-3 space-y-1"><a href={source.url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-cyan-300 underline break-all">{index + 1}. {source.title}</a><p className="text-xs text-slate-400">{source.snippet}</p><p className="text-[11px] text-slate-500 break-all">{source.url}</p></article>)}<button onClick={() => onRunTool('Analyze the following verified web research results. Separate verified sources from your interpretation. Cite only the exact URLs included below.\n\n'+researchSources.map((s,i)=>`[${i+1}] ${s.title}\nURL: ${s.url}\nExcerpt: ${s.snippet}`).join('\n\n'), { toolMode: 'research' })} className="w-full rounded-xl bg-emerald-500 py-3 font-bold text-slate-950">{language === 'dari' ? 'تحلیل منابع با هوش مصنوعی' : 'AI interpretation of sources'}</button></div>}
         </div>
       )}
 
