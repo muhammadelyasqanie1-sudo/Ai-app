@@ -35,11 +35,20 @@ async function enforceAdminConfiguredRateLimits(req: IncomingMessage, res: Serve
   if (!account) return false;
   let policies;
   try {
+    const subscription = await pool.query(
+      `SELECT p.plan_key FROM user_subscriptions s
+         JOIN subscription_plans p ON p.id=s.plan_id
+        WHERE s.user_id=$1 AND s.status IN ('active','trialing')
+          AND (s.ends_at IS NULL OR s.ends_at>now())
+        ORDER BY s.starts_at DESC LIMIT 1`,
+      [account.id],
+    );
+    const tier = subscription.rows[0]?.plan_key || 'free';
     policies = await pool.query(
       `SELECT scope_type,scope_key,requests,window_seconds FROM rate_limit_policies
         WHERE enabled=true AND ((scope_type='user' AND scope_key=$1) OR (scope_type='tier' AND scope_key=$2))
         ORDER BY CASE WHEN scope_type='user' THEN 0 ELSE 1 END`,
-      [account.id, account.role],
+      [account.id, tier],
     );
   } catch { return false; }
   for (const policy of policies.rows) {
@@ -124,10 +133,31 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     if (await handleProductivityApi(req, res, pathname)) return;
     if (await handleAdminApi(req, res, pathname)) return;
 
+    if (pathname.startsWith('/api/research') && pool) {
+      const flag = await pool.query("SELECT enabled FROM feature_flags WHERE flag_key='research' LIMIT 1").catch(() => ({ rows: [] as any[] }));
+      if (flag.rows[0] && flag.rows[0].enabled === false) {
+        sendJson(res, 503, { error: 'Research is temporarily disabled by the administrator.', feature: 'research' }, requestId);
+        return;
+      }
+    }
+    if ((pathname.startsWith('/api/voice') || pathname.startsWith('/api/speech')) && pool) {
+      const flag = await pool.query("SELECT enabled FROM feature_flags WHERE flag_key='voice' LIMIT 1").catch(() => ({ rows: [] as any[] }));
+      if (flag.rows[0] && flag.rows[0].enabled === false) {
+        sendJson(res, 503, { error: 'Voice features are temporarily disabled by the administrator.', feature: 'voice' }, requestId);
+        return;
+      }
+    }
     if (await handleResearchApi(req, res)) return;
     if (await handleVoiceApi(req, res)) return;
 
     if (pathname === '/api/chat') {
+      if (pool) {
+        const flag = await pool.query("SELECT enabled FROM feature_flags WHERE flag_key='chat' LIMIT 1").catch(() => ({ rows: [] as any[] }));
+        if (flag.rows[0] && flag.rows[0].enabled === false) {
+          sendJson(res, 503, { error: 'Chat is temporarily disabled by the administrator.', feature: 'chat' }, requestId);
+          return;
+        }
+      }
       await handleChatApi(req, res);
       return;
     }
