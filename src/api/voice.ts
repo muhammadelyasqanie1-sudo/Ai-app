@@ -30,8 +30,8 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
   const requestId = randomUUID();
   if (path === '/api/voice/voices' && req.method === 'GET') {
     const descriptors = await getVerifiedModelDescriptors();
-    const voices = descriptors.filter((model) => model.enabled && model.verifiedAt && model.capabilities.tts && Boolean(getProviderAdapter(model.providerId)?.synthesize))
-      .flatMap((model) => getProviderAdapter(model.providerId)?.voiceOptions?.(model.id) || []);
+    const voiceModel = descriptors.find((model) => model.enabled && model.verifiedAt && model.capabilities.tts && Boolean(getProviderAdapter(model.providerId)?.synthesize));
+    const voices = voiceModel ? getProviderAdapter(voiceModel.providerId)?.voiceOptions?.(voiceModel.id) || [] : [];
     reply(res, 200, { available: voices.length > 0, voices }, requestId);
     return true;
   }
