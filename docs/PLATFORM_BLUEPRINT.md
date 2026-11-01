@@ -60,3 +60,19 @@ Initial provider: Cloudflare Workers AI (already connected in `src/api/chatHandl
 6. Runtime portability: add a Cloudflare Worker entrypoint only after the shared API/provider contracts are runtime-neutral.
 
 Do not run CI/tests or production migrations without an explicit request. This roadmap does not imply that authentication, database connectivity, or every listed capability is already implemented.
+
+## Mission contract (non-negotiable)
+
+AFG AI is one unified platform: one AI gateway, multiple verified capabilities, one consistent account and data model.
+
+- No fabricated results, demo records, or mock actions in production UI. A capability without a configured and verified integration must be clearly unavailable and must not accept a fake job.
+- The backend is the source of truth for provider and model availability. The model catalog endpoint must return only models discovered from the live provider catalog. Chat requests re-check the selected model against the provider catalog before execution; a syntactically valid model ID is not proof of availability.
+- Persist user actions only after authentication and authorization are implemented. Every persisted row must have an owner relationship, appropriate indexes, retention rules, and access controls. Never imply that browser-only state is durable.
+- Every API response includes a request ID. Server logs use structured events and avoid logging credentials, raw tokens, or full private prompts.
+- Localization is selected once and applied consistently. A selected locale must control all labels, messages, dates, accessibility text, and document direction. RTL locales are Dari, Persian, Pashto, and Arabic; LTR locales include English.
+- A feature is considered released only after its provider integration, server validation, persistence, error handling, localization, and operational monitoring are complete.
+
+## Current implementation truth
+
+The existing app currently has a live Cloudflare Workers AI chat adapter and live model-catalog discovery. Image and video generation are intentionally disabled until real providers are connected. Chat history is currently not persisted to PostgreSQL; the schema and database connection foundation exist, but authentication, ownership enforcement, migrations, and persistence endpoints still need implementation. Do not advertise those unfinished systems as active.
+
