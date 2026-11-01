@@ -46,6 +46,8 @@ export interface AfgMessage {
   attachments?: ChatAttachment[];
   thought?: string;
   isStreaming?: boolean;
+  retryable?: boolean;
+  isError?: boolean;
 }
 
 export interface AfgChatSession {
