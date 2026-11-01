@@ -8,6 +8,8 @@ import { handleAuthApi } from './auth.ts';
 import { handleAdminApi } from './adminHandler.ts';
 import { handleResearchApi } from './research.ts';
 import { handleVoiceApi } from './voice.ts';
+import { handleProductivityApi } from './productivity.ts';
+import { handleAccountApi } from './account.ts';
 
 type ApiRequest = IncomingMessage & { originalUrl?: string };
 
@@ -55,6 +57,8 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
 
   try {
     if (await handleAuthApi(req, res, pathname)) return;
+    if (await handleAccountApi(req, res, pathname)) return;
+    if (await handleProductivityApi(req, res, pathname)) return;
     if (await handleAdminApi(req, res, pathname)) return;
 
     if (await handleResearchApi(req, res)) return;
