@@ -347,7 +347,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
               ? 'bg-red-500/20 text-red-400 animate-pulse ring-2 ring-red-400'
               : voiceAvailable ? 'text-slate-400 hover:text-cyan-300' : 'text-slate-700 cursor-not-allowed opacity-40'
           }`}
-          title={!voiceAvailable ? (language === 'dari' ? 'ارائه‌دهنده گفتار به متن در دسترس نیست' : 'No verified speech-to-text provider is available') : (isRecording ? t.recording : 'Voice input')}
+          title={!voiceEnabled ? (language === 'dari' ? 'قابلیت صوتی در تنظیمات غیرفعال است' : 'Voice is disabled in settings') : (!speechToTextAvailable ? (language === 'dari' ? 'ارائه‌دهنده گفتار به متن در دسترس نیست' : 'No verified speech-to-text provider is available') : (isRecording ? t.recording : 'Voice input'))}
           aria-label="Voice input"
         >
           {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
