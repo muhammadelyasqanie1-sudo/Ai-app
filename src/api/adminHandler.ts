@@ -111,6 +111,12 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       }); return true;
     }
 
+    if (req.method === 'GET' && pathname === '/api/admin/requests') {
+      const result = await pool.query(`SELECT request_id,method,route,status_code,duration_ms,classification,created_at
+        FROM admin_request_events ORDER BY created_at DESC LIMIT 150`);
+      sendAuthJson(res, 200, { requests: result.rows }); return true;
+    }
+
     if (req.method === 'GET' && pathname === '/api/admin/audit') {
       const result = await pool.query(`SELECT a.id,a.actor_user_id,u.email AS actor_email,a.action,
         a.target_type,a.target_id,a.metadata,a.created_at FROM audit_logs a
