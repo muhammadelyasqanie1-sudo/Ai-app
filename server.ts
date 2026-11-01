@@ -15,6 +15,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use('/api', (req, res, next) => {
+  const requestId = randomUUID();
+  req.headers['x-request-id'] = requestId;
+  res.setHeader('X-Request-Id', requestId);
   const origin = req.headers.origin;
   const configuredOrigins = (process.env.APP_ORIGIN || '').split(',').map((value) => value.trim()).filter(Boolean);
   const allowedOrigins = new Set([...configuredOrigins, 'capacitor://localhost', 'https://localhost', 'http://localhost', 'http://localhost:3000', 'http://localhost:5173']);
@@ -28,9 +31,6 @@ app.use('/api', (req, res, next) => {
     res.status(204).end();
     return;
   }
-  const requestId = randomUUID();
-  req.headers['x-request-id'] = requestId;
-  res.setHeader('X-Request-Id', requestId);
   res.on('finish', () => {
     console.info('API_REQUEST', JSON.stringify({
       requestId,
