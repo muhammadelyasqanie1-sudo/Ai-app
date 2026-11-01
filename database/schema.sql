@@ -132,3 +132,25 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS audit_created_idx ON audit_logs(created_at DESC);
+
+
+-- Additive account and provider-control fields. Safe to apply after the original schema.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS default_model text;
+
+ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS context_window integer NOT NULL DEFAULT 0;
+ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS input_cost_per_million numeric(14,6);
+ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS output_cost_per_million numeric(14,6);
+ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS verified_at timestamptz;
+ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS last_health_ok boolean NOT NULL DEFAULT false;
+ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+
+CREATE TABLE IF NOT EXISTS provider_fallback_chains (
+  capability text PRIMARY KEY CHECK (capability IN ('text','vision','imageGen','tts','stt')),
+  ordered_models jsonb NOT NULL DEFAULT '[]'::jsonb,
+  updated_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS users_role_status_idx ON users(role, status);
+CREATE INDEX IF NOT EXISTS model_catalog_enabled_idx ON model_catalog(provider_key, enabled);
