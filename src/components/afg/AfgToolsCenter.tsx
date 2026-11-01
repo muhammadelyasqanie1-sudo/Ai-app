@@ -142,6 +142,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   const [researchSources, setResearchSources] = useState<Array<{ title: string; url: string; snippet: string }>>([]);
   const [voiceText, setVoiceText] = useState('');
   const [voiceId, setVoiceId] = useState('');
+  const [voiceLanguage, setVoiceLanguage] = useState<'auto' | 'en' | 'fa' | 'ps' | 'ar'>(language === 'dari' ? 'fa' : 'en');
   const [voiceAudioUrl, setVoiceAudioUrl] = useState('');
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [voiceError, setVoiceError] = useState('');
@@ -174,7 +175,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
       try {
         const dataUrl = String(reader.result || '');
         const audioBase64 = dataUrl.split(',')[1] || '';
-        const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/transcribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mimeType: file.type, audioBase64 }) });
+        const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/transcribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mimeType: file.type, audioBase64, language: voiceLanguage }) });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Speech recognition is unavailable.');
         setVoiceTranscript(typeof data.text === 'string' ? data.text : '');
@@ -190,7 +191,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
     if (!voiceText.trim() || voiceLoading) return;
     setVoiceLoading(true); setVoiceError(''); setVoiceAudioUrl('');
     try {
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/synthesize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: voiceText.trim(), voice: voiceId.trim() || undefined }) });
+      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/synthesize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: voiceText.trim(), voice: voiceId.trim() || undefined, language: voiceLanguage === 'auto' ? undefined : voiceLanguage }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Speech synthesis is unavailable.');
       setVoiceAudioUrl('data:' + data.mimeType + ';base64,' + data.audioBase64);
@@ -620,6 +621,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
         <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-amber-500/40 shadow-xl space-y-4">
           <h2 className="text-base font-bold text-white flex items-center gap-2"><Mic className="w-5 h-5 text-amber-400" /><span>{t.toolVoice}</span></h2>
           <label className="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" checked={voiceConversationMode} onChange={(e) => setVoiceConversationMode(e.target.checked)} disabled={!capabilities['speech-to-text']} />{language === 'dari' ? 'حالت مکالمه: متن تشخیص‌شده را خودکار به چت بفرست' : 'Conversation mode: automatically send recognized speech to Chat'}</label>
+          <label className="block text-xs text-slate-300">{language === 'dari' ? 'زبان گفتار' : 'Speech language'}<select value={voiceLanguage} onChange={(e) => setVoiceLanguage(e.target.value as any)} className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 p-2 text-white"><option value="auto">{language === 'dari' ? 'تشخیص خودکار' : 'Auto-detect'}</option><option value="en">{language === 'dari' ? 'انگلیسی' : 'English'}</option><option value="fa">{language === 'dari' ? 'دری / فارسی' : 'Dari / Persian'}</option><option value="ps">{language === 'dari' ? 'پشتو' : 'Pashto'}</option><option value="ar">{language === 'dari' ? 'عربی' : 'Arabic'}</option></select></label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <section className="rounded-2xl bg-slate-900/80 border border-amber-900/40 p-4 space-y-3">
               <h3 className="text-sm font-bold text-white">{language === 'dari' ? 'گفتار به متن' : 'Speech to Text'}</h3>
