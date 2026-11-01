@@ -72,9 +72,9 @@ export interface ImageResult { url: string; mimeType?: string; }
 export interface ImageEditRequest { image: Uint8Array; mimeType: string; instruction: string; mask?: Uint8Array; }
 export interface VisionRequest { image: Uint8Array; mimeType: string; prompt: string; mode: 'describe' | 'ocr' | 'diagram' | 'screenshot'; }
 export interface VisionResult { text: string; }
-export interface AudioRequest { audio: Uint8Array; mimeType: string; }
+export interface AudioRequest { audio: Uint8Array; mimeType: string; language?: string; }
 export interface Transcription { text: string; }
-export interface TTSRequest { text: string; voice?: string; }
+export interface TTSRequest { text: string; voice?: string; language?: string; }
 export interface AudioResult { audio: Uint8Array; mimeType: string; }
 
 export interface ProviderAdapter {
