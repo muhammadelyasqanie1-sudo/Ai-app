@@ -68,7 +68,7 @@ export async function handleProductivityApi(req: IncomingMessage, res: ServerRes
     const result = await pool.query(
       `SELECT id, tool_type AS type, title, content, parameters, is_pinned AS "isPinned", created_at AS "createdAt", updated_at AS "updatedAt"
          FROM productivity_items WHERE user_id = $1 AND ($2::text IS NULL OR tool_type = $2)
-         ORDER BY is_pinned DESC, updated_at DESC LIMIT 200`,
+         ORDER BY is_pinned DESC, updated_at DESC LIMIT 500`,
       [user.id, type && TYPES.includes(type as ProductivityType) ? type : null],
     );
     reply(res, 200, { items: result.rows });
@@ -83,6 +83,13 @@ export async function handleProductivityApi(req: IncomingMessage, res: ServerRes
       const content = cleanText(body.content, 20_000);
       if (!title || !content) { reply(res, 400, { error: 'A title and content are required.' }); return true; }
       const parameters = sanitizeParameters(type, body.parameters);
+      const usage = await pool.query('SELECT COUNT(*)::int AS item_count, COALESCE(SUM(octet_length(content)),0)::bigint AS content_bytes FROM productivity_items WHERE user_id=$1',[user.id]);
+      const itemCount = Number(usage.rows[0]?.item_count || 0);
+      const contentBytes = Number(usage.rows[0]?.content_bytes || 0);
+      if (itemCount >= 500 || contentBytes + Buffer.byteLength(content,'utf8') > 5 * 1024 * 1024) {
+        reply(res,429,{error:'Your Productivity workspace has reached its storage limit. Delete older items before adding more.'});
+        return true;
+      }
       const result = await pool.query(
         `INSERT INTO productivity_items (user_id, tool_type, title, content, parameters)
          VALUES ($1,$2,$3,$4,$5::jsonb)
