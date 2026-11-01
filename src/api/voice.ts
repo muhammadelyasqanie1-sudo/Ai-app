@@ -42,7 +42,7 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
   try {
     const body = await readBody(req);
     if (path.endsWith('/transcribe')) {
-      const mimeType = typeof body.mimeType === 'string' ? body.mimeType.toLowerCase() : '';
+      const mimeType = typeof body.mimeType === 'string' ? body.mimeType.toLowerCase().split(';')[0].trim() : '';
       const encoded = typeof body.audioBase64 === 'string' ? body.audioBase64 : '';
       if (!ALLOWED_AUDIO_TYPES.has(mimeType) || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) {
         reply(res, 400, { error: 'Provide supported audio data and MIME type.' }, requestId);
