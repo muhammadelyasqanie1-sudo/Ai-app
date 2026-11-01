@@ -60,7 +60,7 @@ export const cloudflareWorkersAi: ChatProviderAdapter = {
         .filter((id): id is string => /^@cf\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(id))
         .filter((id, index, all) => all.indexOf(id) === index)
         .sort((a, b) => a.localeCompare(b))
-        .map((id) => ({ id, displayName: id, capabilities: ['chat'] }));
+        .map((id) => ({ id, displayName: id, capabilities: ['chat' as const] }));
 
       if (models.length === 0) {
         return {
