@@ -264,9 +264,9 @@ export async function getCapabilitySnapshot() {
     'image-generation': selectable.some((model) => model.capabilities.imageGen && Boolean(getProviderAdapter(model.providerId)?.generateImage)),
     'video-generation': false,
     'file-processing': false,
-    'speech-to-text': selectable.some((model) => model.capabilities.stt),
-    'text-to-speech': selectable.some((model) => model.capabilities.tts),
-    research: false,
+    'speech-to-text': selectable.some((model) => model.capabilities.stt && Boolean(getProviderAdapter(model.providerId)?.transcribe)),
+    'text-to-speech': selectable.some((model) => model.capabilities.tts && Boolean(getProviderAdapter(model.providerId)?.synthesize)),
+    research: Boolean(process.env.TAVILY_API_KEY),
   };
 
   return {
