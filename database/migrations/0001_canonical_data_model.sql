@@ -79,3 +79,29 @@ CREATE INDEX IF NOT EXISTS subscriptions_user_status_idx ON user_subscriptions(u
 CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_external_ref_idx ON user_subscriptions(provider,external_reference) WHERE external_reference IS NOT NULL;
 CREATE INDEX IF NOT EXISTS usage_records_user_created_idx ON usage_records(user_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS user_memory_user_updated_idx ON user_memory(user_id,updated_at DESC);
+
+-- Keep canonical profile and verification timestamps synchronized with legacy account writes.
+CREATE OR REPLACE FUNCTION afg_sync_user_profile() RETURNS trigger AS $$
+BEGIN
+  INSERT INTO profiles(user_id,display_name,avatar_url,locale,updated_at)
+  VALUES(NEW.id,NEW.display_name,NEW.avatar_url,COALESCE(NEW.preferred_language,'dari'),now())
+  ON CONFLICT(user_id) DO UPDATE SET
+    display_name=EXCLUDED.display_name,
+    avatar_url=EXCLUDED.avatar_url,
+    locale=EXCLUDED.locale,
+    updated_at=now();
+  INSERT INTO user_settings(user_id,memory_enabled,default_language,updated_at)
+  VALUES(NEW.id,COALESCE(NEW.memory_enabled,true),COALESCE(NEW.preferred_language,'dari'),now())
+  ON CONFLICT(user_id) DO NOTHING;
+  IF NEW.email_verified=true AND NEW.email_verified_at IS NULL THEN
+    NEW.email_verified_at=now();
+  ELSIF NEW.email_verified=false THEN
+    NEW.email_verified_at=NULL;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS users_sync_profile ON users;
+CREATE TRIGGER users_sync_profile
+BEFORE INSERT OR UPDATE OF display_name,avatar_url,preferred_language,email_verified,memory_enabled ON users
+FOR EACH ROW EXECUTE FUNCTION afg_sync_user_profile();
