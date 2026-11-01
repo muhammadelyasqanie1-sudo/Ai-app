@@ -20,7 +20,21 @@ function compactOlderContext(messages: ChatInput['messages'], contextWindow: num
 
   const recent: typeof conversation = [];
   let used = estimateTokens(system);
-  for (let i = conversation.length - 1; i >= 0; i--) {
+  const latestMessage = conversation[conversation.length - 1];
+  if (latestMessage?.role === 'user') {
+    const latestCost = estimateTokens([latestMessage]);
+    if (used + latestCost > budget) {
+      throw new ProviderAdapterError(
+        'Your latest message is larger than this model context window. Shorten the message and retry; it was not silently truncated.',
+        413,
+        'latest_message_exceeds_context',
+      );
+    }
+    recent.unshift(latestMessage);
+    used += latestCost;
+  }
+
+  for (let i = conversation.length - 2; i >= 0; i--) {
     const candidate = conversation[i];
     const cost = estimateTokens([candidate]);
     if (used + cost > Math.floor(budget * 0.72)) break;
