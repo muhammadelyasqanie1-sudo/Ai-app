@@ -27,6 +27,12 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
     try {
       const body = await readJsonBody(req, 20000);
       const v = Object.fromEntries(Object.entries(body).filter(([key]) => PREFERENCE_FIELDS.has(key)));
+      if (typeof body.defaultModel === 'string' && body.defaultModel.trim()) {
+        const { getVerifiedModelDescriptors } = await import('../services/providerGateway.ts');
+        const models = await getVerifiedModelDescriptors();
+        const chosen = models.find((model) => (model.providerId + '::' + model.id === body.defaultModel || model.id === body.defaultModel) && model.enabled && model.verifiedAt);
+        if (!chosen) { reply(res,400,{error:'Default model must be enabled and health-verified.'}); return true; }
+      }
       const notifications = v.notifications && typeof v.notifications === 'object' ? v.notifications as Record<string, unknown> : {};
       const appearance = ['light','dark','neon','system'].includes(String(v.appearance)) ? v.appearance : 'system';
       const density = ['compact','comfortable','spacious'].includes(String(v.density)) ? v.density : 'comfortable';
