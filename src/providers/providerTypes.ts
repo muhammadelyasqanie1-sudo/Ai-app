@@ -44,6 +44,7 @@ export interface HealthStatus {
 export interface ChatRequest {
   model: string;
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+  signal?: AbortSignal;
 }
 
 export interface ChatChunk {
