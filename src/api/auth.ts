@@ -90,9 +90,8 @@ export async function authenticateRequest(req: IncomingMessage): Promise<Authent
 export function verifyCsrf(req: IncomingMessage): boolean {
   const jar = cookies(req);
   const header = req.headers['x-csrf-token'];
-  return Boolean(jar.afg_csrf && typeof header === 'string' &&
-    jar.afg_csrf.length >= 32 && header.length >= 32 &&
-    timingSafeEqual(Buffer.from(jar.afg_csrf), Buffer.from(header)));
+  if (!jar.afg_csrf || typeof header !== 'string' || jar.afg_csrf.length < 32 || header.length !== jar.afg_csrf.length) return false;
+  return timingSafeEqual(Buffer.from(jar.afg_csrf), Buffer.from(header));
 }
 
 export async function createSession(userId: string, res: ServerResponse): Promise<void> {
