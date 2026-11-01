@@ -19,7 +19,7 @@ import {
   ChevronRight,
   TrendingUp,
 } from 'lucide-react';
-import type { TabType, Language, UserProfile } from '../../types/afg';
+import type { TabType, Language, UserProfile, AfgCapabilityKey } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
 
 interface AfgHomeViewProps {
@@ -27,6 +27,7 @@ interface AfgHomeViewProps {
   user: UserProfile;
   onChangeTab: (tab: TabType) => void;
   onStartChatWithPrompt?: (prompt: string) => void;
+  capabilities: Record<AfgCapabilityKey, boolean>;
 }
 
 export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
@@ -34,6 +35,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
   user,
   onChangeTab,
   onStartChatWithPrompt,
+  capabilities,
 }) => {
   const t = translations[language];
   const [quickQuery, setQuickQuery] = useState('');
@@ -72,8 +74,8 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
     },
     {
       id: 'chat' as TabType,
-      title: language === 'dari' ? 'کمک برنامه‌نویسی' : 'Code Help',
-      desc: language === 'dari' ? 'کدنویسی به بیش از ۲۰ زبان' : 'Write & Fix Code',
+      title: language === 'dari' ? 'گفت‌وگوی هوش مصنوعی' : 'AI Chat',
+      desc: capabilities.chat ? (language === 'dari' ? 'مدل گفت‌وگوی تأییدشده فعال است' : 'Verified chat model available') : (language === 'dari' ? 'مدل تأییدشده در دسترس نیست' : 'No verified chat model available'),
       icon: Code2,
       color: 'from-emerald-500 to-teal-400',
       textColor: 'text-emerald-400',
@@ -180,9 +182,9 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
                 {t.welcomeBack}
               </p>
               <div className="flex items-center gap-2 mt-2">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-[11px] font-semibold text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  {t.online}
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[11px] font-semibold ${capabilities.chat ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 'bg-amber-500/15 border-amber-500/40 text-amber-300'}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${capabilities.chat ? 'bg-emerald-400 animate-pulse' : 'bg-amber-300'}`} />
+                  {capabilities.chat ? (language === 'dari' ? 'گفت‌وگو تأیید شد' : 'Chat verified') : (language === 'dari' ? 'مدل هوش مصنوعی در دسترس نیست' : 'AI provider unavailable')}
                 </span>
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-[11px] font-bold text-amber-300">
                   <Crown className="w-3 h-3 text-amber-400 fill-amber-400" />
@@ -269,7 +271,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
                   {t.toolImageGen}
                 </h3>
                 <p className="text-xs text-purple-300/80">
-                  {t.createArtDesc}
+                  {language === 'dari' ? 'تا تأیید قابلیت تولید تصویر غیرفعال' : 'Unavailable until image generation is verified'}
                 </p>
               </div>
             </div>
@@ -289,7 +291,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
                   {t.toolVideoGen}
                 </h3>
                 <p className="text-xs text-pink-300/80">
-                  {t.makeVideoDesc}
+                  {language === 'dari' ? 'تا تأیید قابلیت تولید ویدیو غیرفعال' : 'Unavailable until video generation is verified'}
                 </p>
               </div>
             </div>
@@ -335,24 +337,24 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
         <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-900/60 border border-cyan-900/40">
           <Zap className="w-5 h-5 text-cyan-400 shrink-0" />
           <div>
-            <h4 className="text-xs font-bold text-white">Fast & Reliable</h4>
-            <p className="text-[10px] text-slate-400">Always Online</p>
+            <h4 className="text-xs font-bold text-white">Provider status</h4>
+            <p className="text-[10px] text-slate-400">{capabilities.chat ? 'Chat verified' : 'Not verified'}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-900/60 border border-cyan-900/40">
           <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
           <div>
-            <h4 className="text-xs font-bold text-white">Safe & Secure</h4>
-            <p className="text-[10px] text-slate-400">Your Data is Safe</p>
+            <h4 className="text-xs font-bold text-white">Server-side secrets</h4>
+            <p className="text-[10px] text-slate-400">Provider keys stay on server</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-900/60 border border-cyan-900/40">
           <Sparkles className="w-5 h-5 text-amber-400 shrink-0" />
           <div>
-            <h4 className="text-xs font-bold text-white">Premium Features</h4>
-            <p className="text-[10px] text-slate-400">Simple & Beautiful</p>
+            <h4 className="text-xs font-bold text-white">Verified capabilities</h4>
+            <p className="text-[10px] text-slate-400">Only supported features are enabled</p>
           </div>
         </div>
 
