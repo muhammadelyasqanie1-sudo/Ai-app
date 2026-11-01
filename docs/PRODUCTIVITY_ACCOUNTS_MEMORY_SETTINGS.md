@@ -15,7 +15,7 @@ The Tools Center includes Notes, Summarizer, Idea Generator, Study Assistant, Ta
 Memory categories are `preferences`, `language`, `style` and `facts`. Users can list, add, edit and delete memory items and turn memory off. The chat handler injects saved memories only for an authenticated user when both account and preference-level memory switches are enabled. Sensitive-content detection requires an explicit per-item consent flag before storing a detected sensitive item. Memory is never needed for anonymous chat.
 
 ## 3.14 Settings and privacy
-Preferences persist per account: appearance (light/dark/neon/system), accent color, density, font size, chat width, animations, app language, default model, auto-select, response style/length, creativity, memory, voice and notification toggles. The app asks for a language choice on first launch and applies RTL for Dari. Settings also include password change, active-session listing/revocation, JSON data export, local conversation clearing, memory management and account deletion with a confirmation phrase (plus current-password confirmation when a password credential exists).
+Preferences persist per account: appearance (light/dark/neon/system), accent color, density, font size, chat width, animations, app language, default model, auto-select, response style/length, creativity, memory, voice and notification toggles. The app asks for a language choice on first launch and applies RTL for Dari. Settings also include password change, active-session listing/revocation, JSON data export, server and local conversation clearing, memory management and account deletion with a confirmation phrase (plus current-password confirmation when a password credential exists).
 
 Security notifications are generated for successful sign-ins, email verification, password resets and password changes. They respect the in-app and security-alert toggles; when email notifications are enabled and Resend is configured, security alerts are also sent by email. Product-update and usage-alert event producers are not connected yet.
 
@@ -29,6 +29,6 @@ Security notifications are generated for successful sign-ins, email verification
 ## Operational limitations
 - No SMS provider is integrated; phone verification remains hidden/unavailable.
 - Product-update and usage-alert notifications still need their event producers. Security events are wired to the in-app inbox and optional Resend email delivery.
-- Local chat history remains browser/device storage. The export includes it from the browser; it is not synchronized to PostgreSQL by this feature.
+- The current chat UI history remains browser/device storage; the privacy delete action also clears any server-stored conversation records owned by the account. The export includes local history from the browser; it is not synchronized to PostgreSQL by this feature.
 - Database schema changes must be applied manually before using authenticated workspace/account endpoints.
 - No build, lint, tests, database migration or deployment was run as part of these source changes.
