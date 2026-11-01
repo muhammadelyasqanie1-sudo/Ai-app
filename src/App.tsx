@@ -63,7 +63,7 @@ export default function App() {
 
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('afg_theme');
-    return (saved === 'dark' || saved === 'light') ? saved : 'dark';
+    return (saved === 'dark' || saved === 'light' || saved === 'neon' || saved === 'system') ? saved : 'system';
   });
 
   const [currentTab, setCurrentTab] = useState<TabType>('home');
@@ -106,13 +106,12 @@ export default function App() {
   }, [language]);
 
   useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-      document.documentElement.classList.remove('light');
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.classList.add('light');
-    }
+    const resolved = theme === 'system'
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : theme;
+    document.documentElement.classList.toggle('dark', resolved === 'dark' || resolved === 'neon');
+    document.documentElement.classList.toggle('light', resolved === 'light');
+    document.documentElement.classList.toggle('neon', resolved === 'neon');
     localStorage.setItem('afg_theme', theme);
   }, [theme]);
 
@@ -499,6 +498,7 @@ export default function App() {
             user={user}
             onToggleLanguage={handleToggleLanguage}
             onToggleTheme={handleToggleTheme}
+            onSetTheme={setTheme}
             onOpenShortcuts={() => setIsShortcutsOpen(true)}
           />
         )}
