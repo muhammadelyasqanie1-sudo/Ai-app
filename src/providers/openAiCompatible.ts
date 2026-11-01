@@ -23,10 +23,8 @@ function validBaseUrl(value: string): boolean {
   } catch { return false; }
 }
 
-export function createOpenAICompatibleAdapter(): ChatProviderAdapter | null {
+export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
   const initial = config();
-  if (!initial.baseUrl || !initial.apiKey) return null;
-
   return {
     id: initial.id,
     key: initial.id,
