@@ -339,12 +339,14 @@ export default function App() {
               continue;
             }
             const payload = await response.json().catch(() => ({}));
-            throw new Error(payload.error || `HTTP ${response.status}`);
+            throw Object.assign(new Error(payload.error || `HTTP ${response.status}`), { retryable: payload.retryable === true || [429,502,503,504].includes(response.status) });
           }
           const reader = response.body?.getReader();
           if (!reader) throw new Error('Missing response stream');
           const decoder = new TextDecoder();
           let streamFailed = false;
+          let streamRetryable = true;
+          let streamErrorMessage = 'The AI returned an empty or interrupted response.';
           let streamBuffer = '';
           while (true) {
             const { done, value } = await reader.read();
@@ -362,14 +364,14 @@ export default function App() {
                 if (parsed.type === 'content' && typeof parsed.text === 'string') {
                   fullContent += parsed.text;
                   setMessages((previous) => previous.map((message) => message.id === assistantId ? { ...message, content: fullContent } : message));
-                } else if (parsed.type === 'error') { streamFailed = true; }
+                } else if (parsed.type === 'error') { streamFailed = true; streamRetryable = parsed.retryable !== false; streamErrorMessage = typeof parsed.error === 'string' ? parsed.error : streamErrorMessage; }
               } catch { /* Ignore malformed individual SSE events. */ }
             }
           }
-          if (streamFailed || !fullContent.trim()) throw new Error('The AI returned an empty or interrupted response.');
+          if (streamFailed || !fullContent.trim()) throw Object.assign(new Error(streamErrorMessage), { retryable: streamFailed ? streamRetryable : true });
           streamCompleted = true;
         } catch (error) {
-          if (abortController.signal.aborted || fullContent.trim() || attempt >= 2) throw error;
+          if (abortController.signal.aborted || fullContent.trim() || attempt >= 2 || (error instanceof Error && (error as Error & { retryable?: boolean }).retryable === false)) throw error;
           const baseDelay = 500 * (2 ** attempt);
           await new Promise((resolve) => setTimeout(resolve, baseDelay + Math.floor(Math.random() * Math.max(1, baseDelay * 0.35))));
         }
