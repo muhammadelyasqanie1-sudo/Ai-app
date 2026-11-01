@@ -248,7 +248,7 @@ export async function getFileAssistantSnapshot() {
     storageConfigured: false,
     extractionReady: false,
     virusScannerReady: false,
-    acceptedFormats: ['PDF', 'TXT', 'DOCX', 'CSV', 'XLSX', 'JSON', 'source files', 'images'],
+    plannedFormats: ['PDF', 'TXT', 'DOCX', 'CSV', 'XLSX', 'JSON', 'source files', 'images'],
     message: 'File processing is disabled until private object storage, file extraction, malware scanning and per-user quota enforcement are implemented and configured.',
   };
 }
