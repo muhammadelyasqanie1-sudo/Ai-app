@@ -131,12 +131,50 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   const [researchLoading, setResearchLoading] = useState(false);
   const [researchError, setResearchError] = useState('');
   const [researchSources, setResearchSources] = useState<Array<{ title: string; url: string; snippet: string }>>([]);
+  const [voiceText, setVoiceText] = useState('');
+  const [voiceId, setVoiceId] = useState('');
+  const [voiceAudioUrl, setVoiceAudioUrl] = useState('');
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [voiceError, setVoiceError] = useState('');
+  const [voiceLoading, setVoiceLoading] = useState(false);
 
   // Translation uses the selected verified text-generation model.
   const handleTranslate = () => {
     if (!transInput.trim()) return;
     onRunTool(transInput.trim(), { toolMode: 'translation', sourceLanguage: sourceLang, targetLanguage: targetLang });
     setTransOutput(language === 'dari' ? 'درخواست ترجمه به دستیار هوشمند فرستاده شد؛ نتیجه در صفحه چت نمایش داده می‌شود.' : 'Translation request sent to the AI assistant; the result will appear in Chat.');
+  };
+
+  const handleTranscribeFile = (file?: File) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { setVoiceError(language === 'dari' ? 'حجم فایل صوتی باید کمتر از ۱۰ مگابایت باشد.' : 'Audio file must be 10 MB or smaller.'); return; }
+    setVoiceLoading(true); setVoiceError(''); setVoiceTranscript('');
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const dataUrl = String(reader.result || '');
+        const audioBase64 = dataUrl.split(',')[1] || '';
+        const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/transcribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mimeType: file.type, audioBase64 }) });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Speech recognition is unavailable.');
+        setVoiceTranscript(typeof data.text === 'string' ? data.text : '');
+      } catch (error) { setVoiceError(error instanceof Error ? error.message : 'Transcription failed.'); }
+      finally { setVoiceLoading(false); }
+    };
+    reader.onerror = () => { setVoiceError('Could not read the audio file.'); setVoiceLoading(false); };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSynthesize = async () => {
+    if (!voiceText.trim() || voiceLoading) return;
+    setVoiceLoading(true); setVoiceError(''); setVoiceAudioUrl('');
+    try {
+      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/synthesize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: voiceText.trim(), voice: voiceId.trim() || undefined }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Speech synthesis is unavailable.');
+      setVoiceAudioUrl('data:' + data.mimeType + ';base64,' + data.audioBase64);
+    } catch (error) { setVoiceError(error instanceof Error ? error.message : 'Speech synthesis failed.'); }
+    finally { setVoiceLoading(false); }
   };
 
   const handleResearch = async () => {
@@ -556,21 +594,26 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
       {/* Tool 6: Voice Tools */}
       {activeSubTab === 'voice-tools' && (
         <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-amber-500/40 shadow-xl space-y-4">
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <Mic className="w-5 h-5 text-amber-400" />
-            <span>{t.toolVoice}</span>
-          </h2>
-          <div className="p-5 rounded-2xl bg-slate-900/80 border border-amber-900/40 text-center space-y-3">
-            <div className="w-16 h-16 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(245,158,11,0.3)]">
-              <Mic className="w-8 h-8" />
-            </div>
-            <h3 className="text-sm font-bold text-white">
-              {language === 'dari' ? 'تبدیل زنده گفتار به نوشتار' : 'Live Speech-to-Text Transcriber'}
-            </h3>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">
-              {language === 'dari' ? 'با کلیک بر روی دکمه میکروفون در صفحه چت، به زبان فارسی، پشتو یا انگلیسی صحبت کنید تا متن دقیق پیاده‌سازی شود.' : 'Use the microphone in the chat input to speak freely in Dari, Pashto, or English.'}
-            </p>
+          <h2 className="text-base font-bold text-white flex items-center gap-2"><Mic className="w-5 h-5 text-amber-400" /><span>{t.toolVoice}</span></h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <section className="rounded-2xl bg-slate-900/80 border border-amber-900/40 p-4 space-y-3">
+              <h3 className="text-sm font-bold text-white">{language === 'dari' ? 'گفتار به متن' : 'Speech to Text'}</h3>
+              <p className="text-xs text-slate-400">{language === 'dari' ? 'فایل صوتی را برای پیاده‌سازی متن انتخاب کنید.' : 'Choose an audio file to transcribe.'}</p>
+              <input type="file" accept="audio/webm,audio/wav,audio/mpeg,audio/mp4,audio/ogg,audio/aac" disabled={!capabilities['speech-to-text'] || voiceLoading} onChange={(e) => handleTranscribeFile(e.target.files?.[0])} className="w-full text-xs text-slate-300 disabled:opacity-40" />
+              {!capabilities['speech-to-text'] && <p className="text-xs text-amber-200">{language === 'dari' ? 'تا اتصال مدل و آداپتر واقعی STT غیرفعال است.' : 'Disabled until a real STT model and adapter are configured.'}</p>}
+              {voiceTranscript && <textarea readOnly value={voiceTranscript} rows={4} className="w-full rounded-xl bg-slate-950 border border-slate-700 p-2 text-sm text-white" />}
+            </section>
+            <section className="rounded-2xl bg-slate-900/80 border border-amber-900/40 p-4 space-y-3">
+              <h3 className="text-sm font-bold text-white">{language === 'dari' ? 'متن به گفتار' : 'Text to Speech'}</h3>
+              <textarea value={voiceText} onChange={(e) => setVoiceText(e.target.value)} maxLength={5000} rows={4} placeholder={language === 'dari' ? 'متن برای خواندن...' : 'Text to speak...'} className="w-full rounded-xl bg-slate-950 border border-slate-700 p-2 text-sm text-white" />
+              <input value={voiceId} onChange={(e) => setVoiceId(e.target.value)} placeholder={language === 'dari' ? 'شناسه صدای ارائه‌دهنده (اختیاری)' : 'Provider voice ID (optional)'} disabled={!capabilities['text-to-speech']} className="w-full rounded-xl bg-slate-950 border border-slate-700 p-2 text-xs text-white disabled:opacity-40" />
+              <button onClick={handleSynthesize} disabled={!capabilities['text-to-speech'] || !voiceText.trim() || voiceLoading} className="w-full rounded-xl bg-amber-400 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-40">{voiceLoading ? '…' : (language === 'dari' ? 'تولید صدا' : 'Generate speech')}</button>
+              {!capabilities['text-to-speech'] && <p className="text-xs text-amber-200">{language === 'dari' ? 'تا اتصال مدل و آداپتر واقعی TTS غیرفعال است.' : 'Disabled until a real TTS model and adapter are configured.'}</p>}
+              {voiceAudioUrl && <audio controls src={voiceAudioUrl} className="w-full" />}
+            </section>
           </div>
+          {voiceLoading && <p className="text-xs text-amber-200">{language === 'dari' ? 'در حال پردازش صوت...' : 'Processing audio...'}</p>}
+          {voiceError && <p className="text-xs text-rose-300">{voiceError}</p>}
         </div>
       )}
 
