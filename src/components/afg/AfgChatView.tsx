@@ -12,7 +12,8 @@ import {
   ChevronUp,
   BrainCircuit,
   MessageSquare,
-  Bot
+  Bot,
+  Square
 } from 'lucide-react';
 import { AfgBrainLogo } from './AfgBrainLogo';
 import { AfgChatInputCapsule } from './AfgChatInputCapsule';
@@ -23,6 +24,8 @@ import { translations } from '../../utils/afgTranslations';
 interface AfgChatViewProps {
   messages: AfgMessage[];
   onSendMessage: (text: string, attachments: ChatAttachment[]) => void;
+  onStop: () => void;
+  onRetryMessage: (messageId: string) => void;
   isLoading: boolean;
   language: Language;
   user: UserProfile;
@@ -37,6 +40,8 @@ interface AfgChatViewProps {
 export const AfgChatView: React.FC<AfgChatViewProps> = ({
   messages,
   onSendMessage,
+  onStop,
+  onRetryMessage,
   isLoading,
   language,
   user,
@@ -140,8 +145,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
             </p>
           </div>
         </div>
-
-
+        {isLoading && <button onClick={onStop} className="flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300"><Square className="w-3 h-3" />{language === 'dari' ? 'توقف' : 'Stop'}</button>}
       </div>
 
       {/* Messages Scroll Area */}
@@ -183,7 +187,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
         )}
 
         {/* Message Items */}
-        {messages.map((msg) => {
+        {messages.filter((message) => !(message.role === 'assistant' && !message.content.trim() && message.isStreaming)).map((msg) => {
           const isUser = msg.role === 'user';
           const isSpeaking = speakingMsgId === msg.id;
 
@@ -283,6 +287,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                 {/* Message Actions Bar (Read Aloud, Copy) */}
                 {!isUser && !msg.isStreaming && (
                   <div className="flex items-center gap-2 mt-1.5 px-1 text-slate-400">
+                    {msg.retryable && <button onClick={() => onRetryMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-amber-300 hover:bg-amber-500/10"><RefreshCw className="w-3.5 h-3.5" />{language === 'dari' ? 'تلاش دوباره' : 'Retry'}</button>}
                     {/* Read Aloud Button (User Request #7) */}
                     <button
                       onClick={() => handleReadAloud(msg.id, msg.content)}
