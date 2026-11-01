@@ -18,6 +18,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, isS
     <div className="space-y-3 leading-relaxed text-[15px] select-text afg-markdown">
       <ReactMarkdown
         skipHtml
+        urlTransform={(url) => {
+          const value = url.trim();
+          return /^(https?:|mailto:)/i.test(value) || /^(\\/|#|\\.\\.?\\/)/.test(value) ? value : '';
+        }}
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex, rehypeHighlight]}
         components={{
