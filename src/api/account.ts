@@ -117,7 +117,7 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
       if(!stored.rows[0]?.password_hash||!await verifyPassword(current,stored.rows[0].password_hash)){reply(res,401,{error:'Current password is incorrect.'});return true;}
       await pool.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[await hashPassword(next),user.id]);
       await pool.query('DELETE FROM sessions WHERE user_id=$1 AND token_hash<>$2',[user.id,secretHash(cookieToken(req,'afg_session'))]);
-      await pool.query("INSERT INTO user_notification_events(user_id,event_type,title,body) SELECT $1,'security.password_changed','Password changed','Your AFG AI account password was changed.' WHERE COALESCE((SELECT (notifications_json->>'inApp')::boolean FROM user_preferences WHERE user_id=$1),true)",[user.id]);
+      try { await pool.query("INSERT INTO user_notification_events(user_id,event_type,title,body) SELECT $1,'security.password_changed','Password changed','Your AFG AI account password was changed.' WHERE COALESCE((SELECT (notifications_json->>'inApp')::boolean FROM user_preferences WHERE user_id=$1),true)",[user.id]); } catch { console.error('AFG_SECURITY_NOTIFICATION_UNAVAILABLE'); }
       reply(res,200,{changed:true,otherSessionsRevoked:true});
     }catch{reply(res,400,{error:'Could not change password.'});}return true;
   }
