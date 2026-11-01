@@ -316,6 +316,7 @@ export default function App() {
     setMessages(prev => [...prev, initialAssistantMessage]);
 
     let fullContent = '';
+    let requestId = '';
     try {
       let streamCompleted = false;
       for (let attempt = 0; attempt < 3 && !streamCompleted; attempt++) {
@@ -339,6 +340,7 @@ export default function App() {
               continue;
             }
             const payload = await response.json().catch(() => ({}));
+            if (typeof payload.requestId === 'string') requestId = payload.requestId;
             throw Object.assign(new Error(payload.error || `HTTP ${response.status}`), { retryable: payload.retryable === true || [429,502,503,504].includes(response.status) });
           }
           const reader = response.body?.getReader();
@@ -361,7 +363,8 @@ export default function App() {
               if (dataStr === '[DONE]') continue;
               try {
                 const parsed = JSON.parse(dataStr);
-                if (parsed.type === 'content' && typeof parsed.text === 'string') {
+                if (parsed.type === 'meta' && typeof parsed.requestId === 'string') { requestId = parsed.requestId; }
+                else if (parsed.type === 'content' && typeof parsed.text === 'string') {
                   fullContent += parsed.text;
                   setMessages((previous) => previous.map((message) => message.id === assistantId ? { ...message, content: fullContent } : message));
                 } else if (parsed.type === 'error') { streamFailed = true; streamRetryable = parsed.retryable !== false; streamErrorMessage = typeof parsed.error === 'string' ? parsed.error : streamErrorMessage; }
@@ -394,9 +397,10 @@ export default function App() {
       }
       setMessages((previous) => previous.map((message) => message.id === assistantId ? { ...message, isStreaming: false } : message));
     } catch {
-      const userFacingError = language === 'dari'
+      const supportReference = requestId ? (language === 'dari' ? `\\nشناسه پیگیری: ${requestId}` : `\\nRequest ID: ${requestId}`) : '';
+      const userFacingError = (language === 'dari'
         ? 'پاسخ کامل نشد. پیام شما باقی مانده است؛ اتصال و مدل را بررسی کرده و دوباره تلاش کنید.'
-        : 'The response could not be completed. Your prompt is preserved; check the connection and model, then retry.';
+        : 'The response could not be completed. Your prompt is preserved; check the connection and model, then retry.') + supportReference;
 
       if (abortController.signal.aborted) {
         setMessages(prev => prev.filter((message) => message.id !== assistantId));
