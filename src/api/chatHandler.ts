@@ -6,8 +6,17 @@ import { buildToolModePrompt } from '../services/toolModes.ts';
 import { getProductivityPrompt } from './productivity.ts';
 import { authenticateRequest } from './auth.ts';
 import { pool } from './database.ts';
+import { z } from 'zod';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
+const chatRequestSchema = z.object({
+  messages: z.array(z.object({
+    role: z.enum(['user','assistant']),
+    content: z.string().max(50_000),
+  }).passthrough()).min(1).max(100),
+  model: z.string().trim().min(1).max(300),
+  language: z.enum(['dari','english']).optional(),
+}).passthrough();
 
 // Per-process load shedding; identity-based/distributed rate limits require authenticated users.
 let activeChatRequests = 0;
@@ -121,6 +130,12 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       sendJson(req, res, 400, { error: 'Request body must contain valid JSON.', requestId: id }, id);
       return;
     }
+    const validated = chatRequestSchema.safeParse(body);
+    if (!validated.success) {
+      sendJson(req,res,400,{error:'Provide valid messages, a supported language and a model identifier.',requestId:id},id);
+      return;
+    }
+    body = validated.data;
 
     const messages = body.messages as ChatMessage[] | undefined;
     const requestedLanguage = body.language === 'dari' ? 'dari' : 'english';
