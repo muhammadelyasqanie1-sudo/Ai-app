@@ -134,7 +134,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   ];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8.5rem)] max-w-5xl mx-auto w-full px-2 sm:px-4">
+    <div style={{ maxWidth: "var(--afg-chat-width, 64rem)" }} className="flex flex-col h-[calc(100vh-8.5rem)] mx-auto w-full px-2 sm:px-4">
       
       {/* Top Session Status Bar */}
       <div className="flex items-center justify-between py-2 px-3 border-b border-cyan-900/30 mb-2">
