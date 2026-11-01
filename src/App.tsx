@@ -182,6 +182,7 @@ export default function App() {
       const stored = JSON.parse(localStorage.getItem('afg_sessions') || '[]');
       const sessions = Array.isArray(stored) ? stored : [];
       const firstUser = messages.find((message) => message.role === 'user');
+      const existingSession = sessions.find((item: any) => item?.id === currentSessionId);
       const latest = [...messages].reverse().find((message) => message.role === 'user' || (message.role === 'assistant' && message.content.trim()));
       const session = {
         id: currentSessionId,
