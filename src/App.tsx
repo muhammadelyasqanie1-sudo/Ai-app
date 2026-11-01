@@ -226,7 +226,7 @@ export default function App() {
         .then((data) => {
           if (data?.authenticated && data.user) {
             setUser({ name: data.user.displayName || 'User', nameEn: data.user.displayName || 'User', email: data.user.email || '', avatar: '', isPremium: false, tier: 'Free' });
-            fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { if (prefs?.preferences?.auto_select_model === false) { setSelectedModel(''); return; } const model = prefs?.preferences?.default_model; if (typeof model === 'string' && availableModels.includes(model)) setSelectedModel(model); }).catch(() => {});
+            fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { if (prefs?.preferences?.auto_select_model === false) { setSelectedModel(''); return; } const model = prefs?.preferences?.default_model; if (typeof model === 'string' && model) setSelectedModel(model); }).catch(() => {});
           } else {
             setUser(DEFAULT_USER);
           }
