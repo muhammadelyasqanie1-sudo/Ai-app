@@ -144,7 +144,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
 
     let emittedContent = false;
     heartbeat = setInterval(() => {
-      if (!res.writableEnded && !res.destroyed) res.write(': heartbeat\\n\\n');
+      if (!res.writableEnded && !res.destroyed) res.write(': heartbeat\n\n');
     }, 15_000);
     try {
       for await (const chunk of stream) {
