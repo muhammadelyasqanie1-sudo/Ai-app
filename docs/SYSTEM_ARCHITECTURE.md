@@ -4,151 +4,135 @@ Last reviewed: 2026-11-01
 
 ## 1. Runtime architecture
 
-The current production runtime remains the existing Express application on Render. Vite is the development runtime and uses the same API request handler. Cloudflare Workers, D1, R2, KV, Queues, and WebSockets are not deployed components in this repository.
+The project remains the existing React/Vite/Capacitor client and Express server on Render. This is a modular monolith, not a deployed Workers/D1/R2/KV/queue architecture.
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│ CLIENT                                                        │
-│ React 19 + TypeScript + Vite + Tailwind + Capacitor Android   │
-│ Chat UI · Home · Tools · Image/Video unavailable · Settings   │
-│ Mobile-first layout · current locale: English or Dari         │
-└──────────────────────────────┬───────────────────────────────┘
-                               │ HTTPS / JSON / Server-Sent Events
-┌──────────────────────────────▼───────────────────────────────┐
-│ API EDGE                                                      │
-│ src/api/http.ts                                               │
-│ Shared route table · CORS allowlist · request IDs             │
-│ structured request logs · HTTP status/error envelopes        │
-│ request-size and chat-input validation · bounded chat concurrency        │
-└──────────────────────────────┬───────────────────────────────┘
-                               │
-┌──────────────────────────────▼───────────────────────────────┐
-│ SERVICE LAYER                                                 │
-│ src/services/chatService.ts                                   │
-│ src/services/providerGateway.ts                               │
-│ Verified model selection · capability snapshot                │
-│                                                              │
-│ PROVIDER ADAPTER REGISTRY                                     │
-│ src/providers/cloudflareWorkersAi.ts                          │
-│ Cloudflare Workers AI · live model catalog · streaming chat   │
-│ Other providers/capabilities are not registered yet           │
-└──────────────────────────────┬───────────────────────────────┘
-                               │
-┌──────────────────────────────▼───────────────────────────────┐
-│ PERSISTENCE                                                   │
-│ PostgreSQL schema + pg connection/health foundation           │
-│ No active auth, conversation persistence, object storage,     │
-│ KV cache, queue workers, or generated-asset storage           │
-└──────────────────────────────────────────────────────────────┘
-```
+**Client:** React 19 + TypeScript + Vite + Capacitor Android. Chat, local conversation history, settings and authenticated admin UI.
+
+**API edge:** shared route handler with request IDs, CORS, structured logs, input limits, auth/session + CSRF, admin authorization, health, models, capabilities and chat.
+
+**Services:** chat service and provider gateway with health verification, context fitting, extractive summary, cost-based auto-selection and admin fallback order.
+
+**Adapters:** Cloudflare Workers AI and optional OpenAI-compatible adapter.
+
+**Persistence:** PostgreSQL when configured and schema applied; stores users, hashed sessions, provider/model enablement, pricing, fallback chains and audit records.
 
 ## 2. Client layer
 
-- React 19 and TypeScript render the web interface.
-- Vite provides local development and the production asset build.
-- Capacitor packages the same web client for Android.
-- The browser calls the same API paths in development and production.
-- `VITE_API_BASE_URL` is an optional public base URL for a separately deployed API. It must never contain provider credentials.
-- The app reads `GET /api/capabilities`; model IDs and enabled capability flags come from the server. If the endpoint cannot verify the provider, chat models are cleared and chat is unavailable.
-- The current UI supports English and Dari. RTL is enabled for Dari. AI output is rendered through React text nodes and a simple Markdown parser rather than raw HTML injection. Other locales and full translation of every component are future work.
-- Image, video, document processing, standalone translation, research, server-side speech-to-text, and TTS remain disabled because no matching backend services are registered.
+- React 19, TypeScript, Vite, Tailwind and Capacitor remain the client stack.
+- English and Dari are supported; Dari enables RTL.
+- The model picker groups discovered models by provider and shows capability labels. Unverified/disabled models remain disabled with a reason.
+- Chat streams with SSE, server heartbeat comments every 15 seconds, and client retry with exponential backoff (500 ms, 1 s) only before any response text has arrived. Once partial output exists, the client does not replay the request, avoiding duplicate output.
+- Stop cancels the browser request; the server propagates cancellation to the provider fetch.
+- Conversation history currently uses browser localStorage. It supports search across saved messages, rename, pin, Markdown/JSON export, print-to-PDF, delete and clear. This is device/browser-local, not synchronized cloud persistence.
+- Markdown rendering uses ReactMarkdown with GFM tables, math/LaTeX and syntax highlighting. Raw HTML is disabled; ReactMarkdown renders text through React elements and does not inject model HTML.
+- Image/video generation, vision, file processing, research and server-side voice features remain disabled unless a real adapter/service advertises them.
 
 ## 3. API edge and route contract
 
-Both runtimes use `src/api/http.ts`:
+Production Express (server.ts) and Vite development both use src/api/http.ts.
 
-- Production: Express in `server.ts`, mounted under `/api`.
-- Development: Vite middleware in `vite.config.ts`.
-- The shared handler uses the original URL so Express mounting does not change route matching.
-
-| Method | Route | Contract |
+| Method | Route | Purpose |
 |---|---|---|
-| GET | `/api/health` | Process health; does not promise provider or database readiness |
-| GET | `/api/ready` | Database readiness; returns degraded when PostgreSQL is not configured or reachable |
-| GET | `/api/models` | Live provider-verified chat model IDs |
-| GET | `/api/capabilities` | Live capability snapshot and verified model IDs |
-| POST | `/api/chat` | Validated JSON request; SSE response |
+| GET | /api/health | Process health |
+| GET | /api/ready | PostgreSQL readiness |
+| GET | /api/models | Selectable verified chat models |
+| GET | /api/capabilities | Capability snapshot and all discovered model descriptors |
+| POST | /api/chat | Validated chat request and SSE stream |
+| POST | /api/auth/login | Email/password sign-in for provisioned accounts |
+| POST | /api/auth/bootstrap-admin | One-time first-admin bootstrap |
+| GET | /api/auth/me | Current session and account preferences |
+| PATCH | /api/auth/preferences | Set a health-verified per-user default model |
+| POST | /api/auth/logout | Revoke current session |
+| GET | /api/admin/providers | Admin provider registry |
+| GET | /api/admin/models | Admin model registry, health and pricing |
+| GET | /api/admin/fallbacks | Capability fallback chains |
+| PATCH | /api/admin/providers | Enable/disable a provider |
+| PATCH | /api/admin/models | Enable/disable a model and set pricing |
+| PATCH | /api/admin/fallbacks | Configure capability fallback order |
 
-All API requests receive a server-generated `X-Request-Id`. API request logs contain request ID, method, path, status, and duration; prompts, authorization headers, and provider tokens are not logged. API JSON responses are non-cacheable and include the request ID. Chat uses bounded request and message sizes, validates roles/model shape/live model membership, and limits each server process to four concurrent chat requests with a 5-second Retry-After response when saturated. This is load shedding, not a per-user rate limiter.
+All requests receive a server-generated request ID. Logs contain request ID, method, path, status and duration, not prompts, passwords, session tokens or provider credentials. Chat input is bounded (1 MB request body, message count/content limits, and 200,000 total message characters). Each process accepts at most four concurrent chat requests; this is load shedding, not a distributed per-user quota.
 
-CORS only reflects origins configured in `APP_ORIGIN` or the local/Capacitor development allowlist. The current API does not use cookie authentication, so a cookie-based CSRF token flow is not active.
+CORS reflects only configured APP_ORIGIN entries and the local/Capacitor development allowlist. Credentialed requests use an HttpOnly session cookie and a separate CSRF cookie/header pair for state-changing authenticated operations.
 
-## 4. Service layer and provider gateway
+## 4. Provider registry and contract
 
-- `src/services/chatService.ts` validates the selected model against a fresh provider catalog before preparing inference.
-- `src/services/providerGateway.ts` owns the provider registry and computes the public capability snapshot.
-- `src/providers/providerTypes.ts` defines typed provider, model, chat input, capability, and error contracts.
-- `src/providers/cloudflareWorkersAi.ts` is the only registered provider adapter. It discovers models from the live Cloudflare account catalog and streams chat responses.
-- Model IDs are passed unchanged from provider catalog to API response, client selection, chat request, and provider adapter.
-- A catalog failure produces an unavailable result; there is no hardcoded model fallback.
-- Only chat can currently be reported as available. Vision, image/video generation, files, speech, TTS, and research are explicitly false.
-- There is no multi-provider fallback, retry policy, per-user/distributed rate limiter, usage metering, or distributed health registry yet. Provider calls have bounded network timeouts; a failed stream is surfaced as an SSE error rather than a fake completion.
+The canonical ProviderAdapter and ModelDescriptor types are in src/providers/providerTypes.ts. Required adapter methods are config validation, model discovery, model-specific health check, capability reporting and streaming chat. Image, vision, transcription, synthesis and embedding methods are optional and are not advertised until implemented.
 
-### 4.1 Provider adapter contract (2.2)
+Registered adapters:
+- Cloudflare Workers AI: registered in source; requires server-only CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.
+- OpenAI-compatible: registered only when OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_API_KEY are both present. It uses /models and /chat/completions; the base URL must be HTTPS in production.
 
-The canonical contract in `src/providers/providerTypes.ts` is `ProviderAdapter`. It requires:
+Model references sent through the client/API are provider-qualified as providerId::modelId, avoiding collisions when providers expose identical model IDs. Provider secrets are never sent to the client or stored in provider configuration rows.
 
-- `id`, `validateConfig()`, `listModels()`, `healthCheck(modelId)`, `capabilities(modelId)`, and `streamChat(req)`.
-- Optional image generation, image analysis, transcription, speech synthesis, and embedding methods. An adapter must omit an optional method until it has a real implementation.
-- Each model descriptor carries its provider ID, display name, description, context-window metadata (zero means the provider did not supply it), capability flags, enabled state, and verification timestamp.
+Each model is probed with a bounded inference request. Successful health results are cached per server process for five minutes. A model is selectable only when its provider is configured/enabled, the model is enabled, the health probe succeeded recently, and the requested capability is supported. The chat service repeats the verification before inference.
 
-Cloudflare is currently the only adapter. Its model catalog is live; its health check makes a bounded, minimal inference probe for each listed text model. Successful health checks are cached in process memory for five minutes. Catalog probing is limited to four concurrent model checks. A model is selectable only when it is enabled, text+streaming capable, and has a successful health check timestamp no older than five minutes. The chat service repeats this check before inference, so client state cannot authorize a model.
+### 4.1 Model routing
 
-`GET /api/capabilities` includes `modelDescriptors`. Models that failed or lack a recent health probe are returned with `selectable: false` and `disabledReason: "Provider not reachable."`; the model picker renders them disabled with that tooltip. `GET /api/models` contains selectable model IDs only.
+- Manual selection is grouped by provider.
+- Auto selects the lowest combined input/output price among healthy, enabled text+streaming models when pricing has been configured by an administrator.
+- If no trustworthy price metadata exists, auto mode uses the administrator's configured healthy fallback order. It does not invent a price or claim to know the cheapest model.
+- If a manually selected model becomes unhealthy, the configured fallback order is tried before cost-based selection.
+- Fallback chains are capability-specific: text, vision, imageGen, tts and stt. Only discovered enabled models advertising the selected capability can be saved.
+- User default model preference is stored in users.default_model and must reference a currently health-verified model.
 
-Important implementation boundaries:
-- `enabled` currently defaults to true in the Cloudflare adapter. A persistent admin enable/disable toggle is not implemented because authenticated admin authorization and provider-model settings storage do not yet exist.
-- Health results and their five-minute cache are process-local, not distributed across Render instances. Each instance performs its own probes.
-- The Cloudflare health probe currently checks text inference only. It does not claim vision, tools, JSON mode, image generation, audio, or embeddings.
-- Cloudflare's model catalog may omit context-window metadata; in that case `contextWindow` is zero/unknown, not an invented value.
-- Optional provider methods are not implemented for this adapter and are not advertised as supported.
+### 4.2 Context management and response integrity
 
-## 5. Persistence and background processing
+- The service uses provider-supplied context window metadata when available, reserves headroom and compacts older conversation turns into an explicitly labelled extractive summary.
+- When the provider does not publish context metadata, AFG_UNKNOWN_CONTEXT_BUDGET (default 8192 estimated tokens) is a conservative configurable budget; it is not represented as the provider's actual context window.
+- The system instruction requires uncertainty honesty and forbids fabricated citations, URLs, quotations and tool results.
+- The server emits an error for empty provider output. The client hides empty streaming bubbles and shows a retryable error instead.
+- Client retries use exponential backoff only when no text has been received. Partial output is preserved and not silently replayed.
 
-- `database/schema.sql` defines PostgreSQL tables for users, identities, sessions, conversations, messages, providers, models, usage, assets, API keys, and audit logs.
-- `src/api/database.ts` creates a server-side PostgreSQL pool and exposes a connection check.
-- The schema is not automatically migrated by application startup.
-- The app does not yet create authenticated users or sessions, persist conversations/messages, enforce row ownership, meter usage, or store generated assets.
-- R2/S3-compatible object storage, KV/cache, queues, and background workers are not configured or used. No binary file or generated asset is claimed to be saved.
-- Do not enable persistent user data until authentication, server-side ownership checks, migrations, and retention/deletion rules are implemented.
+## 5. Authentication, admin controls and persistence
 
-## 6. Security controls and explicit gaps
+- src/api/auth.ts implements scrypt password verification, hashed opaque session tokens, HttpOnly session cookies, CSRF double-submit validation and sign-in throttling.
+- The first administrator is created through POST /api/auth/bootstrap-admin, protected by server-only AFG_ADMIN_BOOTSTRAP_TOKEN (minimum 32 characters). Bootstrap closes after an active admin exists.
+- Admin APIs enforce the database-backed users.role = admin on the server. Provider/model toggles, model pricing and fallback chains are persisted in PostgreSQL and written to audit_logs.
+- The admin UI does not accept or display provider secrets. Provider credentials remain environment-only.
+- database/schema.sql includes additive columns for password hashes, default model, model costs/health metadata and fallback chains. The schema is not auto-applied; an operator must apply it before using database-backed auth/admin endpoints.
+- The app does not yet provide public user registration, email verification, Google OAuth, account recovery or a complete user-management dashboard.
+- Conversations/messages are not yet persisted to PostgreSQL. Current history is localStorage-only.
+- User ownership enforcement for server-side conversations/assets, usage metering and per-user quotas are not implemented.
+
+## 6. Security controls and remaining gaps
 
 Implemented:
-- Server-only Cloudflare credentials.
-- CORS origin allowlist.
-- Server-generated request IDs and sanitized structured logs.
-- Bounded chat request size, message count, and content size.
-- Live model verification before chat inference.
-- Safe, normalized provider errors and bounded provider request timeouts.
+- Server-only provider credentials.
+- Database-backed session authentication for provisioned accounts.
+- Hashed session tokens, HttpOnly session cookie and CSRF validation for authenticated writes.
+- Server-side admin role checks; no client-only admin authorization.
+- One-time, secret-protected admin bootstrap.
+- Admin audit records for provider/model/fallback changes.
+- CORS allowlist, request IDs, bounded inputs, safe errors and provider timeouts.
+- No raw HTML rendering for model-generated Markdown.
 
-Not implemented yet:
-- Authentication middleware, session lifecycle, OAuth/email verification.
-- Server-side user roles, resource ownership, quotas, and admin authorization.
-- Cookie CSRF protection (not applicable until cookie-authenticated state-changing routes exist).
-- Per-user/distributed rate limiting and abuse/spend controls; only a process-local concurrency guard is active.
-- Provider retries and multi-provider fallback.
-- Upload scanning, object-storage access controls, and isolated file-processing workers.
-- Database migrations, conversation persistence, audit writes, and usage metering.
+Remaining:
+- Public registration, verified email/Google OAuth, recovery and full account management.
+- Distributed login/chat rate limits and per-user quotas/spend controls.
+- Persistent conversation/message APIs, server-side ownership checks and cross-device history.
+- Distributed provider health cache and multi-instance coordination.
+- Provider-specific retries for requests after partial stream output, resumable SSE/event IDs.
+- Actual pricing feeds; prices are administrator-entered metadata and must be kept current.
+- Vision, image generation, video, file-processing workers, TTS/STT, embeddings, research and object storage.
+- Database migration automation, backup/retention/deletion workflows and production security review.
 
-These gaps are release blockers for a public multi-user platform. Do not infer that the presence of schema tables means those controls are active.
+These gaps mean the project is not yet a fully production-ready public multi-user AI platform. Do not infer a capability from a UI label or schema table alone.
 
 ## 7. Environment configuration
 
 Server-only:
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN`
-- `DATABASE_URL` (optional until database-backed features are enabled)
-- `DATABASE_SSL`, `DATABASE_SSL_REJECT_UNAUTHORIZED`, `DATABASE_POOL_MAX`
-- `APP_ORIGIN` (comma-separated trusted browser origins)
+- CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN
+- Optional OpenAI-compatible: OPENAI_COMPAT_BASE_URL, OPENAI_COMPAT_API_KEY, OPENAI_COMPAT_PROVIDER_ID, OPENAI_COMPAT_DISPLAY_NAME
+- AFG_ADMIN_BOOTSTRAP_TOKEN (one-time secret; minimum 32 characters)
+- DATABASE_URL, DATABASE_SSL, DATABASE_SSL_REJECT_UNAUTHORIZED, DATABASE_POOL_MAX
+- APP_ORIGIN (comma-separated trusted browser origins)
+- AFG_UNKNOWN_CONTEXT_BUDGET (estimated-token budget when provider context metadata is absent)
 
-Public client build setting:
-- `VITE_API_BASE_URL` (optional HTTPS API base URL; never put secrets here)
+Public client setting:
+- VITE_API_BASE_URL (optional API base URL; never put secrets here)
 
-Render provides `PORT`. There is no Render Blueprint, Dockerfile, D1 binding, R2 binding, KV namespace, queue, or Worker deployment configuration checked into this repository.
+Render supplies PORT. There is no Render Blueprint, Dockerfile, D1 binding, R2 binding, KV namespace, queue or Worker deployment configuration checked into this repository.
 
-## 8. Release posture
+## 8. Change validation
 
-The current architecture is a modular monolith with a shared API edge, one service, and one provider adapter. It is not yet the full distributed/serverless architecture in the proposed diagram. Add services and infrastructure only alongside real implementations, configuration, monitoring, and authorization—not as empty integrations or UI promises.
-
-No tests, type checks, builds, database migrations, workflow runs, or deployments were executed during this architecture source change.
+Source files and documentation were updated through GitHub. No tests, type checks, builds, database migrations, workflow runs or deployments were executed. Runtime/compile status is therefore unverified.
