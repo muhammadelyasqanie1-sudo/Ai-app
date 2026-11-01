@@ -101,6 +101,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
     try {
       const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/synthesize', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: cleanText.slice(0, 5000), language: language === 'dari' ? 'fa' : 'en' }),
       });
