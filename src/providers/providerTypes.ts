@@ -49,6 +49,7 @@ export interface ChatRequest {
   model: string;
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
   signal?: AbortSignal;
+  noFallback?: boolean;
 }
 
 export interface ChatChunk {
