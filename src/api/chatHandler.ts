@@ -11,7 +11,7 @@ let activeChatRequests = 0;
 const MAX_CONCURRENT_CHAT_REQUESTS = 4;
 
 function splitTranslationDocument(text: string, maxChars = 6000): string[] {
-  const paragraphs = text.split(/(\\n\\s*\\n)/);
+  const paragraphs = text.split(/(\n\s*\n)/);
   const chunks: string[] = [];
   let current = '';
   const push = () => { if (current.trim()) chunks.push(current); current = ''; };
