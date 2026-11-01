@@ -4,7 +4,7 @@ import { handleChatApi } from './chatHandler.ts';
 import { checkDatabase, pool } from './database.ts';
 import { getProviderModelCatalog } from './modelCatalog.ts';
 import { getCapabilitySnapshot, getImageStudioSnapshot, getFileAssistantSnapshot } from '../services/providerGateway.ts';
-import { handleAuthApi } from './auth.ts';
+import { authenticateRequest, handleAuthApi } from './auth.ts';
 import { handleAdminApi } from './adminHandler.ts';
 import { handleResearchApi } from './research.ts';
 import { handleVoiceApi } from './voice.ts';
@@ -26,6 +26,56 @@ function sendJson(res: ServerResponse, status: number, body: unknown, requestId:
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Request-Id', requestId);
   res.end(JSON.stringify({ ...(body as Record<string, unknown>), requestId }));
+}
+
+async function enforceAdminConfiguredRateLimits(req: IncomingMessage, res: ServerResponse, pathname: string, requestId: string): Promise<boolean> {
+  if (!pool || !pathname.startsWith('/api/') || ['/api/health','/api/ready'].includes(pathname)) return false;
+  let account: Awaited<ReturnType<typeof authenticateRequest>> = null;
+  try { account = await authenticateRequest(req); } catch { return false; }
+  if (!account) return false;
+  const policies = await pool.query(
+    `SELECT scope_type,scope_key,requests,window_seconds FROM rate_limit_policies
+      WHERE enabled=true AND ((scope_type='user' AND scope_key=$1) OR (scope_type='tier' AND scope_key=$2))
+      ORDER BY CASE WHEN scope_type='user' THEN 0 ELSE 1 END`,
+    [account.id, account.role],
+  );
+  for (const policy of policies.rows) {
+    const counter = await pool.query(
+      `INSERT INTO rate_limit_counters(scope_type,scope_key,window_start,request_count)
+       VALUES($1,$2,to_timestamp(floor(extract(epoch FROM now())/$3)*$3),1)
+       ON CONFLICT(scope_type,scope_key,window_start)
+       DO UPDATE SET request_count=rate_limit_counters.request_count+1
+       RETURNING request_count`,
+      [policy.scope_type,policy.scope_key,policy.window_seconds],
+    );
+    if (Number(counter.rows[0]?.request_count || 0) > Number(policy.requests)) {
+      res.setHeader('Retry-After', String(policy.window_seconds));
+      sendJson(res, 429, { error: 'Rate limit exceeded.', scope: policy.scope_type }, requestId);
+      return true;
+    }
+  }
+  const modelId = typeof req.headers['x-afg-model'] === 'string' ? req.headers['x-afg-model'] : '';
+  if (modelId) {
+    const modelPolicies = await pool.query(
+      "SELECT scope_key,requests,window_seconds FROM rate_limit_policies WHERE enabled=true AND scope_type='model' AND scope_key=$1",
+      [modelId],
+    );
+    for (const policy of modelPolicies.rows) {
+      const counter = await pool.query(
+        `INSERT INTO rate_limit_counters(scope_type,scope_key,window_start,request_count)
+         VALUES('model',$1,to_timestamp(floor(extract(epoch FROM now())/$2)*$2),1)
+         ON CONFLICT(scope_type,scope_key,window_start)
+         DO UPDATE SET request_count=rate_limit_counters.request_count+1 RETURNING request_count`,
+        [policy.scope_key,policy.window_seconds],
+      );
+      if (Number(counter.rows[0]?.request_count || 0) > Number(policy.requests)) {
+        res.setHeader('Retry-After', String(policy.window_seconds));
+        sendJson(res, 429, { error: 'Model rate limit exceeded.', scope: 'model' }, requestId);
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Promise<void> {
@@ -65,6 +115,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
   }
 
   try {
+    if (await enforceAdminConfiguredRateLimits(req, res, pathname, requestId)) return;
     if (await handleAuthApi(req, res, pathname)) return;
     if (await handleAccountApi(req, res, pathname)) return;
     if (await handleProductivityApi(req, res, pathname)) return;
