@@ -81,6 +81,8 @@ export default function App() {
     capabilities: {
       chat: false,
       vision: false,
+      ocr: false,
+      'image-edit': false,
       'image-generation': false,
       'video-generation': false,
       'file-processing': false,
