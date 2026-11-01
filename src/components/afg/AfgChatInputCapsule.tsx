@@ -348,7 +348,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
           <span>~{tokenEstimate} tokens</span>
         </div>
         <div className="text-[10px] text-cyan-400/70 font-medium">
-          AFG AI Core 3.8
+          {selectedModel || (language === 'dari' ? 'مدل تأییدشده موجود نیست' : 'No verified model available')}
         </div>
       </div>
 
