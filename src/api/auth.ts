@@ -202,8 +202,20 @@ export async function readJsonBody(req: IncomingMessage, maxBytes = 16_384): Pro
     if (Buffer.byteLength(raw, 'utf8') > maxBytes) throw new Error('Request body is too large.');
   }
   const parsed: unknown = JSON.parse(raw || '{}');
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Request body must be a JSON object.');
-  return parsed as Record<string, unknown>;
+  const validated = z.record(z.string(), z.unknown()).safeParse(parsed);
+  if (!validated.success) throw new Error('Request body must be a JSON object.');
+  const inspect = (value: unknown, depth = 0): boolean => {
+    if (depth > 20) return false;
+    if (Array.isArray(value)) return value.length <= 1000 && value.every((item) => inspect(item, depth + 1));
+    if (value && typeof value === 'object') {
+      const entries = Object.entries(value as Record<string, unknown>);
+      return entries.length <= 500 && entries.every(([key, item]) =>
+        !['__proto__','prototype','constructor'].includes(key) && inspect(item, depth + 1));
+    }
+    return true;
+  };
+  if (!inspect(validated.data)) throw new Error('Request body contains unsupported structure.');
+  return validated.data;
 }
 
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
