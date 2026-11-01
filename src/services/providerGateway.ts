@@ -60,7 +60,12 @@ async function verifyModel(provider: ChatProviderAdapter, model: ModelDescriptor
   if (isRecent) {
     health = cached;
   } else {
-    const result = await provider.healthCheck(model.id);
+    let result: { healthy: boolean; checkedAt: string };
+    try {
+      result = await provider.healthCheck(model.id);
+    } catch {
+      result = { healthy: false, checkedAt: new Date().toISOString() };
+    }
     health = { healthy: result.healthy, checkedAt: result.checkedAt };
     healthCache.set(cacheKey, health);
     if (pool) {
@@ -81,18 +86,26 @@ async function verifyModel(provider: ChatProviderAdapter, model: ModelDescriptor
 export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> {
   const verified: ModelDescriptor[] = [];
   for (const provider of providerRegistry) {
-    const config = await provider.validateConfig();
-    if (!config.valid || !(await isProviderEnabled(provider.id))) continue;
+    try {
+      const config = await provider.validateConfig();
+      if (!config.valid || !(await isProviderEnabled(provider.id))) continue;
 
-    const models = await provider.listModels();
-    const enabledModels = await syncDiscoveredModels(provider, models);
-    const configuredModels = models.map((model) => ({
-      ...model,
-      enabled: enabledModels.get(model.id) ?? false,
-    }));
-    for (let i = 0; i < configuredModels.length; i += 4) {
-      const batch = configuredModels.slice(i, i + 4);
-      verified.push(...await Promise.all(batch.map((model) => verifyModel(provider, model))));
+      const models = await provider.listModels();
+      const enabledModels = await syncDiscoveredModels(provider, models);
+      const configuredModels = models.map((model) => ({
+        ...model,
+        enabled: enabledModels.get(model.id) ?? false,
+      }));
+      for (let i = 0; i < configuredModels.length; i += 4) {
+        const batch = configuredModels.slice(i, i + 4);
+        verified.push(...await Promise.all(batch.map((model) => verifyModel(provider, model))));
+      }
+    } catch (error) {
+      // One unavailable provider must not hide healthy models from other registered providers.
+      console.warn('AI_PROVIDER_DISCOVERY_SKIPPED', JSON.stringify({
+        provider: provider.id,
+        code: error instanceof Error ? error.name : 'unknown_provider_error',
+      }));
     }
   }
   return verified;
@@ -187,12 +200,15 @@ export async function getCapabilitySnapshot() {
     })),
     verified: capabilities.chat,
     checkedAt: new Date().toISOString(),
-    providers: getProviderRegistry().map((provider) => ({
-      id: provider.id,
-      displayName: provider.displayName,
-      status: selectable.some((model) => model.providerId === provider.id) ? 'verified' : 'unavailable',
-      capabilities: capabilities.chat && provider.id === 'cloudflare-workers-ai' ? ['chat'] : [],
-    })),
+    providers: getProviderRegistry().map((provider) => {
+      const providerModels = selectable.filter((model) => model.providerId === provider.id);
+      return {
+        id: provider.id,
+        displayName: provider.displayName,
+        status: providerModels.some((model) => model.capabilities.text && model.capabilities.streaming) ? 'verified' : 'unavailable',
+        capabilities: [...new Set(providerModels.flatMap((model) => Object.entries(model.capabilities).filter(([, enabled]) => enabled).map(([key]) => key)))],
+      };
+    }),
     capabilities,
   };
 }
