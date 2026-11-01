@@ -81,6 +81,21 @@ CREATE INDEX IF NOT EXISTS usage_records_user_created_idx ON usage_records(user_
 CREATE INDEX IF NOT EXISTS user_memory_user_updated_idx ON user_memory(user_id,updated_at DESC);
 
 -- Keep canonical profile and verification timestamps synchronized with legacy account writes.
+CREATE OR REPLACE FUNCTION afg_sync_email_verified_timestamp() RETURNS trigger AS $$
+BEGIN
+  IF NEW.email_verified=true AND (TG_OP='INSERT' OR OLD.email_verified IS DISTINCT FROM NEW.email_verified) THEN
+    NEW.email_verified_at=COALESCE(NEW.email_verified_at,now());
+  ELSIF NEW.email_verified=false THEN
+    NEW.email_verified_at=NULL;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS users_sync_email_verified_timestamp ON users;
+CREATE TRIGGER users_sync_email_verified_timestamp
+BEFORE INSERT OR UPDATE OF email_verified ON users
+FOR EACH ROW EXECUTE FUNCTION afg_sync_email_verified_timestamp();
+
 CREATE OR REPLACE FUNCTION afg_sync_user_profile() RETURNS trigger AS $$
 BEGIN
   INSERT INTO profiles(user_id,display_name,avatar_url,locale,updated_at)
@@ -93,15 +108,10 @@ BEGIN
   INSERT INTO user_settings(user_id,memory_enabled,default_language,updated_at)
   VALUES(NEW.id,COALESCE(NEW.memory_enabled,true),COALESCE(NEW.preferred_language,'dari'),now())
   ON CONFLICT(user_id) DO NOTHING;
-  IF NEW.email_verified=true AND NEW.email_verified_at IS NULL THEN
-    NEW.email_verified_at=now();
-  ELSIF NEW.email_verified=false THEN
-    NEW.email_verified_at=NULL;
-  END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS users_sync_profile ON users;
 CREATE TRIGGER users_sync_profile
-BEFORE INSERT OR UPDATE OF display_name,avatar_url,preferred_language,email_verified,memory_enabled ON users
+AFTER INSERT OR UPDATE OF display_name,avatar_url,preferred_language,memory_enabled ON users
 FOR EACH ROW EXECUTE FUNCTION afg_sync_user_profile();
