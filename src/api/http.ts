@@ -4,7 +4,8 @@ import { handleChatApi } from './chatHandler.ts';
 import { checkDatabase, pool } from './database.ts';
 import { getProviderModelCatalog } from './modelCatalog.ts';
 import { getCapabilitySnapshot, getImageStudioSnapshot, getFileAssistantSnapshot } from '../services/providerGateway.ts';
-import { authenticateRequest, handleAuthApi } from './auth.ts';
+import { authenticateRequest, handleAuthApi, verifyCsrf } from './auth.ts';
+import { createHash } from 'crypto';
 import { handleAdminApi } from './adminHandler.ts';
 import { handleResearchApi } from './research.ts';
 import { handleVoiceApi } from './voice.ts';
@@ -116,6 +117,37 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
       }
     }
   });
+
+  // Cookie-authenticated state changes must pass the double-submit CSRF check.
+  const unsafeMethod = !['GET','HEAD','OPTIONS'].includes(req.method || 'GET');
+  const hasSessionCookie = /(?:^|;)\\s*afg_session=/.test(req.headers.cookie || '');
+  if (unsafeMethod && hasSessionCookie && !verifyCsrf(req)) {
+    sendJson(res, 403, { error: 'CSRF validation failed.' }, requestId);
+    return;
+  }
+
+  // Distributed IP throttling; hash the address before storing it in the database.
+  if (pool && pathname.startsWith('/api/') && !['/api/health','/api/ready'].includes(pathname)) {
+    const clientIp = (req as ApiRequest & { ip?: string }).ip || req.socket.remoteAddress || 'unknown';
+    const ipKey = createHash('sha256').update(clientIp).digest('hex');
+    try {
+      const ipCounter = await pool.query(
+        `INSERT INTO rate_limit_counters(scope_type,scope_key,window_start,request_count)
+         VALUES('ip',$1,to_timestamp(floor(extract(epoch FROM now())/60)*60),1)
+         ON CONFLICT(scope_type,scope_key,window_start)
+         DO UPDATE SET request_count=rate_limit_counters.request_count+1
+         RETURNING request_count`,
+        [ipKey],
+      );
+      if (Number(ipCounter.rows[0]?.request_count || 0) > 120) {
+        res.setHeader('Retry-After','60');
+        sendJson(res,429,{error:'Too many requests from this network. Please retry shortly.',scope:'ip'},requestId);
+        return;
+      }
+    } catch {
+      // Do not take the whole API offline if the optional limiter table is temporarily unavailable.
+    }
+  }
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
