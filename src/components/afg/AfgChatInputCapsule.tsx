@@ -111,6 +111,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
             const dataUrl = String(reader.result || '');
             const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/transcribe', {
               method: 'POST',
+              credentials: 'include',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ mimeType: blob.type || 'audio/webm', audioBase64: dataUrl.split(',')[1] || '', language: language === 'dari' ? 'fa' : 'en' }),
             });
