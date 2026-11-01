@@ -66,6 +66,9 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   
   // Speech synthesis state (Read Aloud)
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+  const [voiceEnabled,setVoiceEnabled]=useState(()=>localStorage.getItem('afg_voice_enabled')!=='false');
+  const ttsAvailable=voiceEnabled&&capabilities['text-to-speech'];
+  useEffect(()=>{const sync=()=>setVoiceEnabled(localStorage.getItem('afg_voice_enabled')!=='false');window.addEventListener('afg-voice-preference-change',sync);window.addEventListener('afg-preferences-change',sync);return()=>{window.removeEventListener('afg-voice-preference-change',sync);window.removeEventListener('afg-preferences-change',sync);};},[]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedThoughts, setExpandedThoughts] = useState<Record<string, boolean>>({});
@@ -84,7 +87,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
 
   // Provider-backed Read Aloud; unavailable unless a verified TTS adapter exists.
   const handleReadAloud = async (msgId: string, text: string) => {
-    if (!capabilities['text-to-speech']) return;
+    if (!ttsAvailable) return;
     if (speakingMsgId === msgId) {
       audioRef.current?.pause();
       audioRef.current = null;
@@ -319,12 +322,12 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                     <button onClick={() => onDeleteMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-red-500/10 hover:text-red-300"><Trash2 className="w-3.5 h-3.5" />{language === 'dari' ? 'حذف' : 'Delete'}</button>
                     {/* Read Aloud Button (User Request #7) */}
                     <button
-                      disabled={!capabilities['text-to-speech']}
+                      disabled={!ttsAvailable}
                       onClick={() => handleReadAloud(msg.id, msg.content)}
                       className={`flex items-center gap-1 text-[11px] p-1 px-2 rounded-md hover:bg-slate-800 transition-colors ${
-                        isSpeaking ? 'text-cyan-400 bg-cyan-950/40' : capabilities['text-to-speech'] ? 'hover:text-slate-200' : 'opacity-30 cursor-not-allowed'
+                        isSpeaking ? 'text-cyan-400 bg-cyan-950/40' : ttsAvailable ? 'hover:text-slate-200' : 'opacity-30 cursor-not-allowed'
                       }`}
-                      title={!capabilities['text-to-speech'] ? (language === 'dari' ? 'ارائه‌دهنده متن به گفتار تأیید نشده است' : 'No verified text-to-speech provider is available') : (isSpeaking ? t.stopSpeech : t.readAloud)}
+                      title={!ttsAvailable ? (language === 'dari' ? 'ارائه‌دهنده متن به گفتار تأیید نشده است' : 'No verified text-to-speech provider is available') : (isSpeaking ? t.stopSpeech : t.readAloud)}
                     >
                       {isSpeaking ? (
                         <>
