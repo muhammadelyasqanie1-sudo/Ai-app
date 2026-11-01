@@ -76,73 +76,6 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
       {/* Settings Options List */}
       <div className="rounded-3xl bg-[#09122c]/90 border border-cyan-900/40 overflow-hidden divide-y divide-cyan-950/60 shadow-xl">
         
-        {/* Language Option */}
-        <div 
-          onClick={onToggleLanguage}
-          className="p-4 flex items-center justify-between hover:bg-cyan-950/30 cursor-pointer transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400">
-              <Globe className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-sm font-bold text-white block">
-                {t.appLanguage}
-              </span>
-              <span className="text-xs text-slate-400">
-                {language === 'dari' ? 'فارسی / دری (افغانستان)' : 'English (US)'}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-cyan-300 font-bold bg-cyan-500/15 px-2.5 py-1 rounded-lg">
-              {language === 'dari' ? 'دری' : 'English'}
-            </span>
-            <ChevronRight className={`w-4 h-4 text-slate-500 ${language === 'dari' ? 'rotate-180' : ''}`} />
-          </div>
-        </div>
-
-        {/* Theme Mode Option */}
-        <div 
-          onClick={onToggleTheme}
-          className="p-4 flex items-center justify-between hover:bg-cyan-950/30 cursor-pointer transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
-              {theme === 'dark' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-            </div>
-            <div>
-              <span className="text-sm font-bold text-white block">
-                {t.darkMode}
-              </span>
-              <span className="text-xs text-slate-400">
-                {theme === 'dark' ? 'Dark Mode (Active)' : 'Light Mode (Active)'}
-              </span>
-            </div>
-          </div>
-
-          <div className={`w-12 h-6 rounded-full p-1 transition-colors ${theme === 'dark' ? 'bg-cyan-500' : 'bg-slate-700'}`}>
-            <div className={`w-4 h-4 rounded-full bg-white transition-transform ${theme === 'dark' ? 'translate-x-6' : 'translate-x-0'}`} />
-          </div>
-        </div>
-
-        {/* Notification and sound integrations are not configured yet. */}
-      <div className="p-4 flex items-center justify-between border-b border-cyan-950/60">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center text-sky-400"><Bell className="w-5 h-5" /></div>
-          <div><span className="text-sm font-bold text-white block">{t.notifications}</span><span className="text-xs text-slate-400">{language === 'dari' ? 'اعلان‌ها هنوز پیکربندی نشده‌اند' : 'Not configured'}</span></div>
-        </div>
-        <span className="text-xs text-amber-300">{language === 'dari' ? 'غیرفعال' : 'Unavailable'}</span>
-      </div>
-      <div className="p-4 flex items-center justify-between border-b border-cyan-950/60">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400"><Volume2 className="w-5 h-5" /></div>
-          <div><span className="text-sm font-bold text-white block">{t.soundEffects}</span><span className="text-xs text-slate-400">{language === 'dari' ? 'افکت‌های صوتی هنوز پیاده‌سازی نشده‌اند' : 'Not implemented'}</span></div>
-        </div>
-        <span className="text-xs text-amber-300">{language === 'dari' ? 'غیرفعال' : 'Unavailable'}</span>
-      </div>
-
         {/* Keyboard Shortcuts Trigger (preserves request #9) */}
         <div 
           onClick={onOpenShortcuts}
@@ -185,11 +118,6 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
           <ChevronRight className={`w-4 h-4 text-slate-500 ${language === 'dari' ? 'rotate-180' : ''}`} />
         </div>
 
-      </div>
-
-      {/* Sign-out is unavailable until authentication and sessions are implemented. */}
-      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 text-xs leading-6 text-amber-100">
-        {language === 'dari' ? 'ورود و نشست کاربری هنوز فعال نیست؛ بنابراین خروج از حساب نیز در دسترس نیست.' : 'Sign-in and session management are not implemented yet, so sign-out is unavailable.'}
       </div>
 
       {/* About AFG AI Modal (Screenshot 4) */}
