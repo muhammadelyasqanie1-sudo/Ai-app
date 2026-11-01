@@ -169,3 +169,15 @@ html[data-afg-density="compact"] .space-y-3 > :not([hidden]) ~ :not([hidden]),
 html[data-afg-density="compact"] .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-block-start: .5rem !important; }
 html[data-afg-density="spacious"] .space-y-3 > :not([hidden]) ~ :not([hidden]),
 html[data-afg-density="spacious"] .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-block-start: 1.35rem !important; }
+
+
+/* Apply the selected account accent to the app's primary cyan UI tokens. */
+html [class~="text-cyan-200"],
+html [class~="text-cyan-300"],
+html [class~="text-cyan-400"] { color: var(--accent-cyan) !important; }
+html [class~="border-cyan-400"],
+html [class~="border-cyan-500"],
+html [class~="border-cyan-500/30"],
+html [class~="border-cyan-500/40"] { border-color: color-mix(in srgb, var(--accent-cyan) 55%, transparent) !important; }
+html [class~="bg-cyan-500/10"],
+html [class~="bg-cyan-500/20"] { background-color: color-mix(in srgb, var(--accent-cyan) 12%, transparent) !important; }
