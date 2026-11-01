@@ -54,6 +54,52 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
   }
 
   try {
+    if (req.method === 'GET' && pathname === '/api/admin/subscription-plans') {
+      const result = await pool.query(`SELECT plan_key,display_name,monthly_price_usd,limits_json,features_json,enabled
+        FROM subscription_plans ORDER BY monthly_price_usd,plan_key`);
+      sendAuthJson(res, 200, { plans: result.rows }); return true;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/admin/subscriptions') {
+      const result = await pool.query(`SELECT s.id,s.user_id,u.email,p.plan_key,p.display_name AS plan_name,
+          s.status,s.starts_at,s.ends_at,s.provider,s.created_at
+        FROM user_subscriptions s JOIN users u ON u.id=s.user_id
+        JOIN subscription_plans p ON p.id=s.plan_id
+        ORDER BY s.created_at DESC LIMIT 300`);
+      sendAuthJson(res, 200, { subscriptions: result.rows }); return true;
+    }
+
+    if (req.method === 'PATCH' && pathname === '/api/admin/subscriptions') {
+      const body = await readJsonBody(req, 8000);
+      const targetId = typeof body.userId === 'string' ? body.userId : '';
+      const planKey = typeof body.planKey === 'string' ? body.planKey : '';
+      if (!targetId || !['free','pro'].includes(planKey)) {
+        sendAuthJson(res, 400, { error: 'Provide a user ID and an enabled free or pro plan.' }); return true;
+      }
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const plan = await client.query('SELECT id,plan_key FROM subscription_plans WHERE plan_key=$1 AND enabled=true FOR SHARE',[planKey]);
+        const target = await client.query("SELECT id FROM users WHERE id=$1 AND status='active' FOR UPDATE",[targetId]);
+        if (!plan.rows[0] || !target.rows[0]) {
+          await client.query('ROLLBACK');
+          sendAuthJson(res, 404, { error: 'Active user or enabled plan not found.' }); return true;
+        }
+        await client.query("UPDATE user_subscriptions SET status='cancelled',ends_at=now(),updated_at=now() WHERE user_id=$1 AND status IN ('active','trialing')",[targetId]);
+        const created = await client.query(`INSERT INTO user_subscriptions(user_id,plan_id,status,provider)
+          VALUES($1,$2,'active','admin_manual') RETURNING id,status,starts_at`,[targetId,plan.rows[0].id]);
+        await client.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+          [user.id,'subscription.plan.assign','user',targetId,JSON.stringify({planKey,subscriptionId:created.rows[0].id,source:'admin_manual'})]);
+        await client.query('COMMIT');
+        sendAuthJson(res, 200, { subscription: {...created.rows[0],planKey} }); return true;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+
     if (req.method === 'GET' && pathname === '/api/admin/users') {
       const result = await pool.query(`
         SELECT u.id,u.email,u.display_name,u.role,u.status,u.created_at,
