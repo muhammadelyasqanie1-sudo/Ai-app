@@ -89,7 +89,7 @@ This is a modular monolith, not yet a deployed Workers/serverless, WebSocket, or
 
 The following are now present in source:
 - Shared API edge and SSE chat with heartbeat, cancellation, pre-first-token exponential retry, empty-output guard and uncertainty/source-honesty instruction.
-- Provider adapter contract with Cloudflare Workers AI and optional OpenAI-compatible adapter; provider-qualified model references.
+- Provider adapter contract with Cloudflare Workers AI and OpenAI-compatible adapter (visible but disabled until configured); provider-qualified model references.
 - Five-minute per-process model health verification, PostgreSQL provider/model enablement, administrator-entered prices and capability fallback chains.
 - One-time admin bootstrap, database-backed hashed sessions, CSRF checks, server-side admin role enforcement and audit logging.
 - Core message operations and localStorage conversation history with search, rename, pin, Markdown/JSON export, print-to-PDF, delete and clear.
