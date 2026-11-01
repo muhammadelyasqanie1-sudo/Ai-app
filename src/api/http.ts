@@ -7,6 +7,7 @@ import { getCapabilitySnapshot, getImageStudioSnapshot, getFileAssistantSnapshot
 import { handleAuthApi } from './auth.ts';
 import { handleAdminApi } from './adminHandler.ts';
 import { handleResearchApi } from './research.ts';
+import { handleVoiceApi } from './voice.ts';
 
 type ApiRequest = IncomingMessage & { originalUrl?: string };
 
@@ -57,6 +58,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     if (await handleAdminApi(req, res, pathname)) return;
 
     if (await handleResearchApi(req, res)) return;
+    if (await handleVoiceApi(req, res)) return;
 
     if (pathname === '/api/chat') {
       await handleChatApi(req, res);
