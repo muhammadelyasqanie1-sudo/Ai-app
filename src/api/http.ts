@@ -32,7 +32,10 @@ function sendJson(res: ServerResponse, status: number, body: unknown, requestId:
 async function enforceAdminConfiguredRateLimits(req: IncomingMessage, res: ServerResponse, pathname: string, requestId: string): Promise<boolean> {
   if (!pool || !pathname.startsWith('/api/') || ['/api/health','/api/ready'].includes(pathname)) return false;
   let account: Awaited<ReturnType<typeof authenticateRequest>> = null;
-  try { account = await authenticateRequest(req); } catch { return false; }
+  try { account = await authenticateRequest(req); } catch {
+    sendJson(res,503,{error:'Authentication checks are temporarily unavailable.'},requestId);
+    return true;
+  }
   if (!account) return false;
   let policies;
   try {
@@ -51,7 +54,10 @@ async function enforceAdminConfiguredRateLimits(req: IncomingMessage, res: Serve
         ORDER BY CASE WHEN scope_type='user' THEN 0 ELSE 1 END`,
       [account.id, tier],
     );
-  } catch { return false; }
+  } catch {
+    sendJson(res,503,{error:'Rate limiting is temporarily unavailable.'},requestId);
+    return true;
+  }
   for (const policy of policies.rows) {
     const counter = await pool.query(
       `INSERT INTO rate_limit_counters(scope_type,scope_key,window_start,request_count)
@@ -131,21 +137,25 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     const clientIp = (req as ApiRequest & { ip?: string }).ip || req.socket.remoteAddress || 'unknown';
     const ipKey = createHash('sha256').update(clientIp).digest('hex');
     try {
+      const ipPolicy = await pool.query("SELECT requests,window_seconds FROM rate_limit_policies WHERE enabled=true AND scope_type='ip' AND scope_key='*' LIMIT 1");
+      const maxRequests = Number(ipPolicy.rows[0]?.requests || 120);
+      const windowSeconds = Number(ipPolicy.rows[0]?.window_seconds || 60);
       const ipCounter = await pool.query(
         `INSERT INTO rate_limit_counters(scope_type,scope_key,window_start,request_count)
-         VALUES('ip',$1,to_timestamp(floor(extract(epoch FROM now())/60)*60),1)
+         VALUES('ip',$1,to_timestamp((floor(extract(epoch FROM now())/$2)*$2)::double precision),1)
          ON CONFLICT(scope_type,scope_key,window_start)
          DO UPDATE SET request_count=rate_limit_counters.request_count+1
          RETURNING request_count`,
-        [ipKey],
+        [ipKey,windowSeconds],
       );
-      if (Number(ipCounter.rows[0]?.request_count || 0) > 120) {
-        res.setHeader('Retry-After','60');
+      if (Number(ipCounter.rows[0]?.request_count || 0) > maxRequests) {
+        res.setHeader('Retry-After',String(windowSeconds));
         sendJson(res,429,{error:'Too many requests from this network. Please retry shortly.',scope:'ip'},requestId);
         return;
       }
     } catch {
-      // Do not take the whole API offline if the optional limiter table is temporarily unavailable.
+      sendJson(res,503,{error:'Network rate limiting is temporarily unavailable.'},requestId);
+      return;
     }
   }
 
