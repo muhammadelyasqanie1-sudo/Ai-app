@@ -584,9 +584,10 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
             />
           </div>
 
-          <button disabled className="w-full py-3 rounded-xl bg-slate-800 text-slate-500 font-bold text-sm cursor-not-allowed">
-            {language === 'dari' ? 'خلاصه‌سازی تا اتصال مدل غیرفعال است' : 'Summarization unavailable until an AI provider is connected'}
-                    </button>
+          <button onClick={() => { if (summarizeText.trim()) onRunTool(summarizeText.trim(), { productivityType: 'summary', productivityParameters: { length: 'medium' } }); }} disabled={!summarizeText.trim()} className="w-full py-3 rounded-xl bg-rose-600 text-white font-bold text-sm disabled:opacity-40">
+            {language === 'dari' ? 'خلاصه‌سازی با هوش مصنوعی' : 'Summarize with AFG AI'}
+          </button>
+          <p className="text-[11px] text-slate-500">{language === 'dari' ? 'نتیجه در صفحه چت نمایش داده و در فضای کاری ذخیره می‌شود.' : 'The result appears in Chat and is saved to your Productivity workspace when signed in.'}</p>
 
           {summaryResult && (
             <div className="p-4 rounded-2xl bg-slate-900/90 border border-rose-800/40 text-xs sm:text-sm text-slate-200 leading-relaxed whitespace-pre-line">
