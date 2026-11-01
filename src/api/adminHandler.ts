@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
-import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './auth.ts';
+import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf, revokeUserSessions } from './auth.ts';
 import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors } from '../services/providerGateway.ts';
 
 const ALLOWED_FALLBACK_CAPABILITIES = new Set(['text', 'vision', 'imageGen', 'tts', 'stt']);
@@ -127,7 +127,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         WHERE id=$1 AND status <> 'deleted' RETURNING id,role,status`,
         [targetId, role ?? null, status ?? null]);
       if (!result.rowCount) { sendAuthJson(res, 404, { error: 'User not found.' }); return true; }
-      if (status === 'suspended') await pool.query('DELETE FROM sessions WHERE user_id=$1', [targetId]);
+      if (status === 'suspended' || role !== undefined) await revokeUserSessions(targetId);
       await pool.query(
         'INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
         [user.id,'user.access.update','user',targetId,JSON.stringify({role:role ?? null,status:status ?? null})]);
