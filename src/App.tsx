@@ -479,7 +479,7 @@ export default function App() {
         )}
 
         {currentTab === 'tools' && (
-          <AfgToolsCenter language={language} onRunTool={(prompt, options) => { setCurrentTab('chat'); void handleSendMessage(prompt, [], messages, options); }} />
+          <AfgToolsCenter language={language} capabilities={capabilitySnapshot.capabilities} onRunTool={(prompt, options) => { setCurrentTab('chat'); void handleSendMessage(prompt, [], messages, options); }} />
         )}
 
         {currentTab === 'history' && (
