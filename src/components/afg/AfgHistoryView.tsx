@@ -128,6 +128,12 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
         />
       </div>
 
+      <div className="flex justify-end">
+        <button onClick={() => { if (window.confirm(language === 'dari' ? 'تمام گفتگوهای ذخیره‌شده پاک شود؟' : 'Delete all saved conversations?')) setSessions([]); }} className="flex items-center gap-1 rounded-lg px-3 py-2 text-xs text-red-300 hover:bg-red-500/10">
+          <Trash className="w-3.5 h-3.5" />{language === 'dari' ? 'پاک‌کردن همه' : 'Clear all'}
+        </button>
+      </div>
+
       {/* Sessions List */}
       <div className="space-y-3">
         {filteredSessions.length === 0 ? (
@@ -147,6 +153,7 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
+                    {session.isPinned && <Pin className="w-3 h-3 text-amber-300" />}
                     <h3 className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors truncate">
                       {session.title}
                     </h3>
@@ -160,10 +167,15 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1 shrink-0">
+                <button onClick={(e) => handlePin(session, e)} className="p-1.5 rounded-lg text-slate-500 hover:text-amber-300" title="Pin"><Pin className="w-4 h-4" /></button>
+                <button onClick={(e) => handleRename(session, e)} className="p-1.5 rounded-lg text-slate-500 hover:text-cyan-300" title="Rename"><Pencil className="w-4 h-4" /></button>
+                <button onClick={(e) => handleExport(session, 'md', e)} className="p-1.5 rounded-lg text-slate-500 hover:text-cyan-300" title="Export Markdown"><FileText className="w-4 h-4" /></button>
+                <button onClick={(e) => handleExport(session, 'json', e)} className="p-1.5 rounded-lg text-slate-500 hover:text-cyan-300" title="Export JSON"><FileJson className="w-4 h-4" /></button>
+                <button onClick={(e) => handleExport(session, 'pdf', e)} className="p-1.5 rounded-lg text-slate-500 hover:text-cyan-300" title="Print / Save PDF"><Download className="w-4 h-4" /></button>
                 <button
                   onClick={(e) => handleDelete(session.id, e)}
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10"
                   title="Delete"
                 >
                   <Trash2 className="w-4 h-4" />
