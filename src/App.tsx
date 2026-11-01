@@ -222,14 +222,16 @@ export default function App() {
         .then((data) => {
           if (data?.authenticated && data.user) {
             setUser({ name: data.user.displayName || 'User', nameEn: data.user.displayName || 'User', email: data.user.email || '', avatar: '', isPremium: false, tier: 'Free' });
+            fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const model = prefs?.preferences?.default_model; if (typeof model === 'string' && availableModels.includes(model)) setSelectedModel(model); }).catch(() => {});
           } else {
             setUser(DEFAULT_USER);
           }
         }).catch(() => {});
     };
     window.addEventListener('afg-auth-change', syncAccount);
+    window.addEventListener('afg-preferences-change', syncAccount);
     syncAccount();
-    return () => window.removeEventListener('afg-auth-change', syncAccount);
+    return () => { window.removeEventListener('afg-auth-change', syncAccount); window.removeEventListener('afg-preferences-change', syncAccount); };
   }, []);
 
   // Keyboard shortcuts
