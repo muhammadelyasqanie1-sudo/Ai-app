@@ -22,7 +22,8 @@ export type ToolSubTab =
   | 'code-help'
   | 'writing-studio'
   | 'research'
-  | 'summarizer';
+  | 'summarizer'
+  | 'productivity';
 
 export interface UserProfile {
   name: string;
