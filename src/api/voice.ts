@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomUUID } from 'crypto';
-import { selectCheapestModel, getProviderAdapter } from '../services/providerGateway.ts';
+import { selectCheapestModel, getProviderAdapter, getVerifiedModelDescriptors } from '../services/providerGateway.ts';
 
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 const ALLOWED_AUDIO_TYPES = new Set(['audio/webm', 'audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/aac']);
@@ -26,8 +26,15 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
 
 export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   const path = new URL(req.url || '/', 'http://localhost').pathname;
-  if (path !== '/api/voice/transcribe' && path !== '/api/voice/synthesize') return false;
+  if (path !== '/api/voice/transcribe' && path !== '/api/voice/synthesize' && path !== '/api/voice/voices') return false;
   const requestId = randomUUID();
+  if (path === '/api/voice/voices' && req.method === 'GET') {
+    const descriptors = await getVerifiedModelDescriptors();
+    const voices = descriptors.filter((model) => model.verifiedAt && model.capabilities.tts && Boolean(getProviderAdapter(model.providerId)?.synthesize))
+      .flatMap((model) => getProviderAdapter(model.providerId)?.voiceOptions?.(model.id) || []);
+    reply(res, 200, { available: voices.length > 0, voices }, requestId);
+    return true;
+  }
   if (req.method !== 'POST') {
     reply(res, 405, { error: 'Method not allowed.' }, requestId);
     return true;
