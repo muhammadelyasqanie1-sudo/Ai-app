@@ -108,7 +108,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
             const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/transcribe', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ mimeType: blob.type || 'audio/webm', audioBase64: dataUrl.split(',')[1] || '' }),
+              body: JSON.stringify({ mimeType: blob.type || 'audio/webm', audioBase64: dataUrl.split(',')[1] || '', language: language === 'dari' ? 'fa' : 'en' }),
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Speech recognition failed.');
