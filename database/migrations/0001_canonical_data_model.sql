@@ -83,10 +83,12 @@ CREATE INDEX IF NOT EXISTS user_memory_user_updated_idx ON user_memory(user_id,u
 -- Keep canonical profile and verification timestamps synchronized with legacy account writes.
 CREATE OR REPLACE FUNCTION afg_sync_email_verified_timestamp() RETURNS trigger AS $$
 BEGIN
-  IF NEW.email_verified=true AND (TG_OP='INSERT' OR OLD.email_verified IS DISTINCT FROM NEW.email_verified) THEN
-    NEW.email_verified_at=COALESCE(NEW.email_verified_at,now());
-  ELSIF NEW.email_verified=false THEN
-    NEW.email_verified_at=NULL;
+  IF TG_OP='INSERT' THEN
+    IF NEW.email_verified THEN NEW.email_verified_at=COALESCE(NEW.email_verified_at,now());
+    ELSE NEW.email_verified_at=NULL; END IF;
+  ELSIF NEW.email_verified IS DISTINCT FROM OLD.email_verified THEN
+    IF NEW.email_verified THEN NEW.email_verified_at=now();
+    ELSE NEW.email_verified_at=NULL; END IF;
   END IF;
   RETURN NEW;
 END;
