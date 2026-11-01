@@ -133,6 +133,15 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
 
   // --- Summarizer State ---
   const [summarizeText, setSummarizeText] = useState('');
+  const [summarizeFileName, setSummarizeFileName] = useState('');
+  const handleSummarizerFile = async (file?: File) => {
+    if (!file) return;
+    if (file.size > 200_000) { setSummaryResult(language === 'dari' ? 'فایل متنی باید حداکثر ۲۰۰ کیلوبایت باشد.' : 'Text file must be 200 KB or smaller.'); return; }
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (!['txt','md','csv','json'].includes(extension || '')) { setSummaryResult(language === 'dari' ? 'فقط فایل‌های TXT، MD، CSV و JSON پشتیبانی می‌شوند. برای PDF هنوز استخراج امن فعال نیست.' : 'Only TXT, MD, CSV and JSON files are supported. Secure PDF extraction is not enabled yet.'); return; }
+    try { const text = await file.text(); if (!text.trim()) throw new Error('empty'); setSummarizeText(text); setSummarizeFileName(file.name); setSummaryResult(''); }
+    catch { setSummaryResult(language === 'dari' ? 'خواندن فایل متنی ممکن نشد.' : 'Could not read the text file.'); }
+  };
   const [summaryResult, setSummaryResult] = useState('');
   const [writingPrompt, setWritingPrompt] = useState('');
   const [writingTemplate, setWritingTemplate] = useState('article');
@@ -572,6 +581,11 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
           </div>
 
           <div>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">
+              {language === 'dari' ? 'فایل متنی (TXT، MD، CSV، JSON):' : 'Text document (TXT, MD, CSV, JSON):'}
+            </label>
+            <input type="file" accept=".txt,.md,.csv,.json,text/plain,text/markdown,text/csv,application/json" onChange={(e) => { void handleSummarizerFile(e.target.files?.[0]); e.currentTarget.value = ''; }} className="mb-2 w-full text-xs text-slate-300" />
+            {summarizeFileName && <p className="mb-2 text-[11px] text-cyan-300">{summarizeFileName}</p>}
             <label className="block text-xs font-semibold text-slate-400 mb-1">
               {language === 'dari' ? 'یا متن را مستقیم جای‌گذاری کنید:' : 'Or paste text directly:'}
             </label>
