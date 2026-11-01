@@ -31,6 +31,7 @@ export async function getCapabilitySnapshot() {
   };
 
   return {
+    models: catalog.models.map((model) => model.id),
     verified: catalog.verified,
     checkedAt: catalog.checkedAt,
     providers: [{
