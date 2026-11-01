@@ -39,6 +39,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({ language }) => {
   const [showBootstrap, setShowBootstrap] = useState(false);
   const [providers, setProviders] = useState<ProviderRow[]>([]);
   const [models, setModels] = useState<ModelRow[]>([]);
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, { input: string; output: string }>>({});
   const [fallbacks, setFallbacks] = useState<FallbackRow[]>([]);
   const [fallbackCapability, setFallbackCapability] = useState('text');
   const [fallbackText, setFallbackText] = useState('');
@@ -55,6 +56,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({ language }) => {
       ]);
       setProviders(providerData.providers || []);
       setModels(modelData.models || []);
+      setPriceDrafts(Object.fromEntries((modelData.models || []).map((model: ModelRow) => [model.providerId + ':' + model.id, { input: model.inputCostPerMillion == null ? '' : String(model.inputCostPerMillion), output: model.outputCostPerMillion == null ? '' : String(model.outputCostPerMillion) }])));
       setFallbacks(fallbackData.fallbacks || []);
       setAuthenticated(true);
     } catch (err) {
@@ -92,6 +94,23 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({ language }) => {
       await api('/api/admin/providers', { method: 'PATCH', body: JSON.stringify({ providerId: provider.id, enabled: !provider.enabled }) });
       await loadAdminData();
     } catch (err) { setError(err instanceof Error ? err.message : 'Provider update failed.'); }
+  };
+
+  const saveModelPricing = async (model: ModelRow) => {
+    const key = model.providerId + ':' + model.id;
+    const draft = priceDrafts[key] || { input: '', output: '' };
+    const parseCost = (value: string) => value.trim() === '' ? null : Number(value);
+    const inputCostPerMillion = parseCost(draft.input);
+    const outputCostPerMillion = parseCost(draft.output);
+    if ((inputCostPerMillion !== null && (!Number.isFinite(inputCostPerMillion) || inputCostPerMillion < 0)) ||
+        (outputCostPerMillion !== null && (!Number.isFinite(outputCostPerMillion) || outputCostPerMillion < 0))) {
+      setError('Pricing must be a non-negative number or blank.'); return;
+    }
+    try {
+      await api('/api/admin/models', { method: 'PATCH', body: JSON.stringify({ providerId: model.providerId, modelId: model.id, enabled: model.enabled, inputCostPerMillion, outputCostPerMillion }) });
+      await loadAdminData();
+      setNotice('Model pricing saved. Auto-routing can now compare configured costs.');
+    } catch (err) { setError(err instanceof Error ? err.message : 'Pricing update failed.'); }
   };
 
   const toggleModel = async (model: ModelRow) => {
@@ -198,6 +217,11 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({ language }) => {
             <p className="text-[11px] text-slate-500">{model.providerId} · {model.contextWindow ? `${model.contextWindow.toLocaleString()} context` : 'Context unknown'}</p>
             <div className="mt-1 flex flex-wrap gap-1">{Object.entries(model.capabilities).filter(([, value]) => value).map(([key]) => <span key={key} className="rounded-full bg-cyan-500/10 px-2 py-0.5 text-[10px] text-cyan-300">{key}</span>)}</div>
             <p className={`mt-1 text-[11px] ${model.verifiedAt ? 'text-emerald-400' : 'text-amber-300'}`}>{model.verifiedAt ? `Verified ${new Date(model.verifiedAt).toLocaleString()}` : 'Provider not reachable.'}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input aria-label="Input USD per million tokens" type="number" min="0" step="0.000001" placeholder="Input $ / 1M" value={priceDrafts[model.providerId + ':' + model.id]?.input || ''} onChange={(event) => setPriceDrafts((previous) => ({ ...previous, [model.providerId + ':' + model.id]: { ...(previous[model.providerId + ':' + model.id] || { input: '', output: '' }), input: event.target.value } }))} className="w-28 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-white" />
+              <input aria-label="Output USD per million tokens" type="number" min="0" step="0.000001" placeholder="Output $ / 1M" value={priceDrafts[model.providerId + ':' + model.id]?.output || ''} onChange={(event) => setPriceDrafts((previous) => ({ ...previous, [model.providerId + ':' + model.id]: { ...(previous[model.providerId + ':' + model.id] || { input: '', output: '' }), output: event.target.value } }))} className="w-28 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-white" />
+              <button onClick={() => void saveModelPricing(model)} className="rounded-lg bg-cyan-500/15 px-2.5 py-1.5 text-xs text-cyan-300">Save pricing</button>
+            </div>
           </div>
           <button onClick={() => void toggleModel(model)} className={`rounded-xl px-3 py-2 text-xs font-bold ${model.enabled ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>{model.enabled ? 'Enabled' : 'Disabled'}</button>
         </div>)}
