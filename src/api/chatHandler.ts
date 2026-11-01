@@ -59,7 +59,17 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       }
     }
 
-    const body = JSON.parse(bodyStr || '{}');
+    let body: Record<string, unknown>;
+    try {
+      body = JSON.parse(bodyStr || '{}');
+    } catch {
+      sendJson(req, res, 400, { error: 'Request body must contain valid JSON.', requestId: id }, id);
+      return;
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      sendJson(req, res, 400, { error: 'Request body must be a JSON object.', requestId: id }, id);
+      return;
+    }
     const messages = body.messages as ChatMessage[] | undefined;
     const customInstructions = String(body.customInstructions || '').slice(0, 8_000);
     const model = String(body.model || '').trim();
