@@ -196,13 +196,28 @@ const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
 
-function isLoginRateLimited(req: IncomingMessage): boolean {
-  const forwarded = req.headers['x-forwarded-for'];
-  const address = (typeof forwarded === 'string' ? forwarded.split(',')[0] : req.socket.remoteAddress) || 'unknown';
+async function isLoginRateLimited(req: IncomingMessage): Promise<boolean> {
+  const address = (req as IncomingMessage & { ip?: string }).ip || req.socket.remoteAddress || 'unknown';
+  const key = createHash('sha256').update(address).digest('hex');
+  if (pool) {
+    try {
+      const result = await pool.query(
+        `INSERT INTO rate_limit_counters(scope_type,scope_key,window_start,request_count)
+         VALUES('auth_ip',$1,to_timestamp((floor(extract(epoch FROM now())/900)*900)::double precision),1)
+         ON CONFLICT(scope_type,scope_key,window_start)
+         DO UPDATE SET request_count=rate_limit_counters.request_count+1
+         RETURNING request_count`,
+        [key],
+      );
+      return Number(result.rows[0]?.request_count || 0) > LOGIN_MAX_ATTEMPTS;
+    } catch {
+      // Retain a conservative local fallback if the database limiter cannot be reached.
+    }
+  }
   const now = Date.now();
-  const current = loginAttempts.get(address);
+  const current = loginAttempts.get(key);
   if (!current || current.resetAt <= now) {
-    loginAttempts.set(address, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
     return false;
   }
   current.count += 1;
@@ -307,7 +322,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
   }
 
   if (pathname === '/api/auth/register' && req.method === 'POST') {
-    if (isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
+    if (await isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
     try {
       if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) { sendAuthJson(res,503,{error:'Email verification is unavailable until RESEND_API_KEY and EMAIL_FROM are configured.'}); return true; }
       const parsed=parseAuthInput(AUTH_INPUT.register,await readJsonBody(req)); if(!parsed){sendAuthJson(res,400,{error:'Use a valid email and a password of at least 12 characters.'});return true;}
