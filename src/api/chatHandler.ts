@@ -153,9 +153,9 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     let memoryPrompt = '';
     if (authenticatedUser && pool) {
       try {
-        const preference = await pool.query('SELECT memory_enabled FROM user_preferences WHERE user_id=$1', [authenticatedUser.id]);
+        const preference = await pool.query('SELECT u.memory_enabled AS account_memory_enabled, COALESCE(p.memory_enabled, u.memory_enabled) AS memory_enabled FROM users u LEFT JOIN user_preferences p ON p.user_id=u.id WHERE u.id=$1', [authenticatedUser.id]);
         const userMemory = await pool.query('SELECT category, content FROM user_memories WHERE user_id=$1 ORDER BY updated_at DESC LIMIT 30', [authenticatedUser.id]);
-        if (preference.rows[0]?.memory_enabled !== false && userMemory.rows.length) {
+        if (preference.rows[0]?.account_memory_enabled !== false && preference.rows[0]?.memory_enabled !== false && userMemory.rows.length) {
           memoryPrompt = 'User-approved personal memory (use only when relevant; never expose it unnecessarily):\\n' + userMemory.rows.map((item) => '[' + item.category + '] ' + item.content).join('\\n');
         }
       } catch { console.error('AFG_MEMORY_CONTEXT_UNAVAILABLE'); }
