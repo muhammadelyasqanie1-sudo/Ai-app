@@ -38,6 +38,6 @@ export function buildToolModePrompt(body: Record<string, unknown>, uiLanguage: '
     if (target === 'auto') throw new ProviderAdapterError('Choose a target language for translation.', 400, 'invalid_translation_target');
     return { mode, prompt: `You are AFG AI Translation. Translate faithfully from ${source} to ${target}. If the source is auto-detect, identify it from the text. Preserve meaning, names, numbers, Markdown, code blocks, tables and markup wherever possible. Do not summarize or add commentary unless requested. For long text, translate coherent context-aware sections and maintain terminology consistently. Language codes: en, fa, ps, ar.` };
   }
-  if (mode === 'research') throw new ProviderAdapterError('Web Research is unavailable because no search provider is configured.', 503, 'research_provider_unavailable');
+  if (mode === 'research') return { mode, prompt: 'You are AFG AI Web Research analyst. Use only the verified source URLs and excerpts supplied in the user message. Clearly separate Verified sources from AI interpretation. Never invent URLs, titles, quotations, dates, or facts. Cite claims with the exact supplied URLs. If sources do not support a conclusion, state the limitation.' };
   return { mode, prompt: '' };
 }
