@@ -20,6 +20,7 @@ import {
 import { AfgBrainLogo } from './AfgBrainLogo';
 import type { Language, Theme, UserProfile } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
+import { AfgAccountSettings } from './AfgAccountSettings';
 
 interface AfgSettingsViewProps {
   language: Language;
@@ -27,6 +28,7 @@ interface AfgSettingsViewProps {
   user: UserProfile;
   onToggleLanguage: () => void;
   onToggleTheme: () => void;
+  onSetTheme: (theme: Theme) => void;
   onOpenShortcuts: () => void;
 }
 
@@ -36,6 +38,7 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
   user,
   onToggleLanguage,
   onToggleTheme,
+  onSetTheme,
   onOpenShortcuts,
 }) => {
   const t = translations[language];
@@ -67,6 +70,8 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
           </div>
         </div>
       </div>
+
+      <AfgAccountSettings language={language} theme={theme} onTheme={onSetTheme} onLanguage={onToggleLanguage} />
 
       {/* Settings Options List */}
       <div className="rounded-3xl bg-[#09122c]/90 border border-cyan-900/40 overflow-hidden divide-y divide-cyan-950/60 shadow-xl">
