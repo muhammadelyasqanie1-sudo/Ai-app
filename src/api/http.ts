@@ -80,7 +80,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     }
 
     if (req.method === 'GET' && pathname === '/api/models') {
-      const catalog = await getCloudflareModelCatalog();
+      const catalog = await getProviderModelCatalog();
       sendJson(res, catalog.status, catalog.body, requestId);
       return;
     }
