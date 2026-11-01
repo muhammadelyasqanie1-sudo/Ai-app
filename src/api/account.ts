@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createHash } from 'crypto';
 import { pool } from './database.ts';
-import { authenticateRequest, verifyCsrf, readJsonBody, sendAuthJson, hashPassword, verifyPassword, clearSessionCookies } from './auth.ts';
+import { authenticateRequest, verifyCsrf, readJsonBody, sendAuthJson, hashPassword, verifyPassword, clearSessionCookies, recordSecurityNotification } from './auth.ts';
 
 function reply(res: ServerResponse, status: number, body: Record<string, unknown>) { sendAuthJson(res, status, body); }
 const SENSITIVE_MEMORY_PATTERN = /\b(password|passcode|secret|api.?key|token|otp|verification.?code|recovery.?code|private.?key|credential|passport|national.?id|identity.?card|social.?security|ssn|driver.?license|medical|diagnosis|medication|prescription|hospital|doctor|disease|symptom|health|diabetes|cancer|pregnan|depression|anxiety|allergy|blood.?pressure|bank.?account|account.?number|credit.?card|debit.?card|cvv|iban)\b|رمز|پاسورد|تذکره|پاسپورت|کارت هویت|شماره هویت|کلید خصوصی|کد تایید|کد تأیید|رمز یکبار مصرف|صحت|مریض|دوا|دارو|تشخیص|بیماری|شفاخانه|داکتر|دکتر|حساسیت|فشار خون|شکر|سرطان|حاملگی|بارداری|افسردگی|اضطراب|حساب بانکی|شماره حساب|کارت بانکی/i;
@@ -119,7 +119,7 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
       if(!stored.rows[0]?.password_hash||!await verifyPassword(current,stored.rows[0].password_hash)){reply(res,401,{error:'Current password is incorrect.'});return true;}
       await pool.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[await hashPassword(next),user.id]);
       await pool.query('DELETE FROM sessions WHERE user_id=$1 AND token_hash<>$2',[user.id,secretHash(cookieToken(req,'afg_session'))]);
-      try { await pool.query("INSERT INTO user_notification_events(user_id,event_type,title,body) SELECT $1,'security.password_changed','Password changed','Your AFG AI account password was changed.' WHERE COALESCE((SELECT COALESCE((notifications_json->>'inApp')::boolean,true) AND COALESCE((notifications_json->>'securityAlerts')::boolean,true) FROM user_preferences WHERE user_id=$1),true)",[user.id]); } catch { console.error('AFG_SECURITY_NOTIFICATION_UNAVAILABLE'); }
+      await recordSecurityNotification(user.id,'security.password_changed','Password changed','Your AFG AI account password was changed.');
       reply(res,200,{changed:true,otherSessionsRevoked:true});
     }catch{reply(res,400,{error:'Could not change password.'});}return true;
   }
