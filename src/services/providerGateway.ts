@@ -116,25 +116,25 @@ export async function selectCheapestModel(capability: keyof CapabilityFlags = 't
       [capability],
     );
     const ordered = Array.isArray(fallback.rows[0]?.ordered_models) ? fallback.rows[0].ordered_models as string[] : [];
-    const chooseFallback = () => ordered.find((modelId) => capable.some((model) => model.id === modelId)) || null;
+    const chooseFallback = () => ordered.find((modelId) => capable.some((model) => model.providerId + '::' + model.id === modelId)) || null;
     if (preferFallback) {
       const fallbackModel = chooseFallback();
       if (fallbackModel) return fallbackModel;
     }
 
     const costs = await pool.query(
-      `SELECT model_key, input_cost_per_million, output_cost_per_million
+      `SELECT provider_key, model_key, input_cost_per_million, output_cost_per_million
          FROM model_catalog WHERE enabled = true`,
     );
     const costById = new Map<string, number>();
     for (const row of costs.rows) {
       if (row.input_cost_per_million !== null && row.output_cost_per_million !== null) {
-        costById.set(row.model_key, Number(row.input_cost_per_million) + Number(row.output_cost_per_million));
+        costById.set(row.provider_key + '::' + row.model_key, Number(row.input_cost_per_million) + Number(row.output_cost_per_million));
       }
     }
-    const priced = capable.filter((model) => costById.has(model.id))
-      .sort((a, b) => (costById.get(a.id) || 0) - (costById.get(b.id) || 0));
-    if (priced.length) return priced[0].id;
+    const priced = capable.filter((model) => costById.has(model.providerId + '::' + model.id))
+      .sort((a, b) => (costById.get(a.providerId + '::' + a.id) || 0) - (costById.get(b.providerId + '::' + b.id) || 0));
+    if (priced.length) return priced[0].providerId + '::' + priced[0].id;
     return chooseFallback();
   }
 
@@ -152,7 +152,7 @@ export async function getVerifiedProviderCatalog(): Promise<ProviderCatalog> {
       status: selectable.length ? 200 : 503,
       verified: selectable.length > 0,
       models: selectable.map((model) => ({
-        id: model.id,
+        id: model.providerId + '::' + model.id,
         displayName: model.displayName,
         capabilities: ['chat'],
       })),
@@ -179,7 +179,7 @@ export async function getCapabilitySnapshot() {
   };
 
   return {
-    models: selectable.filter((model) => model.capabilities.text && model.capabilities.streaming).map((model) => model.id),
+    models: selectable.filter((model) => model.capabilities.text && model.capabilities.streaming).map((model) => model.providerId + '::' + model.id),
     modelDescriptors: descriptors.map((model) => ({
       ...model,
       selectable: isRecentAndHealthy(model),
