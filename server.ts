@@ -2,6 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { randomUUID } from 'crypto';
 import { handleChatApi } from './src/api/chatHandler.ts';
 import { checkDatabase } from './src/api/database.ts';
 
@@ -11,6 +12,21 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+app.use('/api', (req, res, next) => {
+  const requestId = randomUUID();
+  req.headers['x-request-id'] = requestId;
+  res.setHeader('X-Request-Id', requestId);
+  res.on('finish', () => {
+    console.info('API_REQUEST', JSON.stringify({
+      requestId,
+      method: req.method,
+      path: req.path,
+      status: res.statusCode,
+    }));
+  });
+  next();
+});
 
 app.get('/api/health', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -58,7 +74,7 @@ app.get('/api/models', async (_req, res) => {
         return Boolean(taskName && /text generation|text-generation|chat/i.test(taskName));
       })
       .map((item) => item.name || item.id || item.model || '')
-      .filter((name): name is string => typeof name === 'string' && /^@cf\\/[a-zA-Z0-9._-]+\\/[a-zA-Z0-9._-]+$/.test(name))
+      .filter((name): name is string => typeof name === 'string' && /^@cf\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(name))
       .filter((name, index, all) => all.indexOf(name) === index)
       .sort((a, b) => a.localeCompare(b));
 
