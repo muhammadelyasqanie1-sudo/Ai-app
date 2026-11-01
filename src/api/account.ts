@@ -91,6 +91,16 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
     }catch{reply(res,400,{error:'Could not update memory settings.'});}return true;
   }
 
+  if(pathname==='/api/account/conversations'&&req.method==='DELETE'){
+    const result=await pool.query('DELETE FROM conversations WHERE user_id=$1',[user.id]);
+    reply(res,200,{deleted:true,count:result.rowCount||0});return true;
+  }
+  const conversationMatch=pathname.match(/^\/api\/account\/conversations\/([0-9a-f-]{36})$/i);
+  if(conversationMatch&&req.method==='DELETE'){
+    const result=await pool.query('DELETE FROM conversations WHERE id=$1 AND user_id=$2',[conversationMatch[1],user.id]);
+    reply(res,result.rowCount?200:404,result.rowCount?{deleted:true}:{error:'Conversation not found.'});return true;
+  }
+
   if(pathname==='/api/account/notifications'&&req.method==='GET'){
     const result=await pool.query('SELECT id,event_type AS "eventType",title,body,read_at AS "readAt",created_at AS "createdAt" FROM user_notification_events WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100',[user.id]);
     reply(res,200,{notifications:result.rows});return true;
