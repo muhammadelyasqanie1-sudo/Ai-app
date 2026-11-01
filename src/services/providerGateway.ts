@@ -42,7 +42,7 @@ function capabilityFlagsFromStored(value: unknown): CapabilityFlags {
 async function getStoredModels(providerId: string, forceDisabled = false): Promise<ModelDescriptor[]> {
   if (!pool) return [];
   const result = await pool.query(
-    `SELECT model_key, display_name, capabilities, enabled, context_window
+    `SELECT model_key, display_name, COALESCE(capabilities_override, capabilities) AS capabilities, enabled, context_window
        FROM model_catalog WHERE provider_key = $1 ORDER BY display_name`,
     [providerId],
   );
@@ -67,7 +67,7 @@ async function syncDiscoveredModels(provider: ChatProviderAdapter, models: Model
        VALUES ($1, $2, $3, $4, true, $5)
        ON CONFLICT (provider_key, model_key) DO UPDATE SET
          display_name = EXCLUDED.display_name,
-         capabilities = EXCLUDED.capabilities,
+         capabilities = COALESCE(model_catalog.capabilities_override, EXCLUDED.capabilities),
          context_window = EXCLUDED.context_window,
          updated_at = now()`,
       [provider.id, model.id, model.displayName,
@@ -113,6 +113,23 @@ async function verifyModel(provider: ChatProviderAdapter, model: ModelDescriptor
   return { ...model, verifiedAt: health.healthy ? health.checkedAt : null };
 }
 
+async function applyCapabilityOverrides(providerId: string, models: ModelDescriptor[]): Promise<ModelDescriptor[]> {
+  if (!pool || !models.length) return models;
+  const result = await pool.query(
+    'SELECT model_key, capabilities_override FROM model_catalog WHERE provider_key=$1 AND capabilities_override IS NOT NULL',
+    [providerId],
+  );
+  const overrides = new Map(result.rows.map((row) => [row.model_key, row.capabilities_override as string[]]));
+  return models.map((model) => {
+    const override = overrides.get(model.id);
+    if (!override) return model;
+    const selected = new Set(override);
+    return { ...model, capabilities: Object.fromEntries(
+      Object.keys(model.capabilities).map((key) => [key, selected.has(key)]),
+    ) as CapabilityFlags };
+  });
+}
+
 export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> {
   const verified: ModelDescriptor[] = [];
   for (const provider of providerRegistry) {
@@ -136,7 +153,8 @@ export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> 
 
     try {
       const enabledModels = await syncDiscoveredModels(provider, models);
-      const configuredModels = models.map((model) => ({
+      const withOverrides = await applyCapabilityOverrides(provider.id, models);
+      const configuredModels = withOverrides.map((model) => ({
         ...model,
         enabled: enabledModels.get(model.id) ?? false,
       }));
