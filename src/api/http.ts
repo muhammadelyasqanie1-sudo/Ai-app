@@ -6,6 +6,7 @@ import { getProviderModelCatalog } from './modelCatalog.ts';
 import { getCapabilitySnapshot, getImageStudioSnapshot, getFileAssistantSnapshot } from '../services/providerGateway.ts';
 import { handleAuthApi } from './auth.ts';
 import { handleAdminApi } from './adminHandler.ts';
+import { handleResearchApi } from './research.ts';
 
 type ApiRequest = IncomingMessage & { originalUrl?: string };
 
@@ -54,6 +55,8 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
   try {
     if (await handleAuthApi(req, res, pathname)) return;
     if (await handleAdminApi(req, res, pathname)) return;
+
+    if (await handleResearchApi(req, res)) return;
 
     if (pathname === '/api/chat') {
       await handleChatApi(req, res);
