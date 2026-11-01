@@ -89,6 +89,16 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
     }catch{reply(res,400,{error:'Could not update memory settings.'});}return true;
   }
 
+  if(pathname==='/api/account/notifications'&&req.method==='GET'){
+    const result=await pool.query('SELECT id,event_type AS "eventType",title,body,read_at AS "readAt",created_at AS "createdAt" FROM user_notification_events WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100',[user.id]);
+    reply(res,200,{notifications:result.rows});return true;
+  }
+  const notificationMatch=pathname.match(/^\/api\/account\/notifications\/([0-9a-f-]{36})$/i);
+  if(notificationMatch&&req.method==='PATCH'){
+    const result=await pool.query('UPDATE user_notification_events SET read_at=now() WHERE id=$1 AND user_id=$2 RETURNING id',[notificationMatch[1],user.id]);
+    reply(res,result.rowCount?200:404,result.rowCount?{read:true}:{error:'Notification not found.'});return true;
+  }
+
   if(pathname==='/api/account/sessions'&&req.method==='GET'){
     const currentHash=secretHash(cookieToken(req,'afg_session'));
     const result=await pool.query('SELECT id,created_at AS "createdAt",last_seen_at AS "lastSeenAt",expires_at AS "expiresAt",(token_hash=$2) AS current FROM sessions WHERE user_id=$1 AND expires_at>now() ORDER BY last_seen_at DESC LIMIT 50',[user.id,currentHash]);
