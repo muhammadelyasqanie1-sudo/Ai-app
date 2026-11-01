@@ -103,6 +103,17 @@ function cookieOptions() {
   return `Path=/; HttpOnly; SameSite=Lax${secure}`;
 }
 
+export function ensureCsrfCookie(req: IncomingMessage, res: ServerResponse): void {
+  const current = cookies(req).afg_csrf;
+  if (current && current.length >= 32) return;
+  const token = randomBytes(32).toString('base64url');
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  const existing = res.getHeader('Set-Cookie');
+  const values = Array.isArray(existing) ? existing.map(String) : (existing ? [String(existing)] : []);
+  values.push(`afg_csrf=${encodeURIComponent(token)}; Path=/; SameSite=Lax${secure}; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`);
+  res.setHeader('Set-Cookie', values);
+}
+
 export function setSessionCookies(res: ServerResponse, sessionToken: string, csrfToken: string) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   res.setHeader('Set-Cookie', [
@@ -284,6 +295,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
 
 
   if (pathname === '/api/auth/providers' && req.method === 'GET') {
+    ensureCsrfCookie(req,res);
     sendAuthJson(res, 200, { googleEnabled: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && configuredAppOrigin()), emailEnabled: Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM) });
     return true;
   }
@@ -498,6 +510,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
   }
 
   if (pathname === '/api/auth/me' && req.method === 'GET') {
+    ensureCsrfCookie(req,res);
     try {
       const user = await authenticateRequest(req);
       sendAuthJson(res, user ? 200 : 401, user ? {
