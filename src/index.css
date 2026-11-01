@@ -199,7 +199,7 @@ html [class~="bg-cyan-500/20"] { background-color: color-mix(in srgb, var(--acce
   box-shadow: var(--afg-focus-ring);
 }
 :where(button,a,input,textarea,select) { transition: color var(--afg-motion-fast) ease, background-color var(--afg-motion-fast) ease, border-color var(--afg-motion-fast) ease, box-shadow var(--afg-motion-fast) ease; }
-:where(input,textarea,select,[contenteditable="true"]) { direction: auto; unicode-bidi: plaintext; }
+:where(input,textarea,select,[contenteditable="true"]) { unicode-bidi: plaintext; }
 [dir="rtl"] .afg-directional-icon { transform: scaleX(-1); }
 .afg-capability-badge { display:inline-flex;align-items:center;gap:.5rem;padding:.35rem .7rem;border:1px solid var(--border-color);border-radius:999px;font-size:.75rem;font-weight:650;background:var(--bg-surface-subtle);color:var(--text-secondary); }
 .afg-capability-badge i { width:.45rem;height:.45rem;border-radius:50%;background:#94a3b8; }
