@@ -284,3 +284,5 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS audit_logs_no_update ON audit_logs;
 CREATE TRIGGER audit_logs_no_update BEFORE UPDATE OR DELETE ON audit_logs
 FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_mutation();
+
+ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS capabilities_override text[];
