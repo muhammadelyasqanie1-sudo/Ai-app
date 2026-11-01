@@ -23,12 +23,14 @@ interface AfgHistoryViewProps {
   language: Language;
   onSelectChat: (session: AfgChatSession) => void;
   onNewChat: () => void;
+  activeSessionId: string;
 }
 
 export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
   language,
   onSelectChat,
   onNewChat,
+  activeSessionId,
 }) => {
   const t = translations[language];
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,6 +51,7 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setSessions((previous) => previous.filter((session) => session.id !== id));
+    if (id === activeSessionId) onNewChat();
   };
 
   const handleRename = (session: AfgChatSession, e: React.MouseEvent) => {
@@ -129,7 +132,7 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
       </div>
 
       <div className="flex justify-end">
-        <button onClick={() => { if (window.confirm(language === 'dari' ? 'تمام گفتگوهای ذخیره‌شده پاک شود؟' : 'Delete all saved conversations?')) setSessions([]); }} className="flex items-center gap-1 rounded-lg px-3 py-2 text-xs text-red-300 hover:bg-red-500/10">
+        <button onClick={() => { if (window.confirm(language === 'dari' ? 'تمام گفتگوهای ذخیره‌شده پاک شود؟' : 'Delete all saved conversations?')) { setSessions([]); onNewChat(); } }} className="flex items-center gap-1 rounded-lg px-3 py-2 text-xs text-red-300 hover:bg-red-500/10">
           <Trash className="w-3.5 h-3.5" />{language === 'dari' ? 'پاک‌کردن همه' : 'Clear all'}
         </button>
       </div>
