@@ -25,7 +25,7 @@ function apiPlugin() {
           res.setHeader('Cache-Control', 'no-store');
           res.setHeader('X-Request-Id', requestId);
           console.info('API_REQUEST', JSON.stringify({ requestId, method: 'GET', path: '/api/models', status: catalog.status }));
-          res.end(JSON.stringify({ ...catalog.body, requestId }));
+          res.end(JSON.stringify(catalog.body));
           return;
         }
         next();
