@@ -60,7 +60,7 @@ The canonical ProviderAdapter and ModelDescriptor types are in src/providers/pro
 
 Registered adapters:
 - Cloudflare Workers AI: registered in source; requires server-only CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.
-- OpenAI-compatible: registered only when OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_API_KEY are both present. It uses /models and /chat/completions; the base URL must be HTTPS in production.
+- OpenAI-compatible: always appears in the registry; it becomes usable only when OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_API_KEY are both present. It uses /models and /chat/completions; the base URL must be HTTPS in production.
 
 Model references sent through the client/API are provider-qualified as providerId::modelId, avoiding collisions when providers expose identical model IDs. Provider secrets are never sent to the client or stored in provider configuration rows.
 
