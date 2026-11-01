@@ -216,7 +216,7 @@ export default function App() {
     }).catch(() => {});
   };
 
-  // Global Keyboard Shortcuts (Ctrl+/ or Cmd+/)
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === '/') {
