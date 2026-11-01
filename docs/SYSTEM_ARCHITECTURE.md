@@ -84,6 +84,25 @@ CORS only reflects origins configured in `APP_ORIGIN` or the local/Capacitor dev
 - Only chat can currently be reported as available. Vision, image/video generation, files, speech, TTS, and research are explicitly false.
 - There is no multi-provider fallback, retry policy, per-user/distributed rate limiter, usage metering, or distributed health registry yet. Provider calls have bounded network timeouts; a failed stream is surfaced as an SSE error rather than a fake completion.
 
+### 4.1 Provider adapter contract (2.2)
+
+The canonical contract in `src/providers/providerTypes.ts` is `ProviderAdapter`. It requires:
+
+- `id`, `validateConfig()`, `listModels()`, `healthCheck(modelId)`, `capabilities(modelId)`, and `streamChat(req)`.
+- Optional image generation, image analysis, transcription, speech synthesis, and embedding methods. An adapter must omit an optional method until it has a real implementation.
+- Each model descriptor carries its provider ID, display name, description, context-window metadata (zero means the provider did not supply it), capability flags, enabled state, and verification timestamp.
+
+Cloudflare is currently the only adapter. Its model catalog is live; its health check makes a bounded, minimal inference probe for each listed text model. Successful health checks are cached in process memory for five minutes. Catalog probing is limited to four concurrent model checks. A model is selectable only when it is enabled, text+streaming capable, and has a successful health check timestamp no older than five minutes. The chat service repeats this check before inference, so client state cannot authorize a model.
+
+`GET /api/capabilities` includes `modelDescriptors`. Models that failed or lack a recent health probe are returned with `selectable: false` and `disabledReason: "Provider not reachable."`; the model picker renders them disabled with that tooltip. `GET /api/models` contains selectable model IDs only.
+
+Important implementation boundaries:
+- `enabled` currently defaults to true in the Cloudflare adapter. A persistent admin enable/disable toggle is not implemented because authenticated admin authorization and provider-model settings storage do not yet exist.
+- Health results and their five-minute cache are process-local, not distributed across Render instances. Each instance performs its own probes.
+- The Cloudflare health probe currently checks text inference only. It does not claim vision, tools, JSON mode, image generation, audio, or embeddings.
+- Cloudflare's model catalog may omit context-window metadata; in that case `contextWindow` is zero/unknown, not an invented value.
+- Optional provider methods are not implemented for this adapter and are not advertised as supported.
+
 ## 5. Persistence and background processing
 
 - `database/schema.sql` defines PostgreSQL tables for users, identities, sessions, conversations, messages, providers, models, usage, assets, API keys, and audit logs.
