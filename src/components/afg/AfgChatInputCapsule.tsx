@@ -253,7 +253,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
           className="min-w-0 max-w-[72%] rounded-xl border border-cyan-700/50 bg-slate-900 px-2.5 py-2 text-[11px] text-cyan-100 outline-none focus:border-cyan-400 disabled:opacity-60"
         >
           {modelOptions.length > 0 ? <>
-            <option value="auto">{language === 'dari' ? 'انتخاب خودکار — کم‌هزینه‌ترین مدل سالم' : 'Auto — lowest-cost healthy model'}</option>
+            <option value="auto">{language === 'dari' ? 'خودکار — ارزان‌ترین مدل قیمت‌گذاری‌شده؛ در غیر آن مدل سالم پیش‌فرض' : 'Auto — lowest priced when configured; otherwise healthy default'}</option>
             {[...new Set(modelOptions.map((model) => model.providerId))].map((providerId) => (
               <optgroup key={providerId} label={providerId}>
                 {modelOptions.filter((model) => model.providerId === providerId).map((model) => (
