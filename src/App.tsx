@@ -534,6 +534,7 @@ export default function App() {
             theme={theme}
             user={user}
             onToggleLanguage={handleToggleLanguage}
+            onSetLanguage={setLanguage}
             onToggleTheme={handleToggleTheme}
             onSetTheme={setTheme}
             onOpenShortcuts={() => setIsShortcutsOpen(true)}
