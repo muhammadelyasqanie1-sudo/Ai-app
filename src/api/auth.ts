@@ -107,7 +107,7 @@ export async function authenticateRequest(req: IncomingMessage): Promise<Authent
   const result = await pool.query(
     `SELECT u.id, u.email, u.display_name, u.role, u.status, u.default_model
        FROM sessions s JOIN users u ON u.id = s.user_id
-      WHERE s.token_hash = $1 AND s.expires_at > now() AND u.status = 'active'
+      WHERE s.token_hash = $1 AND s.expires_at > now() AND s.revoked_at IS NULL AND u.status = 'active'
       LIMIT 1`,
     [hash(sessionToken)],
   );
@@ -146,7 +146,7 @@ export async function createSession(userId: string, res: ServerResponse): Promis
 export async function destroySession(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (pool) {
     const token = cookies(req).afg_session;
-    if (token) await pool.query('DELETE FROM sessions WHERE token_hash = $1', [hash(token)]);
+    if (token) await pool.query('UPDATE sessions SET revoked_at=now() WHERE token_hash = $1 AND revoked_at IS NULL', [hash(token)]);
   }
   clearSessionCookies(res);
 }
