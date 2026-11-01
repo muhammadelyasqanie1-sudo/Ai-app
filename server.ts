@@ -34,7 +34,9 @@ app.get('/api/models', async (_req, res) => {
     };
     if (!response.ok || payload.success === false) {
       console.error('Cloudflare model list failed:', response.status, JSON.stringify(payload.errors || []).slice(0, 800));
-      res.status(response.status || 502).json({ error: 'Could not load Cloudflare Workers AI models.' });
+      console.error('Cloudflare model catalog unavailable; using the known chat model fallback.');
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ models: ['@cf/openai/gpt-oss-120b'], source: 'fallback' });
       return;
     }
 
@@ -48,16 +50,18 @@ app.get('/api/models', async (_req, res) => {
       .filter((name, index, all) => all.indexOf(name) === index)
       .sort((a, b) => a.localeCompare(b));
 
-    if (models.length === 0) {
-      res.status(502).json({ error: 'Cloudflare returned no compatible text-generation models. Check Workers AI permissions.' });
-      return;
-    }
+    // Keep the model picker usable if Cloudflare's catalog permission is missing
+    // or the catalog response contains no chat entries. This is the known chat
+    // model previously selected for this AFG AI account; actual access is still
+    // enforced by Cloudflare when a message is sent.
+    const visibleModels = models.length > 0 ? models : ['@cf/openai/gpt-oss-120b'];
 
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ models });
+    res.json({ models: visibleModels, source: models.length > 0 ? 'cloudflare-catalog' : 'fallback' });
   } catch (error) {
-    console.error('Cloudflare model list failed:', error);
-    res.status(502).json({ error: 'Could not load Cloudflare Workers AI models.' });
+    console.error('Cloudflare model list failed; using fallback:', error);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ models: ['@cf/openai/gpt-oss-120b'], source: 'fallback' });
   }
 });
 
