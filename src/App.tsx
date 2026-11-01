@@ -426,7 +426,7 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen w-full flex flex-col transition-colors duration-200 ${theme === 'dark' ? 'bg-[#060b18] text-slate-100' : 'bg-[#f4f7fc] text-slate-900'}`}>
+    <div className={`min-h-screen w-full flex flex-col transition-colors duration-200 ${(theme === 'dark' || theme === 'neon' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) ? 'bg-[#060b18] text-slate-100' : 'bg-[#f4f7fc] text-slate-900'}`}>
       
       {/* AFG AI Header */}
       <AfgHeader
