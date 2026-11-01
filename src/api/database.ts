@@ -20,9 +20,8 @@ export async function checkDatabase() {
   try {
     await pool.query('SELECT 1');
     return { configured: true, connected: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Database connection failed';
-    console.error('PostgreSQL health check failed:', message);
+  } catch {
+    console.error('DATABASE_HEALTH_CHECK_FAILED');
     return { configured: true, connected: false, message: 'Database connection failed' };
   }
 }
