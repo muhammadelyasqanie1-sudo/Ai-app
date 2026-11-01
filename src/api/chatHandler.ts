@@ -50,7 +50,7 @@ function corsHeaders(req: IncomingMessage) {
   const origin = req.headers.origin;
   const configured = (process.env.APP_ORIGIN || '').split(',').map((value) => value.trim()).filter(Boolean);
   const allowed = new Set([...configured, 'http://localhost:3000', 'http://localhost:5173', 'https://localhost', 'capacitor://localhost']);
-  return origin && allowed.has(origin) ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {};
+  return origin && allowed.has(origin) ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Credentials': 'true', Vary: 'Origin' } : {};
 }
 
 function sendJson(req: IncomingMessage, res: ServerResponse, status: number, payload: unknown, id: string) {
@@ -72,6 +72,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       ...corsHeaders(req),
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, X-Request-Id',
+      'Access-Control-Allow-Credentials': 'true',
       'Vary': 'Origin',
       'X-Request-Id': id,
     });
