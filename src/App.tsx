@@ -17,6 +17,7 @@ import { AfgAdminPanel } from './components/afg/AfgAdminPanel';
 import { AfgSideMenu } from './components/afg/AfgSideMenu';
 import { AfgLanguageModal } from './components/afg/AfgLanguageModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
+import { ErrorBoundary } from './components/afg/AfgDesignSystem';
 
 import type { 
   Language, 
@@ -486,6 +487,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 w-full pb-24 md:pb-8 pt-2 md:ms-60">
+        <ErrorBoundary>
         {currentTab === 'home' && (
           <AfgHomeView
             language={language}
@@ -558,6 +560,7 @@ export default function App() {
         {currentTab === 'admin' && (
           <AfgAdminPanel language={language} />
         )}
+        </ErrorBoundary>
       </main>
 
 
