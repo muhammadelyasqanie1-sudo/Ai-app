@@ -175,8 +175,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       const lastUser = upstreamMessages[upstreamMessages.length - 1];
       if (lastUser.content.length > 6000) {
         const chunks = splitTranslationDocument(lastUser.content);
-        lastUser.content = 'Translate every numbered segment in order. Keep terminology consistent across all segments, preserve the original paragraph and markup structure, and do not omit or summarize any segment. Return the translated segments in the same order.\\n\\n' +
-          chunks.map((chunk, index) => `[Segment ${index + 1} of ${chunks.length}]\\n${chunk}`).join('\\n\\n');
+        lastUser.content = 'Translate every numbered segment in order. Keep terminology consistent across all segments, preserve the original paragraph and markup structure, and do not omit or summarize any segment. Return the translated segments in the same order.\n\n' +
+          chunks.map((chunk, index) => `[Segment ${index + 1} of ${chunks.length}]\n${chunk}`).join('\n\n');
       }
     }
 
