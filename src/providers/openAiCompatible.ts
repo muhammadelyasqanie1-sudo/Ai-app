@@ -138,7 +138,7 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
         }
         buffer += decoder.decode();
         if (buffer.trim()) {
-          const dataLine = buffer.split(/\\r?\\n/).find((line) => line.startsWith('data:'));
+          const dataLine = buffer.split(/\r?\n/).find((line) => line.startsWith('data:'));
           const data = dataLine?.slice(5).trim();
           if (data && data !== '[DONE]') {
             let event: any;
