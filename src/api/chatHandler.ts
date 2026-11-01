@@ -2,6 +2,13 @@ import type { IncomingMessage, ServerResponse } from 'http';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
+function requestId(req: IncomingMessage) {
+  const supplied = req.headers['x-request-id'];
+  return typeof supplied === 'string' && /^[a-zA-Z0-9._-]{8,100}$/.test(supplied)
+    ? supplied
+    : crypto.randomUUID();
+}
+
 function corsHeaders(req: IncomingMessage) {
   const origin = req.headers.origin;
   const configured = (process.env.APP_ORIGIN || '').split(',').map((value) => value.trim()).filter(Boolean);
@@ -9,29 +16,53 @@ function corsHeaders(req: IncomingMessage) {
   return origin && allowed.has(origin) ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {};
 }
 
-function sendJson(req: IncomingMessage, res: ServerResponse, status: number, payload: unknown) {
+function sendJson(req: IncomingMessage, res: ServerResponse, status: number, payload: unknown, id: string) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
+    'X-Request-Id': id,
     ...corsHeaders(req),
   });
   res.end(JSON.stringify(payload));
 }
 
+async function getVerifiedChatModels(accountId: string, apiToken: string): Promise<string[] | null> {
+  const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/models/search?per_page=100&hide_experimental=true`, {
+    headers: { Authorization: `Bearer ${apiToken}`, Accept: 'application/json' },
+  });
+  const payload = await response.json() as {
+    success?: boolean;
+    result?: Array<{ name?: string; id?: string; model?: string; task?: { name?: string } | string }>;
+  };
+  if (!response.ok || payload.success !== true || !Array.isArray(payload.result)) return null;
+  return payload.result
+    .filter((item) => {
+      const task = typeof item.task === 'string' ? item.task : item.task?.name;
+      return Boolean(task && /text generation|text-generation|chat/i.test(task));
+    })
+    .map((item) => item.name || item.id || item.model || '')
+    .filter((name): name is string => /^@cf\\/[a-zA-Z0-9._-]+\\/[a-zA-Z0-9._-]+$/.test(name))
+    .filter((name, index, all) => all.indexOf(name) === index);
+}
+
 export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
+  const id = requestId(req);
+  res.setHeader('X-Request-Id', id);
+
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       ...corsHeaders(req),
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Request-Id',
       'Vary': 'Origin',
+      'X-Request-Id': id,
     });
     res.end();
     return;
   }
 
   if (req.method !== 'POST') {
-    sendJson(req, res, 405, { error: 'Method not allowed' });
+    sendJson(req, res, 405, { error: 'Method not allowed', requestId: id }, id);
     return;
   }
 
@@ -40,54 +71,78 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     for await (const chunk of req) {
       bodyStr += chunk.toString();
       if (bodyStr.length > 1_000_000) {
-        sendJson(res, 413, { error: 'Request is too large' });
+        sendJson(req, res, 413, { error: 'Request is too large.', requestId: id }, id);
         return;
       }
     }
 
     const body = JSON.parse(bodyStr || '{}');
     const messages = body.messages as ChatMessage[] | undefined;
-    const customInstructions = String(body.customInstructions || '');
+    const customInstructions = String(body.customInstructions || '').slice(0, 8_000);
     const model = String(body.model || '').trim();
 
-    if (!Array.isArray(messages) || messages.length === 0) {
-      sendJson(res, 400, { error: 'Missing messages array' });
+    if (!Array.isArray(messages) || messages.length === 0 || messages.length > 100) {
+      sendJson(req, res, 400, { error: 'Messages must contain between 1 and 100 items.', requestId: id }, id);
       return;
     }
-    if (!model || !/^@cf\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(model)) {
-      sendJson(res, 400, { error: 'Please select a valid Cloudflare Workers AI model in the app.' });
+    if (messages.some((message) =>
+      !message || !['user', 'assistant', 'system'].includes(message.role) ||
+      typeof message.content !== 'string' || message.content.length > 50_000
+    )) {
+      sendJson(req, res, 400, { error: 'Each message must have a valid role and text content under 50,000 characters.', requestId: id }, id);
+      return;
+    }
+    const totalCharacters = messages.reduce((total, message) => total + message.content.length, 0);
+    if (totalCharacters > 200_000) {
+      sendJson(req, res, 413, { error: 'Conversation is too large. Shorten the message history.', requestId: id }, id);
+      return;
+    }
+    if (!model || !/^@cf\\/[a-zA-Z0-9._-]+\\/[a-zA-Z0-9._-]+$/.test(model)) {
+      sendJson(req, res, 400, { error: 'Select a valid model from the verified provider catalog.', requestId: id }, id);
       return;
     }
 
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
     const apiToken = process.env.CLOUDFLARE_API_TOKEN?.trim();
     if (!accountId || !apiToken) {
-      sendJson(res, 503, { error: 'Cloudflare Workers AI is not configured. Add CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in Render Environment.' });
+      sendJson(req, res, 503, { error: 'AI provider is not configured on the server.', requestId: id }, id);
+      return;
+    }
+
+    let verifiedModels: string[] | null;
+    try {
+      verifiedModels = await getVerifiedChatModels(accountId, apiToken);
+    } catch {
+      verifiedModels = null;
+    }
+    if (!verifiedModels) {
+      sendJson(req, res, 502, { error: 'The AI provider could not verify its model catalog. Please retry.', requestId: id }, id);
+      return;
+    }
+    if (!verifiedModels.includes(model)) {
+      sendJson(req, res, 400, { error: 'This model is not currently verified as available for chat. Refresh the model list.', requestId: id }, id);
       return;
     }
 
     const systemMessages = messages
-      .filter((m) => m && m.role === 'system')
-      .map((m) => String(m.content ?? ''));
+      .filter((message) => message.role === 'system')
+      .map((message) => message.content);
     if (customInstructions) systemMessages.unshift(customInstructions);
 
     const upstreamMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
-    if (systemMessages.join('\n\n').trim()) {
-      upstreamMessages.push({ role: 'system', content: systemMessages.join('\n\n') });
+    if (systemMessages.join('\\n\\n').trim()) {
+      upstreamMessages.push({ role: 'system', content: systemMessages.join('\\n\\n') });
     }
     upstreamMessages.push(...messages
-      .filter((m) => m && (m.role === 'user' || m.role === 'assistant'))
-      .map((m) => ({ role: m.role as 'user' | 'assistant', content: String(m.content ?? '') }))
-      .filter((m) => m.content.length > 0));
+      .filter((message) => message.role === 'user' || message.role === 'assistant')
+      .map((message) => ({ role: message.role as 'user' | 'assistant', content: message.content }))
+      .filter((message) => message.content.length > 0));
 
-    if (!upstreamMessages.some((m) => m.role === 'user')) {
-      sendJson(res, 400, { error: 'At least one user message is required.' });
+    if (!upstreamMessages.some((message) => message.role === 'user')) {
+      sendJson(req, res, 400, { error: 'At least one user message is required.', requestId: id }, id);
       return;
     }
 
-    // Use Cloudflare's OpenAI-compatible Chat Completions endpoint.
-    // The universal /ai/run endpoint requires a different input schema for
-    // each model, so sending { messages } there breaks many catalog entries.
     const upstream = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1/chat/completions`, {
       method: 'POST',
       headers: {
@@ -95,26 +150,20 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
       },
-      body: JSON.stringify({
-        model,
-        messages: upstreamMessages,
-        stream: true,
-      }),
+      body: JSON.stringify({ model, messages: upstreamMessages, stream: true }),
     });
 
     if (!upstream.ok) {
       const details = await upstream.text();
-      console.error('Cloudflare Workers AI request failed:', upstream.status, details.slice(0, 1200));
-      sendJson(res, upstream.status, {
-        error: 'Cloudflare Workers AI request failed',
-        status: upstream.status,
-        details: details.slice(0, 700),
-      });
+      console.error('AI_PROVIDER_REQUEST_FAILED', JSON.stringify({ requestId: id, status: upstream.status, model, details: details.slice(0, 800) }));
+      sendJson(req, res, upstream.status, {
+        error: 'The AI provider rejected the request. Check model access or try another verified model.',
+        requestId: id,
+      }, id);
       return;
     }
-
     if (!upstream.body) {
-      sendJson(res, 502, { error: 'Cloudflare returned an empty response stream.' });
+      sendJson(req, res, 502, { error: 'The AI provider returned an empty response stream.', requestId: id }, id);
       return;
     }
 
@@ -122,23 +171,22 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
+      'X-Request-Id': id,
       ...corsHeaders(req),
     });
 
     const reader = upstream.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-
     try {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split(/\r?\n\r?\n/);
+        const events = buffer.split(/\\r?\\n\\r?\\n/);
         buffer = events.pop() || '';
-
         for (const eventText of events) {
-          const dataLine = eventText.split(/\r?\n/).find((line) => line.startsWith('data:'));
+          const dataLine = eventText.split(/\\r?\\n/).find((line) => line.startsWith('data:'));
           if (!dataLine) continue;
           const data = dataLine.slice(5).trim();
           if (!data || data === '[DONE]') continue;
@@ -150,27 +198,29 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
               typeof event.choices?.[0]?.delta?.content === 'string' ? event.choices[0].delta.content :
               undefined;
             if (typeof piece === 'string' && piece.length > 0) {
-              res.write(`data: ${JSON.stringify({ type: 'content', text: piece })}\n\n`);
+              res.write(`data: ${JSON.stringify({ type: 'content', text: piece })}\\n\\n`);
             }
             if (event.error) {
-              console.error('Cloudflare stream error:', JSON.stringify(event.error).slice(0, 800));
+              console.error('AI_PROVIDER_STREAM_ERROR', JSON.stringify({ requestId: id, model, error: event.error }).slice(0, 1000));
             }
           } catch {
             // Ignore non-JSON SSE events.
           }
         }
       }
-      res.write('data: [DONE]\n\n');
+      res.write(`data: ${JSON.stringify({ type: 'done', requestId: id })}\\n\\n`);
+      res.write('data: [DONE]\\n\\n');
       res.end();
     } finally {
       reader.releaseLock();
     }
-  } catch (error: any) {
-    console.error('Cloudflare Workers AI error:', error?.message || error);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown server error';
+    console.error('AI_CHAT_HANDLER_ERROR', JSON.stringify({ requestId: id, message }));
     if (!res.headersSent) {
-      sendJson(res, 500, { error: 'Internal server error' });
+      sendJson(req, res, 500, { error: 'The AI request failed unexpectedly. Please retry.', requestId: id }, id);
     } else {
-      res.write(`data: ${JSON.stringify({ type: 'error', error: 'Cloudflare AI stream failed' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'error', error: 'The AI response stream was interrupted.', requestId: id })}\\n\\n`);
       res.end();
     }
   }
