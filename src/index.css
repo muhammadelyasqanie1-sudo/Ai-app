@@ -31,6 +31,20 @@
     --card-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5), 0 0 20px -2px rgba(0, 229, 255, 0.12);
   }
 
+  .neon {
+    --bg-main: #030712;
+    --bg-surface: #070f25;
+    --bg-surface-subtle: #0b1b38;
+    --bg-surface-hover: #102a50;
+    --border-color: #164e63;
+    --text-primary: #ecfeff;
+    --text-secondary: #a5f3fc;
+    --accent-cyan: #22d3ee;
+    --accent-blue: #818cf8;
+    --accent-glow: rgba(34, 211, 238, 0.5);
+    --card-shadow: 0 0 24px rgba(34, 211, 238, 0.12);
+  }
+
   html[dir="rtl"] {
     font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
@@ -121,4 +135,20 @@
 
 .animate-brain-pulse {
   animation: brain-pulse 3s infinite ease-in-out;
+}
+
+
+:root { --afg-font-size: 14px; --afg-chat-width: 64rem; }
+html { font-size: var(--afg-font-size); }
+html[data-afg-density="compact"] { --afg-density-gap: .5rem; }
+html[data-afg-density="comfortable"] { --afg-density-gap: 1rem; }
+html[data-afg-density="spacious"] { --afg-density-gap: 1.5rem; }
+html[data-afg-chat-width="narrow"] { --afg-chat-width: 42rem; }
+html[data-afg-chat-width="comfortable"] { --afg-chat-width: 64rem; }
+html[data-afg-chat-width="wide"] { --afg-chat-width: 86rem; }
+html.afg-reduce-motion *, html.afg-reduce-motion *::before, html.afg-reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
 }
