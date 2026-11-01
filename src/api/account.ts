@@ -13,7 +13,7 @@ function secretHash(value: string) { return createHash('sha256').update(value).d
 const PREFERENCE_FIELDS = new Set(['language','appearance','accentColor','density','fontSize','chatWidth','animationsEnabled','defaultModel','autoSelectModel','responseStyle','responseLength','creativity','memoryEnabled','voiceEnabled','defaultLanguage','notifications']);
 
 export async function handleAccountApi(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
-  if (!pathname.startsWith('/api/account/')) return false;
+  if (pathname !== '/api/account' && !pathname.startsWith('/api/account/')) return false;
   if (!pool) { reply(res, 503, { error: 'Account services require DATABASE_URL and the current database schema.' }); return true; }
   const user = await authenticateRequest(req);
   if (!user) { reply(res, 401, { error: 'Sign in is required.' }); return true; }
