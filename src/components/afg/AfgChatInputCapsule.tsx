@@ -43,6 +43,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   const [inputText, setInputText] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [voiceRecordingError, setVoiceRecordingError] = useState('');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [linkInputOpen, setLinkInputOpen] = useState(false);
@@ -64,54 +65,64 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Web Speech Recognition for voice input
-  const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
 
-  useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = language === 'dari' ? 'fa-IR' : 'en-US';
+  useEffect(() => () => {
+    mediaRecorderRef.current?.stop();
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
 
-      recognition.onresult = (event: any) => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
-        setInputText((prev) => (prev ? prev + ' ' + transcript : transcript));
-      };
-
-      recognition.onend = () => {
-        setIsRecording(false);
-      };
-
-      recognition.onerror = () => {
-        setIsRecording(false);
-      };
-
-      recognitionRef.current = recognition;
-    }
-  }, [language]);
-
-  const toggleRecording = () => {
-    if (!recognitionRef.current) {
-      alert(language === 'dari' ? 'مرورگر شما از ورودی گفتار پشتیبانی نمی‌کند.' : 'Web Speech is not supported in this browser.');
+  const toggleRecording = async () => {
+    if (!speechToTextAvailable) return;
+    if (isRecording) {
+      mediaRecorderRef.current?.stop();
+      setIsRecording(false);
       return;
     }
-
-    if (isRecording) {
-      recognitionRef.current.stop();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '');
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mediaRecorderRef.current = recorder;
+      recordedChunksRef.current = [];
+      recorder.ondataavailable = (event) => { if (event.data.size > 0) recordedChunksRef.current.push(event.data); };
+      recorder.onerror = () => {
+        setVoiceRecordingError(language === 'dari' ? 'ضبط صدا ناموفق بود.' : 'Audio recording failed.');
+        setIsRecording(false);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        stream.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+        if (!blob.size) return;
+        const reader = new FileReader();
+        reader.onload = async () => {
+          try {
+            const dataUrl = String(reader.result || '');
+            const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/transcribe', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ mimeType: blob.type || 'audio/webm', audioBase64: dataUrl.split(',')[1] || '' }),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Speech recognition failed.');
+            if (typeof data.text === 'string' && data.text.trim()) setInputText((previous) => previous ? previous + ' ' + data.text.trim() : data.text.trim());
+          } catch (error) {
+            setVoiceRecordingError(error instanceof Error ? error.message : 'Speech recognition failed.');
+          }
+        };
+        reader.readAsDataURL(blob);
+      };
+      recorder.start();
+      setIsRecording(true);
+    } catch {
+      setVoiceRecordingError(language === 'dari' ? 'دسترسی به میکروفون ممکن نیست.' : 'Microphone access is unavailable.');
       setIsRecording(false);
-    } else {
-      try {
-        recognitionRef.current.lang = language === 'dari' ? 'fa-IR' : 'en-US';
-        recognitionRef.current.start();
-        setIsRecording(true);
-      } catch (err) {
-        console.warn('Speech start error', err);
-      }
     }
   };
 
