@@ -59,6 +59,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     return;
   }
   activeChatRequests += 1;
+  const abortController = new AbortController();
+  res.on('close', () => { if (!res.writableEnded) abortController.abort(); });
   let heartbeat: ReturnType<typeof setInterval> | undefined;
 
   try {
@@ -131,7 +133,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
-    const stream = await prepareVerifiedChat({ model, messages: upstreamMessages });
+    const stream = await prepareVerifiedChat({ model, messages: upstreamMessages, signal: abortController.signal });
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
