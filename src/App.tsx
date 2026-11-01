@@ -116,16 +116,18 @@ export default function App() {
     fetch(`${API_BASE_URL}/api/capabilities`)
       .then(async (response) => {
         const data = await response.json();
+        const options: AfgModelOption[] = Array.isArray(data.modelDescriptors) ? data.modelDescriptors : [];
         const verified = response.ok && data.verified === true &&
           Array.isArray(data.models) && data.capabilities &&
           typeof data.capabilities === 'object';
+        setModelOptions(options);
         if (!verified) {
           setAvailableModels([]);
-          setModelOptions([]);
           setSelectedModel('');
           setCapabilitySnapshot({
             verified: false,
             models: [],
+            modelDescriptors: options,
             capabilities: {
               chat: false,
               vision: false,
@@ -140,8 +142,6 @@ export default function App() {
           console.error('AFG_AI_CAPABILITIES_UNVERIFIED');
           return;
         }
-        const options: AfgModelOption[] = Array.isArray(data.modelDescriptors) ? data.modelDescriptors : [];
-        setModelOptions(options);
         setAvailableModels(data.models);
         setSelectedModel((current) => data.models.includes(current) ? current : (data.models[0] || ''));
         setCapabilitySnapshot(data as AfgCapabilitySnapshot);
