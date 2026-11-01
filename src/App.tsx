@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AfgHeader } from './components/afg/AfgHeader';
 import { AfgNavigation } from './components/afg/AfgNavigation';
 import { AfgHomeView } from './components/afg/AfgHomeView';
@@ -70,6 +70,7 @@ export default function App() {
   const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
   const [messages, setMessages] = useState<AfgMessage[]>(INITIAL_MESSAGES);
   const [isLoading, setIsLoading] = useState(false);
+  const activeChatAbortRef = useRef<AbortController | null>(null);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [modelOptions, setModelOptions] = useState<AfgModelOption[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
@@ -198,7 +199,7 @@ export default function App() {
   };
 
   // Chat message sending & streaming logic
-  const handleSendMessage = async (text: string, attachments: ChatAttachment[]) => {
+  const handleSendMessage = async (text: string, attachments: ChatAttachment[], baseMessages: AfgMessage[] = messages) => {
     if (!text.trim() && attachments.length === 0) return;
     if (!selectedModel) {
       setCurrentTab('chat');
@@ -224,8 +225,10 @@ export default function App() {
       timestamp: Date.now(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages(baseMessages.concat(userMessage));
     setIsLoading(true);
+    const abortController = new AbortController();
+    activeChatAbortRef.current = abortController;
 
     const assistantId = `ast-${Date.now()}`;
     const initialAssistantMessage: AfgMessage = {
@@ -243,7 +246,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [...messages, userMessage].map(m => ({
+          messages: [...baseMessages, userMessage].map(m => ({
             role: m.role,
             content: m.content,
           })),
@@ -252,6 +255,7 @@ export default function App() {
             ? 'پاسخ‌های شما باید به زبان فارسی/دری شیوا، دقیق و صمیمانه باشد و در صورت لزوم از شعرها یا نمونه‌های مرتبط با افغانستان استفاده نمایید.'
             : 'Respond insightfully, clearly, and supportively as the AFG AI assistant.',
         }),
+        signal: abortController.signal,
       });
 
       if (!response.ok) {
@@ -317,16 +321,33 @@ export default function App() {
         ? 'درخواست انجام نشد. پیام شما در گفتگو باقی مانده است؛ لطفاً اتصال و مدل انتخاب‌شده را بررسی کرده و دوباره تلاش کنید.'
         : 'The request failed. Your message remains in this conversation; check the connection and selected model, then try again.';
 
-      setMessages(prev =>
-        prev.map(m =>
-          m.id === assistantId
-            ? { ...m, content: userFacingError, isStreaming: false }
-            : m
-        )
-      );
+      if (abortController.signal.aborted) {
+        setMessages(prev => prev.filter((message) => message.id !== assistantId));
+      } else {
+        setMessages(prev => prev.map(m =>
+          m.id === assistantId ? { ...m, content: userFacingError, isStreaming: false, isError: true, retryable: true } : m
+        ));
+      }
     } finally {
+      if (activeChatAbortRef.current === abortController) activeChatAbortRef.current = null;
       setIsLoading(false);
     }
+  };
+
+  const handleStopGeneration = () => activeChatAbortRef.current?.abort();
+
+  const handleRetryMessage = (messageId: string) => {
+    const targetIndex = messages.findIndex((message) => message.id === messageId);
+    if (targetIndex < 0) return;
+    let userIndex = -1;
+    for (let index = targetIndex - 1; index >= 0; index--) {
+      if (messages[index].role === 'user') { userIndex = index; break; }
+    }
+    if (userIndex < 0) return;
+    const userMessage = messages[userIndex];
+    const context = messages.slice(0, userIndex);
+    setMessages(context);
+    void handleSendMessage(userMessage.content, userMessage.attachments || [], context);
   };
 
   const handleSelectHistoryChat = (session: AfgChatSession) => {
@@ -376,6 +397,8 @@ export default function App() {
           <AfgChatView
             messages={messages}
             onSendMessage={handleSendMessage}
+            onStop={handleStopGeneration}
+            onRetryMessage={handleRetryMessage}
             isLoading={isLoading}
             language={language}
             user={user}
