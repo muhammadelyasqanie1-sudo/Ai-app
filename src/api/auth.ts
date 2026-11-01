@@ -1,6 +1,8 @@
 import { createHash, randomBytes, randomInt, scrypt as scryptCallback, timingSafeEqual } from 'crypto';
 import { promisify } from 'util';
 import bcrypt from 'bcryptjs';
+import argon2 from 'argon2';
+import { z } from 'zod';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
 
@@ -21,7 +23,10 @@ function cookies(req: IncomingMessage): Record<string, string> {
   return Object.fromEntries(raw.split(';').map((part) => {
     const index = part.indexOf('=');
     if (index < 0) return ['', ''];
-    return [part.slice(0, index).trim(), decodeURIComponent(part.slice(index + 1).trim())];
+    const key = part.slice(0, index).trim();
+    let value = part.slice(index + 1).trim();
+    try { value = decodeURIComponent(value); } catch { return ['', '']; }
+    return [key, value];
   }).filter(([key]) => key));
 }
 
@@ -88,7 +93,7 @@ export function clearSessionCookies(res: ServerResponse) {
 }
 
 export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 12);
+  return argon2.hash(password, { type: argon2.argon2id, memoryCost: 19_456, timeCost: 2, parallelism: 1 });
 }
 
 export async function verifyPassword(password: string, encoded: string): Promise<boolean> {
@@ -98,6 +103,11 @@ export async function verifyPassword(password: string, encoded: string): Promise
   const expected = Buffer.from(hashHex, 'hex');
   const actual = await scrypt(password, Buffer.from(saltHex, 'hex'), expected.length) as Buffer;
   return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+export async function revokeUserSessions(userId: string): Promise<void> {
+  if (!pool) return;
+  await pool.query('UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [userId]);
 }
 
 export async function authenticateRequest(req: IncomingMessage): Promise<AuthenticatedUser | null> {
@@ -350,7 +360,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const row=found.rows[0];if(!row||row.attempts>=5||!/^\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
       await pool.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[await hashPassword(next),row.id]);
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
-      await pool.query('DELETE FROM sessions WHERE user_id=$1',[row.id]);clearSessionCookies(res);await recordSecurityNotification(row.id,'security.password_reset','Password reset','Your AFG AI account password was reset. All previous sessions were revoked.');sendAuthJson(res,200,{reset:true});return true;
+      await revokeUserSessions(row.id);clearSessionCookies(res);await recordSecurityNotification(row.id,'security.password_reset','Password reset','Your AFG AI account password was reset. All previous sessions were revoked.');sendAuthJson(res,200,{reset:true});return true;
     }catch{sendAuthJson(res,400,{error:'Could not reset the password.'});return true;}
   }
 
@@ -378,7 +388,114 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         sendAuthJson(res, 401, { error: 'Email or password is incorrect.' });
         return true;
       }
-      if (typeof row.password_hash === 'string' && row.password_hash.startsWith('scrypt$')) {
+      if (typeof row.password_hash === 'string' && !row.password_hash.startsWith('$argon2id
+        await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [await hashPassword(password), row.id]);
+      }
+      await createSession(row.id, res);
+      await recordSecurityNotification(row.id, 'security.sign_in', 'New sign-in', 'Your AFG AI account was signed in successfully.');
+      sendAuthJson(res, 200, { authenticated: true });
+      return true;
+    } catch {
+      sendAuthJson(res, 400, { error: 'Unable to process the sign-in request.' });
+      return true;
+    }
+  }
+
+  if (pathname === '/api/auth/bootstrap-admin' && req.method === 'POST') {
+    try {
+      const configuredToken = process.env.AFG_ADMIN_BOOTSTRAP_TOKEN || '';
+      const body = await readJsonBody(req);
+      const suppliedToken = typeof body.bootstrapToken === 'string' ? body.bootstrapToken : '';
+      if (configuredToken.length < 32 || suppliedToken.length !== configuredToken.length ||
+          !timingSafeEqual(Buffer.from(suppliedToken), Buffer.from(configuredToken))) {
+        sendAuthJson(res, 403, { error: 'Admin bootstrap is not authorized or is not configured.' });
+        return true;
+      }
+      const existingAdmins = await pool.query("SELECT 1 FROM users WHERE role = 'admin' AND status = 'active' LIMIT 1");
+      if (existingAdmins.rows.length) {
+        sendAuthJson(res, 409, { error: 'An active administrator already exists. Bootstrap is permanently closed.' });
+        return true;
+      }
+      const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+      const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 100) : 'AFG AI Administrator';
+      const password = typeof body.password === 'string' ? body.password : '';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 12 || password.length > 256) {
+        sendAuthJson(res, 400, { error: 'Use a valid email and a password of at least 12 characters.' });
+        return true;
+      }
+      const passwordHash = await hashPassword(password);
+      const created = await pool.query(
+        "INSERT INTO users (email, display_name, password_hash, role, email_verified) VALUES ($1, $2, $3, 'admin', true) ON CONFLICT (email) DO UPDATE SET display_name = EXCLUDED.display_name, password_hash = EXCLUDED.password_hash, role = 'admin', status = 'active', email_verified = true, updated_at = now() RETURNING id",
+        [email, displayName, passwordHash],
+      );
+      await createSession(created.rows[0].id, res);
+      sendAuthJson(res, 201, { authenticated: true, bootstrapped: true });
+    } catch {
+      sendAuthJson(res, 400, { error: 'Could not complete administrator bootstrap.' });
+    }
+    return true;
+  }
+
+  if (pathname === '/api/auth/me' && req.method === 'GET') {
+    try {
+      const user = await authenticateRequest(req);
+      sendAuthJson(res, user ? 200 : 401, user ? {
+        authenticated: true,
+        user: {
+          id: user.id, email: user.email, displayName: user.displayName,
+          role: user.role, defaultModel: user.defaultModel,
+        },
+      } : { authenticated: false });
+    } catch {
+      sendAuthJson(res, 401, { authenticated: false });
+    }
+    return true;
+  }
+
+  if (pathname === '/api/auth/preferences' && req.method === 'PATCH') {
+    const user = await authenticateRequest(req);
+    if (!user) { sendAuthJson(res, 401, { error: 'Sign in is required.' }); return true; }
+    if (!verifyCsrf(req)) { sendAuthJson(res, 403, { error: 'CSRF validation failed.' }); return true; }
+    try {
+      const body = await readJsonBody(req);
+      const defaultModel = typeof body.defaultModel === 'string' ? body.defaultModel.trim() : '';
+      if (defaultModel) {
+        const { getVerifiedModelDescriptors } = await import('../services/providerGateway.ts');
+        const available = await getVerifiedModelDescriptors();
+        const selected = available.find((model) => (model.providerId + '::' + model.id === defaultModel || model.id === defaultModel) && model.enabled && model.verifiedAt);
+        if (!selected) { sendAuthJson(res, 400, { error: 'Default model must be enabled and health-verified.' }); return true; }
+      }
+      await pool.query('UPDATE users SET default_model = $1, updated_at = now() WHERE id = $2', [defaultModel || null, user.id]);
+      await pool.query('INSERT INTO user_preferences (user_id, default_model) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET default_model = EXCLUDED.default_model, updated_at = now()', [user.id, defaultModel || null]);
+      sendAuthJson(res, 200, { defaultModel: defaultModel || null });
+    } catch { sendAuthJson(res, 400, { error: 'Could not update account preferences.' }); }
+    return true;
+  }
+
+  if (pathname === '/api/auth/logout' && req.method === 'POST') {
+    if (!verifyCsrf(req)) {
+      sendAuthJson(res, 403, { error: 'CSRF validation failed.' });
+      return true;
+    }
+    try {
+      await destroySession(req, res);
+      sendAuthJson(res, 200, { authenticated: false });
+    } catch {
+      sendAuthJson(res, 500, { error: 'Could not end the session.' });
+    }
+    return true;
+  }
+
+  sendAuthJson(res, 404, { error: 'Authentication route not found.' });
+  return true;
+}
+);
+  if (algorithm !== 'scrypt' || !saltHex || !hashHex || !/^[a-f0-9]{32}$/.test(saltHex) || !/^[a-f0-9]{128}$/.test(hashHex)) return false;
+  const expected = Buffer.from(hashHex, 'hex');
+  const actual = await scrypt(password, Buffer.from(saltHex, 'hex'), expected.length) as Buffer;
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+)) {
         await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [await hashPassword(password), row.id]);
       }
       await createSession(row.id, res);
