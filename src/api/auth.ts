@@ -28,6 +28,10 @@ function cookies(req: IncomingMessage): Record<string, string> {
 function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
+function hashEmailCode(value: string): string {
+  const pepper = process.env.AFG_EMAIL_CODE_PEPPER || process.env.RESEND_API_KEY || '';
+  return createHash('sha256').update(pepper + ':' + value).digest('hex');
+}
 
 function cookieOptions() {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
@@ -251,7 +255,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const created=await pool.query("INSERT INTO users(email,display_name,password_hash,email_verified) VALUES($1,$2,$3,false) ON CONFLICT(email) DO NOTHING RETURNING id",[email,displayName||email,passwordHash]);
       if(!created.rows[0]){sendAuthJson(res,409,{error:'An account with this email may already exist. Try signing in or resetting your password.'});return true;}
       const code=String(randomInt(0,1000000)).padStart(6,'0');
-      await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'verify_email',$2,now()+interval '10 minutes')",[created.rows[0].id,hash(code)]);
+      await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'verify_email',$2,now()+interval '10 minutes')",[created.rows[0].id,hashEmailCode(code)]);
       if(!await sendEmailCode(email,code,'verify_email')){await pool.query('DELETE FROM users WHERE id=$1',[created.rows[0].id]);sendAuthJson(res,502,{error:'Could not send the verification email. Check the email provider configuration.'});return true;}
       sendAuthJson(res,201,{verificationRequired:true});return true;
     }catch{sendAuthJson(res,400,{error:'Could not create the account.'});return true;}
@@ -263,7 +267,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const body=await readJsonBody(req);const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';const code=typeof body.code==='string'?body.code.trim():'';
       const found=await pool.query("SELECT u.id,c.id AS code_id,c.code_hash,c.attempts FROM users u JOIN email_verification_codes c ON c.user_id=u.id WHERE lower(u.email)=$1 AND c.purpose='verify_email' AND c.consumed_at IS NULL AND c.expires_at>now() ORDER BY c.created_at DESC LIMIT 1",[email]);
       const row=found.rows[0];
-      if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hash(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The verification code is invalid or expired.'});return true;}
+      if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The verification code is invalid or expired.'});return true;}
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
       await pool.query('UPDATE users SET email_verified=true,updated_at=now() WHERE id=$1',[row.id]);
       await createSession(row.id,res);sendAuthJson(res,200,{verified:true});return true;
@@ -277,7 +281,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const found=await pool.query("SELECT id FROM users WHERE lower(email)=$1 AND status='active' AND email_verified=true LIMIT 1",[email]);
       if(found.rows[0]&&process.env.RESEND_API_KEY&&process.env.EMAIL_FROM){
         const code=String(randomInt(0,1000000)).padStart(6,'0');
-        await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'password_reset',$2,now()+interval '10 minutes')",[found.rows[0].id,hash(code)]);
+        await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'password_reset',$2,now()+interval '10 minutes')",[found.rows[0].id,hashEmailCode(code)]);
         await sendEmailCode(email,code,'password_reset');
       }
       sendAuthJson(res,200,{message:'If the account exists and email delivery is configured, a reset code will be sent.'});return true;
@@ -291,7 +295,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const next=typeof body.newPassword==='string'?body.newPassword:'';
       if(next.length<12||next.length>256){sendAuthJson(res,400,{error:'New password must be at least 12 characters.'});return true;}
       const found=await pool.query("SELECT u.id,c.id AS code_id,c.code_hash,c.attempts FROM users u JOIN email_verification_codes c ON c.user_id=u.id WHERE lower(u.email)=$1 AND c.purpose='password_reset' AND c.consumed_at IS NULL AND c.expires_at>now() ORDER BY c.created_at DESC LIMIT 1",[email]);
-      const row=found.rows[0];if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hash(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
+      const row=found.rows[0];if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
       await pool.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[await hashPassword(next),row.id]);
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
       await pool.query('DELETE FROM sessions WHERE user_id=$1',[row.id]);sendAuthJson(res,200,{reset:true});return true;
@@ -613,7 +617,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const created=await pool.query("INSERT INTO users(email,display_name,password_hash,email_verified) VALUES($1,$2,$3,false) ON CONFLICT(email) DO NOTHING RETURNING id",[email,displayName||email,passwordHash]);
       if(!created.rows[0]){sendAuthJson(res,409,{error:'An account with this email may already exist. Try signing in or resetting your password.'});return true;}
       const code=String(randomInt(0,1000000)).padStart(6,'0');
-      await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'verify_email',$2,now()+interval '10 minutes')",[created.rows[0].id,hash(code)]);
+      await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'verify_email',$2,now()+interval '10 minutes')",[created.rows[0].id,hashEmailCode(code)]);
       if(!await sendEmailCode(email,code,'verify_email')){await pool.query('DELETE FROM users WHERE id=$1',[created.rows[0].id]);sendAuthJson(res,502,{error:'Could not send the verification email. Check the email provider configuration.'});return true;}
       sendAuthJson(res,201,{verificationRequired:true});return true;
     }catch{sendAuthJson(res,400,{error:'Could not create the account.'});return true;}
@@ -624,7 +628,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const body=await readJsonBody(req);const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';const code=typeof body.code==='string'?body.code.trim():'';
       const found=await pool.query("SELECT u.id,c.id AS code_id,c.code_hash,c.attempts FROM users u JOIN email_verification_codes c ON c.user_id=u.id WHERE lower(u.email)=$1 AND c.purpose='verify_email' AND c.consumed_at IS NULL AND c.expires_at>now() ORDER BY c.created_at DESC LIMIT 1",[email]);
       const row=found.rows[0];
-      if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hash(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The verification code is invalid or expired.'});return true;}
+      if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The verification code is invalid or expired.'});return true;}
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
       await pool.query('UPDATE users SET email_verified=true,updated_at=now() WHERE id=$1',[row.id]);
       await createSession(row.id,res);sendAuthJson(res,200,{verified:true});return true;
@@ -637,7 +641,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const found=await pool.query("SELECT id FROM users WHERE lower(email)=$1 AND status='active' AND email_verified=true LIMIT 1",[email]);
       if(found.rows[0]&&process.env.RESEND_API_KEY&&process.env.EMAIL_FROM){
         const code=String(randomInt(0,1000000)).padStart(6,'0');
-        await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'password_reset',$2,now()+interval '10 minutes')",[found.rows[0].id,hash(code)]);
+        await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'password_reset',$2,now()+interval '10 minutes')",[found.rows[0].id,hashEmailCode(code)]);
         await sendEmailCode(email,code,'password_reset');
       }
       sendAuthJson(res,200,{message:'If the account exists and email delivery is configured, a reset code will be sent.'});return true;
@@ -650,7 +654,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const next=typeof body.newPassword==='string'?body.newPassword:'';
       if(next.length<12||next.length>256){sendAuthJson(res,400,{error:'New password must be at least 12 characters.'});return true;}
       const found=await pool.query("SELECT u.id,c.id AS code_id,c.code_hash,c.attempts FROM users u JOIN email_verification_codes c ON c.user_id=u.id WHERE lower(u.email)=$1 AND c.purpose='password_reset' AND c.consumed_at IS NULL AND c.expires_at>now() ORDER BY c.created_at DESC LIMIT 1",[email]);
-      const row=found.rows[0];if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hash(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
+      const row=found.rows[0];if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
       await pool.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[await hashPassword(next),row.id]);
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
       await pool.query('DELETE FROM sessions WHERE user_id=$1',[row.id]);sendAuthJson(res,200,{reset:true});return true;
@@ -1072,7 +1076,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const created=await pool.query("INSERT INTO users(email,display_name,password_hash,email_verified) VALUES($1,$2,$3,false) ON CONFLICT(email) DO NOTHING RETURNING id",[email,displayName||email,passwordHash]);
       if(!created.rows[0]){sendAuthJson(res,409,{error:'An account with this email may already exist. Try signing in or resetting your password.'});return true;}
       const code=String(randomInt(0,1000000)).padStart(6,'0');
-      await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'verify_email',$2,now()+interval '10 minutes')",[created.rows[0].id,hash(code)]);
+      await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'verify_email',$2,now()+interval '10 minutes')",[created.rows[0].id,hashEmailCode(code)]);
       if(!await sendEmailCode(email,code,'verify_email')){await pool.query('DELETE FROM users WHERE id=$1',[created.rows[0].id]);sendAuthJson(res,502,{error:'Could not send the verification email. Check the email provider configuration.'});return true;}
       sendAuthJson(res,201,{verificationRequired:true});return true;
     }catch{sendAuthJson(res,400,{error:'Could not create the account.'});return true;}
@@ -1083,7 +1087,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const body=await readJsonBody(req);const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';const code=typeof body.code==='string'?body.code.trim():'';
       const found=await pool.query("SELECT u.id,c.id AS code_id,c.code_hash,c.attempts FROM users u JOIN email_verification_codes c ON c.user_id=u.id WHERE lower(u.email)=$1 AND c.purpose='verify_email' AND c.consumed_at IS NULL AND c.expires_at>now() ORDER BY c.created_at DESC LIMIT 1",[email]);
       const row=found.rows[0];
-      if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hash(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The verification code is invalid or expired.'});return true;}
+      if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The verification code is invalid or expired.'});return true;}
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
       await pool.query('UPDATE users SET email_verified=true,updated_at=now() WHERE id=$1',[row.id]);
       await createSession(row.id,res);sendAuthJson(res,200,{verified:true});return true;
@@ -1096,7 +1100,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const found=await pool.query("SELECT id FROM users WHERE lower(email)=$1 AND status='active' AND email_verified=true LIMIT 1",[email]);
       if(found.rows[0]&&process.env.RESEND_API_KEY&&process.env.EMAIL_FROM){
         const code=String(randomInt(0,1000000)).padStart(6,'0');
-        await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'password_reset',$2,now()+interval '10 minutes')",[found.rows[0].id,hash(code)]);
+        await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'password_reset',$2,now()+interval '10 minutes')",[found.rows[0].id,hashEmailCode(code)]);
         await sendEmailCode(email,code,'password_reset');
       }
       sendAuthJson(res,200,{message:'If the account exists and email delivery is configured, a reset code will be sent.'});return true;
@@ -1109,7 +1113,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const next=typeof body.newPassword==='string'?body.newPassword:'';
       if(next.length<12||next.length>256){sendAuthJson(res,400,{error:'New password must be at least 12 characters.'});return true;}
       const found=await pool.query("SELECT u.id,c.id AS code_id,c.code_hash,c.attempts FROM users u JOIN email_verification_codes c ON c.user_id=u.id WHERE lower(u.email)=$1 AND c.purpose='password_reset' AND c.consumed_at IS NULL AND c.expires_at>now() ORDER BY c.created_at DESC LIMIT 1",[email]);
-      const row=found.rows[0];if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hash(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
+      const row=found.rows[0];if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
       await pool.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[await hashPassword(next),row.id]);
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
       await pool.query('DELETE FROM sessions WHERE user_id=$1',[row.id]);sendAuthJson(res,200,{reset:true});return true;
