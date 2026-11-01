@@ -306,10 +306,10 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
                 className="bg-slate-900 text-white rounded-lg px-2 py-1 border border-cyan-700/50"
               >
                 <option value="auto">{language === 'dari' ? 'تشخیص خودکار' : 'Auto-detect'}</option>
-                <option value="fa">فارسی / دری (Dari)</option>
-                <option value="ps">پښتو (Pashto)</option>
-                <option value="en">English</option>
-                <option value="ar">العربية (Arabic)</option>
+                <option value="fa">{language === 'dari' ? 'دری / فارسی' : 'Dari / Persian'}</option>
+                <option value="ps">{language === 'dari' ? 'پشتو' : 'Pashto'}</option>
+                <option value="en">{language === 'dari' ? 'انگلیسی' : 'English'}</option>
+                <option value="ar">{language === 'dari' ? 'عربی' : 'Arabic'}</option>
               </select>
 
               <button 
