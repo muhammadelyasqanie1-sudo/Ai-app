@@ -45,7 +45,7 @@ async function enforceAdminConfiguredRateLimits(req: IncomingMessage, res: Serve
   for (const policy of policies.rows) {
     const counter = await pool.query(
       `INSERT INTO rate_limit_counters(scope_type,scope_key,window_start,request_count)
-       VALUES($1,$2,to_timestamp(floor(extract(epoch FROM now())/$3)*$3),1)
+       VALUES($1,$2,to_timestamp((floor(extract(epoch FROM now())/$3)*$3)::double precision),1)
        ON CONFLICT(scope_type,scope_key,window_start)
        DO UPDATE SET request_count=rate_limit_counters.request_count+1
        RETURNING request_count`,
@@ -66,7 +66,7 @@ async function enforceAdminConfiguredRateLimits(req: IncomingMessage, res: Serve
     for (const policy of modelPolicies.rows) {
       const counter = await pool.query(
         `INSERT INTO rate_limit_counters(scope_type,scope_key,window_start,request_count)
-         VALUES('model',$1,to_timestamp(floor(extract(epoch FROM now())/$2)*$2),1)
+         VALUES('model',$1,to_timestamp((floor(extract(epoch FROM now())/$2)*$2)::double precision),1)
          ON CONFLICT(scope_type,scope_key,window_start)
          DO UPDATE SET request_count=rate_limit_counters.request_count+1 RETURNING request_count`,
         [policy.scope_key,policy.window_seconds],
