@@ -41,18 +41,7 @@ const DEFAULT_USER: UserProfile = {
   tier: 'Free',
 };
 
-const INITIAL_MESSAGES: AfgMessage[] = [
-  {
-    id: 'seed-welcome-1',
-    role: 'assistant',
-    content: `سلام! 👋 به **AFG AI** خوش آمدید.
-
-گفت‌وگوی متنی با مدل‌های تأییدشده زمانی در دسترس است که ارائه‌دهنده در سرور پیکربندی و بررسی شده باشد. قابلیت‌های دیگر فعلاً غیرفعال‌اند.
-
-چگونه می‌توانم کمک کنم؟ 🇦🇫❤️`,
-    timestamp: Date.now() - 1000 * 60 * 10,
-  },
-];
+const INITIAL_MESSAGES: AfgMessage[] = [];
 
 const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
