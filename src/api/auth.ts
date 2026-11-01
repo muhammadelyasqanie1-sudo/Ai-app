@@ -33,12 +33,28 @@ function hashEmailCode(value: string): string {
   return createHash('sha256').update(pepper + ':' + value).digest('hex');
 }
 
-async function recordSecurityNotification(userId: string, eventType: string, title: string, body: string) {
+export async function recordSecurityNotification(userId: string, eventType: string, title: string, body: string) {
   try {
-    await pool.query(
-      "INSERT INTO user_notification_events(user_id,event_type,title,body) SELECT $1,$2,$3,$4 WHERE COALESCE((SELECT COALESCE((notifications_json->>'inApp')::boolean,true) AND COALESCE((notifications_json->>'securityAlerts')::boolean,true) FROM user_preferences WHERE user_id=$1),true)",
-      [userId,eventType,title,body],
+    const result = await pool.query(
+      "SELECT u.email, COALESCE((p.notifications_json->>'inApp')::boolean,true) AS in_app, COALESCE((p.notifications_json->>'email')::boolean,false) AS email_enabled, COALESCE((p.notifications_json->>'securityAlerts')::boolean,true) AS security_enabled FROM users u LEFT JOIN user_preferences p ON p.user_id=u.id WHERE u.id=$1",
+      [userId],
     );
+    const preference = result.rows[0];
+    if (!preference || preference.security_enabled !== true) return;
+    if (preference.in_app === true) {
+      await pool.query('INSERT INTO user_notification_events(user_id,event_type,title,body) VALUES($1,$2,$3,$4)',[userId,eventType,title,body]);
+    }
+    const apiKey = process.env.RESEND_API_KEY || '';
+    const from = process.env.EMAIL_FROM || '';
+    if (preference.email_enabled === true && preference.email && apiKey && from) {
+      try {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ from, to: [preference.email], subject: 'AFG AI security alert: ' + title, text: body + '\n\nIf this activity was not yours, sign in and secure your account.' }),
+        });
+      } catch { console.error('AFG_SECURITY_EMAIL_UNAVAILABLE'); }
+    }
   } catch { console.error('AFG_SECURITY_NOTIFICATION_UNAVAILABLE'); }
 }
 
