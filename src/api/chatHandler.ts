@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import { randomUUID } from 'crypto';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
@@ -6,7 +7,7 @@ function requestId(req: IncomingMessage) {
   const supplied = req.headers['x-request-id'];
   return typeof supplied === 'string' && /^[a-zA-Z0-9._-]{8,100}$/.test(supplied)
     ? supplied
-    : crypto.randomUUID();
+    : randomUUID();
 }
 
 function corsHeaders(req: IncomingMessage) {
