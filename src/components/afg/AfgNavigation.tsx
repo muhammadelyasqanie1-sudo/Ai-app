@@ -20,7 +20,7 @@ export const AfgNavigation: React.FC<AfgNavigationProps> = ({ currentTab, onChan
       <div className="afg-primary-nav-items">
         {items.map(item => {
           const Icon=item.icon;
-          const active=currentTab===item.id && (item.key!=='files' || currentTab==='tools') && (item.key!=='profile' || currentTab==='settings');
+          const active=currentTab===item.id && item.key!=='files' && item.key!=='profile';
           return <button key={item.key} type="button" onClick={()=>onChangeTab(item.id)} aria-current={active?'page':undefined} aria-label={item.label} title={item.key==='files'?(dari?'مرکز ابزارها؛ مدیریت فایل هنوز فعال نیست':'Tools center; file management is not enabled yet'):item.label} className={`afg-primary-nav-item ${active?'is-active':''}`}>
             <Icon aria-hidden="true" size={19}/><span>{item.label}</span>
           </button>;
