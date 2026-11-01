@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { handleChatApi } from './chatHandler.ts';
 import { checkDatabase } from './database.ts';
 import { getProviderModelCatalog } from './modelCatalog.ts';
-import { getCapabilitySnapshot } from '../services/providerGateway.ts';
+import { getCapabilitySnapshot, getImageStudioSnapshot, getFileAssistantSnapshot } from '../services/providerGateway.ts';
 import { handleAuthApi } from './auth.ts';
 import { handleAdminApi } from './adminHandler.ts';
 
@@ -82,6 +82,18 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     if (req.method === 'GET' && pathname === '/api/models') {
       const catalog = await getProviderModelCatalog();
       sendJson(res, catalog.status, catalog.body, requestId);
+      return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/studio/capabilities') {
+      const snapshot = await getImageStudioSnapshot();
+      sendJson(res, snapshot.available ? 200 : 503, snapshot, requestId);
+      return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/files/status') {
+      const snapshot = await getFileAssistantSnapshot();
+      sendJson(res, 200, snapshot, requestId);
       return;
     }
 
