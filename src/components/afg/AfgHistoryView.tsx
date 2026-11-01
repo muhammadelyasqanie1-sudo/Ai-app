@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import type { Language, AfgChatSession, TabType } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
+import { getIntlLocale } from '../../utils/i18n';
 
 interface AfgHistoryViewProps {
   language: Language;
@@ -161,7 +162,7 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
                       {session.title}
                     </h3>
                     <span className="text-[10px] text-slate-500 shrink-0">
-                      {new Date(session.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Intl.DateTimeFormat(getIntlLocale(language), { hour: '2-digit', minute: '2-digit' }).format(new Date(session.timestamp))}
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 truncate mt-0.5">
