@@ -257,7 +257,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
             {[...new Set(modelOptions.map((model) => model.providerId))].map((providerId) => (
               <optgroup key={providerId} label={providerId}>
                 {modelOptions.filter((model) => model.providerId === providerId).map((model) => (
-                  <option key={providerId + ':' + model.id} value={model.id} disabled={!model.selectable} title={model.selectable ? model.displayName : (model.disabledReason || 'Provider not reachable.')}>
+                  <option key={providerId + ':' + model.id} value={model.providerId + '::' + model.id} disabled={!model.selectable} title={model.selectable ? model.displayName : (model.disabledReason || 'Provider not reachable.')}>
                     {model.displayName} · {Object.entries(model.capabilities || {}).filter(([, enabled]) => enabled).map(([capability]) => capability).join(', ')}{model.selectable ? '' : ' — Provider not reachable.'}
                   </option>
                 ))}
