@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './auth.ts';
-import { getProviderRegistry, getVerifiedModelDescriptors } from '../services/providerGateway.ts';
+import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors } from '../services/providerGateway.ts';
 
 const ALLOWED_FALLBACK_CAPABILITIES = new Set(['text', 'vision', 'imageGen', 'tts', 'stt']);
 
@@ -58,17 +58,19 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const registry = getProviderRegistry();
       const settings = await pool.query('SELECT provider_key, enabled, display_name FROM provider_configs');
       const byId = new Map(settings.rows.map((row) => [row.provider_key, row]));
-      sendAuthJson(res, 200, {
-        providers: registry.map((provider) => {
-          const setting = byId.get(provider.id);
-          return {
-            id: provider.id,
-            displayName: provider.displayName,
-            enabled: setting ? Boolean(setting.enabled) : true,
-            configured: true,
-          };
-        }),
-      });
+      const providers = await Promise.all(registry.map(async (provider) => {
+        const setting = byId.get(provider.id);
+        const adapter = getProviderAdapter(provider.id);
+        const config = await adapter?.validateConfig();
+        return {
+          id: provider.id,
+          displayName: provider.displayName,
+          enabled: setting ? Boolean(setting.enabled) : true,
+          configured: Boolean(config?.valid),
+          configMessage: config?.valid ? null : (config?.message || 'Provider configuration unavailable.'),
+        };
+      }));
+      sendAuthJson(res, 200, { providers });
       return true;
     }
 
