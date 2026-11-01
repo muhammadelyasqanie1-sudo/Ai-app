@@ -286,3 +286,13 @@ CREATE TRIGGER audit_logs_no_update BEFORE UPDATE OR DELETE ON audit_logs
 FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_mutation();
 
 ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS capabilities_override text[];
+
+
+CREATE TABLE IF NOT EXISTS rate_limit_counters (
+  scope_type text NOT NULL,
+  scope_key text NOT NULL,
+  window_start timestamptz NOT NULL,
+  request_count integer NOT NULL DEFAULT 0,
+  PRIMARY KEY(scope_type,scope_key,window_start)
+);
+CREATE INDEX IF NOT EXISTS rate_limit_counters_window_idx ON rate_limit_counters(window_start);
