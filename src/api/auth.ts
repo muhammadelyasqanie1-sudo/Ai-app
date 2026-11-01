@@ -421,6 +421,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         if (!selected) { sendAuthJson(res, 400, { error: 'Default model must be enabled and health-verified.' }); return true; }
       }
       await pool.query('UPDATE users SET default_model = $1, updated_at = now() WHERE id = $2', [defaultModel || null, user.id]);
+      await pool.query('INSERT INTO user_preferences (user_id, default_model) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET default_model = EXCLUDED.default_model, updated_at = now()', [user.id, defaultModel || null]);
       sendAuthJson(res, 200, { defaultModel: defaultModel || null });
     } catch { sendAuthJson(res, 400, { error: 'Could not update account preferences.' }); }
     return true;
