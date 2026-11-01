@@ -148,6 +148,21 @@ export default function App() {
   // Chat message sending & streaming logic
   const handleSendMessage = async (text: string, attachments: ChatAttachment[]) => {
     if (!text.trim() && attachments.length === 0) return;
+    if (!selectedModel) {
+      setCurrentTab('chat');
+      setMessages((previous) => [...previous, {
+        id: `usr-${Date.now()}`,
+        role: 'user',
+        content: text,
+        timestamp: Date.now(),
+      }, {
+        id: `ast-${Date.now()}`,
+        role: 'assistant',
+        content: language === 'dari' ? 'هیچ مدل چت تأییدشده‌ای در دسترس نیست. پس از تنظیم ارائه‌دهنده دوباره تلاش کنید.' : 'No verified chat model is available. Configure the provider and try again.',
+        timestamp: Date.now(),
+      }]);
+      return;
+    }
 
     const userMessage: AfgMessage = {
       id: `usr-${Date.now()}`,
