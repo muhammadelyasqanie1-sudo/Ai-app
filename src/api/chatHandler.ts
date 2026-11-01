@@ -64,14 +64,19 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
   let heartbeat: ReturnType<typeof setInterval> | undefined;
 
   try {
-    let bodyStr = '';
+    const bodyChunks: Buffer[] = [];
+    let bodyBytes = 0;
     for await (const chunk of req) {
-      bodyStr += chunk.toString();
-      if (Buffer.byteLength(bodyStr, 'utf8') > 1_000_000) {
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      bodyBytes += bytes.length;
+      if (bodyBytes > 1_000_000) {
         sendJson(req, res, 413, { error: 'Request is too large.', requestId: id }, id);
         return;
       }
+      bodyChunks.push(bytes);
     }
+    // Decode only after concatenation so UTF-8 characters split across network chunks remain intact.
+    const bodyStr = Buffer.concat(bodyChunks).toString('utf8');
 
     let body: Record<string, unknown>;
     try {
