@@ -39,7 +39,7 @@ export const AfgProductivityCenter:React.FC<{language:Language; onRunTool:(promp
  const save=async()=>{
   if(!title.trim()||!content.trim())return;
   setLoading(true);setStatus('');
-  try{const r=await fetch(API+'/api/productivity/items',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf()},body:JSON.stringify({type,title,content,parameters:parameter?{focus:parameter}:{}})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Save failed');setItems(prev=>[d.item,...prev]);setTitle('');setContent('');setStatus(dari?'ذخیره شد.':'Saved to your workspace.');}
+  try{const r=await fetch(API+'/api/productivity/items',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf()},body:JSON.stringify({type,title,content,parameters:parameter?{[parameterKey[type]]:parameter}:{}})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Save failed');setItems(prev=>[d.item,...prev]);setTitle('');setContent('');setStatus(dari?'ذخیره شد.':'Saved to your workspace.');}
   catch(e){setStatus(e instanceof Error?e.message:'Could not save item.');}finally{setLoading(false);}
  };
  const remove=async(id:string)=>{try{const r=await fetch(API+'/api/productivity/items/'+id,{method:'DELETE',credentials:'include',headers:{'X-CSRF-Token':csrf()}});if(!r.ok)throw new Error('Delete failed');setItems(prev=>prev.filter(x=>x.id!==id));}catch(e){setStatus(e instanceof Error?e.message:'Could not delete item.');}};
