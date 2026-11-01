@@ -4,6 +4,8 @@ import { prepareVerifiedChat } from '../services/chatService.ts';
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
 import { buildToolModePrompt } from '../services/toolModes.ts';
 import { getProductivityPrompt } from './productivity.ts';
+import { authenticateRequest } from './auth.ts';
+import { pool } from './database.ts';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
@@ -147,6 +149,17 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     }
 
     const toolMode = buildToolModePrompt(body, requestedLanguage);
+    const authenticatedUser = await authenticateRequest(req);
+    let memoryPrompt = '';
+    if (authenticatedUser && pool) {
+      try {
+        const preference = await pool.query('SELECT memory_enabled FROM user_preferences WHERE user_id=$1', [authenticatedUser.id]);
+        const userMemory = await pool.query('SELECT category, content FROM user_memories WHERE user_id=$1 ORDER BY updated_at DESC LIMIT 30', [authenticatedUser.id]);
+        if (preference.rows[0]?.memory_enabled !== false && userMemory.rows.length) {
+          memoryPrompt = 'User-approved personal memory (use only when relevant; never expose it unnecessarily):\\n' + userMemory.rows.map((item) => '[' + item.category + '] ' + item.content).join('\\n');
+        }
+      } catch { console.error('AFG_MEMORY_CONTEXT_UNAVAILABLE'); }
+    }
     const systemMessages = [
       requestedLanguage === 'dari'
         ? 'Respond in clear, natural Dari Persian. Keep the entire response in Dari unless the user explicitly requests another language.'
@@ -154,6 +167,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       'You are AFG AI. Be honest about uncertainty and limitations. Never fabricate citations, URLs, quotations, sources, or tool results. Cite only sources actually supplied or retrieved in this request. If no verifiable source is available, say so clearly. Distinguish confirmed facts from estimates and opinions.',
       toolMode.prompt,
       getProductivityPrompt(body.productivityType, body.productivityParameters, requestedLanguage),
+      memoryPrompt,
     ].filter(Boolean);
 
     const upstreamMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
