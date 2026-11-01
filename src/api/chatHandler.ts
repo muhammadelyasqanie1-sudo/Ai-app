@@ -102,6 +102,23 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
   const abortController = new AbortController();
   res.on('close', () => { if (!res.writableEnded) abortController.abort(); });
   let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let requestTimer: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+  let requestUserId: string | null = null;
+  let activeModelId = '';
+  const classifyError = (error: unknown): string => {
+    if (timedOut || (error instanceof Error && error.name === 'TimeoutError')) return 'timeout';
+    if (abortController.signal.aborted) return 'network';
+    if (error instanceof ProviderAdapterError) {
+      if (error.status === 401 || error.status === 403) return 'auth';
+      if (error.status === 429 || /rate_limit|quota/i.test(error.code)) return 'rate_limit';
+      if (error.status >= 500) return 'provider_5xx';
+      if (/model_not_verified|provider_not_registered|provider_not_configured/i.test(error.code)) return 'unavailable_model';
+      if (/policy|safety|content_filter/i.test(error.code)) return 'content_policy';
+      if (error.status >= 400) return 'invalid_request';
+    }
+    return 'network';
+  };
 
   try {
     const bodyChunks: Buffer[] = [];
@@ -166,6 +183,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
 
     const toolMode = buildToolModePrompt(body, requestedLanguage);
     const authenticatedUser = await authenticateRequest(req);
+    requestUserId = authenticatedUser?.id || null;
     let memoryPrompt = '';
     let userPreferencePrompt = '';
     if (authenticatedUser && pool) {
@@ -219,8 +237,12 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       }
     }
 
+    // Bound the complete upstream generation, including provider retries and stream reads.
+    requestTimer = setTimeout(() => { timedOut = true; abortController.abort(); }, 60_000);
     const prepared = await prepareVerifiedChat({ model, messages: upstreamMessages, signal: abortController.signal });
     const { providerId, modelId, stream } = prepared;
+    activeModelId = modelId;
+    res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId })}\\n\\n`);
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
@@ -252,12 +274,17 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         requestId: id,
         provider: prepared.providerId,
         model: prepared.modelId,
-        code: error instanceof ProviderAdapterError ? error.code : 'unexpected_stream_error',
+        code: classifyError(error),
+        providerCode: error instanceof ProviderAdapterError ? error.code : 'unexpected_stream_error',
+        userId: requestUserId,
+        modelId: activeModelId,
+        latencyMs: Date.now() - startedAt,
       }));
       if (!res.destroyed && !res.writableEnded) {
         res.write(`data: ${JSON.stringify({
           type: 'error',
           error: 'The AI response stream was interrupted. Your prompt is still available to retry.',
+          errorCode: classifyError(error),
           retryable: true,
           requestId: id,
         })}\n\n`);
@@ -269,12 +296,20 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     console.error('AI_CHAT_REQUEST_FAILED', JSON.stringify({
       requestId: id,
       provider: 'unknown-or-not-selected',
-      code: providerError?.code || 'request_failed',
+      errorCode: classifyError(error),
+      providerCode: providerError?.code || 'request_failed',
       status: providerError?.status || 500,
+      userId: requestUserId,
+      modelId: activeModelId,
+      latencyMs: Date.now() - startedAt,
     }));
     if (!res.headersSent) {
-      sendJson(req, res, providerError?.status || 500, {
-        error: providerError?.message || 'The AI request failed unexpectedly. Please retry.',
+      const errorCode = classifyError(error);
+      const safeStatus = timedOut ? 504 : (providerError?.status && providerError.status >= 400 && providerError.status < 500 ? providerError.status : 502);
+      sendJson(req, res, safeStatus, {
+        error: timedOut ? 'The AI request timed out. Your prompt is preserved; please retry.' : 'The AI request could not be completed. Your prompt is preserved; please retry.',
+        errorCode,
+        retryable: errorCode !== 'invalid_request' && errorCode !== 'content_policy',
         requestId: id,
       }, id);
     } else {
@@ -282,6 +317,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     }
   } finally {
     if (heartbeat) clearInterval(heartbeat);
+    if (requestTimer) clearTimeout(requestTimer);
     activeChatRequests = Math.max(0, activeChatRequests - 1);
   }
 }
