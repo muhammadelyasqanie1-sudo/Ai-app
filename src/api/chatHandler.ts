@@ -59,6 +59,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     return;
   }
   activeChatRequests += 1;
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
 
   try {
     let bodyStr = '';
@@ -114,6 +115,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       .filter((message) => message.role === 'system')
       .map((message) => message.content);
     if (customInstructions) systemMessages.unshift(customInstructions);
+    systemMessages.unshift('You are AFG AI. Be honest about uncertainty and limitations. Never fabricate citations, URLs, quotations, sources, or tool results. Cite only sources actually supplied or retrieved in this request. If no verifiable source is available, say so clearly. Distinguish confirmed facts from estimates and opinions.');
 
     const upstreamMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
     if (systemMessages.join('\n\n').trim()) {
@@ -139,6 +141,9 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     });
 
     let emittedContent = false;
+    heartbeat = setInterval(() => {
+      if (!res.writableEnded && !res.destroyed) res.write(': heartbeat\\n\\n');
+    }, 15_000);
     try {
       for await (const chunk of stream) {
         if (!chunk.content) continue;
@@ -146,7 +151,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         res.write(`data: ${JSON.stringify({ type: 'content', text: chunk.content })}\n\n`);
       }
       if (!emittedContent) {
-        res.write(`data: ${JSON.stringify({ type: 'error', error: 'The AI provider returned an empty response.', requestId: id })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'error', error: 'The AI provider returned an empty response. Please retry.', retryable: true, requestId: id })}\n\n`);
         res.end();
         return;
       }
@@ -163,6 +168,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       res.write(`data: ${JSON.stringify({
         type: 'error',
         error: 'The AI response stream was interrupted. Your prompt is still available to retry.',
+        retryable: true,
         requestId: id,
       })}\n\n`);
       res.end();
@@ -184,6 +190,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       res.end();
     }
   } finally {
+    if (heartbeat) clearInterval(heartbeat);
     activeChatRequests = Math.max(0, activeChatRequests - 1);
   }
 }
