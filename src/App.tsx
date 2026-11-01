@@ -69,6 +69,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<TabType>('home');
   const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
   const [messages, setMessages] = useState<AfgMessage[]>(INITIAL_MESSAGES);
+  const [currentSessionId, setCurrentSessionId] = useState(() => `chat-${Date.now()}`);
   const [isLoading, setIsLoading] = useState(false);
   const activeChatAbortRef = useRef<AbortController | null>(null);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
@@ -168,6 +169,25 @@ export default function App() {
         console.error('AFG_AI_CAPABILITIES_UNAVAILABLE');
       });
   }, []);
+
+  useEffect(() => {
+    if (!messages.some((message) => message.role === 'user')) return;
+    try {
+      const stored = JSON.parse(localStorage.getItem('afg_sessions') || '[]');
+      const sessions = Array.isArray(stored) ? stored : [];
+      const firstUser = messages.find((message) => message.role === 'user');
+      const latest = [...messages].reverse().find((message) => message.role === 'user' || (message.role === 'assistant' && message.content.trim()));
+      const session = {
+        id: currentSessionId,
+        title: (firstUser?.content || 'New chat').replace(/\\s+/g, ' ').slice(0, 64),
+        lastMessage: latest?.content.slice(0, 180) || '',
+        timestamp: Date.now(),
+        messages,
+        category: 'general',
+      };
+      localStorage.setItem('afg_sessions', JSON.stringify([session, ...sessions.filter((item: any) => item?.id !== currentSessionId)].slice(0, 200)));
+    } catch { console.error('AFG_AI_LOCAL_HISTORY_SAVE_FAILED'); }
+  }, [messages, currentSessionId]);
 
   // Global Keyboard Shortcuts (Ctrl+/ or Cmd+/)
   useEffect(() => {
@@ -335,12 +355,14 @@ export default function App() {
   };
 
   const handleSelectHistoryChat = (session: AfgChatSession) => {
+    setCurrentSessionId(session.id);
     setMessages(session.messages);
     setCurrentTab('chat');
   };
 
   const handleNewChat = () => {
-    setMessages(INITIAL_MESSAGES);
+    setCurrentSessionId(`chat-${Date.now()}`);
+    setMessages([]);
     setCurrentTab('chat');
   };
 
