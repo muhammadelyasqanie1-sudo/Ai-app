@@ -126,12 +126,30 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   const [writingStyle, setWritingStyle] = useState('clear');
   const [writingLanguage, setWritingLanguage] = useState(language === 'dari' ? 'dari' : 'english');
   const [writingLength, setWritingLength] = useState('medium');
+  const [researchQuery, setResearchQuery] = useState('');
+  const [researchLoading, setResearchLoading] = useState(false);
+  const [researchError, setResearchError] = useState('');
+  const [researchSources, setResearchSources] = useState<Array<{ title: string; url: string; snippet: string }>>([]);
 
   // Translation remains disabled until a real translation provider is connected.
   const handleTranslate = () => {
     if (!transInput.trim()) return;
     onRunTool(transInput.trim(), { toolMode: 'translation', sourceLanguage: sourceLang, targetLanguage: targetLang });
     setTransOutput(language === 'dari' ? 'درخواست ترجمه به دستیار هوشمند فرستاده شد؛ نتیجه در صفحه چت نمایش داده می‌شود.' : 'Translation request sent to the AI assistant; the result will appear in Chat.');
+  };
+
+  const handleResearch = async () => {
+    if (!researchQuery.trim() || researchLoading) return;
+    setResearchLoading(true); setResearchError(''); setResearchSources([]);
+    try {
+      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/research', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: researchQuery.trim() }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Research is unavailable.');
+      const sources = Array.isArray(data.sources) ? data.sources.filter((item: any) => typeof item?.url === 'string' && /^https?:\\/\\//i.test(item.url) && typeof item?.title === 'string') : [];
+      setResearchSources(sources);
+      if (!sources.length) setResearchError(language === 'dari' ? 'منبع قابل تأیید پیدا نشد.' : 'No verified source URLs were returned.');
+    } catch (error) { setResearchError(error instanceof Error ? error.message : 'Research failed.'); }
+    finally { setResearchLoading(false); }
   };
 
   const handleCopy = (text: string, setFn: (val: boolean) => void) => {
@@ -144,6 +162,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
     { id: 'translate' as ToolSubTab, title: t.toolTranslate, desc: language === 'dari' ? 'ترجمه با مدل چت تأییدشده' : 'Uses the verified chat model', ready: true, icon: Languages, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/30' },
     { id: 'code-help' as ToolSubTab, title: t.toolCodeHelp, desc: language === 'dari' ? 'تولید، توضیح، اشکال‌زدایی و بهینه‌سازی کد' : 'Generate, explain, debug and optimize code', ready: true, icon: Code2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
     { id: 'writing-studio' as ToolSubTab, title: language === 'dari' ? 'استودیوی نویسندگی' : 'Writing Studio', desc: language === 'dari' ? 'ایمیل، مقاله، رزومه و محتوای تبلیغاتی' : 'Emails, articles, CVs and marketing content', ready: true, icon: FileText, color: 'text-fuchsia-400', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30' },
+    { id: 'research' as ToolSubTab, title: language === 'dari' ? 'پژوهش وب' : 'Web Research', desc: language === 'dari' ? 'جستجوی منابع واقعی و لینک‌های اصلی' : 'Search real sources and original URLs', ready: true, icon: Languages, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
     { id: 'voice-tools' as ToolSubTab, title: t.toolVoice, desc: language === 'dari' ? 'نیازمند ارائه‌دهنده صوتی سازگار' : 'Requires a compatible voice provider', ready: false, icon: Mic, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
     { id: 'pdf-tools' as ToolSubTab, title: t.toolPdf, desc: language === 'dari' ? 'بارگذاری و استخراج متن فعال نیست' : 'Upload and text extraction are unavailable', ready: false, icon: FileText, color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/30' },
     { id: 'calculator' as ToolSubTab, title: t.toolCalc, desc: language === 'dari' ? 'محاسبه محلی' : 'Local arithmetic calculator', ready: true, icon: Calculator, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/30' },
@@ -347,6 +366,16 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
           <pre className="p-4 rounded-2xl bg-black/80 border border-cyan-900/60 text-emerald-300 font-mono text-xs sm:text-sm overflow-x-auto leading-relaxed">
             <code>{generatedCode || (language === 'dari' ? 'تولیدکننده کد به سرویس واقعی وصل نشده است.' : 'The code generator is not connected to a real service.')}</code>
           </pre>
+        </div>
+      )}
+
+      {activeSubTab === 'research' && (
+        <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-blue-500/40 shadow-xl space-y-4">
+          <h2 className="text-base font-bold text-white">{language === 'dari' ? 'پژوهش وب با منابع واقعی' : 'Web Research with real sources'}</h2>
+          <p className="text-xs text-slate-400">{language === 'dari' ? 'جستجو فقط با TAVILY_API_KEY تنظیم‌شده در سرور کار می‌کند. لینک‌ها عیناً از نتیجه جستجو گرفته می‌شوند.' : 'Search runs only when TAVILY_API_KEY is configured on the server. Source URLs are passed through from the search response.'}</p>
+          <div className="flex gap-2"><input value={researchQuery} onChange={(e) => setResearchQuery(e.target.value)} maxLength={500} placeholder={language === 'dari' ? 'موضوع پژوهش را بنویسید...' : 'What would you like to research?'} className="min-w-0 flex-1 rounded-xl bg-slate-900 border border-blue-900/50 p-3 text-sm text-white" /><button onClick={handleResearch} disabled={!researchQuery.trim() || researchLoading} className="rounded-xl bg-blue-500 px-4 text-sm font-bold text-white disabled:opacity-40">{researchLoading ? '…' : (language === 'dari' ? 'جستجو' : 'Search')}</button></div>
+          {researchError && <p className="text-sm text-amber-200">{researchError}</p>}
+          {researchSources.length > 0 && <div className="space-y-3"><h3 className="text-sm font-bold text-emerald-300">{language === 'dari' ? 'منابع تأییدشده' : 'Verified sources'}</h3>{researchSources.map((source, index) => <article key={source.url} className="rounded-xl border border-slate-700 bg-slate-900/70 p-3 space-y-1"><a href={source.url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-cyan-300 underline break-all">{index + 1}. {source.title}</a><p className="text-xs text-slate-400">{source.snippet}</p><p className="text-[11px] text-slate-500 break-all">{source.url}</p></article>)}<button onClick={() => onRunTool('Analyze the following verified web research results. Separate verified sources from your interpretation. Cite only the exact URLs included below.\\n\\n'+researchSources.map((s,i)=>`[${i+1}] ${s.title}\\nURL: ${s.url}\\nExcerpt: ${s.snippet}`).join('\\n\\n'), { toolMode: 'research' })} className="w-full rounded-xl bg-emerald-500 py-3 font-bold text-slate-950">{language === 'dari' ? 'تحلیل منابع با هوش مصنوعی' : 'AI interpretation of sources'}</button></div>}
         </div>
       )}
 
