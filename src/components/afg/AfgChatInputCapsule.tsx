@@ -25,7 +25,7 @@ interface AfgChatInputCapsuleProps {
   selectedModel: string;
   onSelectModel: (model: string) => void;
   modelsLoading?: boolean;
-  voiceAvailable?: boolean;
+  speechToTextAvailable?: boolean;
 }
 
 export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
@@ -37,7 +37,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   selectedModel,
   onSelectModel,
   modelsLoading = false,
-  voiceAvailable = false,
+  speechToTextAvailable = false,
 }) => {
   const t = translations[language];
   const [inputText, setInputText] = useState('');
