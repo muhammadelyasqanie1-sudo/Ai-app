@@ -1,6 +1,8 @@
 export type AfgCapability =
   | 'chat'
   | 'vision'
+  | 'ocr'
+  | 'image-edit'
   | 'image-generation'
   | 'video-generation'
   | 'file-processing'
