@@ -338,6 +338,26 @@ export default function App() {
     }
   };
 
+  const handleEditMessage = (messageId: string, editedText: string) => {
+    const index = messages.findIndex((message) => message.id === messageId && message.role === 'user');
+    if (index < 0 || !editedText.trim()) return;
+    const original = messages[index];
+    const context = messages.slice(0, index);
+    setMessages(context);
+    void handleSendMessage(editedText.trim(), original.attachments || [], context);
+  };
+
+  const handleBranchMessage = (messageId: string) => {
+    const index = messages.findIndex((message) => message.id === messageId);
+    if (index < 0) return;
+    setCurrentSessionId(`chat-${Date.now()}`);
+    setMessages(messages.slice(0, index + 1));
+  };
+
+  const handleDeleteMessage = (messageId: string) => {
+    setMessages((previous) => previous.filter((message) => message.id !== messageId));
+  };
+
   const handleStopGeneration = () => activeChatAbortRef.current?.abort();
 
   const handleRetryMessage = (messageId: string) => {
@@ -405,6 +425,9 @@ export default function App() {
             onSendMessage={handleSendMessage}
             onStop={handleStopGeneration}
             onRetryMessage={handleRetryMessage}
+            onEditMessage={handleEditMessage}
+            onBranchMessage={handleBranchMessage}
+            onDeleteMessage={handleDeleteMessage}
             isLoading={isLoading}
             language={language}
             user={user}
