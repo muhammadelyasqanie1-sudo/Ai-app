@@ -192,89 +192,12 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
         onChange={(e) => handleFileUpload(e, 'camera')}
       />
 
-      {/* Attachment Popover Sheet (from Screenshot 1) */}
+      {/* Attachments are disabled until upload, storage, and model handling exist. */}
       {isMenuOpen && (
-        <div 
-          ref={menuRef}
-          className="absolute -top-48 right-4 sm:right-6 z-50 w-72 sm:w-80 rounded-2xl bg-[#091126]/95 backdrop-blur-2xl border border-cyan-500/40 p-3 shadow-[0_15px_40px_rgba(0,0,0,0.8),0_0_20px_rgba(0,229,255,0.25)] animate-in fade-in slide-in-from-bottom-3 duration-200"
-        >
-          <div className="flex items-center justify-between pb-2 mb-2 border-b border-cyan-900/40">
-            <span className="text-xs font-semibold text-cyan-300 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-              {t.attachModalTitle}
-            </span>
-            <button 
-              onClick={() => setIsMenuOpen(false)}
-              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            {/* Gallery */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/60 hover:bg-cyan-950/60 border border-slate-700/60 hover:border-cyan-500/50 text-slate-200 hover:text-cyan-300 transition-all group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform text-cyan-400">
-                <ImageIcon className="w-5 h-5" />
-              </div>
-              <span className="text-xs font-medium text-center">{t.attachGallery}</span>
-            </button>
-
-            {/* Camera */}
-            <button
-              onClick={() => cameraInputRef.current?.click()}
-              className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/60 hover:bg-cyan-950/60 border border-slate-700/60 hover:border-cyan-500/50 text-slate-200 hover:text-cyan-300 transition-all group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform text-sky-400">
-                <Camera className="w-5 h-5" />
-              </div>
-              <span className="text-xs font-medium text-center">{t.attachCamera}</span>
-            </button>
-
-            {/* Document / File */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/60 hover:bg-cyan-950/60 border border-slate-700/60 hover:border-cyan-500/50 text-slate-200 hover:text-cyan-300 transition-all group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform text-indigo-400">
-                <FileText className="w-5 h-5" />
-              </div>
-              <span className="text-xs font-medium text-center">{t.attachFile}</span>
-            </button>
-
-            {/* Link */}
-            <button
-              onClick={() => setLinkInputOpen(true)}
-              className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/60 hover:bg-cyan-950/60 border border-slate-700/60 hover:border-cyan-500/50 text-slate-200 hover:text-cyan-300 transition-all group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-teal-500/10 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform text-teal-400">
-                <LinkIcon className="w-5 h-5" />
-              </div>
-              <span className="text-xs font-medium text-center">{t.attachLink}</span>
-            </button>
-          </div>
-
-          {/* Quick link input prompt */}
-          {linkInputOpen && (
-            <div className="mt-2.5 pt-2 border-t border-cyan-900/40 flex items-center gap-1.5">
-              <input
-                type="url"
-                placeholder="https://..."
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-                className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-cyan-700/50 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
-              />
-              <button
-                onClick={handleAddLink}
-                className="px-2.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs"
-              >
-                +
-              </button>
-            </div>
-          )}
+        <div ref={menuRef} className="absolute -top-24 right-4 z-50 w-72 rounded-2xl bg-[#091126]/95 border border-amber-500/40 p-4 shadow-xl">
+          <p className="text-xs leading-6 text-amber-100">
+            {language === 'dari' ? 'بارگذاری فایل، تصویر و لینک هنوز به سرور وصل نیست؛ فعلاً فقط پیام متنی ارسال می‌شود.' : 'File, image, and link uploads are not connected to the server yet. Text messages only are supported.'}
+          </p>
         </div>
       )}
 
