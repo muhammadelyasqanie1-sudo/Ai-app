@@ -23,6 +23,7 @@ import { translations } from '../../utils/afgTranslations';
 
 interface AfgToolsCenterProps {
   language: Language;
+  onRunTool: (prompt: string, options: Record<string, unknown>) => void;
 }
 
 function calculateExpression(expression: string): number {
@@ -72,7 +73,7 @@ function calculateExpression(expression: string): number {
   return result;
 }
 
-export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
+export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunTool }) => {
   const t = translations[language];
   const [activeSubTab, setActiveSubTab] = useState<ToolSubTab>('overview');
   const [fileStatus, setFileStatus] = useState<{ available: boolean; acceptedFormats: string[]; message: string } | null>(null);
@@ -94,7 +95,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
 
 
   // --- Translation Tool State ---
-  const [sourceLang, setSourceLang] = useState<'fa' | 'ps' | 'en' | 'ar'>('fa');
+  const [sourceLang, setSourceLang] = useState<'auto' | 'fa' | 'ps' | 'en' | 'ar'>('auto');
   const [targetLang, setTargetLang] = useState<'fa' | 'ps' | 'en' | 'ar'>('en');
   const [transInput, setTransInput] = useState(
     language === 'dari' ? 'سلام، من از افغانستان هستم و از هوش مصنوعی استفاده می‌کنم.' : 'Hello, I am using the smart AFG AI assistant.'
@@ -119,10 +120,18 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
   // --- Summarizer State ---
   const [summarizeText, setSummarizeText] = useState('');
   const [summaryResult, setSummaryResult] = useState('');
+  const [writingPrompt, setWritingPrompt] = useState('');
+  const [writingTemplate, setWritingTemplate] = useState('article');
+  const [writingTone, setWritingTone] = useState('professional');
+  const [writingStyle, setWritingStyle] = useState('clear');
+  const [writingLanguage, setWritingLanguage] = useState(language === 'dari' ? 'dari' : 'english');
+  const [writingLength, setWritingLength] = useState('medium');
 
   // Translation remains disabled until a real translation provider is connected.
   const handleTranslate = () => {
-    setTransOutput(language === 'dari' ? 'سرویس ترجمه هنوز به سرور وصل نشده است.' : 'A translation provider is not configured yet.');
+    if (!transInput.trim()) return;
+    onRunTool(transInput.trim(), { toolMode: 'translation', sourceLanguage: sourceLang, targetLanguage: targetLang });
+    setTransOutput(language === 'dari' ? 'درخواست ترجمه به دستیار هوشمند فرستاده شد؛ نتیجه در صفحه چت نمایش داده می‌شود.' : 'Translation request sent to the AI assistant; the result will appear in Chat.');
   };
 
   const handleCopy = (text: string, setFn: (val: boolean) => void) => {
@@ -132,9 +141,10 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
   };
 
   const toolCards = [
-    { id: 'translate' as ToolSubTab, title: t.toolTranslate, desc: language === 'dari' ? 'تا اتصال سرویس ترجمه غیرفعال' : 'Unavailable until a translation provider is connected', ready: false, icon: Languages, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/30' },
-    { id: 'code-help' as ToolSubTab, title: t.toolCodeHelp, desc: language === 'dari' ? 'تولید مستقل کد هنوز وصل نیست' : 'Standalone code generation is not connected', ready: false, icon: Code2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
-    { id: 'voice-tools' as ToolSubTab, title: t.toolVoice, desc: language === 'dari' ? 'ورودی گفتار وابسته به مرورگر' : 'Browser-dependent speech input', ready: true, icon: Mic, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
+    { id: 'translate' as ToolSubTab, title: t.toolTranslate, desc: language === 'dari' ? 'ترجمه با مدل چت تأییدشده' : 'Uses the verified chat model', ready: true, icon: Languages, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/30' },
+    { id: 'code-help' as ToolSubTab, title: t.toolCodeHelp, desc: language === 'dari' ? 'تولید، توضیح، اشکال‌زدایی و بهینه‌سازی کد' : 'Generate, explain, debug and optimize code', ready: true, icon: Code2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
+    { id: 'writing-studio' as ToolSubTab, title: language === 'dari' ? 'استودیوی نویسندگی' : 'Writing Studio', desc: language === 'dari' ? 'ایمیل، مقاله، رزومه و محتوای تبلیغاتی' : 'Emails, articles, CVs and marketing content', ready: true, icon: FileText, color: 'text-fuchsia-400', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30' },
+    { id: 'voice-tools' as ToolSubTab, title: t.toolVoice, desc: language === 'dari' ? 'نیازمند ارائه‌دهنده صوتی سازگار' : 'Requires a compatible voice provider', ready: false, icon: Mic, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
     { id: 'pdf-tools' as ToolSubTab, title: t.toolPdf, desc: language === 'dari' ? 'بارگذاری و استخراج متن فعال نیست' : 'Upload and text extraction are unavailable', ready: false, icon: FileText, color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/30' },
     { id: 'calculator' as ToolSubTab, title: t.toolCalc, desc: language === 'dari' ? 'محاسبه محلی' : 'Local arithmetic calculator', ready: true, icon: Calculator, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/30' },
     { id: 'qr-scanner' as ToolSubTab, title: language === 'dari' ? 'تولیدکننده QR' : 'QR Generator', desc: language === 'dari' ? 'با سرویس بیرونی QRServer' : 'Uses the external QRServer service', ready: true, icon: QrCode, color: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30' },
@@ -216,6 +226,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
                 aria-label="Source Language"
                 className="bg-slate-900 text-white rounded-lg px-2 py-1 border border-cyan-700/50"
               >
+                <option value="auto">{language === 'dari' ? 'تشخیص خودکار' : 'Auto-detect'}</option>
                 <option value="fa">فارسی / دری (Dari)</option>
                 <option value="ps">پښتو (Pashto)</option>
                 <option value="en">English</option>
@@ -290,7 +301,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
 
           <button
             onClick={handleTranslate}
-            disabled={true}
+            disabled={!transInput.trim()}
             className="w-full py-3 rounded-xl gradient-btn-cyan text-slate-950 font-bold text-sm shadow-md"
           >
             {isTranslating ? 'در حال ترجمه هوشمند...' : (language === 'dari' ? 'ترجمه کن' : 'Translate Now')}
@@ -325,7 +336,8 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
               className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-cyan-700/50 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
             />
             <button
-              disabled={true}
+              onClick={() => { if (codePrompt.trim()) onRunTool(codePrompt.trim(), { toolMode: 'coding' }); }}
+              disabled={!codePrompt.trim()}
               className="px-4 py-2.5 rounded-xl gradient-btn-cyan text-slate-950 font-bold text-xs"
             >
               Generate Code
@@ -335,6 +347,21 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
           <pre className="p-4 rounded-2xl bg-black/80 border border-cyan-900/60 text-emerald-300 font-mono text-xs sm:text-sm overflow-x-auto leading-relaxed">
             <code>{generatedCode || (language === 'dari' ? 'تولیدکننده کد به سرویس واقعی وصل نشده است.' : 'The code generator is not connected to a real service.')}</code>
           </pre>
+        </div>
+      )}
+
+      {activeSubTab === 'writing-studio' && (
+        <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-fuchsia-500/40 shadow-xl space-y-4">
+          <h2 className="text-base font-bold text-white flex items-center gap-2"><FileText className="w-5 h-5 text-fuchsia-400" />{language === 'dari' ? 'استودیوی نویسندگی' : 'Writing Studio'}</h2>
+          <textarea rows={5} value={writingPrompt} onChange={(e) => setWritingPrompt(e.target.value)} placeholder={language === 'dari' ? 'موضوع، اطلاعات و خواسته‌های خود را بنویسید...' : 'Describe what you want written and provide the key facts...'} className="w-full rounded-2xl bg-slate-900 border border-fuchsia-900/50 p-3 text-sm text-white" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="text-xs text-slate-300">{language === 'dari' ? 'قالب' : 'Template'}<select value={writingTemplate} onChange={(e) => setWritingTemplate(e.target.value)} className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 p-2 text-white">{[['email','Email'],['article','Article'],['blog','Blog'],['proposal','Proposal'],['cv','CV / Resume'],['cover-letter','Cover letter'],['social','Social post'],['product-description','Product description'],['ad','Advertisement'],['story','Story'],['script','Script']].map(([v,l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+            <label className="text-xs text-slate-300">{language === 'dari' ? 'لحن' : 'Tone'}<select value={writingTone} onChange={(e) => setWritingTone(e.target.value)} className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 p-2 text-white">{['neutral','professional','friendly','formal','persuasive','creative','academic','concise'].map(v => <option key={v}>{v}</option>)}</select></label>
+            <label className="text-xs text-slate-300">{language === 'dari' ? 'سبک' : 'Style'}<select value={writingStyle} onChange={(e) => setWritingStyle(e.target.value)} className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 p-2 text-white">{['clear','plain','technical','narrative','bullet-points','structured'].map(v => <option key={v}>{v}</option>)}</select></label>
+            <label className="text-xs text-slate-300">{language === 'dari' ? 'زبان خروجی' : 'Output language'}<select value={writingLanguage} onChange={(e) => setWritingLanguage(e.target.value)} className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 p-2 text-white"><option value="english">English</option><option value="dari">Dari</option><option value="pashto">Pashto</option><option value="arabic">Arabic</option></select></label>
+            <label className="text-xs text-slate-300">{language === 'dari' ? 'طول متن' : 'Length'}<select value={writingLength} onChange={(e) => setWritingLength(e.target.value)} className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 p-2 text-white">{['short','medium','long','detailed'].map(v => <option key={v}>{v}</option>)}</select></label>
+          </div>
+          <button onClick={() => { if (writingPrompt.trim()) onRunTool(writingPrompt.trim(), { toolMode: 'writing', writingTemplate, writingTone, writingStyle, writingLanguage, writingLength }); }} disabled={!writingPrompt.trim()} className="w-full py-3 rounded-xl bg-fuchsia-500 text-slate-950 font-bold disabled:opacity-40">{language === 'dari' ? 'ساخت متن' : 'Create writing'}</button>
         </div>
       )}
 
