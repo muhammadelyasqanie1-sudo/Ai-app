@@ -4,11 +4,23 @@ import { getProviderAdapter, getVerifiedModelDescriptors } from '../services/pro
 import { authenticateRequest } from './auth.ts';
 import { pool } from './database.ts';
 import { verifyCsrf } from './auth.ts';
+import { z } from 'zod';
 
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 const MAX_CONCURRENT_VOICE_REQUESTS = 2;
 let activeVoiceRequests = 0;
 const voiceRate = new Map<string,{startedAt:number;count:number}>();
+const transcribeSchema = z.object({
+  mimeType: z.string().max(100),
+  audioBase64: z.string().min(1).max(14 * 1024 * 1024),
+  language: z.enum(['auto','en','fa','ps','ar']).optional(),
+}).strict();
+const synthesizeSchema = z.object({
+  text: z.string().trim().min(1).max(5000),
+  voice: z.string().trim().max(100).optional(),
+  language: z.enum(['en','fa','ps','ar']).optional(),
+}).strict();
+
 const ALLOWED_AUDIO_TYPES = new Set(['audio/webm', 'audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/aac']);
 
 function reply(res: ServerResponse, status: number, payload: unknown, requestId: string) {
@@ -64,8 +76,11 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
   try {
     const body = await readBody(req);
     if (path.endsWith('/transcribe')) {
-      const mimeType = typeof body.mimeType === 'string' ? body.mimeType.toLowerCase().split(';')[0].trim() : '';
-      const encoded = typeof body.audioBase64 === 'string' ? body.audioBase64 : '';
+      const parsed = transcribeSchema.safeParse(body);
+      if (!parsed.success) { reply(res,400,{error:'Provide supported audio data, MIME type and language.'},requestId); return true; }
+      const input = parsed.data;
+      const mimeType = input.mimeType.toLowerCase().split(';')[0].trim();
+      const encoded = input.audioBase64;
       if (!ALLOWED_AUDIO_TYPES.has(mimeType) || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) {
         reply(res, 400, { error: 'Provide supported audio data and MIME type.' }, requestId);
         return true;
@@ -87,14 +102,17 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
         reply(res, 503, { available: false, error: 'The selected provider does not implement speech recognition.' }, requestId);
         return true;
       }
-      const language = ['auto', 'en', 'fa', 'ps', 'ar'].includes(String(body.language)) ? String(body.language) : 'auto';
+      const language = input.language || 'auto';
       const result = await adapter.transcribe({ audio: new Uint8Array(audio), mimeType, language });
       reply(res, 200, { available: true, text: result.text }, requestId);
       return true;
     }
 
-    const text = typeof body.text === 'string' ? body.text.trim() : '';
-    const voice = typeof body.voice === 'string' ? body.voice.trim().slice(0, 100) : undefined;
+    const parsed = synthesizeSchema.safeParse(body);
+    if (!parsed.success) { reply(res,400,{error:'Text-to-speech input must contain 1 to 5,000 characters.'},requestId); return true; }
+    const input = parsed.data;
+    const text = input.text;
+    const voice = input.voice;
     if (!text || text.length > 5000) {
       reply(res, 400, { error: 'Text-to-speech input must contain 1 to 5,000 characters.' }, requestId);
       return true;
@@ -110,7 +128,7 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
       reply(res, 503, { available: false, error: 'The selected provider does not implement speech synthesis.' }, requestId);
       return true;
     }
-    const language = ['en', 'fa', 'ps', 'ar'].includes(String(body.language)) ? String(body.language) : undefined;
+    const language = input.language;
     const result = await adapter.synthesize({ text, voice, language });
     if (!result.audio.length || result.audio.length > MAX_AUDIO_BYTES) {
       reply(res, 502, { error: 'The voice provider returned an invalid audio result.' }, requestId);
