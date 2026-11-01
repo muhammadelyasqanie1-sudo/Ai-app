@@ -2,6 +2,7 @@
 INSERT INTO rate_limit_policies(scope_type,scope_key,requests,window_seconds,enabled)
 VALUES
  ('ip','*',120,60,true),
+ ('user','*',120,60,true),
  ('tier','free',60,60,true),
  ('tier','pro',300,60,true)
 ON CONFLICT(scope_type,scope_key) DO NOTHING;
