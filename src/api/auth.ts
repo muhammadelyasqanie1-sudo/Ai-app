@@ -322,7 +322,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         return true;
       }
       const result = await pool.query(
-        `SELECT id, password_hash, status, email_verified FROM users WHERE lower(email) = $1 LIMIT 1`,
+        'SELECT id, password_hash, status, email_verified FROM users WHERE lower(email) = $1 LIMIT 1',
         [email],
       );
       const row = result.rows[0];
@@ -331,7 +331,11 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         sendAuthJson(res, 401, { error: 'Email or password is incorrect.' });
         return true;
       }
-      if (typeof row.password_hash === 'string' && row.password_hash.startsWith('scrypt
+      if (typeof row.password_hash === 'string' && row.password_hash.startsWith('scrypt$')) {
+        await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [await hashPassword(password), row.id]);
+      }
+      await createSession(row.id, res);
+      sendAuthJson(res, 200, { authenticated: true });
       return true;
     } catch {
       sendAuthJson(res, 400, { error: 'Unable to process the sign-in request.' });
