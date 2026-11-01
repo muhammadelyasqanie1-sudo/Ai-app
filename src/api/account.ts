@@ -57,7 +57,7 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
       const category=['preferences','language','style','facts'].includes(String(body.category))?String(body.category):'';
       const content=typeof body.content==='string'?body.content.trim():'';
       if(!category||!content||content.length>2000){reply(res,400,{error:'Choose a category and provide 1–2,000 characters.'});return true;}
-      const sensitive=/\b(password|passcode|secret|api.?key|token|passport|national.?id|ssn|medical|diagnosis|medication|health|bank.?account|credit.?card)\b/i.test(content);
+      const sensitive=/\b(password|passcode|secret|api.?key|token|passport|national.?id|ssn|medical|diagnosis|medication|health|bank.?account|credit.?card|رمز|پاسورد|تذکره|پاسپورت|صحت|مریض|دوا|تشخیص)\b/i.test(content);
       if(sensitive&&body.consentSensitive!==true){reply(res,400,{error:'This may contain sensitive information. Explicit per-item consent is required.'});return true;}
       const result=await pool.query('INSERT INTO user_memories(user_id,category,content,consent_sensitive) VALUES($1,$2,$3,$4) RETURNING id,category,content,consent_sensitive AS "consentSensitive",created_at AS "createdAt"',[user.id,category,content,sensitive]);
       reply(res,201,{memory:result.rows[0]});
