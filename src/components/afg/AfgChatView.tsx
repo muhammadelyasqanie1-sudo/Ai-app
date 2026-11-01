@@ -137,20 +137,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-[11px] text-slate-400">
-          <span className="hidden sm:inline">{language === 'dari' ? 'مدل' : 'Model'}</span>
-          <select
-            value={selectedModel}
-            onChange={(event) => onSelectModel(event.target.value)}
-            disabled={isLoading}
-            aria-label={language === 'dari' ? 'انتخاب مدل هوش مصنوعی' : 'Select AI model'}
-            className="max-w-[190px] rounded-xl border border-cyan-700/50 bg-slate-900 px-2.5 py-2 text-[11px] text-cyan-200 outline-none focus:border-cyan-400 disabled:opacity-50"
-          >
-            {availableModels.map((model) => (
-              <option key={model} value={model}>{model}</option>
-            ))}
-          </select>
-        </div>
+
       </div>
 
       {/* Messages Scroll Area */}
@@ -360,6 +347,10 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
           onSendMessage={onSendMessage}
           disabled={isLoading}
           language={language}
+          availableModels={availableModels}
+          selectedModel={selectedModel}
+          onSelectModel={onSelectModel}
+          modelsLoading={isLoading}
         />
       </div>
 
