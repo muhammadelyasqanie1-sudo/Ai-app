@@ -108,7 +108,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       sendJson(req, res, 413, { error: 'Conversation is too large. Shorten the message history.', requestId: id }, id);
       return;
     }
-    if (!model || (model !== 'auto' && !/^@cf\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(model))) {
+    if (!model || (model !== 'auto' && !/^[a-zA-Z0-9@][a-zA-Z0-9._:/-]{0,299}(?:::[a-zA-Z0-9@][a-zA-Z0-9._:/-]{0,299})?$/.test(model))) {
       sendJson(req, res, 400, { error: 'Select a valid model from the verified provider catalog.', requestId: id }, id);
       return;
     }
