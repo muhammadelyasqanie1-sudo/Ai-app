@@ -1,5 +1,6 @@
 import { cloudflareWorkersAi } from '../providers/cloudflareWorkersAi.ts';
-import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescriptor } from '../providers/providerTypes.ts';
+import { pool } from '../api/database.ts';
+import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescriptor, CapabilityFlags } from '../providers/providerTypes.ts';
 
 const providerRegistry: ChatProviderAdapter[] = [cloudflareWorkersAi];
 const HEALTH_TTL_MS = 5 * 60 * 1000;
@@ -15,52 +16,128 @@ export function getChatProvider(): ChatProviderAdapter {
   return provider;
 }
 
+async function isProviderEnabled(providerId: string): Promise<boolean> {
+  if (!pool) return true;
+  const result = await pool.query('SELECT enabled FROM provider_configs WHERE provider_key = $1 LIMIT 1', [providerId]);
+  return result.rows.length ? Boolean(result.rows[0].enabled) : true;
+}
+
+async function syncDiscoveredModels(provider: ChatProviderAdapter, models: ModelDescriptor[]): Promise<Map<string, boolean>> {
+  if (!pool) return new Map(models.map((model) => [model.id, model.enabled]));
+  for (const model of models) {
+    await pool.query(
+      `INSERT INTO model_catalog
+        (provider_key, model_key, display_name, capabilities, enabled, context_window)
+       VALUES ($1, $2, $3, $4, true, $5)
+       ON CONFLICT (provider_key, model_key) DO UPDATE SET
+         display_name = EXCLUDED.display_name,
+         capabilities = EXCLUDED.capabilities,
+         context_window = EXCLUDED.context_window,
+         updated_at = now()`,
+      [provider.id, model.id, model.displayName,
+        Object.entries(model.capabilities).filter(([, enabled]) => enabled).map(([key]) => key),
+        model.contextWindow],
+    );
+  }
+  const result = await pool.query(
+    'SELECT model_key, enabled FROM model_catalog WHERE provider_key = $1',
+    [provider.id],
+  );
+  return new Map(result.rows.map((row) => [row.model_key, Boolean(row.enabled)]));
+}
+
 async function verifyModel(provider: ChatProviderAdapter, model: ModelDescriptor): Promise<ModelDescriptor> {
   const cacheKey = `${provider.id}:${model.id}`;
   const cached = healthCache.get(cacheKey);
   const isRecent = cached && Date.now() - Date.parse(cached.checkedAt) <= HEALTH_TTL_MS;
+  let health: { healthy: boolean; checkedAt: string };
   if (isRecent) {
-    return { ...model, verifiedAt: cached.healthy ? cached.checkedAt : null };
+    health = cached;
+  } else {
+    const result = await provider.healthCheck(model.id);
+    health = { healthy: result.healthy, checkedAt: result.checkedAt };
+    healthCache.set(cacheKey, health);
+    if (pool) {
+      await pool.query(
+        `UPDATE model_catalog
+            SET verified_at = CASE WHEN $3 THEN $2::timestamptz ELSE NULL END,
+                last_health_ok = $3,
+                health_checked_at = $2::timestamptz,
+                updated_at = now()
+          WHERE provider_key = $1 AND model_key = $4`,
+        [provider.id, result.checkedAt, result.healthy, model.id],
+      );
+    }
   }
-
-  const result = await provider.healthCheck(model.id);
-  healthCache.set(cacheKey, { healthy: result.healthy, checkedAt: result.checkedAt });
-  return { ...model, verifiedAt: result.healthy ? result.checkedAt : null };
+  return { ...model, enabled: model.enabled, verifiedAt: health.healthy ? health.checkedAt : null };
 }
 
 export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> {
   const verified: ModelDescriptor[] = [];
   for (const provider of providerRegistry) {
     const config = await provider.validateConfig();
-    if (!config.valid) continue;
+    if (!config.valid || !(await isProviderEnabled(provider.id))) continue;
 
-    let models: ModelDescriptor[];
-    try {
-      models = await provider.listModels();
-    } catch {
-      continue;
+    const models = await provider.listModels();
+    const enabledModels = await syncDiscoveredModels(provider, models);
+    const configuredModels = models.map((model) => ({
+      ...model,
+      enabled: enabledModels.get(model.id) ?? false,
+    }));
+    for (let i = 0; i < configuredModels.length; i += 4) {
+      const batch = configuredModels.slice(i, i + 4);
+      verified.push(...await Promise.all(batch.map((model) => verifyModel(provider, model))));
     }
-
-    // Bound probe concurrency to avoid flooding a provider account during catalog refresh.
-    const results: ModelDescriptor[] = [];
-    for (let i = 0; i < models.length; i += 4) {
-      const batch = models.slice(i, i + 4);
-      results.push(...await Promise.all(batch.map((model) => verifyModel(provider, model))));
-    }
-    verified.push(...results);
   }
   return verified;
+}
+
+function isRecentAndHealthy(model: ModelDescriptor): boolean {
+  return model.enabled && model.verifiedAt !== null &&
+    Date.now() - Date.parse(model.verifiedAt) <= HEALTH_TTL_MS;
+}
+
+export async function selectCheapestModel(capability: keyof CapabilityFlags = 'text'): Promise<string | null> {
+  const descriptors = await getVerifiedModelDescriptors();
+  const capable = descriptors.filter((model) =>
+    isRecentAndHealthy(model) && model.capabilities[capability],
+  );
+  if (!capable.length) return null;
+
+  if (pool) {
+    const fallback = await pool.query(
+      'SELECT ordered_models FROM provider_fallback_chains WHERE capability = $1 LIMIT 1',
+      [capability],
+    );
+    const ordered = Array.isArray(fallback.rows[0]?.ordered_models) ? fallback.rows[0].ordered_models as string[] : [];
+    for (const modelId of ordered) {
+      if (capable.some((model) => model.id === modelId)) return modelId;
+    }
+
+    const costs = await pool.query(
+      `SELECT model_key, input_cost_per_million, output_cost_per_million
+         FROM model_catalog WHERE enabled = true`,
+    );
+    const costById = new Map<string, number>();
+    for (const row of costs.rows) {
+      if (row.input_cost_per_million !== null && row.output_cost_per_million !== null) {
+        costById.set(row.model_key, Number(row.input_cost_per_million) + Number(row.output_cost_per_million));
+      }
+    }
+    const priced = capable.filter((model) => costById.has(model.id))
+      .sort((a, b) => (costById.get(a.id) || 0) - (costById.get(b.id) || 0));
+    if (priced.length) return priced[0].id;
+  }
+
+  // With no trustworthy pricing metadata, do not claim a cheapest model.
+  return null;
 }
 
 export async function getVerifiedProviderCatalog(): Promise<ProviderCatalog> {
   try {
     const descriptors = await getVerifiedModelDescriptors();
     const selectable = descriptors.filter((model) =>
-      model.enabled &&
-      model.verifiedAt !== null &&
-      Date.now() - Date.parse(model.verifiedAt) <= HEALTH_TTL_MS &&
-      model.capabilities.text &&
-      model.capabilities.streaming,
+      isRecentAndHealthy(model) && model.capabilities.text && model.capabilities.streaming,
     );
     return {
       status: selectable.length ? 200 : 503,
@@ -80,11 +157,7 @@ export async function getVerifiedProviderCatalog(): Promise<ProviderCatalog> {
 
 export async function getCapabilitySnapshot() {
   const descriptors = await getVerifiedModelDescriptors();
-  const selectable = descriptors.filter((model) =>
-    model.enabled &&
-    model.verifiedAt !== null &&
-    Date.now() - Date.parse(model.verifiedAt) <= HEALTH_TTL_MS,
-  );
+  const selectable = descriptors.filter(isRecentAndHealthy);
   const capabilities: Record<AfgCapability, boolean> = {
     chat: selectable.some((model) => model.capabilities.text && model.capabilities.streaming),
     vision: selectable.some((model) => model.capabilities.vision),
@@ -100,8 +173,7 @@ export async function getCapabilitySnapshot() {
     models: selectable.filter((model) => model.capabilities.text && model.capabilities.streaming).map((model) => model.id),
     modelDescriptors: descriptors.map((model) => ({
       ...model,
-      selectable: model.enabled && model.verifiedAt !== null &&
-        Date.now() - Date.parse(model.verifiedAt) <= HEALTH_TTL_MS,
+      selectable: isRecentAndHealthy(model),
       disabledReason: !model.enabled ? 'Disabled by administrator.' : (model.verifiedAt !== null ? null : 'Provider not reachable.'),
     })),
     verified: capabilities.chat,
