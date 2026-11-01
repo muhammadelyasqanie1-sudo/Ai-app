@@ -27,6 +27,7 @@ interface AfgSettingsViewProps {
   theme: Theme;
   user: UserProfile;
   onToggleLanguage: () => void;
+  onSetLanguage: (language: Language) => void;
   onToggleTheme: () => void;
   onSetTheme: (theme: Theme) => void;
   onOpenShortcuts: () => void;
@@ -37,6 +38,7 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
   theme,
   user,
   onToggleLanguage,
+  onSetLanguage,
   onToggleTheme,
   onSetTheme,
   onOpenShortcuts,
@@ -71,7 +73,7 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
         </div>
       </div>
 
-      <AfgAccountSettings language={language} theme={theme} onTheme={onSetTheme} onLanguage={onToggleLanguage} />
+      <AfgAccountSettings language={language} theme={theme} onTheme={onSetTheme} onLanguage={onSetLanguage} />
 
       {/* Settings Options List */}
       <div className="rounded-3xl bg-[#09122c]/90 border border-cyan-900/40 overflow-hidden divide-y divide-cyan-950/60 shadow-xl">
