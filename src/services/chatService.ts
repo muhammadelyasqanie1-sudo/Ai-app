@@ -53,7 +53,7 @@ function verified(model: ModelDescriptor | undefined): model is ModelDescriptor 
     model.capabilities.text && model.capabilities.streaming);
 }
 
-export async function prepareVerifiedChat(input: ChatInput): Promise<AsyncIterable<{ content: string }>> {
+export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerId: string; modelId: string; stream: AsyncIterable<{ content: string }> }> {
   const descriptors = await getVerifiedModelDescriptors();
   const separator = input.model.indexOf('::');
   const requestedProviderId = separator >= 0 ? input.model.slice(0, separator) : '';
@@ -81,5 +81,5 @@ export async function prepareVerifiedChat(input: ChatInput): Promise<AsyncIterab
   if (!provider) throw new ProviderAdapterError('The selected provider is not registered.', 503, 'provider_not_registered');
 
   const messages = compactOlderContext(input.messages, selected.contextWindow);
-  return provider.streamChat({ ...input, model: selected.id, messages });
+  return { providerId: provider.id, modelId: selected.id, stream: provider.streamChat({ ...input, model: selected.id, messages }) };
 }
