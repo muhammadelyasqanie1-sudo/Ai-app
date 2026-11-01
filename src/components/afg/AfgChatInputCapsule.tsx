@@ -71,6 +71,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  useEffect(()=>{if(!voiceEnabled&&isRecording){mediaRecorderRef.current?.stop();mediaStreamRef.current?.getTracks().forEach(track=>track.stop());mediaStreamRef.current=null;setIsRecording(false);}},[voiceEnabled,isRecording]);
 
   useEffect(() => () => {
     mediaRecorderRef.current?.stop();
