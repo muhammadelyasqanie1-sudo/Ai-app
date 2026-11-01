@@ -101,7 +101,7 @@ function isRecentAndHealthy(model: ModelDescriptor): boolean {
     Date.now() - Date.parse(model.verifiedAt) <= HEALTH_TTL_MS;
 }
 
-export async function selectCheapestModel(capability: keyof CapabilityFlags = 'text'): Promise<string | null> {
+export async function selectCheapestModel(capability: keyof CapabilityFlags = 'text', preferFallback = false): Promise<string | null> {
   const descriptors = await getVerifiedModelDescriptors();
   const capable = descriptors.filter((model) =>
     isRecentAndHealthy(model) && model.capabilities[capability],
@@ -114,8 +114,10 @@ export async function selectCheapestModel(capability: keyof CapabilityFlags = 't
       [capability],
     );
     const ordered = Array.isArray(fallback.rows[0]?.ordered_models) ? fallback.rows[0].ordered_models as string[] : [];
-    for (const modelId of ordered) {
-      if (capable.some((model) => model.id === modelId)) return modelId;
+    const chooseFallback = () => ordered.find((modelId) => capable.some((model) => model.id === modelId)) || null;
+    if (preferFallback) {
+      const fallbackModel = chooseFallback();
+      if (fallbackModel) return fallbackModel;
     }
 
     const costs = await pool.query(
@@ -131,6 +133,7 @@ export async function selectCheapestModel(capability: keyof CapabilityFlags = 't
     const priced = capable.filter((model) => costById.has(model.id))
       .sort((a, b) => (costById.get(a.id) || 0) - (costById.get(b.id) || 0));
     if (priced.length) return priced[0].id;
+    return chooseFallback();
   }
 
   // With no trustworthy pricing metadata, do not claim a cheapest model.
