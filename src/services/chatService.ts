@@ -59,7 +59,7 @@ export async function prepareVerifiedChat(input: ChatInput): Promise<AsyncIterab
 
   // If the manually selected model is unavailable, use the administrator's healthy fallback order.
   if (!selected) {
-    const fallbackId = await selectCheapestModel('text');
+    const fallbackId = await selectCheapestModel('text', input.model !== 'auto');
     selected = descriptors.find((model) => model.id === fallbackId && verified(model));
   }
 
