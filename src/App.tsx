@@ -68,7 +68,7 @@ export default function App() {
   const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
   const [messages, setMessages] = useState<AfgMessage[]>(INITIAL_MESSAGES);
   const [isLoading, setIsLoading] = useState(false);
-  const [availableModels, setAvailableModels] = useState<string[]>(['@cf/openai/gpt-oss-120b']);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [initialPromptForChat, setInitialPromptForChat] = useState<string | undefined>(undefined);
 
@@ -100,16 +100,20 @@ export default function App() {
       .then(async (response) => {
         if (!response.ok) throw new Error('Could not load models');
         const data = await response.json();
-        if (Array.isArray(data.models) && data.models.length > 0) {
+        if (data.verified === true && Array.isArray(data.models)) {
           setAvailableModels(data.models);
-          setSelectedModel((current) => data.models.includes(current) ? current : data.models[0]);
+          setSelectedModel((current) => data.models.includes(current) ? current : (data.models[0] || ''));
+        } else {
+          setAvailableModels([]);
+          setSelectedModel('');
+          console.error('AI provider did not verify an available model catalog:', data.error || 'No verified models');
         }
       })
       .catch((error) => {
-      console.error('Could not load Cloudflare Workers AI models; using known chat model:', error);
-      setAvailableModels(['@cf/openai/gpt-oss-120b']);
-      setSelectedModel((current) => current || '@cf/openai/gpt-oss-120b');
-    });
+        console.error('Could not verify AI model catalog:', error);
+        setAvailableModels([]);
+        setSelectedModel('');
+      });
   }, []);
 
   // Global Keyboard Shortcuts (Ctrl+/ or Cmd+/)
