@@ -135,6 +135,8 @@ export default function App() {
             capabilities: {
               chat: false,
               vision: false,
+
+              vision: false,
               'image-generation': false,
               'video-generation': false,
               'file-processing': false,
@@ -165,6 +167,8 @@ export default function App() {
           models: [],
           capabilities: {
             chat: false,
+            vision: false,
+
             vision: false,
             'image-generation': false,
             'video-generation': false,
