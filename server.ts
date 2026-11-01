@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import { handleChatApi } from './src/api/chatHandler.ts';
 import { checkDatabase } from './src/api/database.ts';
+import { getCloudflareModelCatalog } from './src/api/modelCatalog.ts';
 
 dotenv.config();
 
@@ -14,6 +15,19 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use('/api', (req, res, next) => {
+  const origin = req.headers.origin;
+  const configuredOrigins = (process.env.APP_ORIGIN || '').split(',').map((value) => value.trim()).filter(Boolean);
+  const allowedOrigins = new Set([...configuredOrigins, 'capacitor://localhost', 'https://localhost', 'http://localhost', 'http://localhost:3000', 'http://localhost:5173']);
+  if (origin && allowedOrigins.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-Id');
+    res.status(204).end();
+    return;
+  }
   const requestId = randomUUID();
   req.headers['x-request-id'] = requestId;
   res.setHeader('X-Request-Id', requestId);
@@ -45,43 +59,9 @@ app.all('/api/chat', (req, res) => {
 });
 
 app.get('/api/models', async (_req, res) => {
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
-  const apiToken = process.env.CLOUDFLARE_API_TOKEN?.trim();
   res.setHeader('Cache-Control', 'no-store');
-  if (!accountId || !apiToken) {
-    res.status(503).json({ error: 'AI model catalog is unavailable: provider credentials are not configured.', models: [], verified: false });
-    return;
-  }
-
-  try {
-    const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/models/search?per_page=100&hide_experimental=true`, {
-      headers: { Authorization: `Bearer ${apiToken}`, Accept: 'application/json' },
-    });
-    const payload = await response.json() as {
-      success?: boolean;
-      result?: Array<{ name?: string; id?: string; model?: string; task?: { name?: string } | string }>;
-    };
-    if (!response.ok || payload.success !== true) {
-      console.error('AI_MODEL_CATALOG_FAILED', JSON.stringify({ status: response.status }));
-      res.status(502).json({ error: 'The AI provider could not verify its model catalog. Try again later.', models: [], verified: false });
-      return;
-    }
-
-    const models = (payload.result || [])
-      .filter((item) => {
-        const taskName = typeof item.task === 'string' ? item.task : item.task?.name;
-        return Boolean(taskName && /text generation|text-generation|chat/i.test(taskName));
-      })
-      .map((item) => item.name || item.id || item.model || '')
-      .filter((name): name is string => typeof name === 'string' && /^@cf\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(name))
-      .filter((name, index, all) => all.indexOf(name) === index)
-      .sort((a, b) => a.localeCompare(b));
-
-    res.json({ models, source: 'cloudflare-live-catalog', verified: models.length > 0, checkedAt: new Date().toISOString() });
-  } catch {
-    console.error('AI_MODEL_CATALOG_ERROR', JSON.stringify({ provider: 'cloudflare' }));
-    res.status(502).json({ error: 'Could not contact the AI provider to verify models.', models: [], verified: false });
-  }
+  const catalog = await getCloudflareModelCatalog();
+  res.status(catalog.status).json(catalog.body);
 });
 
 app.use(express.static(path.join(__dirname, 'dist')));
