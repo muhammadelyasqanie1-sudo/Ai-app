@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 
 const MAX_QUERY_LENGTH = 500;
 let activeSearches = 0;
+const searchRate = new Map<string, { startedAt: number; count: number }>();
 
 function reply(res: ServerResponse, status: number, payload: unknown, requestId: string) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Request-Id': requestId });
@@ -10,11 +11,23 @@ function reply(res: ServerResponse, status: number, payload: unknown, requestId:
 }
 
 export async function handleResearchApi(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
-  if (!req.url?.startsWith('/api/research')) return false;
+  const pathname = new URL(req.url || '/', 'http://localhost').pathname;
+  if (pathname !== '/api/research') return false;
   const requestId = randomUUID();
   if (req.method !== 'POST') {
     reply(res, 405, { error: 'Method not allowed.' }, requestId);
     return true;
+  }
+  const clientKey = req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const windowState = searchRate.get(clientKey);
+  if (!windowState || now - windowState.startedAt >= 60_000) searchRate.set(clientKey, { startedAt: now, count: 1 });
+  else if (windowState.count >= 12) {
+    reply(res, 429, { error: 'Research rate limit reached. Please wait a minute before trying again.' }, requestId);
+    return true;
+  } else windowState.count += 1;
+  if (searchRate.size > 500) {
+    for (const [key, value] of searchRate) if (now - value.startedAt >= 60_000) searchRate.delete(key);
   }
   const apiKey = process.env.TAVILY_API_KEY;
   if (!apiKey) {
