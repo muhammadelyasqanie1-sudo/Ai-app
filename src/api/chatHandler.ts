@@ -167,13 +167,15 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         model,
         code: error instanceof ProviderAdapterError ? error.code : 'unexpected_stream_error',
       }));
-      res.write(`data: ${JSON.stringify({
-        type: 'error',
-        error: 'The AI response stream was interrupted. Your prompt is still available to retry.',
-        retryable: true,
-        requestId: id,
-      })}\n\n`);
-      res.end();
+      if (!res.destroyed && !res.writableEnded) {
+        res.write(`data: ${JSON.stringify({
+          type: 'error',
+          error: 'The AI response stream was interrupted. Your prompt is still available to retry.',
+          retryable: true,
+          requestId: id,
+        })}\n\n`);
+        res.end();
+      }
     }
   } catch (error) {
     const providerError = error instanceof ProviderAdapterError ? error : null;
