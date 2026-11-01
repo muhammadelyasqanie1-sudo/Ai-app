@@ -259,6 +259,8 @@ export async function getCapabilitySnapshot() {
   const capabilities: Record<AfgCapability, boolean> = {
     chat: selectable.some((model) => model.capabilities.text && model.capabilities.streaming),
     vision: selectable.some((model) => model.capabilities.vision && Boolean(getProviderAdapter(model.providerId)?.analyzeImage)),
+    ocr: selectable.some((model) => model.capabilities.ocr && Boolean(getProviderAdapter(model.providerId)?.analyzeImage)),
+    'image-edit': selectable.some((model) => model.capabilities.imageEdit && Boolean(getProviderAdapter(model.providerId)?.editImage)),
     'image-generation': selectable.some((model) => model.capabilities.imageGen && Boolean(getProviderAdapter(model.providerId)?.generateImage)),
     'video-generation': false,
     'file-processing': false,
