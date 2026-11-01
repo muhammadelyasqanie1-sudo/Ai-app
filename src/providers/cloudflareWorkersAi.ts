@@ -117,6 +117,10 @@ export const cloudflareWorkersAi: ChatProviderAdapter = {
         console.warn('AI_MODEL_HEALTH_FAILED', JSON.stringify({ provider: this.id, model: modelId, status: response.status }));
         return { healthy: false, checkedAt, message: 'Provider not reachable.' };
       }
+      const payload = await response.json() as { success?: boolean; errors?: unknown[] };
+      if (payload.success === false || (Array.isArray(payload.errors) && payload.errors.length > 0)) {
+        return { healthy: false, checkedAt, message: 'Provider not reachable.' };
+      }
       return { healthy: true, checkedAt };
     } catch {
       return { healthy: false, checkedAt, message: 'Provider not reachable.' };
