@@ -59,8 +59,13 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 export async function verifyPassword(password: string, encoded: string): Promise<boolean> {
-  if (/^\\$2[aby]\\$/.test(encoded)) return bcrypt.compare(password, encoded);
-  const [algorithm, saltHex, hashHex] = encoded.split('
+  if (/^\$2[aby]\$/.test(encoded)) return bcrypt.compare(password, encoded);
+  const [algorithm, saltHex, hashHex] = encoded.split('$');
+  if (algorithm !== 'scrypt' || !saltHex || !hashHex || !/^[a-f0-9]{32}$/.test(saltHex) || !/^[a-f0-9]{128}$/.test(hashHex)) return false;
+  const expected = Buffer.from(hashHex, 'hex');
+  const actual = await scrypt(password, Buffer.from(saltHex, 'hex'), expected.length) as Buffer;
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
 
 export async function authenticateRequest(req: IncomingMessage): Promise<AuthenticatedUser | null> {
   if (!pool) return null;
@@ -158,7 +163,7 @@ async function sendEmailCode(email: string, code: string, purpose: 'verify_email
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to: [email], subject, text: description + '\\n\\n' + code + '\\n\\nThis code expires in 10 minutes. If you did not request it, ignore this email.' }),
+    body: JSON.stringify({ from, to: [email], subject, text: description + '\n\n' + code + '\n\nThis code expires in 10 minutes. If you did not request it, ignore this email.' }),
   });
   return response.ok;
 }
@@ -170,7 +175,7 @@ function clearOAuthState(res: ServerResponse) {
   res.setHeader('Set-Cookie', cookiesToKeep);
 }
 function configuredAppOrigin(): string {
-  return (process.env.APP_ORIGIN || '').split(',')[0].trim().replace(/\\/$/, '');
+  return (process.env.APP_ORIGIN || '').split(',')[0].trim().replace(/\/$/, '');
 }
 
 export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
@@ -250,7 +255,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) { sendAuthJson(res,503,{error:'Email verification is unavailable until RESEND_API_KEY and EMAIL_FROM are configured.'}); return true; }
       const body=await readJsonBody(req); const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';
       const password=typeof body.password==='string'?body.password:''; const displayName=typeof body.displayName==='string'?body.displayName.trim().slice(0,100):'';
-      if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)||password.length<12||password.length>256){sendAuthJson(res,400,{error:'Use a valid email and a password of at least 12 characters.'});return true;}
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||password.length<12||password.length>256){sendAuthJson(res,400,{error:'Use a valid email and a password of at least 12 characters.'});return true;}
       const passwordHash=await hashPassword(password);
       const created=await pool.query("INSERT INTO users(email,display_name,password_hash,email_verified) VALUES($1,$2,$3,false) ON CONFLICT(email) DO NOTHING RETURNING id",[email,displayName||email,passwordHash]);
       if(!created.rows[0]){sendAuthJson(res,409,{error:'An account with this email may already exist. Try signing in or resetting your password.'});return true;}
@@ -267,7 +272,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const body=await readJsonBody(req);const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';const code=typeof body.code==='string'?body.code.trim():'';
       const found=await pool.query("SELECT u.id,c.id AS code_id,c.code_hash,c.attempts FROM users u JOIN email_verification_codes c ON c.user_id=u.id WHERE lower(u.email)=$1 AND c.purpose='verify_email' AND c.consumed_at IS NULL AND c.expires_at>now() ORDER BY c.created_at DESC LIMIT 1",[email]);
       const row=found.rows[0];
-      if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The verification code is invalid or expired.'});return true;}
+      if(!row||row.attempts>=5||!/^\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The verification code is invalid or expired.'});return true;}
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
       await pool.query('UPDATE users SET email_verified=true,updated_at=now() WHERE id=$1',[row.id]);
       await createSession(row.id,res);sendAuthJson(res,200,{verified:true});return true;
@@ -295,7 +300,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const next=typeof body.newPassword==='string'?body.newPassword:'';
       if(next.length<12||next.length>256){sendAuthJson(res,400,{error:'New password must be at least 12 characters.'});return true;}
       const found=await pool.query("SELECT u.id,c.id AS code_id,c.code_hash,c.attempts FROM users u JOIN email_verification_codes c ON c.user_id=u.id WHERE lower(u.email)=$1 AND c.purpose='password_reset' AND c.consumed_at IS NULL AND c.expires_at>now() ORDER BY c.created_at DESC LIMIT 1",[email]);
-      const row=found.rows[0];if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
+      const row=found.rows[0];if(!row||row.attempts>=5||!/^\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
       await pool.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[await hashPassword(next),row.id]);
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
       await pool.query('DELETE FROM sessions WHERE user_id=$1',[row.id]);sendAuthJson(res,200,{reset:true});return true;
@@ -352,7 +357,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
       const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 100) : 'AFG AI Administrator';
       const password = typeof body.password === 'string' ? body.password : '';
-      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || password.length < 12 || password.length > 256) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 12 || password.length > 256) {
         sendAuthJson(res, 400, { error: 'Use a valid email and a password of at least 12 characters.' });
         return true;
       }
@@ -612,7 +617,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) { sendAuthJson(res,503,{error:'Email verification is unavailable until RESEND_API_KEY and EMAIL_FROM are configured.'}); return true; }
       const body=await readJsonBody(req); const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';
       const password=typeof body.password==='string'?body.password:''; const displayName=typeof body.displayName==='string'?body.displayName.trim().slice(0,100):'';
-      if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)||password.length<12||password.length>256){sendAuthJson(res,400,{error:'Use a valid email and a password of at least 12 characters.'});return true;}
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||password.length<12||password.length>256){sendAuthJson(res,400,{error:'Use a valid email and a password of at least 12 characters.'});return true;}
       const passwordHash=await hashPassword(password);
       const created=await pool.query("INSERT INTO users(email,display_name,password_hash,email_verified) VALUES($1,$2,$3,false) ON CONFLICT(email) DO NOTHING RETURNING id",[email,displayName||email,passwordHash]);
       if(!created.rows[0]){sendAuthJson(res,409,{error:'An account with this email may already exist. Try signing in or resetting your password.'});return true;}
@@ -628,7 +633,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const body=await readJsonBody(req);const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';const code=typeof body.code==='string'?body.code.trim():'';
       const found=await pool.query("SELECT u.id,c.id AS code_id,c.code_hash,c.attempts FROM users u JOIN email_verification_codes c ON c.user_id=u.id WHERE lower(u.email)=$1 AND c.purpose='verify_email' AND c.consumed_at IS NULL AND c.expires_at>now() ORDER BY c.created_at DESC LIMIT 1",[email]);
       const row=found.rows[0];
-      if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The verification code is invalid or expired.'});return true;}
+      if(!row||row.attempts>=5||!/^\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The verification code is invalid or expired.'});return true;}
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
       await pool.query('UPDATE users SET email_verified=true,updated_at=now() WHERE id=$1',[row.id]);
       await createSession(row.id,res);sendAuthJson(res,200,{verified:true});return true;
@@ -654,7 +659,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const next=typeof body.newPassword==='string'?body.newPassword:'';
       if(next.length<12||next.length>256){sendAuthJson(res,400,{error:'New password must be at least 12 characters.'});return true;}
       const found=await pool.query("SELECT u.id,c.id AS code_id,c.code_hash,c.attempts FROM users u JOIN email_verification_codes c ON c.user_id=u.id WHERE lower(u.email)=$1 AND c.purpose='password_reset' AND c.consumed_at IS NULL AND c.expires_at>now() ORDER BY c.created_at DESC LIMIT 1",[email]);
-      const row=found.rows[0];if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
+      const row=found.rows[0];if(!row||row.attempts>=5||!/^\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
       await pool.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[await hashPassword(next),row.id]);
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
       await pool.query('DELETE FROM sessions WHERE user_id=$1',[row.id]);sendAuthJson(res,200,{reset:true});return true;
@@ -712,7 +717,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
       const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 100) : 'AFG AI Administrator';
       const password = typeof body.password === 'string' ? body.password : '';
-      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || password.length < 12 || password.length > 256) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 12 || password.length > 256) {
         sendAuthJson(res, 400, { error: 'Use a valid email and a password of at least 12 characters.' });
         return true;
       }
@@ -811,7 +816,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
       const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 100) : 'AFG AI Administrator';
       const password = typeof body.password === 'string' ? body.password : '';
-      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || password.length < 12 || password.length > 256) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 12 || password.length > 256) {
         sendAuthJson(res, 400, { error: 'Use a valid email and a password of at least 12 characters.' });
         return true;
       }
@@ -1071,7 +1076,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) { sendAuthJson(res,503,{error:'Email verification is unavailable until RESEND_API_KEY and EMAIL_FROM are configured.'}); return true; }
       const body=await readJsonBody(req); const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';
       const password=typeof body.password==='string'?body.password:''; const displayName=typeof body.displayName==='string'?body.displayName.trim().slice(0,100):'';
-      if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)||password.length<12||password.length>256){sendAuthJson(res,400,{error:'Use a valid email and a password of at least 12 characters.'});return true;}
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||password.length<12||password.length>256){sendAuthJson(res,400,{error:'Use a valid email and a password of at least 12 characters.'});return true;}
       const passwordHash=await hashPassword(password);
       const created=await pool.query("INSERT INTO users(email,display_name,password_hash,email_verified) VALUES($1,$2,$3,false) ON CONFLICT(email) DO NOTHING RETURNING id",[email,displayName||email,passwordHash]);
       if(!created.rows[0]){sendAuthJson(res,409,{error:'An account with this email may already exist. Try signing in or resetting your password.'});return true;}
@@ -1087,7 +1092,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const body=await readJsonBody(req);const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';const code=typeof body.code==='string'?body.code.trim():'';
       const found=await pool.query("SELECT u.id,c.id AS code_id,c.code_hash,c.attempts FROM users u JOIN email_verification_codes c ON c.user_id=u.id WHERE lower(u.email)=$1 AND c.purpose='verify_email' AND c.consumed_at IS NULL AND c.expires_at>now() ORDER BY c.created_at DESC LIMIT 1",[email]);
       const row=found.rows[0];
-      if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The verification code is invalid or expired.'});return true;}
+      if(!row||row.attempts>=5||!/^\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The verification code is invalid or expired.'});return true;}
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
       await pool.query('UPDATE users SET email_verified=true,updated_at=now() WHERE id=$1',[row.id]);
       await createSession(row.id,res);sendAuthJson(res,200,{verified:true});return true;
@@ -1113,7 +1118,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const next=typeof body.newPassword==='string'?body.newPassword:'';
       if(next.length<12||next.length>256){sendAuthJson(res,400,{error:'New password must be at least 12 characters.'});return true;}
       const found=await pool.query("SELECT u.id,c.id AS code_id,c.code_hash,c.attempts FROM users u JOIN email_verification_codes c ON c.user_id=u.id WHERE lower(u.email)=$1 AND c.purpose='password_reset' AND c.consumed_at IS NULL AND c.expires_at>now() ORDER BY c.created_at DESC LIMIT 1",[email]);
-      const row=found.rows[0];if(!row||row.attempts>=5||!/^\\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
+      const row=found.rows[0];if(!row||row.attempts>=5||!/^\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
       await pool.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[await hashPassword(next),row.id]);
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
       await pool.query('DELETE FROM sessions WHERE user_id=$1',[row.id]);sendAuthJson(res,200,{reset:true});return true;
@@ -1171,7 +1176,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
       const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 100) : 'AFG AI Administrator';
       const password = typeof body.password === 'string' ? body.password : '';
-      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || password.length < 12 || password.length > 256) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 12 || password.length > 256) {
         sendAuthJson(res, 400, { error: 'Use a valid email and a password of at least 12 characters.' });
         return true;
       }
