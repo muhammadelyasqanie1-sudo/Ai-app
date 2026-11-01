@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createHash } from 'crypto';
 import { pool } from './database.ts';
+import { z } from 'zod';
 import { authenticateRequest, verifyCsrf, readJsonBody, sendAuthJson, hashPassword, verifyPassword, clearSessionCookies, recordSecurityNotification, recordAuthSecurityEvent } from './auth.ts';
 
 function reply(res: ServerResponse, status: number, body: Record<string, unknown>) { sendAuthJson(res, status, body); }
@@ -12,6 +13,21 @@ function cookieToken(req: IncomingMessage, name: string): string {
   try { return decodeURIComponent(entry.slice(name.length + 1)); } catch { return ''; }
 }
 function secretHash(value: string) { return createHash('sha256').update(value).digest('hex'); }
+const memorySchema = z.object({
+  category: z.enum(['preferences','language','style','facts']),
+  content: z.string().trim().min(1).max(2000),
+  consentSensitive: z.boolean().optional(),
+}).strict();
+const memoryStatusSchema = z.object({ enabled: z.boolean() }).strict();
+const passwordChangeSchema = z.object({
+  currentPassword: z.string().min(1).max(256),
+  newPassword: z.string().min(12).max(256),
+}).strict();
+const accountDeleteSchema = z.object({
+  confirmation: z.literal('DELETE MY ACCOUNT'),
+  currentPassword: z.string().max(256).optional(),
+}).strict();
+
 const PREFERENCE_FIELDS = new Set(['language','appearance','accentColor','density','fontSize','chatWidth','animationsEnabled','defaultModel','autoSelectModel','responseStyle','responseLength','creativity','memoryEnabled','voiceEnabled','defaultLanguage','notifications']);
 
 export async function handleAccountApi(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
@@ -55,10 +71,9 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
   }
   if (pathname === '/api/account/memories' && req.method === 'POST') {
     try {
-      const body=await readJsonBody(req,8000);
-      const category=['preferences','language','style','facts'].includes(String(body.category))?String(body.category):'';
-      const content=typeof body.content==='string'?body.content.trim():'';
-      if(!category||!content||content.length>2000){reply(res,400,{error:'Choose a category and provide 1–2,000 characters.'});return true;}
+      const parsed=memorySchema.safeParse(await readJsonBody(req,8000));
+      if(!parsed.success){reply(res,400,{error:'Choose a valid category and provide 1–2,000 characters.'});return true;}
+      const body=parsed.data; const category=body.category; const content=body.content;
       const sensitive=containsSensitiveMemory(content);
       if(sensitive&&body.consentSensitive!==true){reply(res,400,{error:'This may contain sensitive information. Explicit per-item consent is required.'});return true;}
       const result=await pool.query('INSERT INTO user_memories(user_id,category,content,consent_sensitive) VALUES($1,$2,$3,$4) RETURNING id,category,content,consent_sensitive AS "consentSensitive",created_at AS "createdAt"',[user.id,category,content,sensitive]);
@@ -69,9 +84,9 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
   const memoryMatch=pathname.match(/^\/api\/account\/memories\/([0-9a-f-]{36})$/i);
   if(memoryMatch&&req.method==='PATCH'){
     try{
-      const body=await readJsonBody(req,8000); const content=typeof body.content==='string'?body.content.trim():'';
-      const category=['preferences','language','style','facts'].includes(String(body.category))?String(body.category):'';
-      if(!content||content.length>2000||!category){reply(res,400,{error:'Valid category and content are required.'});return true;}
+      const parsed=memorySchema.safeParse(await readJsonBody(req,8000));
+      if(!parsed.success){reply(res,400,{error:'Valid category and content are required.'});return true;}
+      const body=parsed.data; const content=body.content; const category=body.category;
       const sensitive=containsSensitiveMemory(content);
       if(sensitive&&body.consentSensitive!==true){reply(res,400,{error:'Explicit per-item consent is required.'});return true;}
       const result=await pool.query('UPDATE user_memories SET category=$1,content=$2,consent_sensitive=$3,updated_at=now() WHERE id=$4 AND user_id=$5 RETURNING id',[category,content,sensitive,memoryMatch[1],user.id]);
@@ -84,7 +99,7 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
     reply(res,result.rowCount?200:404,result.rowCount?{deleted:true}:{error:'Memory not found.'});return true;
   }
   if(pathname==='/api/account/memory-status'&&req.method==='PATCH'){
-    try{const body=await readJsonBody(req);if(typeof body.enabled!=='boolean'){reply(res,400,{error:'enabled must be boolean.'});return true;}
+    try{const parsed=memoryStatusSchema.safeParse(await readJsonBody(req));if(!parsed.success){reply(res,400,{error:'enabled must be boolean.'});return true;} const body=parsed.data;
       await pool.query('UPDATE users SET memory_enabled=$1,updated_at=now() WHERE id=$2',[body.enabled,user.id]);
       await pool.query('INSERT INTO user_preferences(user_id,memory_enabled) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET memory_enabled=EXCLUDED.memory_enabled,updated_at=now()',[user.id,body.enabled]);
       reply(res,200,{enabled:body.enabled});
@@ -123,8 +138,8 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
   }
   if(pathname==='/api/account/password'&&req.method==='POST'){
     try{
-      const body=await readJsonBody(req);const current=typeof body.currentPassword==='string'?body.currentPassword:'';const next=typeof body.newPassword==='string'?body.newPassword:'';
-      if(next.length<12||next.length>256){reply(res,400,{error:'New password must be at least 12 characters.'});return true;}
+      const parsed=passwordChangeSchema.safeParse(await readJsonBody(req));if(!parsed.success){reply(res,400,{error:'Provide your current password and a new password of at least 12 characters.'});return true;}
+      const body=parsed.data;const current=body.currentPassword;const next=body.newPassword;
       const stored=await pool.query('SELECT password_hash FROM users WHERE id=$1',[user.id]);
       if(!stored.rows[0]?.password_hash||!await verifyPassword(current,stored.rows[0].password_hash)){reply(res,401,{error:'Current password is incorrect.'});return true;}
       await pool.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[await hashPassword(next),user.id]);
@@ -151,10 +166,11 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
   }
   if(pathname==='/api/account'&&req.method==='DELETE'){
     try{
-      const body=await readJsonBody(req);
-      if(body.confirmation!=='DELETE MY ACCOUNT'){reply(res,400,{error:'Type DELETE MY ACCOUNT to confirm.'});return true;}
+      const parsed=accountDeleteSchema.safeParse(await readJsonBody(req));
+      if(!parsed.success){reply(res,400,{error:'Type DELETE MY ACCOUNT to confirm.'});return true;}
+      const body=parsed.data;
       const stored=await pool.query('SELECT password_hash FROM users WHERE id=$1',[user.id]);
-      if(stored.rows[0]?.password_hash && (typeof body.currentPassword!=='string'||!await verifyPassword(body.currentPassword,stored.rows[0].password_hash))){reply(res,401,{error:'Current password is required and must be correct.'});return true;}
+      if(stored.rows[0]?.password_hash && (!body.currentPassword||!await verifyPassword(body.currentPassword,stored.rows[0].password_hash))){reply(res,401,{error:'Current password is required and must be correct.'});return true;}
       await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',[user.id,'account.self_delete','user',user.id,JSON.stringify({source:'account-settings'})]);
       await recordAuthSecurityEvent(req,user.id,'auth.account_deleted','warning');
       await pool.query('UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL',[user.id]);
