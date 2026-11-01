@@ -4,7 +4,7 @@ import type { Language } from '../../types/afg';
 
 interface AfgLanguageModalProps {
   isOpen: boolean;
-  language: Language;
+  language: Language | null;
   onSelectLanguage: (lang: Language) => void;
 }
 
