@@ -136,7 +136,7 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
       const body=await readJsonBody(req);
       if(body.confirmation!=='DELETE MY ACCOUNT'){reply(res,400,{error:'Type DELETE MY ACCOUNT to confirm.'});return true;}
       const stored=await pool.query('SELECT password_hash FROM users WHERE id=$1',[user.id]);
-      if(!stored.rows[0]?.password_hash||typeof body.currentPassword!=='string'||!await verifyPassword(body.currentPassword,stored.rows[0].password_hash)){reply(res,401,{error:'Current password is required and must be correct.'});return true;}
+      if(stored.rows[0]?.password_hash && (typeof body.currentPassword!=='string'||!await verifyPassword(body.currentPassword,stored.rows[0].password_hash))){reply(res,401,{error:'Current password is required and must be correct.'});return true;}
       await pool.query('DELETE FROM users WHERE id=$1',[user.id]);
       clearSessionCookies(res);
       reply(res,200,{deleted:true});
