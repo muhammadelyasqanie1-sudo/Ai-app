@@ -17,7 +17,7 @@ Memory categories are `preferences`, `language`, `style` and `facts`. Users can 
 ## 3.14 Settings and privacy
 Preferences persist per account: appearance (light/dark/neon/system), accent color, density, font size, chat width, animations, app language, default model, auto-select, response style/length, creativity, memory, voice and notification toggles. The app asks for a language choice on first launch and applies RTL for Dari. Settings also include password change, active-session listing/revocation, JSON data export, server and local conversation clearing, memory management and account deletion with a confirmation phrase (plus current-password confirmation when a password credential exists).
 
-Security notifications are generated for successful sign-ins, email verification, password resets and password changes. They respect the in-app and security-alert toggles; when email notifications are enabled and Resend is configured, security alerts are also sent by email. Product-update and usage-alert event producers are not connected yet.
+Security notifications are generated for successful sign-ins, email verification, password resets and password changes. They respect the in-app and security-alert toggles; when email notifications are enabled and Resend is configured, security alerts are also sent by email. Product update broadcasts are admin-only, audited and opt-in. Administrators can send audited in-app product-update broadcasts through the Admin panel; delivery is limited to users who opted into both product updates and in-app notifications. Usage-alert event production is not connected because provider usage/token accounting is not yet recorded.
 
 ## Required setup
 1. Configure `DATABASE_URL` on Render.
