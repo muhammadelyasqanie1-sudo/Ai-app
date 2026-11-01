@@ -56,11 +56,11 @@ export async function recordSecurityNotification(userId: string, eventType: stri
     const from = process.env.EMAIL_FROM || '';
     if (preference.email_enabled === true && preference.email && apiKey && from) {
       try {
-        await fetch('https://api.resend.com/emails', {
+        void fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({ from, to: [preference.email], subject: 'AFG AI security alert: ' + message.title, text: message.body + '\n\nIf this activity was not yours, sign in and secure your account.' }),
-        });
+        }).then((response) => { if (!response.ok) console.error('AFG_SECURITY_EMAIL_REJECTED'); }).catch(() => console.error('AFG_SECURITY_EMAIL_UNAVAILABLE'));
       } catch { console.error('AFG_SECURITY_EMAIL_UNAVAILABLE'); }
     }
   } catch { console.error('AFG_SECURITY_NOTIFICATION_UNAVAILABLE'); }
