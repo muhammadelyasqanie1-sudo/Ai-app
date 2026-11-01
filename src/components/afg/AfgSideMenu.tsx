@@ -90,7 +90,7 @@ export const AfgSideMenu: React.FC<AfgSideMenuProps> = ({
                 {language === 'dari' ? user.name : user.nameEn}
               </h4>
               <p className="text-[10px] text-cyan-300">
-                {t.premiumUser}
+                {language === 'dari' ? 'حساب مهمان • رایگان' : user.tier}
               </p>
             </div>
           </div>
@@ -118,18 +118,8 @@ export const AfgSideMenu: React.FC<AfgSideMenuProps> = ({
           </div>
         </div>
 
-        {/* Footer with Logout */}
-        <div className="pt-4 border-t border-cyan-950">
-          <button
-            onClick={() => {
-              alert(language === 'dari' ? 'شما با موفقیت خارج شدید.' : 'Logged out successfully.');
-              onClose();
-            }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>{t.logout}</span>
-          </button>
+        <div className="pt-4 border-t border-cyan-950 text-xs leading-6 text-amber-200">
+          {language === 'dari' ? 'ورود و خروج تا پیاده‌سازی احراز هویت غیرفعال است.' : 'Sign-in and sign-out are unavailable until authentication is implemented.'}
         </div>
 
       </div>
