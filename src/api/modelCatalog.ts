@@ -18,7 +18,7 @@ export async function getCloudflareModelCatalog(): Promise<VerifiedModelCatalog>
     body: {
       ...(catalog.error ? { error: catalog.error } : {}),
       models: catalog.models.map((model) => model.id),
-      ...(catalog.verified ? { source: 'cloudflare-live-catalog', checkedAt: catalog.checkedAt } : {}),
+      ...(catalog.verified ? { source: 'provider-registry-live-catalog', checkedAt: catalog.checkedAt } : {}),
       verified: catalog.verified,
     },
   };
