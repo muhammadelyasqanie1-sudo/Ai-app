@@ -394,6 +394,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
           selectedModel={selectedModel}
           onSelectModel={onSelectModel}
           modelsLoading={isLoading}
+          speechToTextAvailable={capabilities['speech-to-text']}
         />
       </div>
 
