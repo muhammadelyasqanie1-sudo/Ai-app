@@ -248,7 +248,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
         <select
           value={selectedModel}
           onChange={(event) => onSelectModel(event.target.value)}
-          disabled={disabled || modelsLoading || availableModels.length === 0}
+          disabled={modelsLoading || (availableModels.length === 0 && modelOptions.length === 0)}
           aria-label={language === 'dari' ? 'انتخاب مدل هوش مصنوعی' : 'Select AI model'}
           className="min-w-0 max-w-[72%] rounded-xl border border-cyan-700/50 bg-slate-900 px-2.5 py-2 text-[11px] text-cyan-100 outline-none focus:border-cyan-400 disabled:opacity-60"
         >
