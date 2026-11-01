@@ -25,7 +25,8 @@ import type {
   UserProfile, 
   AfgMessage, 
   ChatAttachment, 
-  AfgChatSession 
+  AfgChatSession,
+  AfgCapabilitySnapshot,
 } from './types/afg';
 
 const DEFAULT_USER: UserProfile = {
@@ -70,6 +71,20 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
+  const [capabilitySnapshot, setCapabilitySnapshot] = useState<AfgCapabilitySnapshot>({
+    verified: false,
+    models: [],
+    capabilities: {
+      chat: false,
+      vision: false,
+      'image-generation': false,
+      'video-generation': false,
+      'file-processing': false,
+      'speech-to-text': false,
+      'text-to-speech': false,
+      research: false,
+    },
+  });
   const [initialPromptForChat, setInitialPromptForChat] = useState<string | undefined>(undefined);
 
   // Modals state
@@ -96,23 +111,54 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/models`)
+    fetch(`${API_BASE_URL}/api/capabilities`)
       .then(async (response) => {
-        if (!response.ok) throw new Error('Could not load models');
         const data = await response.json();
-        if (data.verified === true && Array.isArray(data.models)) {
-          setAvailableModels(data.models);
-          setSelectedModel((current) => data.models.includes(current) ? current : (data.models[0] || ''));
-        } else {
+        const verified = response.ok && data.verified === true &&
+          Array.isArray(data.models) && data.capabilities &&
+          typeof data.capabilities === 'object';
+        if (!verified) {
           setAvailableModels([]);
           setSelectedModel('');
-          console.error('AI provider did not verify an available model catalog:', data.error || 'No verified models');
+          setCapabilitySnapshot({
+            verified: false,
+            models: [],
+            capabilities: {
+              chat: false,
+              vision: false,
+              'image-generation': false,
+              'video-generation': false,
+              'file-processing': false,
+              'speech-to-text': false,
+              'text-to-speech': false,
+              research: false,
+            },
+          });
+          console.error('AFG_AI_CAPABILITIES_UNVERIFIED');
+          return;
         }
+        setAvailableModels(data.models);
+        setSelectedModel((current) => data.models.includes(current) ? current : (data.models[0] || ''));
+        setCapabilitySnapshot(data as AfgCapabilitySnapshot);
       })
       .catch(() => {
-        console.error('AI_MODEL_CATALOG_UNAVAILABLE');
         setAvailableModels([]);
         setSelectedModel('');
+        setCapabilitySnapshot({
+          verified: false,
+          models: [],
+          capabilities: {
+            chat: false,
+            vision: false,
+            'image-generation': false,
+            'video-generation': false,
+            'file-processing': false,
+            'speech-to-text': false,
+            'text-to-speech': false,
+            research: false,
+          },
+        });
+        console.error('AFG_AI_CAPABILITIES_UNAVAILABLE');
       });
   }, []);
 
@@ -316,6 +362,7 @@ export default function App() {
             user={user}
             onChangeTab={setCurrentTab}
             onStartChatWithPrompt={handleStartChatWithPrompt}
+            capabilities={capabilitySnapshot.capabilities}
           />
         )}
 
