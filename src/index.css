@@ -152,3 +152,20 @@ html.afg-reduce-motion *, html.afg-reduce-motion *::before, html.afg-reduce-moti
   scroll-behavior: auto !important;
   transition-duration: 0.01ms !important;
 }
+
+
+/* User-controlled density scale */
+html[data-afg-density="compact"] .gap-2,
+html[data-afg-density="compact"] .gap-3,
+html[data-afg-density="compact"] .gap-4,
+html[data-afg-density="compact"] .gap-5,
+html[data-afg-density="compact"] .gap-6 { gap: .5rem !important; }
+html[data-afg-density="spacious"] .gap-2,
+html[data-afg-density="spacious"] .gap-3,
+html[data-afg-density="spacious"] .gap-4,
+html[data-afg-density="spacious"] .gap-5,
+html[data-afg-density="spacious"] .gap-6 { gap: 1.35rem !important; }
+html[data-afg-density="compact"] .space-y-3 > :not([hidden]) ~ :not([hidden]),
+html[data-afg-density="compact"] .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-block-start: .5rem !important; }
+html[data-afg-density="spacious"] .space-y-3 > :not([hidden]) ~ :not([hidden]),
+html[data-afg-density="spacious"] .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-block-start: 1.35rem !important; }
