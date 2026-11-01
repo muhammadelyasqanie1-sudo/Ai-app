@@ -95,7 +95,7 @@ export default function App() {
 
   // Modals state
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
-  const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
+  const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(() => !localStorage.getItem('afg_language'));
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
 
   // Sync RTL and Dark Mode with DOM
@@ -223,7 +223,6 @@ export default function App() {
         setIsShortcutsOpen(prev => !prev);
       } else if (e.key === 'Escape') {
         setIsSideMenuOpen(false);
-        setIsLanguageModalOpen(false);
         setIsShortcutsOpen(false);
       }
     };
@@ -537,7 +536,6 @@ export default function App() {
       {/* Language Picker Modal */}
       <AfgLanguageModal
         isOpen={isLanguageModalOpen}
-        onClose={() => setIsLanguageModalOpen(false)}
         language={language}
         onSelectLanguage={(lang) => {
           setLanguage(lang);
