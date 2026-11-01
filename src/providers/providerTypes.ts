@@ -50,6 +50,7 @@ export interface ChatRequest {
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
   signal?: AbortSignal;
   noFallback?: boolean;
+  onModelSelected?: (providerId: string, modelId: string) => void;
 }
 
 export interface ChatChunk {
