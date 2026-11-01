@@ -33,12 +33,15 @@ async function enforceAdminConfiguredRateLimits(req: IncomingMessage, res: Serve
   let account: Awaited<ReturnType<typeof authenticateRequest>> = null;
   try { account = await authenticateRequest(req); } catch { return false; }
   if (!account) return false;
-  const policies = await pool.query(
-    `SELECT scope_type,scope_key,requests,window_seconds FROM rate_limit_policies
-      WHERE enabled=true AND ((scope_type='user' AND scope_key=$1) OR (scope_type='tier' AND scope_key=$2))
-      ORDER BY CASE WHEN scope_type='user' THEN 0 ELSE 1 END`,
-    [account.id, account.role],
-  );
+  let policies;
+  try {
+    policies = await pool.query(
+      `SELECT scope_type,scope_key,requests,window_seconds FROM rate_limit_policies
+        WHERE enabled=true AND ((scope_type='user' AND scope_key=$1) OR (scope_type='tier' AND scope_key=$2))
+        ORDER BY CASE WHEN scope_type='user' THEN 0 ELSE 1 END`,
+      [account.id, account.role],
+    );
+  } catch { return false; }
   for (const policy of policies.rows) {
     const counter = await pool.query(
       `INSERT INTO rate_limit_counters(scope_type,scope_key,window_start,request_count)
