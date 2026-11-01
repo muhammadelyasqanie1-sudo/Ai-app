@@ -323,11 +323,12 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                     <button onClick={() => onDeleteMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-red-500/10 hover:text-red-300"><Trash2 className="w-3.5 h-3.5" />{language === 'dari' ? 'حذف' : 'Delete'}</button>
                     {/* Read Aloud Button (User Request #7) */}
                     <button
+                      disabled={!capabilities['text-to-speech']}
                       onClick={() => handleReadAloud(msg.id, msg.content)}
                       className={`flex items-center gap-1 text-[11px] p-1 px-2 rounded-md hover:bg-slate-800 transition-colors ${
-                        isSpeaking ? 'text-cyan-400 bg-cyan-950/40' : 'hover:text-slate-200'
+                        isSpeaking ? 'text-cyan-400 bg-cyan-950/40' : capabilities['text-to-speech'] ? 'hover:text-slate-200' : 'opacity-30 cursor-not-allowed'
                       }`}
-                      title={isSpeaking ? t.stopSpeech : t.readAloud}
+                      title={!capabilities['text-to-speech'] ? (language === 'dari' ? 'ارائه‌دهنده متن به گفتار تأیید نشده است' : 'No verified text-to-speech provider is available') : (isSpeaking ? t.stopSpeech : t.readAloud)}
                     >
                       {isSpeaking ? (
                         <>
