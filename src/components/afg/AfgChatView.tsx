@@ -17,7 +17,7 @@ import {
 import { AfgBrainLogo } from './AfgBrainLogo';
 import { AfgChatInputCapsule } from './AfgChatInputCapsule';
 import { MarkdownRenderer } from '../MarkdownRenderer';
-import type { Language, AfgMessage, ChatAttachment, UserProfile } from '../../types/afg';
+import type { Language, AfgMessage, ChatAttachment, UserProfile, AfgCapabilityKey } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
 
 interface AfgChatViewProps {
@@ -30,6 +30,7 @@ interface AfgChatViewProps {
   availableModels: string[];
   selectedModel: string;
   onSelectModel: (model: string) => void;
+  capabilities: Record<AfgCapabilityKey, boolean>;
 }
 
 export const AfgChatView: React.FC<AfgChatViewProps> = ({
@@ -42,6 +43,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   availableModels,
   selectedModel,
   onSelectModel,
+  capabilities,
 }) => {
   const t = translations[language];
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -129,7 +131,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
           <div>
             <h2 className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
               <span>{t.chatTitle}</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+              <span className={`w-2 h-2 rounded-full ${capabilities.chat ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" : "bg-amber-300"}`} aria-label={capabilities.chat ? (language === "dari" ? "مدل تأییدشده فعال" : "Verified chat model available") : (language === "dari" ? "مدل تأییدشده موجود نیست" : "No verified chat model")} />
             </h2>
             <p className="text-[10px] text-cyan-400/80">
               {t.chatSubtitle}
