@@ -252,13 +252,21 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
           aria-label={language === 'dari' ? 'انتخاب مدل هوش مصنوعی' : 'Select AI model'}
           className="min-w-0 max-w-[72%] rounded-xl border border-cyan-700/50 bg-slate-900 px-2.5 py-2 text-[11px] text-cyan-100 outline-none focus:border-cyan-400 disabled:opacity-60"
         >
-          {modelOptions.length > 0 ? modelOptions.map((model) => (
-            <option key={model.id} value={model.id} disabled={!model.selectable} title={model.selectable ? model.displayName : (model.disabledReason || 'Provider not reachable.')}>
-              {model.displayName}{model.selectable ? '' : ' — Provider not reachable.'}
-            </option>
-          )) : availableModels.length > 0 ? availableModels.map((model) => (
-            <option key={model} value={model}>{model}</option>
-          )) : (
+          {modelOptions.length > 0 ? <>
+            <option value="auto">{language === 'dari' ? 'انتخاب خودکار — کم‌هزینه‌ترین مدل سالم' : 'Auto — lowest-cost healthy model'}</option>
+            {[...new Set(modelOptions.map((model) => model.providerId))].map((providerId) => (
+              <optgroup key={providerId} label={providerId}>
+                {modelOptions.filter((model) => model.providerId === providerId).map((model) => (
+                  <option key={providerId + ':' + model.id} value={model.id} disabled={!model.selectable} title={model.selectable ? model.displayName : (model.disabledReason || 'Provider not reachable.')}>
+                    {model.displayName} · {Object.entries(model.capabilities || {}).filter(([, enabled]) => enabled).map(([capability]) => capability).join(', ')}{model.selectable ? '' : ' — Provider not reachable.'}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </> : availableModels.length > 0 ? <>
+            <option value="auto">Auto — lowest-cost healthy model</option>
+            {availableModels.map((model) => <option key={model} value={model}>{model}</option>)}
+          </> : (
             <option value="">{language === 'dari' ? 'مدل موجود نیست' : 'No models available'}</option>
           )}
         </select>
