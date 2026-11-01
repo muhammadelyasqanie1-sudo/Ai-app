@@ -165,6 +165,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     const reader = upstream.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let providerStreamFailed = false;
     try {
       while (true) {
         const { done, value } = await reader.read();
@@ -188,15 +189,19 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
               res.write(`data: ${JSON.stringify({ type: 'content', text: piece })}\n\n`);
             }
             if (event.error) {
+              providerStreamFailed = true;
               console.error('AI_PROVIDER_STREAM_ERROR', JSON.stringify({ requestId: id, model, provider: 'cloudflare' }));
+              res.write('data: {"type":"error","error":"The AI provider interrupted the response."}\n\n');
             }
           } catch {
             // Ignore non-JSON SSE events.
           }
         }
       }
-      res.write(`data: ${JSON.stringify({ type: 'done', requestId: id })}\n\n`);
-      res.write('data: [DONE]\n\n');
+      if (!providerStreamFailed) {
+        res.write(`data: ${JSON.stringify({ type: 'done', requestId: id })}\n\n`);
+        res.write('data: [DONE]\n\n');
+      }
       res.end();
     } finally {
       reader.releaseLock();
