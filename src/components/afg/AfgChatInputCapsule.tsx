@@ -25,7 +25,7 @@ interface AfgChatInputCapsuleProps {
   selectedModel: string;
   onSelectModel: (model: string) => void;
   modelsLoading?: boolean;
-  speechToTextAvailable?: boolean;
+  voiceAvailable?: boolean;
 }
 
 export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
@@ -37,12 +37,15 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   selectedModel,
   onSelectModel,
   modelsLoading = false,
-  speechToTextAvailable = false,
+  voiceAvailable = false,
 }) => {
   const t = translations[language];
   const [inputText, setInputText] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [voiceEnabled,setVoiceEnabled]=useState(()=>localStorage.getItem('afg_voice_enabled')!=='false');
+  const voiceAvailable=voiceEnabled&&speechToTextAvailable;
+  useEffect(()=>{const sync=()=>setVoiceEnabled(localStorage.getItem('afg_voice_enabled')!=='false');window.addEventListener('afg-voice-preference-change',sync);window.addEventListener('afg-preferences-change',sync);return()=>{window.removeEventListener('afg-voice-preference-change',sync);window.removeEventListener('afg-preferences-change',sync);};},[]);
   const [voiceRecordingError, setVoiceRecordingError] = useState('');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -75,7 +78,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   }, []);
 
   const toggleRecording = async () => {
-    if (!speechToTextAvailable) return;
+    if (!voiceAvailable) return;
     if (isRecording) {
       mediaRecorderRef.current?.stop();
       setIsRecording(false);
@@ -338,13 +341,13 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
         <button
           type="button"
           onClick={toggleRecording}
-          disabled={!speechToTextAvailable}
+          disabled={!voiceAvailable}
           className={`p-2 rounded-full transition-all ${
             isRecording
               ? 'bg-red-500/20 text-red-400 animate-pulse ring-2 ring-red-400'
-              : speechToTextAvailable ? 'text-slate-400 hover:text-cyan-300' : 'text-slate-700 cursor-not-allowed opacity-40'
+              : voiceAvailable ? 'text-slate-400 hover:text-cyan-300' : 'text-slate-700 cursor-not-allowed opacity-40'
           }`}
-          title={!speechToTextAvailable ? (language === 'dari' ? 'ارائه‌دهنده گفتار به متن در دسترس نیست' : 'No verified speech-to-text provider is available') : (isRecording ? t.recording : 'Voice input')}
+          title={!voiceAvailable ? (language === 'dari' ? 'ارائه‌دهنده گفتار به متن در دسترس نیست' : 'No verified speech-to-text provider is available') : (isRecording ? t.recording : 'Voice input')}
           aria-label="Voice input"
         >
           {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
