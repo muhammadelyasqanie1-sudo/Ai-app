@@ -179,6 +179,17 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         return true;
       }
       const uniqueModels = [...new Set(orderedModels as string[])];
+      const capabilityFlag: Record<string, keyof import('../providers/providerTypes.ts').CapabilityFlags> = {
+        text: 'text', vision: 'vision', imageGen: 'imageGen', tts: 'tts', stt: 'stt',
+      };
+      const discovered = await getVerifiedModelDescriptors();
+      const allowed = new Set(discovered.filter((model) =>
+        model.enabled && model.capabilities[capabilityFlag[capability]],
+      ).map((model) => model.providerId + '::' + model.id));
+      if (uniqueModels.some((modelId) => !allowed.has(modelId))) {
+        sendAuthJson(res, 400, { error: 'Fallback entries must be enabled, discovered models with the selected capability. Use providerId::modelId.' });
+        return true;
+      }
       await pool.query(
         `INSERT INTO provider_fallback_chains (capability, ordered_models, updated_by)
          VALUES ($1, $2::jsonb, $3)
