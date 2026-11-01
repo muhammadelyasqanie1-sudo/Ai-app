@@ -115,14 +115,14 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
   };
 
   const toolCards = [
-    { id: 'translate' as ToolSubTab, title: t.toolTranslate, desc: t.toolTranslateDesc, icon: Languages, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/30' },
-    { id: 'code-help' as ToolSubTab, title: t.toolCodeHelp, desc: t.toolCodeHelpDesc, icon: Code2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
-    { id: 'voice-tools' as ToolSubTab, title: t.toolVoice, desc: t.toolVoiceDesc, icon: Mic, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
-    { id: 'pdf-tools' as ToolSubTab, title: t.toolPdf, desc: t.toolPdfDesc, icon: FileText, color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/30' },
-    { id: 'calculator' as ToolSubTab, title: t.toolCalc, desc: t.toolCalcDesc, icon: Calculator, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/30' },
-    { id: 'qr-scanner' as ToolSubTab, title: t.toolQr, desc: t.toolQrDesc, icon: QrCode, color: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30' },
-    { id: 'summarizer' as ToolSubTab, title: t.toolSummarizer, desc: t.toolSummarizerDesc, icon: FileCheck, color: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30' },
-    { id: 'file-tools' as ToolSubTab, title: t.toolFile, desc: t.toolFileDesc, icon: FolderArchive, color: 'text-teal-400', bg: 'bg-teal-500/10', border: 'border-teal-500/30' },
+    { id: 'translate' as ToolSubTab, title: t.toolTranslate, desc: language === 'dari' ? 'تا اتصال سرویس ترجمه غیرفعال' : 'Unavailable until a translation provider is connected', ready: false, icon: Languages, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/30' },
+    { id: 'code-help' as ToolSubTab, title: t.toolCodeHelp, desc: language === 'dari' ? 'تولید مستقل کد هنوز وصل نیست' : 'Standalone code generation is not connected', ready: false, icon: Code2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
+    { id: 'voice-tools' as ToolSubTab, title: t.toolVoice, desc: language === 'dari' ? 'ورودی گفتار وابسته به مرورگر' : 'Browser-dependent speech input', ready: true, icon: Mic, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
+    { id: 'pdf-tools' as ToolSubTab, title: t.toolPdf, desc: language === 'dari' ? 'بارگذاری و استخراج متن فعال نیست' : 'Upload and text extraction are unavailable', ready: false, icon: FileText, color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/30' },
+    { id: 'calculator' as ToolSubTab, title: t.toolCalc, desc: language === 'dari' ? 'محاسبه محلی' : 'Local arithmetic calculator', ready: true, icon: Calculator, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/30' },
+    { id: 'qr-scanner' as ToolSubTab, title: language === 'dari' ? 'تولیدکننده QR' : 'QR Generator', desc: language === 'dari' ? 'با سرویس بیرونی QRServer' : 'Uses the external QRServer service', ready: true, icon: QrCode, color: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30' },
+    { id: 'summarizer' as ToolSubTab, title: t.toolSummarizer, desc: language === 'dari' ? 'تا اتصال مدل واقعی غیرفعال' : 'Unavailable until a real model is connected', ready: false, icon: FileCheck, color: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30' },
+    { id: 'file-tools' as ToolSubTab, title: t.toolFile, desc: language === 'dari' ? 'پردازش فایل هنوز پیاده‌سازی نشده' : 'File processing is not implemented', ready: false, icon: FolderArchive, color: 'text-teal-400', bg: 'bg-teal-500/10', border: 'border-teal-500/30' },
   ];
 
   return (
@@ -174,7 +174,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-cyan-950 flex items-center justify-between text-xs font-semibold text-cyan-400">
-                  <span>{language === 'dari' ? 'استفاده از ابزار' : 'Open Tool'}</span>
+                  <span>{tool.ready ? (language === 'dari' ? 'بازکردن ابزار' : 'Open Tool') : (language === 'dari' ? 'غیرفعال' : 'Unavailable')}</span>
                   <span>→</span>
                 </div>
               </div>
@@ -187,6 +187,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
       {activeSubTab === 'translate' && (
         <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-cyan-500/40 shadow-xl space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-cyan-900/40">
+            <p className="text-xs text-amber-200">{language === 'dari' ? 'ارائه‌دهنده ترجمه تنظیم نشده است؛ این ابزار غیرفعال است.' : 'No translation provider is configured; this tool is disabled.'}</p>
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               <Languages className="w-5 h-5 text-sky-400" />
               <span>{t.toolTranslate}</span>
@@ -290,6 +291,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
             </h2>
             <button
               onClick={() => handleCopy(generatedCode, setCopiedCode)}
+              disabled={!generatedCode}
               className="px-3 py-1.5 rounded-xl bg-slate-800 text-xs text-cyan-300 hover:bg-slate-700 flex items-center gap-1.5 border border-cyan-800/40"
             >
               {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -405,7 +407,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
         <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-cyan-500/40 shadow-xl space-y-4">
           <h2 className="text-base font-bold text-white flex items-center gap-2">
             <QrCode className="w-5 h-5 text-cyan-400" />
-            <span>{t.toolQr}</span>
+            <span>{language === 'dari' ? 'تولیدکننده کد QR' : 'QR Code Generator'}</span>
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
@@ -442,7 +444,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
         <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-rose-500/40 shadow-xl space-y-4">
           <h2 className="text-base font-bold text-white flex items-center gap-2">
             <FileText className="w-5 h-5 text-rose-400" />
-            <span>{t.toolPdf}</span>
+            <span>{activeSubTab === 'summarizer' ? t.toolSummarizer : t.toolPdf}</span>
           </h2>
 
           <div className="border-2 border-dashed border-rose-500/30 rounded-2xl p-6 text-center bg-rose-500/5">
