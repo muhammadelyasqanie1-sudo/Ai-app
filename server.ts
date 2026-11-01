@@ -49,7 +49,7 @@ app.get('/api/models', async (_req, res) => {
   const apiToken = process.env.CLOUDFLARE_API_TOKEN?.trim();
   res.setHeader('Cache-Control', 'no-store');
   if (!accountId || !apiToken) {
-    res.status(503).json({ error: 'AI model catalog is unavailable: Cloudflare credentials are not configured.', models: [], verified: false });
+    res.status(503).json({ error: 'AI model catalog is unavailable: provider credentials are not configured.', models: [], verified: false });
     return;
   }
 
@@ -60,10 +60,9 @@ app.get('/api/models', async (_req, res) => {
     const payload = await response.json() as {
       success?: boolean;
       result?: Array<{ name?: string; id?: string; model?: string; task?: { name?: string } | string }>;
-      errors?: Array<{ message?: string }>;
     };
     if (!response.ok || payload.success !== true) {
-      console.error('AI_MODEL_CATALOG_FAILED', JSON.stringify({ status: response.status, errors: payload.errors || [] }));
+      console.error('AI_MODEL_CATALOG_FAILED', JSON.stringify({ status: response.status }));
       res.status(502).json({ error: 'The AI provider could not verify its model catalog. Try again later.', models: [], verified: false });
       return;
     }
@@ -78,9 +77,9 @@ app.get('/api/models', async (_req, res) => {
       .filter((name, index, all) => all.indexOf(name) === index)
       .sort((a, b) => a.localeCompare(b));
 
-    res.json({ models, source: 'cloudflare-live-catalog', verified: true, checkedAt: new Date().toISOString() });
-  } catch (error) {
-    console.error('AI_MODEL_CATALOG_ERROR', error instanceof Error ? error.message : 'Unknown error');
+    res.json({ models, source: 'cloudflare-live-catalog', verified: models.length > 0, checkedAt: new Date().toISOString() });
+  } catch {
+    console.error('AI_MODEL_CATALOG_ERROR', JSON.stringify({ provider: 'cloudflare' }));
     res.status(502).json({ error: 'Could not contact the AI provider to verify models.', models: [], verified: false });
   }
 });
