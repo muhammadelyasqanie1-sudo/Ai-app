@@ -46,6 +46,8 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({ language }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [announcementTitle,setAnnouncementTitle]=useState('');
+  const [announcementBody,setAnnouncementBody]=useState('');
 
   const loadAdminData = useCallback(async (): Promise<boolean> => {
     setLoading(true);
@@ -155,6 +157,18 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({ language }) => {
     setFallbackText(value.join('\n'));
   };
 
+  const sendProductUpdate = async () => {
+    setError(''); setNotice('');
+    if (!announcementTitle.trim() || !announcementBody.trim()) { setError(dari ? 'عنوان و متن اعلان را وارد کنید.' : 'Enter an announcement title and message.'); return; }
+    setLoading(true);
+    try {
+      const result = await api('/api/admin/notifications/product-update', { method: 'POST', body: JSON.stringify({ title: announcementTitle.trim(), body: announcementBody.trim() }) });
+      setNotice(dari ? 'اعلان برای ' + result.recipientCount + ' کاربرِ انتخاب‌کننده ارسال شد.' : 'Product update sent to ' + result.recipientCount + ' opted-in users.');
+      setAnnouncementTitle(''); setAnnouncementBody('');
+    } catch (err) { setError(err instanceof Error ? err.message : 'Could not send product update.'); }
+    finally { setLoading(false); }
+  };
+
   const signOut = async () => {
     try { await api('/api/auth/logout', { method: 'POST', body: '{}' }); } catch {}
     setAuthenticated(false); setProviders([]); setModels([]);
@@ -207,6 +221,14 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({ language }) => {
 
       {error && <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
       {notice && <p role="status" className="rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-300">{notice}</p>}
+
+      <div className="rounded-2xl border border-cyan-800/50 bg-slate-950/70 p-4 space-y-3">
+        <h2 className="font-bold text-white">{dari ? 'اعلان به‌روزرسانی محصول' : 'Product update announcement'}</h2>
+        <p className="text-xs text-slate-400">{dari ? 'اعلان فقط برای کاربرانی می‌رود که اعلان محصول و اعلان داخل برنامه را فعال کرده‌اند.' : 'Only users who opted in to both product updates and in-app notifications will receive this announcement.'}</p>
+        <input value={announcementTitle} onChange={e=>setAnnouncementTitle(e.target.value)} maxLength={120} placeholder={dari ? 'عنوان اعلان' : 'Announcement title'} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"/>
+        <textarea value={announcementBody} onChange={e=>setAnnouncementBody(e.target.value)} maxLength={2000} rows={3} placeholder={dari ? 'متن اعلان...' : 'Announcement message...'} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"/>
+        <button onClick={()=>void sendProductUpdate()} disabled={loading||!announcementTitle.trim()||!announcementBody.trim()} className="rounded-xl bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-40">{dari ? 'ارسال اعلان' : 'Send product update'}</button>
+      </div>
 
       <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 space-y-3">
         <h2 className="font-bold text-white">{dari ? 'ارائه‌دهندگان' : 'Providers'}</h2>
