@@ -37,8 +37,8 @@ const AUTH_INPUT = {
   register: z.object({ email: z.string().trim().email().max(254), password: z.string().min(12).max(256), displayName: z.string().trim().max(100).optional() }).strict(),
   login: z.object({ email: z.string().trim().email().max(254), password: z.string().min(8).max(256) }).strict(),
   email: z.object({ email: z.string().trim().email().max(254) }).strict(),
-  verify: z.object({ email: z.string().trim().email().max(254), code: z.string().regex(/^\\d{6}$/) }).strict(),
-  reset: z.object({ email: z.string().trim().email().max(254), code: z.string().regex(/^\\d{6}$/), newPassword: z.string().min(12).max(256) }).strict(),
+  verify: z.object({ email: z.string().trim().email().max(254), code: z.string().regex(/^\d{6}$/) }).strict(),
+  reset: z.object({ email: z.string().trim().email().max(254), code: z.string().regex(/^\d{6}$/), newPassword: z.string().min(12).max(256) }).strict(),
   bootstrap: z.object({ bootstrapToken: z.string().min(32).max(512), email: z.string().trim().email().max(254), displayName: z.string().trim().max(100).optional(), password: z.string().min(12).max(256) }).strict(),
 };
 function parseAuthInput<T extends z.ZodTypeAny>(schema: T, body: Record<string, unknown>): z.infer<T> | null {
