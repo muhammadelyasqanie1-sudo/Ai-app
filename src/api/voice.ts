@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { getProviderAdapter, getVerifiedModelDescriptors } from '../services/providerGateway.ts';
 import { authenticateRequest } from './auth.ts';
 import { pool } from './database.ts';
+import { verifyCsrf } from './auth.ts';
 
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 const MAX_CONCURRENT_VOICE_REQUESTS = 2;
@@ -34,6 +35,8 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
   if (path !== '/api/voice/transcribe' && path !== '/api/voice/synthesize' && path !== '/api/voice/voices') return false;
   const requestId = randomUUID();
   const user = await authenticateRequest(req);
+  if (!user) { reply(res,401,{available:false,error:'Sign in is required to use Voice features.'},requestId); return true; }
+  if (!['GET','HEAD','OPTIONS'].includes(req.method || 'GET') && !verifyCsrf(req)) { reply(res,403,{available:false,error:'CSRF validation failed.'},requestId); return true; }
   if (user && pool) {
     const preference = await pool.query('SELECT COALESCE(p.voice_enabled,true) AS voice_enabled FROM users u LEFT JOIN user_preferences p ON p.user_id=u.id WHERE u.id=$1',[user.id]);
     if (preference.rows[0]?.voice_enabled === false) { reply(res,403,{available:false,error:'Voice features are disabled in your account settings.'},requestId); return true; }
