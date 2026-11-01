@@ -50,7 +50,7 @@ async function enforceAdminConfiguredRateLimits(req: IncomingMessage, res: Serve
     const tier = subscription.rows[0]?.plan_key || 'free';
     policies = await pool.query(
       `SELECT scope_type,scope_key,requests,window_seconds FROM rate_limit_policies
-        WHERE enabled=true AND ((scope_type='user' AND scope_key=$1) OR (scope_type='tier' AND scope_key=$2))
+        WHERE enabled=true AND ((scope_type='user' AND scope_key IN ($1,'*')) OR (scope_type='tier' AND scope_key=$2))
         ORDER BY CASE WHEN scope_type='user' THEN 0 ELSE 1 END`,
       [account.id, tier],
     );
@@ -65,7 +65,7 @@ async function enforceAdminConfiguredRateLimits(req: IncomingMessage, res: Serve
        ON CONFLICT(scope_type,scope_key,window_start)
        DO UPDATE SET request_count=rate_limit_counters.request_count+1
        RETURNING request_count`,
-      [policy.scope_type,policy.scope_key,policy.window_seconds],
+      [policy.scope_type,policy.scope_type === 'user' && policy.scope_key === '*' ? account.id : policy.scope_key,policy.window_seconds],
     );
     if (Number(counter.rows[0]?.request_count || 0) > Number(policy.requests)) {
       res.setHeader('Retry-After', String(policy.window_seconds));
@@ -79,7 +79,8 @@ async function enforceAdminConfiguredRateLimits(req: IncomingMessage, res: Serve
       "SELECT scope_key,requests,window_seconds FROM rate_limit_policies WHERE enabled=true AND scope_type='model' AND scope_key=$1",
       [modelId],
     );
-    for (const policy of modelPolicies.rows) {
+    const effectiveModelPolicies = modelPolicies.rows.length ? modelPolicies.rows : [{scope_key:modelId,requests:60,window_seconds:60}];
+    for (const policy of effectiveModelPolicies) {
       const counter = await pool.query(
         `INSERT INTO rate_limit_counters(scope_type,scope_key,window_start,request_count)
          VALUES('model',$1,to_timestamp((floor(extract(epoch FROM now())/$2)*$2)::double precision),1)
