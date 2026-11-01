@@ -19,54 +19,6 @@ interface AfgHistoryViewProps {
   onNewChat: () => void;
 }
 
-const SEED_SESSIONS: AfgChatSession[] = [
-  {
-    id: 'hist-1',
-    title: 'آینده هوش مصنوعی',
-    titleDari: 'آینده هوش مصنوعی',
-    lastMessage: 'آینده هوش مصنوعی بسیار روشن است و در زمینه‌های آموزش، سلامت، کشاورزی تحولات بزرگی ایجاد خواهد کرد.',
-    timestamp: Date.now() - 1000 * 60 * 18,
-    category: 'general',
-    messages: [
-      { id: '1', role: 'user', content: 'در مورد آینده هوش مصنوعی توضیح بده', timestamp: Date.now() - 1000 * 60 * 18 },
-      { id: '2', role: 'assistant', content: 'آینده هوش مصنوعی بسیار روشن است و در زمینه‌های آموزش، سلامت، کشاورزی و اقتصاد افغانستان تحولات شگرفی ایجاد می‌کند.', timestamp: Date.now() - 1000 * 60 * 17 },
-    ],
-  },
-  {
-    id: 'hist-2',
-    title: 'تولید تصویر کوهستان',
-    titleDari: 'تولید تصویر کوهستان',
-    lastMessage: 'یک کوهستان زیبا در افغانستان با برف و آسمان آبی و انعکاس در دریاچه فیروزه‌ای.',
-    timestamp: Date.now() - 1000 * 60 * 75,
-    category: 'image',
-    messages: [
-      { id: '3', role: 'user', content: 'تولید تصویر کوهستان پامیر با برف و آسمان صاف', timestamp: Date.now() - 1000 * 60 * 75 },
-    ],
-  },
-  {
-    id: 'hist-3',
-    title: 'ترجمه متن انگلیسی',
-    titleDari: 'ترجمه متن انگلیسی',
-    lastMessage: 'Hello, how are you? -> سلام، حال شما چطور است؟',
-    timestamp: Date.now() - 1000 * 60 * 140,
-    category: 'translation',
-    messages: [
-      { id: '4', role: 'user', content: 'Translate "Hello, how are you today?" to Dari', timestamp: Date.now() - 1000 * 60 * 140 },
-    ],
-  },
-  {
-    id: 'hist-4',
-    title: 'راهنمای برنامه و امکانات AFG AI',
-    titleDari: 'راهنمای برنامه',
-    lastMessage: 'این برنامه یک دستیار هوشمند نسل جدید برای کاربران افغانستانی است.',
-    timestamp: Date.now() - 1000 * 60 * 300,
-    category: 'general',
-    messages: [
-      { id: '5', role: 'user', content: 'چه کارهایی می‌توانی انجام دهی؟', timestamp: Date.now() - 1000 * 60 * 300 },
-    ],
-  },
-];
-
 export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
   language,
   onSelectChat,
@@ -74,7 +26,7 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
 }) => {
   const t = translations[language];
   const [searchQuery, setSearchQuery] = useState('');
-  const [sessions, setSessions] = useState<AfgChatSession[]>(SEED_SESSIONS);
+  const [sessions, setSessions] = useState<AfgChatSession[]>([]);
 
   const filteredSessions = sessions.filter(s => 
     s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
