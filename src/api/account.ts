@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createHash } from 'crypto';
 import { pool } from './database.ts';
-import { authenticateRequest, verifyCsrf, readJsonBody, sendAuthJson, hashPassword, verifyPassword } from './auth.ts';
+import { authenticateRequest, verifyCsrf, readJsonBody, sendAuthJson, hashPassword, verifyPassword, clearSessionCookies } from './auth.ts';
 
 function reply(res: ServerResponse, status: number, body: Record<string, unknown>) { sendAuthJson(res, status, body); }
 function cookieToken(req: IncomingMessage, name: string): string {
@@ -110,14 +110,19 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
       pool.query('SELECT * FROM user_preferences WHERE user_id=$1',[user.id]),
       pool.query('SELECT category,content,consent_sensitive,created_at,updated_at FROM user_memories WHERE user_id=$1',[user.id]),
       pool.query('SELECT tool_type,title,content,parameters,created_at,updated_at FROM productivity_items WHERE user_id=$1',[user.id]),
-      pool.query('SELECT id,title,created_at,updated_at FROM conversations WHERE user_id=$1 ORDER BY created_at',[user.id]),
+      pool.query('SELECT c.id,c.title,c.created_at,c.updated_at,COALESCE(json_agg(json_build_object(\'role\',m.role,\'content\',m.content,\'createdAt\',m.created_at) ORDER BY m.created_at) FILTER (WHERE m.id IS NOT NULL),\'[]\'::json) AS messages FROM conversations c LEFT JOIN messages m ON m.conversation_id=c.id WHERE c.user_id=$1 GROUP BY c.id ORDER BY c.created_at',[user.id]),
     ]);
     reply(res,200,{exportedAt:new Date().toISOString(),profile:profile.rows[0],preferences:prefs.rows,memories:memories.rows,productivityItems:items.rows,conversations:conversations.rows});return true;
   }
   if(pathname==='/api/account'&&req.method==='DELETE'){
-    try{const body=await readJsonBody(req);if(body.confirmation!=='DELETE MY ACCOUNT'){reply(res,400,{error:'Type DELETE MY ACCOUNT to confirm.'});return true;}
-      await pool.query("UPDATE users SET status='deleted',email=NULL,display_name='Deleted account',password_hash=NULL,updated_at=now() WHERE id=$1",[user.id]);
-      await pool.query('DELETE FROM sessions WHERE user_id=$1',[user.id]);reply(res,200,{deleted:true});
+    try{
+      const body=await readJsonBody(req);
+      if(body.confirmation!=='DELETE MY ACCOUNT'){reply(res,400,{error:'Type DELETE MY ACCOUNT to confirm.'});return true;}
+      const stored=await pool.query('SELECT password_hash FROM users WHERE id=$1',[user.id]);
+      if(!stored.rows[0]?.password_hash||typeof body.currentPassword!=='string'||!await verifyPassword(body.currentPassword,stored.rows[0].password_hash)){reply(res,401,{error:'Current password is required and must be correct.'});return true;}
+      await pool.query('DELETE FROM users WHERE id=$1',[user.id]);
+      clearSessionCookies(res);
+      reply(res,200,{deleted:true});
     }catch{reply(res,400,{error:'Could not delete account.'});}return true;
   }
   reply(res,404,{error:'Account route not found.'});return true;
