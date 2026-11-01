@@ -140,7 +140,7 @@ export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> 
       }));
       for (let i = 0; i < configuredModels.length; i += 4) {
         const batch = configuredModels.slice(i, i + 4);
-        verified.push(...await Promise.all(batch.map((model) => verifyModel(provider, model))));
+        verified.push(...await Promise.all(batch.map((model) => model.enabled ? verifyModel(provider, model) : Promise.resolve({ ...model, verifiedAt: null }))));
       }
     } catch {
       verified.push(...await getStoredModels(provider.id));
