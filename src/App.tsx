@@ -215,6 +215,23 @@ export default function App() {
     }).catch(() => {});
   };
 
+  useEffect(() => {
+    const syncAccount = () => {
+      fetch(API_BASE_URL + '/api/auth/me', { credentials: 'include' })
+        .then((response) => response.ok ? response.json() : null)
+        .then((data) => {
+          if (data?.authenticated && data.user) {
+            setUser({ name: data.user.displayName || 'User', nameEn: data.user.displayName || 'User', email: data.user.email || '', avatar: '', isPremium: false, tier: 'Free' });
+          } else {
+            setUser(DEFAULT_USER);
+          }
+        }).catch(() => {});
+    };
+    window.addEventListener('afg-auth-change', syncAccount);
+    syncAccount();
+    return () => window.removeEventListener('afg-auth-change', syncAccount);
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
