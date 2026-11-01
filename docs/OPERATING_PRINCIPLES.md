@@ -55,3 +55,16 @@ Tests, lint, database migrations, and manual deployments were not initiated. Imp
 Not implemented by this architecture-only pass: authentication/session middleware, CSRF tokens for cookie-authenticated routes, distributed/per-user rate limiting, multi-provider fallback, retries, usage metering, object storage, queues, WebSockets, migrations, and authenticated persistence. These remain explicit gaps, not simulated features.
 
 No tests, type checks, builds, migrations, workflow runs, or deployments were initiated.
+
+
+## Provider Gateway Contract 2.2 implementation (2026-11-01)
+
+- Expanded `src/providers/providerTypes.ts` with the canonical `ProviderAdapter`, `ModelDescriptor`, `CapabilityFlags`, health/config status types, typed chat chunks, and optional image/audio/embedding request/result contracts.
+- Updated the Cloudflare Workers AI adapter to implement required config validation, live model listing, model-specific health checks, capability reporting, and typed streaming chat. Optional capabilities are deliberately not implemented or advertised.
+- Added a five-minute process-local health cache and bounded four-at-a-time model probes in the provider gateway. Only enabled models with a recent successful health probe and text+streaming support are selectable.
+- The chat service rechecks model verification on the server before every inference. Client model selection is never treated as authorization.
+- `GET /api/capabilities` returns full model descriptors, including disabled entries and the exact `Provider not reachable.` reason. The model picker displays unverified entries as disabled; `GET /api/models` returns selectable IDs only.
+- Known gap: `enabled` currently defaults to true because authenticated admin controls and persistent provider-model settings are not yet implemented. Health cache is per process/Render instance, not distributed. Context window is zero when the provider catalog does not supply it.
+- Updated `docs/SYSTEM_ARCHITECTURE.md` with the contract and explicit boundaries.
+
+No tests, type checks, builds, workflows, migrations, or deployments were run.
