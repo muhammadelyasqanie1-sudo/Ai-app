@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { Language, ChatAttachment, AfgModelOption } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
+import { formatFileSize } from '../../utils/i18n';
 
 interface AfgChatInputCapsuleProps {
   onSendMessage: (text: string, attachments: ChatAttachment[]) => void;
@@ -158,7 +159,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
       const newAtt: ChatAttachment = {
         type,
         name: file.name,
-        size: `${(file.size / 1024).toFixed(1)} KB`,
+        size: formatFileSize(file.size, language),
         url: URL.createObjectURL(file),
       };
       setAttachments((prev) => [...prev, newAtt]);
