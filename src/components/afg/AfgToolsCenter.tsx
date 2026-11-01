@@ -24,6 +24,7 @@ import { translations } from '../../utils/afgTranslations';
 interface AfgToolsCenterProps {
   language: Language;
   onRunTool: (prompt: string, options: Record<string, unknown>) => void;
+  capabilities: Record<string, boolean>;
 }
 
 function calculateExpression(expression: string): number {
@@ -73,7 +74,7 @@ function calculateExpression(expression: string): number {
   return result;
 }
 
-export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunTool }) => {
+export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunTool, capabilities }) => {
   const t = translations[language];
   const [activeSubTab, setActiveSubTab] = useState<ToolSubTab>('overview');
   const [fileStatus, setFileStatus] = useState<{ available: boolean; acceptedFormats: string[]; message: string } | null>(null);
@@ -83,7 +84,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
       .then((response) => response.json())
       .then((data) => setFileStatus({
         available: data.available === true,
-        acceptedFormats: Array.isArray(data.acceptedFormats) ? data.acceptedFormats : [],
+        acceptedFormats: Array.isArray(data.plannedFormats) ? data.plannedFormats : [],
         message: typeof data.message === 'string' ? data.message : '',
       }))
       .catch(() => setFileStatus({
@@ -131,7 +132,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   const [researchError, setResearchError] = useState('');
   const [researchSources, setResearchSources] = useState<Array<{ title: string; url: string; snippet: string }>>([]);
 
-  // Translation remains disabled until a real translation provider is connected.
+  // Translation uses the selected verified text-generation model.
   const handleTranslate = () => {
     if (!transInput.trim()) return;
     onRunTool(transInput.trim(), { toolMode: 'translation', sourceLanguage: sourceLang, targetLanguage: targetLang });
@@ -162,8 +163,8 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
     { id: 'translate' as ToolSubTab, title: t.toolTranslate, desc: language === 'dari' ? 'ترجمه با مدل چت تأییدشده' : 'Uses the verified chat model', ready: true, icon: Languages, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/30' },
     { id: 'code-help' as ToolSubTab, title: t.toolCodeHelp, desc: language === 'dari' ? 'تولید، توضیح، اشکال‌زدایی و بهینه‌سازی کد' : 'Generate, explain, debug and optimize code', ready: true, icon: Code2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
     { id: 'writing-studio' as ToolSubTab, title: language === 'dari' ? 'استودیوی نویسندگی' : 'Writing Studio', desc: language === 'dari' ? 'ایمیل، مقاله، رزومه و محتوای تبلیغاتی' : 'Emails, articles, CVs and marketing content', ready: true, icon: FileText, color: 'text-fuchsia-400', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30' },
-    { id: 'research' as ToolSubTab, title: language === 'dari' ? 'پژوهش وب' : 'Web Research', desc: language === 'dari' ? 'جستجوی منابع واقعی و لینک‌های اصلی' : 'Search real sources and original URLs', ready: true, icon: Languages, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
-    { id: 'voice-tools' as ToolSubTab, title: t.toolVoice, desc: language === 'dari' ? 'نیازمند ارائه‌دهنده صوتی سازگار' : 'Requires a compatible voice provider', ready: false, icon: Mic, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
+    { id: 'research' as ToolSubTab, title: language === 'dari' ? 'پژوهش وب' : 'Web Research', desc: language === 'dari' ? 'جستجوی منابع واقعی و لینک‌های اصلی' : 'Search real sources and original URLs', ready: Boolean(capabilities.research), icon: Languages, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
+    { id: 'voice-tools' as ToolSubTab, title: t.toolVoice, desc: language === 'dari' ? 'نیازمند ارائه‌دهنده صوتی سازگار' : 'Requires a compatible voice provider', ready: Boolean(capabilities['speech-to-text'] || capabilities['text-to-speech']), icon: Mic, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
     { id: 'pdf-tools' as ToolSubTab, title: t.toolPdf, desc: language === 'dari' ? 'بارگذاری و استخراج متن فعال نیست' : 'Upload and text extraction are unavailable', ready: false, icon: FileText, color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/30' },
     { id: 'calculator' as ToolSubTab, title: t.toolCalc, desc: language === 'dari' ? 'محاسبه محلی' : 'Local arithmetic calculator', ready: true, icon: Calculator, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/30' },
     { id: 'qr-scanner' as ToolSubTab, title: language === 'dari' ? 'تولیدکننده QR' : 'QR Generator', desc: language === 'dari' ? 'با سرویس بیرونی QRServer' : 'Uses the external QRServer service', ready: true, icon: QrCode, color: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30' },
@@ -256,7 +257,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
                 onClick={() => {
                   const temp = sourceLang;
                   setSourceLang(targetLang);
-                  setTargetLang(temp);
+                  setTargetLang(temp === 'auto' ? 'en' : temp);
                 }}
                 className="p-1 rounded-lg bg-slate-800 text-cyan-400 hover:bg-slate-700"
               >
