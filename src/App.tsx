@@ -27,6 +27,7 @@ import type {
   ChatAttachment, 
   AfgChatSession,
   AfgCapabilitySnapshot,
+  AfgModelOption,
 } from './types/afg';
 
 const DEFAULT_USER: UserProfile = {
@@ -70,6 +71,7 @@ export default function App() {
   const [messages, setMessages] = useState<AfgMessage[]>(INITIAL_MESSAGES);
   const [isLoading, setIsLoading] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [modelOptions, setModelOptions] = useState<AfgModelOption[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [capabilitySnapshot, setCapabilitySnapshot] = useState<AfgCapabilitySnapshot>({
     verified: false,
@@ -119,6 +121,7 @@ export default function App() {
           typeof data.capabilities === 'object';
         if (!verified) {
           setAvailableModels([]);
+          setModelOptions([]);
           setSelectedModel('');
           setCapabilitySnapshot({
             verified: false,
@@ -137,6 +140,8 @@ export default function App() {
           console.error('AFG_AI_CAPABILITIES_UNVERIFIED');
           return;
         }
+        const options: AfgModelOption[] = Array.isArray(data.modelDescriptors) ? data.modelDescriptors : [];
+        setModelOptions(options);
         setAvailableModels(data.models);
         setSelectedModel((current) => data.models.includes(current) ? current : (data.models[0] || ''));
         setCapabilitySnapshot(data as AfgCapabilitySnapshot);
@@ -375,6 +380,7 @@ export default function App() {
             user={user}
             initialPrompt={initialPromptForChat}
             availableModels={availableModels}
+            modelOptions={modelOptions}
             selectedModel={selectedModel}
             onSelectModel={setSelectedModel}
             capabilities={capabilitySnapshot.capabilities}
