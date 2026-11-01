@@ -1,8 +1,10 @@
 import { cloudflareWorkersAi } from '../providers/cloudflareWorkersAi.ts';
+import { createOpenAICompatibleAdapter } from '../providers/openAiCompatible.ts';
 import { pool } from '../api/database.ts';
 import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescriptor, CapabilityFlags } from '../providers/providerTypes.ts';
 
-const providerRegistry: ChatProviderAdapter[] = [cloudflareWorkersAi];
+const openAICompatible = createOpenAICompatibleAdapter();
+const providerRegistry: ChatProviderAdapter[] = [cloudflareWorkersAi, ...(openAICompatible ? [openAICompatible] : [])];
 const HEALTH_TTL_MS = 5 * 60 * 1000;
 const healthCache = new Map<string, { healthy: boolean; checkedAt: string }>();
 
