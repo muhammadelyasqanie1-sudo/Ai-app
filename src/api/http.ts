@@ -4,6 +4,8 @@ import { handleChatApi } from './chatHandler.ts';
 import { checkDatabase } from './database.ts';
 import { getCloudflareModelCatalog } from './modelCatalog.ts';
 import { getCapabilitySnapshot } from '../services/providerGateway.ts';
+import { handleAuthApi } from './auth.ts';
+import { handleAdminApi } from './adminHandler.ts';
 
 type ApiRequest = IncomingMessage & { originalUrl?: string };
 
@@ -11,7 +13,7 @@ function corsHeaders(req: IncomingMessage) {
   const origin = req.headers.origin;
   const configured = (process.env.APP_ORIGIN || '').split(',').map((value) => value.trim()).filter(Boolean);
   const allowed = new Set([...configured, 'http://localhost:3000', 'http://localhost:5173', 'https://localhost', 'capacitor://localhost']);
-  return origin && allowed.has(origin) ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {};
+  return origin && allowed.has(origin) ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Credentials': 'true', Vary: 'Origin' } : {};
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown, requestId: string) {
@@ -42,13 +44,17 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Request-Id');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Request-Id, X-CSRF-Token');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.end();
     return;
   }
 
   try {
+    if (await handleAuthApi(req, res, pathname)) return;
+    if (await handleAdminApi(req, res, pathname)) return;
+
     if (pathname === '/api/chat') {
       await handleChatApi(req, res);
       return;
