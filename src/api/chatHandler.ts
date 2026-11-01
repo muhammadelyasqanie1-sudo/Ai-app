@@ -2,11 +2,18 @@ import type { IncomingMessage, ServerResponse } from 'http';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
-function sendJson(res: ServerResponse, status: number, payload: unknown) {
+function corsHeaders(req: IncomingMessage) {
+  const origin = req.headers.origin;
+  const configured = (process.env.APP_ORIGIN || '').split(',').map((value) => value.trim()).filter(Boolean);
+  const allowed = new Set([...configured, 'http://localhost:3000', 'http://localhost:5173', 'https://localhost', 'capacitor://localhost']);
+  return origin && allowed.has(origin) ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {};
+}
+
+function sendJson(req: IncomingMessage, res: ServerResponse, status: number, payload: unknown) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
-    'Access-Control-Allow-Origin': '*',
+    ...corsHeaders(req),
   });
   res.end(JSON.stringify(payload));
 }
@@ -14,16 +21,17 @@ function sendJson(res: ServerResponse, status: number, payload: unknown) {
 export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
+      ...corsHeaders(req),
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Vary': 'Origin',
     });
     res.end();
     return;
   }
 
   if (req.method !== 'POST') {
-    sendJson(res, 405, { error: 'Method not allowed' });
+    sendJson(req, res, 405, { error: 'Method not allowed' });
     return;
   }
 
@@ -114,7 +122,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
+      ...corsHeaders(req),
     });
 
     const reader = upstream.body.getReader();
