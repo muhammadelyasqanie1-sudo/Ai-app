@@ -484,7 +484,7 @@ export default function App() {
   };
 
   if (!hasSelectedLanguage) {
-    return <AfgLanguageModal isOpen={true} language={language} onSelectLanguage={handleSetLanguage} />;
+    return <AfgLanguageModal isOpen={true} language={null} onSelectLanguage={handleSetLanguage} />;
   }
 
   return (
