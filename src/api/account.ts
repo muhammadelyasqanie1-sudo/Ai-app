@@ -38,7 +38,7 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
   if (req.method !== 'GET' && !verifyCsrf(req)) { reply(res, 403, { error: 'CSRF validation failed.' }); return true; }
 
   if (pathname === '/api/account/preferences' && req.method === 'GET') {
-    const result = await pool.query('SELECT * FROM user_preferences WHERE user_id=$1', [user.id]);
+    const result = await pool.query('SELECT p.*, s.locale FROM user_preferences p LEFT JOIN user_settings s ON s.user_id=p.user_id WHERE p.user_id=$1', [user.id]);
     reply(res, 200, { preferences: result.rows[0] || null }); return true;
   }
   if (pathname === '/api/account/preferences' && req.method === 'PATCH') {
@@ -60,6 +60,7 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
         [user.id, v.language === 'english' ? 'english' : 'dari', appearance, ['cyan','blue','violet','emerald','rose'].includes(String(v.accentColor)) ? String(v.accentColor) : 'cyan', density, Math.max(12,Math.min(20,Number(v.fontSize)||14)), chatWidth, v.animationsEnabled !== false, typeof v.defaultModel === 'string' && v.defaultModel.trim() ? v.defaultModel.trim().slice(0,300) : null, v.autoSelectModel !== false, ['balanced','concise','detailed','creative','formal'].includes(String(v.responseStyle)) ? String(v.responseStyle) : 'balanced', ['short','medium','long'].includes(String(v.responseLength)) ? String(v.responseLength) : 'medium', Math.max(0,Math.min(1,Number(v.creativity ?? 0.7))), v.memoryEnabled !== false, v.voiceEnabled !== false, v.defaultLanguage === 'english' ? 'english' : 'dari', JSON.stringify({inApp:notifications.inApp!==false,email:notifications.email===true,productUpdates:notifications.productUpdates===true,usageAlerts:notifications.usageAlerts!==false,securityAlerts:notifications.securityAlerts!==false})],
       );
       await pool.query('UPDATE users SET preferred_language=$1,memory_enabled=$2,default_model=$3,updated_at=now() WHERE id=$4', [v.language === 'english' ? 'english' : 'dari',v.memoryEnabled!==false,typeof v.defaultModel==='string'&&v.defaultModel.trim()?v.defaultModel.trim():null,user.id]);
+      await pool.query('INSERT INTO user_settings(user_id,locale,updated_at) VALUES($1,$2,now()) ON CONFLICT(user_id) DO UPDATE SET locale=EXCLUDED.locale,updated_at=now()', [v.language === 'english' ? 'english' : 'dari', user.id]);
       reply(res,200,{preferences:result.rows[0]});
     } catch { reply(res,400,{error:'Could not save account preferences.'}); }
     return true;
