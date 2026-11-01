@@ -344,6 +344,21 @@ export default function App() {
         }
       }
       if (!streamCompleted) throw new Error('The AI response could not be completed.');
+      if (typeof toolOptions.productivityType === 'string' && fullContent.trim()) {
+        const csrfToken = document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '';
+        void fetch(API_BASE_URL + '/api/productivity/items', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': decodeURIComponent(csrfToken) },
+          body: JSON.stringify({
+            type: toolOptions.productivityType,
+            title: text.trim().replace(/\\s+/g, ' ').slice(0, 160) || 'Productivity result',
+            content: fullContent.slice(0, 20000),
+            parameters: toolOptions.productivityParameters || {},
+          }),
+        }).then(async (response) => {
+          if (!response.ok) console.warn('AFG_PRODUCTIVITY_SAVE_UNAVAILABLE', response.status);
+        }).catch(() => console.warn('AFG_PRODUCTIVITY_SAVE_UNAVAILABLE'));
+      }
       setMessages((previous) => previous.map((message) => message.id === assistantId ? { ...message, isStreaming: false } : message));
     } catch {
       const userFacingError = language === 'dari'
