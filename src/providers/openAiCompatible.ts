@@ -136,6 +136,18 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
             if (typeof content === 'string' && content) yield { content };
           }
         }
+        buffer += decoder.decode();
+        if (buffer.trim()) {
+          const dataLine = buffer.split(/\\r?\\n/).find((line) => line.startsWith('data:'));
+          const data = dataLine?.slice(5).trim();
+          if (data && data !== '[DONE]') {
+            let event: any;
+            try { event = JSON.parse(data); } catch { event = null; }
+            if (event?.error) throw new ProviderAdapterError('The provider interrupted the response.', 502, 'provider_stream_error');
+            const content = event?.choices?.[0]?.delta?.content;
+            if (typeof content === 'string' && content) yield { content };
+          }
+        }
       } catch (error) {
         if (error instanceof ProviderAdapterError) throw error;
         throw new ProviderAdapterError('The provider response stream was interrupted.', 502, 'provider_stream_interrupted');
