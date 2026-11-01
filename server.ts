@@ -1,13 +1,11 @@
 import express from 'express';
-import dotenv from 'dotenv';
+import 'dotenv/config';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import { handleChatApi } from './src/api/chatHandler.ts';
 import { checkDatabase } from './src/api/database.ts';
 import { getCloudflareModelCatalog } from './src/api/modelCatalog.ts';
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
