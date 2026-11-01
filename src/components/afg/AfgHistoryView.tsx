@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   History, 
   Search, 
@@ -8,7 +8,13 @@ import {
   Languages, 
   Trash2, 
   ArrowRight,
-  Sparkles
+  Sparkles,
+  Pin,
+  Pencil,
+  Download,
+  FileJson,
+  FileText,
+  Trash
 } from 'lucide-react';
 import type { Language, AfgChatSession, TabType } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
@@ -26,12 +32,19 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
 }) => {
   const t = translations[language];
   const [searchQuery, setSearchQuery] = useState('');
-  const [sessions, setSessions] = useState<AfgChatSession[]>([]);
+  const [sessions, setSessions] = useState<AfgChatSession[]>(() => {
+    try { const saved = JSON.parse(localStorage.getItem('afg_sessions') || '[]'); return Array.isArray(saved) ? saved : []; }
+    catch { return []; }
+  });
 
-  const filteredSessions = sessions.filter(s => 
-    s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useEffect(() => { localStorage.setItem('afg_sessions', JSON.stringify(sessions)); }, [sessions]);
+
+  const filteredSessions = useMemo(() => sessions
+    .filter((session) => session.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      session.lastMessage.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      session.messages.some((message) => message.content.toLowerCase().includes(searchQuery.toLowerCase())))
+    .sort((a, b) => Number(Boolean(b.isPinned)) - Number(Boolean(a.isPinned)) || b.timestamp - a.timestamp),
+  [sessions, searchQuery]);
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
