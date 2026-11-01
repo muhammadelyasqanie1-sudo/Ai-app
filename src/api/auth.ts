@@ -250,7 +250,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       if (defaultModel) {
         const { getVerifiedModelDescriptors } = await import('../services/providerGateway.ts');
         const available = await getVerifiedModelDescriptors();
-        const selected = available.find((model) => model.id === defaultModel && model.enabled && model.verifiedAt);
+        const selected = available.find((model) => (model.providerId + '::' + model.id === defaultModel || model.id === defaultModel) && model.enabled && model.verifiedAt);
         if (!selected) { sendAuthJson(res, 400, { error: 'Default model must be enabled and health-verified.' }); return true; }
       }
       await pool.query('UPDATE users SET default_model = $1, updated_at = now() WHERE id = $2', [defaultModel || null, user.id]);
