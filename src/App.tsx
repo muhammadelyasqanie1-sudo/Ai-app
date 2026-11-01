@@ -68,7 +68,7 @@ export default function App() {
   const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
   const [messages, setMessages] = useState<AfgMessage[]>(INITIAL_MESSAGES);
   const [isLoading, setIsLoading] = useState(false);
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [availableModels, setAvailableModels] = useState<string[]>(['@cf/openai/gpt-oss-120b']);
   const [selectedModel, setSelectedModel] = useState('');
   const [initialPromptForChat, setInitialPromptForChat] = useState<string | undefined>(undefined);
 
@@ -105,7 +105,11 @@ export default function App() {
           setSelectedModel((current) => data.models.includes(current) ? current : data.models[0]);
         }
       })
-      .catch((error) => console.error('Could not load Cloudflare Workers AI models:', error));
+      .catch((error) => {
+      console.error('Could not load Cloudflare Workers AI models; using known chat model:', error);
+      setAvailableModels(['@cf/openai/gpt-oss-120b']);
+      setSelectedModel((current) => current || '@cf/openai/gpt-oss-120b');
+    });
   }, []);
 
   // Global Keyboard Shortcuts (Ctrl+/ or Cmd+/)
