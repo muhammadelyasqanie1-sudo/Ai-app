@@ -67,6 +67,52 @@ function verified(model: ModelDescriptor | undefined): model is ModelDescriptor 
     model.capabilities.text && model.capabilities.streaming);
 }
 
+
+function waitWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(new Error('aborted')); return; }
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, ms);
+    const onAbort = () => { clearTimeout(timer); reject(new Error('aborted')); };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+async function* reliableStream(candidates: ModelDescriptor[], input: ChatInput): AsyncIterable<{ content: string }> {
+  let lastError: unknown;
+  for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex++) {
+    const candidate = candidates[candidateIndex];
+    const provider = getProviderAdapter(candidate.providerId);
+    if (!provider) continue;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (input.signal?.aborted) throw new ProviderAdapterError('The request was cancelled.', 499, 'request_aborted');
+      let emitted = false;
+      try {
+        const stream = provider.streamChat({ ...input, model: candidate.id, messages: compactOlderContext(input.messages, candidate.contextWindow) });
+        for await (const chunk of stream) {
+          if (chunk.content) emitted = true;
+          yield chunk;
+        }
+        return;
+      } catch (error) {
+        lastError = error;
+        // Never replay a partially delivered answer: it would duplicate text in the UI.
+        if (emitted || input.signal?.aborted) throw error;
+        const retryable = !(error instanceof ProviderAdapterError) ||
+          error.status === 429 || error.status >= 500 ||
+          /unreachable|timeout|network|temporar|stream_interrupted/i.test(error.code);
+        if (!retryable) break;
+        if (attempt < 2) {
+          const base = 350 * (2 ** attempt);
+          await waitWithAbort(base + Math.floor(Math.random() * Math.max(1, base * 0.35)), input.signal);
+        }
+      }
+    }
+    if (input.noFallback) break;
+  }
+  if (lastError instanceof ProviderAdapterError) throw lastError;
+  throw new ProviderAdapterError('No healthy model could complete the request.', 503, 'model_unavailable');
+}
+
 export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerId: string; modelId: string; stream: AsyncIterable<{ content: string }> }> {
   const descriptors = await getVerifiedModelDescriptors();
   const separator = input.model.indexOf('::');
@@ -94,6 +140,10 @@ export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerI
   const provider = getProviderAdapter(selected.providerId);
   if (!provider) throw new ProviderAdapterError('The selected provider is not registered.', 503, 'provider_not_registered');
 
+  const candidates = [selected, ...descriptors.filter((model) =>
+    model.providerId !== selected!.providerId || model.id !== selected!.id,
+  ).filter((model) => verified(model) && model.capabilities.text && model.capabilities.streaming)];
   const messages = compactOlderContext(input.messages, selected.contextWindow);
-  return { providerId: provider.id, modelId: selected.id, stream: provider.streamChat({ ...input, model: selected.id, messages }) };
+  const stream = reliableStream(candidates, { ...input, messages });
+  return { providerId: provider.id, modelId: selected.id, stream };
 }
