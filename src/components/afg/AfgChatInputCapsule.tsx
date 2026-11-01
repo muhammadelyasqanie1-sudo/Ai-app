@@ -82,6 +82,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
       return;
     }
     try {
+      setVoiceRecordingError('');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -348,6 +349,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
         >
           {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
         </button>
+        {voiceRecordingError && <span className="max-w-28 text-[10px] text-rose-300">{voiceRecordingError}</span>}
 
         {/* Big Gradient Send Pill Button ("ارسال" / "Send") - The Signature Feature in Screenshot 1 */}
         <button
