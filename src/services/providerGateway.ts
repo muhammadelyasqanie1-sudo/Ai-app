@@ -28,6 +28,40 @@ async function isProviderEnabled(providerId: string): Promise<boolean> {
   return result.rows.length ? Boolean(result.rows[0].enabled) : true;
 }
 
+function capabilityFlagsFromStored(value: unknown): CapabilityFlags {
+  const names = Array.isArray(value) ? value : [];
+  const has = (key: string) => names.includes(key);
+  return {
+    text: has('text'),
+    streaming: has('streaming'),
+    vision: has('vision'),
+    imageGen: has('imageGen'),
+    tts: has('tts'),
+    stt: has('stt'),
+    tools: has('tools'),
+    jsonMode: has('jsonMode'),
+  };
+}
+
+async function getStoredModels(providerId: string, forceDisabled = false): Promise<ModelDescriptor[]> {
+  if (!pool) return [];
+  const result = await pool.query(
+    `SELECT model_key, display_name, capabilities, enabled, context_window
+       FROM model_catalog WHERE provider_key = $1 ORDER BY display_name`,
+    [providerId],
+  );
+  return result.rows.map((row) => ({
+    id: row.model_key,
+    providerId,
+    displayName: row.display_name || row.model_key,
+    description: 'Previously discovered model. The provider could not be reached for a fresh catalog check.',
+    contextWindow: Number(row.context_window) || 0,
+    capabilities: capabilityFlagsFromStored(row.capabilities),
+    enabled: forceDisabled ? false : Boolean(row.enabled),
+    verifiedAt: null,
+  }));
+}
+
 async function syncDiscoveredModels(provider: ChatProviderAdapter, models: ModelDescriptor[]): Promise<Map<string, boolean>> {
   if (!pool) return new Map(models.map((model) => [model.id, model.enabled]));
   for (const model of models) {
@@ -80,17 +114,31 @@ async function verifyModel(provider: ChatProviderAdapter, model: ModelDescriptor
       );
     }
   }
-  return { ...model, enabled: model.enabled, verifiedAt: health.healthy ? health.checkedAt : null };
+  return { ...model, verifiedAt: health.healthy ? health.checkedAt : null };
 }
 
 export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> {
   const verified: ModelDescriptor[] = [];
   for (const provider of providerRegistry) {
-    try {
-      const config = await provider.validateConfig();
-      if (!config.valid || !(await isProviderEnabled(provider.id))) continue;
+    let configValid = false;
+    try { configValid = (await provider.validateConfig()).valid; } catch { configValid = false; }
+    let providerEnabled = false;
+    try { providerEnabled = await isProviderEnabled(provider.id); } catch { providerEnabled = false; }
 
-      const models = await provider.listModels();
+    if (!configValid || !providerEnabled) {
+      verified.push(...await getStoredModels(provider.id, !providerEnabled || !configValid));
+      continue;
+    }
+
+    let models: ModelDescriptor[];
+    try {
+      models = await provider.listModels();
+    } catch {
+      verified.push(...await getStoredModels(provider.id));
+      continue;
+    }
+
+    try {
       const enabledModels = await syncDiscoveredModels(provider, models);
       const configuredModels = models.map((model) => ({
         ...model,
@@ -100,12 +148,8 @@ export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> 
         const batch = configuredModels.slice(i, i + 4);
         verified.push(...await Promise.all(batch.map((model) => verifyModel(provider, model))));
       }
-    } catch (error) {
-      // One unavailable provider must not hide healthy models from other registered providers.
-      console.warn('AI_PROVIDER_DISCOVERY_SKIPPED', JSON.stringify({
-        provider: provider.id,
-        code: error instanceof Error ? error.name : 'unknown_provider_error',
-      }));
+    } catch {
+      verified.push(...await getStoredModels(provider.id));
     }
   }
   return verified;
