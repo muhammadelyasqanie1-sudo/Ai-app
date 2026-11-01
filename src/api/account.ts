@@ -72,7 +72,7 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
       const body=await readJsonBody(req,8000); const content=typeof body.content==='string'?body.content.trim():'';
       const category=['preferences','language','style','facts'].includes(String(body.category))?String(body.category):'';
       if(!content||content.length>2000||!category){reply(res,400,{error:'Valid category and content are required.'});return true;}
-      const sensitive=/\b(password|passcode|secret|api.?key|token|passport|national.?id|ssn|medical|diagnosis|medication|health|bank.?account|credit.?card)\b|رمز|پاسورد|تذکره|پاسپورت|صحت|مریض|دوا|تشخیص/i.test(content);
+      const sensitive=containsSensitiveMemory(content);
       if(sensitive&&body.consentSensitive!==true){reply(res,400,{error:'Explicit per-item consent is required.'});return true;}
       const result=await pool.query('UPDATE user_memories SET category=$1,content=$2,consent_sensitive=$3,updated_at=now() WHERE id=$4 AND user_id=$5 RETURNING id',[category,content,sensitive,memoryMatch[1],user.id]);
       reply(res,result.rowCount?200:404,result.rowCount?{updated:true}:{error:'Memory not found.'});
