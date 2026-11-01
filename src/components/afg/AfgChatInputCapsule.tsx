@@ -20,12 +20,20 @@ interface AfgChatInputCapsuleProps {
   onSendMessage: (text: string, attachments: ChatAttachment[]) => void;
   disabled?: boolean;
   language: Language;
+  availableModels: string[];
+  selectedModel: string;
+  onSelectModel: (model: string) => void;
+  modelsLoading?: boolean;
 }
 
 export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   onSendMessage,
   disabled = false,
   language,
+  availableModels,
+  selectedModel,
+  onSelectModel,
+  modelsLoading = false,
 }) => {
   const t = translations[language];
   const [inputText, setInputText] = useState('');
@@ -308,6 +316,24 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
           ))}
         </div>
       )}
+
+      {/* Model picker stays with the composer so the active model is always visible. */}
+      <div className="flex items-center justify-between gap-2 px-3 py-2 mb-2 rounded-2xl bg-[#08112b]/90 border border-cyan-500/30">
+        <span className="text-xs text-cyan-300 font-semibold">{language === 'dari' ? 'مدل هوش مصنوعی' : 'AI model'}</span>
+        <select
+          value={selectedModel}
+          onChange={(event) => onSelectModel(event.target.value)}
+          disabled={disabled || modelsLoading || availableModels.length === 0}
+          aria-label={language === 'dari' ? 'انتخاب مدل هوش مصنوعی' : 'Select AI model'}
+          className="min-w-0 max-w-[72%] rounded-xl border border-cyan-700/50 bg-slate-900 px-2.5 py-2 text-[11px] text-cyan-100 outline-none focus:border-cyan-400 disabled:opacity-60"
+        >
+          {availableModels.length === 0 ? (
+            <option value="">{language === 'dari' ? 'مدل موجود نیست' : 'No models available'}</option>
+          ) : availableModels.map((model) => (
+            <option key={model} value={model}>{model}</option>
+          ))}
+        </select>
+      </div>
 
       {/* The Signature AFG AI Capsule Input Container (Matching Screenshot 1) */}
       <div className="relative flex items-center gap-2 sm:gap-3 p-1.5 sm:p-2 rounded-full bg-[#08112b]/90 border border-cyan-500/40 backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.6),0_0_20px_rgba(0,229,255,0.18)] focus-within:border-cyan-400 focus-within:shadow-[0_0_25px_rgba(0,229,255,0.35)] transition-all">
