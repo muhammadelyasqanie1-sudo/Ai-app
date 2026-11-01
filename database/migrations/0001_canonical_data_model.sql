@@ -93,7 +93,7 @@ END;
 $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS users_sync_email_verified_timestamp ON users;
 CREATE TRIGGER users_sync_email_verified_timestamp
-BEFORE INSERT OR UPDATE OF email_verified ON users
+BEFORE INSERT OR UPDATE ON users
 FOR EACH ROW EXECUTE FUNCTION afg_sync_email_verified_timestamp();
 
 CREATE OR REPLACE FUNCTION afg_sync_user_profile() RETURNS trigger AS $$
@@ -113,7 +113,7 @@ END;
 $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS users_sync_profile ON users;
 CREATE TRIGGER users_sync_profile
-AFTER INSERT OR UPDATE OF display_name,avatar_url,preferred_language,memory_enabled ON users
+AFTER INSERT OR UPDATE ON users
 FOR EACH ROW EXECUTE FUNCTION afg_sync_user_profile();
 
 DO $$
