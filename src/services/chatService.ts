@@ -1,24 +1,20 @@
-import { getChatProvider } from './providerGateway.ts';
+import { getChatProvider, getVerifiedModelDescriptors } from './providerGateway.ts';
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
 import type { ChatInput } from '../providers/providerTypes.ts';
 
-export async function prepareVerifiedChat(input: ChatInput): Promise<AsyncGenerator<string, void, void>> {
-  const provider = getChatProvider();
-  const catalog = await provider.listModels();
+const HEALTH_MAX_AGE_MS = 5 * 60 * 1000;
 
-  if (!catalog.verified) {
-    throw new ProviderAdapterError(
-      catalog.error || 'The AI provider is currently unavailable.',
-      catalog.status || 503,
-      'model_catalog_unverified',
-    );
-  }
-  if (!catalog.models.some((model) => model.id === input.model && model.capabilities.includes('chat'))) {
-    throw new ProviderAdapterError(
-      'This model is not currently verified as available for chat. Refresh the model list.',
-      400,
-      'model_not_verified',
-    );
+export async function prepareVerifiedChat(input: ChatInput): Promise<AsyncIterable<{ content: string }>> {
+  const provider = getChatProvider();
+  const models = await getVerifiedModelDescriptors();
+  const selected = models.find((model) => model.providerId === provider.id && model.id === input.model);
+  const isRecent = selected?.verifiedAt
+    ? Date.now() - Date.parse(selected.verifiedAt) <= HEALTH_MAX_AGE_MS
+    : false;
+
+  if (!selected || !selected.enabled || !isRecent ||
+      !selected.capabilities.text || !selected.capabilities.streaming) {
+    throw new ProviderAdapterError('Provider not reachable.', 503, 'model_not_verified');
   }
 
   return provider.streamChat(input);
