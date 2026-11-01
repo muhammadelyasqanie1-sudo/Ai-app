@@ -358,7 +358,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       }
       const passwordHash = await hashPassword(password);
       const created = await pool.query(
-        "INSERT INTO users (email, display_name, password_hash, role, email_verified) VALUES ($1, $2, $3, 'admin', true) ON CONFLICT (email) DO UPDATE SET display_name = EXCLUDED.display_name, password_hash = EXCLUDED.password_hash, role = 'admin', status = 'active', updated_at = now() RETURNING id",
+        "INSERT INTO users (email, display_name, password_hash, role, email_verified) VALUES ($1, $2, $3, 'admin', true) ON CONFLICT (email) DO UPDATE SET display_name = EXCLUDED.display_name, password_hash = EXCLUDED.password_hash, role = 'admin', status = 'active', email_verified = true, updated_at = now() RETURNING id",
         [email, displayName, passwordHash],
       );
       await createSession(created.rows[0].id, res);
