@@ -211,7 +211,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({ language }) => {
       <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 space-y-3">
         <h2 className="font-bold text-white">{dari ? 'ارائه‌دهندگان' : 'Providers'}</h2>
         {providers.map((provider) => <div key={provider.id} className="flex items-center justify-between gap-3 border-t border-slate-800 py-3">
-          <div><p className="text-sm font-semibold text-white">{provider.displayName}</p><p className="text-xs text-slate-500">{provider.id}</p></div>
+          <div><p className="text-sm font-semibold text-white">{provider.displayName}</p><p className="text-xs text-slate-500">{provider.id} · {provider.configured ? 'Credentials configured' : 'Credentials missing'}</p></div>
           <button onClick={() => void toggleProvider(provider)} className={`rounded-xl px-3 py-2 text-xs font-bold flex items-center gap-2 ${provider.enabled ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}><Power className="w-4 h-4" />{provider.enabled ? 'Enabled' : 'Disabled'}</button>
         </div>)}
         {providers.length === 0 && <p className="text-sm text-slate-500">{loading ? 'Loading…' : 'No registered providers.'}</p>}
@@ -242,7 +242,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({ language }) => {
           {['text','vision','imageGen','tts','stt'].map((cap) => <option key={cap} value={cap}>{cap}</option>)}
         </select>
         <textarea value={fallbackText} onChange={(e) => setFallbackText(e.target.value)} rows={4} placeholder="One model ID per line, in fallback order" className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs text-white" />
-        <p className="text-[11px] text-slate-500">Use discovered model IDs, one per line. The first healthy model in this order is preferred.</p>
+        <p className="text-[11px] text-slate-500">Use providerId::modelId references, one per line. The first healthy model in this order is preferred when fallback is needed.</p>
         <button onClick={() => void saveFallback()} className="rounded-xl bg-cyan-400 px-4 py-2 text-xs font-bold text-slate-950 flex items-center gap-2"><Save className="w-4 h-4" />Save fallback order</button>
       </div>
     </section>
