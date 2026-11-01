@@ -53,7 +53,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
     {
       id: 'image-gen' as TabType,
       title: language === 'dari' ? 'ساخت عکس' : 'Create Image',
-      desc: language === 'dari' ? 'تولید تصویر با هوش مصنوعی' : 'AI Image Studio',
+      desc: language === 'dari' ? 'تا اتصال ارائه‌دهنده تولید تصویر غیرفعال' : 'Unavailable until an image provider is connected',
       icon: ImageIcon,
       color: 'from-blue-500 to-cyan-400',
       textColor: 'text-cyan-400',
@@ -63,7 +63,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
     {
       id: 'video-gen' as TabType,
       title: language === 'dari' ? 'ساخت ویدیو' : 'Create Video',
-      desc: language === 'dari' ? 'تولید ویدیو از روی متن' : 'Video Generation',
+      desc: language === 'dari' ? 'تا اتصال ارائه‌دهنده تولید ویدیو غیرفعال' : 'Unavailable until a video provider is connected',
       icon: Video,
       color: 'from-purple-500 to-indigo-500',
       textColor: 'text-purple-400',
@@ -83,7 +83,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
     {
       id: 'tools' as TabType,
       title: language === 'dari' ? 'ترجمه هوشمند' : 'Translate',
-      desc: language === 'dari' ? 'فارسی، پشتو، انگلیسی' : 'Text & Voice Translation',
+      desc: language === 'dari' ? 'ارائه‌دهنده ترجمه تنظیم نشده است' : 'Translation provider is not configured',
       icon: Languages,
       color: 'from-sky-500 to-blue-600',
       textColor: 'text-sky-400',
@@ -93,7 +93,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
     {
       id: 'tools' as TabType,
       title: language === 'dari' ? 'ابزار PDF' : 'PDF Tools',
-      desc: language === 'dari' ? 'خلاصه‌سازی و استخراج متن' : 'Read, Extract & Edit',
+      desc: language === 'dari' ? 'بارگذاری و پردازش سند فعال نیست' : 'Document upload and processing are unavailable',
       icon: FileText,
       color: 'from-rose-500 to-pink-500',
       textColor: 'text-rose-400',
@@ -103,7 +103,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
     {
       id: 'tools' as TabType,
       title: language === 'dari' ? 'صدا و گفتار' : 'Voice Tools',
-      desc: language === 'dari' ? 'تبدیل صوت به متن و بالعکس' : 'Speech to Text & TTS',
+      desc: language === 'dari' ? 'ورودی گفتار مرورگر؛ بدون TTS سرور' : 'Browser speech input only; no server TTS',
       icon: Mic,
       color: 'from-amber-500 to-orange-400',
       textColor: 'text-amber-400',
@@ -113,7 +113,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
     {
       id: 'tools' as TabType,
       title: language === 'dari' ? 'مدیریت فایل' : 'File Tools',
-      desc: language === 'dari' ? 'فشرده‌سازی و ابزارها' : 'File Management',
+      desc: language === 'dari' ? 'پردازش فایل هنوز پیاده‌سازی نشده' : 'File processing is not implemented',
       icon: FolderArchive,
       color: 'from-teal-500 to-emerald-500',
       textColor: 'text-teal-400',
@@ -186,7 +186,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
                 </span>
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-[11px] font-bold text-amber-300">
                   <Crown className="w-3 h-3 text-amber-400 fill-amber-400" />
-                  {t.premiumUser}
+                  {language === 'dari' ? 'حساب مهمان • رایگان' : user.tier}
                 </span>
               </div>
             </div>
