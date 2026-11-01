@@ -92,6 +92,7 @@ async function* reliableStream(candidates: ModelDescriptor[], input: ChatInput):
           if (chunk.content) emitted = true;
           yield chunk;
         }
+        if (!emitted) throw new ProviderAdapterError('The provider returned an empty response.', 502, 'empty_response');
         return;
       } catch (error) {
         lastError = error;
@@ -123,7 +124,7 @@ export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerI
   );
 
   // If the manually selected model is unavailable, use the administrator's healthy fallback order.
-  if (!selected) {
+  if (!selected && !input.noFallback) {
     const fallbackId = await selectCheapestModel('text', input.model !== 'auto');
     if (fallbackId) {
       const split = fallbackId.indexOf('::');
