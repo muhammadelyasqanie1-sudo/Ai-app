@@ -110,6 +110,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
     language === 'dari' ? 'سلام، من از افغانستان هستم و از هوش مصنوعی استفاده می‌کنم.' : 'Hello, I am using the smart AFG AI assistant.'
   );
   const [transOutput, setTransOutput] = useState('');
+  const [translationFileName, setTranslationFileName] = useState('');
   const [isTranslating, setIsTranslating] = useState(false);
   const [copiedTrans, setCopiedTrans] = useState(false);
 
@@ -148,6 +149,15 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   const [voiceOptions, setVoiceOptions] = useState<Array<{ id: string; label: string }>>([]);
 
   // Translation uses the selected verified text-generation model.
+  const handleTranslationFile = async (file?: File) => {
+    if (!file) return;
+    if (file.size > 1_000_000) { setTransOutput(language === 'dari' ? 'فایل متنی باید کمتر از ۱ مگابایت باشد.' : 'Text document must be 1 MB or smaller.'); return; }
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (!['txt', 'md', 'csv', 'json'].includes(extension || '')) { setTransOutput(language === 'dari' ? 'فعلاً فقط فایل‌های TXT، MD، CSV و JSON متنی پشتیبانی می‌شوند.' : 'Only text-based TXT, MD, CSV and JSON documents are supported here.'); return; }
+    try { setTransInput(await file.text()); setTranslationFileName(file.name); setTransOutput(''); }
+    catch { setTransOutput(language === 'dari' ? 'خواندن فایل ممکن نشد.' : 'Could not read the selected file.'); }
+  };
+
   const handleTranslate = () => {
     if (!transInput.trim()) return;
     onRunTool(transInput.trim(), { toolMode: 'translation', sourceLanguage: sourceLang, targetLanguage: targetLang });
@@ -281,7 +291,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
       {activeSubTab === 'translate' && (
         <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-cyan-500/40 shadow-xl space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-cyan-900/40">
-            <p className="text-xs text-amber-200">{language === 'dari' ? 'ارائه‌دهنده ترجمه تنظیم نشده است؛ این ابزار غیرفعال است.' : 'No translation provider is configured; this tool is disabled.'}</p>
+            <p className="text-xs text-amber-200">{language === 'dari' ? 'ترجمه با مدل چت تأییدشده انجام می‌شود.' : 'Translation uses the selected verified chat model.'}</p>
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               <Languages className="w-5 h-5 text-sky-400" />
               <span>{t.toolTranslate}</span>
@@ -328,8 +338,10 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">
-                {language === 'dari' ? 'متن مبدا:' : 'Source Text:'}
+                {language === 'dari' ? 'متن یا سند متنی مبدا:' : 'Source text or text document:'}
               </label>
+              <input type="file" accept=".txt,.md,.csv,.json,text/plain,text/markdown,text/csv,application/json" onChange={(e) => handleTranslationFile(e.target.files?.[0])} className="mb-2 w-full text-xs text-slate-300" />
+              {translationFileName && <p className="mb-2 text-[11px] text-cyan-300">{translationFileName}</p>}
               <textarea
                 rows={5}
                 value={transInput}
