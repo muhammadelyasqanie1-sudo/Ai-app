@@ -34,12 +34,12 @@ export async function getCapabilitySnapshot() {
     models: catalog.models.map((model) => model.id),
     verified: catalog.verified,
     checkedAt: catalog.checkedAt,
-    providers: [{
-      id: 'cloudflare-workers-ai',
-      displayName: 'Cloudflare Workers AI',
-      status: catalog.verified ? 'verified' : 'unavailable',
-      capabilities: capabilities.chat ? ['chat'] : [],
-    }],
+    providers: getProviderRegistry().map((provider) => ({
+      id: provider.key,
+      displayName: provider.displayName,
+      status: provider.key === 'cloudflare-workers-ai' && catalog.verified ? 'verified' : 'unavailable',
+      capabilities: provider.key === 'cloudflare-workers-ai' && capabilities.chat ? ['chat'] : [],
+    })),
     capabilities,
   };
 }
