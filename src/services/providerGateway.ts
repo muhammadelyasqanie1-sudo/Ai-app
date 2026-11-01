@@ -186,11 +186,11 @@ export async function selectCheapestModel(capability: keyof CapabilityFlags = 't
     const priced = capable.filter((model) => costById.has(model.providerId + '::' + model.id))
       .sort((a, b) => (costById.get(a.providerId + '::' + a.id) || 0) - (costById.get(b.providerId + '::' + b.id) || 0));
     if (priced.length) return priced[0].providerId + '::' + priced[0].id;
-    return chooseFallback();
+    return chooseFallback() || (capable[0] ? capable[0].providerId + '::' + capable[0].id : null);
   }
 
-  // With no trustworthy pricing metadata, do not claim a cheapest model.
-  return null;
+  // No database means no stored prices/fallback chain; choose a healthy deterministic default without claiming it is cheapest.
+  return capable[0] ? capable[0].providerId + '::' + capable[0].id : null;
 }
 
 export async function getVerifiedProviderCatalog(): Promise<ProviderCatalog> {
@@ -233,8 +233,10 @@ export async function getCapabilitySnapshot() {
     models: selectable.filter((model) => model.capabilities.text && model.capabilities.streaming).map((model) => model.providerId + '::' + model.id),
     modelDescriptors: descriptors.map((model) => ({
       ...model,
-      selectable: isRecentAndHealthy(model),
-      disabledReason: !model.enabled ? 'Disabled by administrator.' : (model.verifiedAt !== null ? null : 'Provider not reachable.'),
+      selectable: isRecentAndHealthy(model) && model.capabilities.text && model.capabilities.streaming,
+      disabledReason: !model.enabled ? 'Disabled by administrator.' :
+        (!model.verifiedAt ? 'Provider not reachable.' :
+          (!model.capabilities.text || !model.capabilities.streaming ? 'This model does not support streaming chat.' : null)),
     })),
     verified: capabilities.chat,
     checkedAt: new Date().toISOString(),
