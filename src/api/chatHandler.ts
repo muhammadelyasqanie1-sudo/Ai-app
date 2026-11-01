@@ -250,7 +250,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       'X-Request-Id': id,
       ...corsHeaders(req),
     });
-    res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId })}\\n\\n`);
+    res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId })}\n\n`);
 
     let emittedContent = false;
     heartbeat = setInterval(() => {
