@@ -145,7 +145,7 @@ export const cloudflareWorkersAi: ChatProviderAdapter = {
             Accept: 'text/event-stream',
           },
           body: JSON.stringify({ model: input.model, messages: input.messages, stream: true }),
-          signal: AbortSignal.timeout(90_000),
+          signal: input.signal ? AbortSignal.any([AbortSignal.timeout(90_000), input.signal]) : AbortSignal.timeout(90_000),
         },
       );
     } catch {
