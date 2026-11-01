@@ -48,7 +48,44 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSessions(prev => prev.filter(s => s.id !== id));
+    setSessions((previous) => previous.filter((session) => session.id !== id));
+  };
+
+  const handleRename = (session: AfgChatSession, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const title = window.prompt(language === 'dari' ? 'نام جدید گفتگو' : 'Rename conversation', session.title);
+    if (title && title.trim()) setSessions((previous) => previous.map((item) => item.id === session.id ? { ...item, title: title.trim().slice(0, 100) } : item));
+  };
+
+  const handlePin = (session: AfgChatSession, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSessions((previous) => previous.map((item) => item.id === session.id ? { ...item, isPinned: !item.isPinned } : item));
+  };
+
+  const sessionMarkdown = (session: AfgChatSession) => '# ' + session.title + '\n\n' + session.messages.map((message) => '## ' + message.role.toUpperCase() + '\n\n' + message.content).join('\n\n');
+
+  const downloadText = (filename: string, content: string, mime: string) => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url; anchor.download = filename; anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExport = (session: AfgChatSession, format: 'md' | 'json' | 'pdf', e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (format === 'json') downloadText(session.title + '.json', JSON.stringify(session, null, 2), 'application/json');
+    else if (format === 'md') downloadText(session.title + '.md', sessionMarkdown(session), 'text/markdown');
+    else {
+      const popup = window.open('', '_blank');
+      if (!popup) return;
+      popup.document.title = session.title;
+      const heading = popup.document.createElement('h1'); heading.textContent = session.title;
+      const pre = popup.document.createElement('pre');
+      pre.style.whiteSpace = 'pre-wrap'; pre.style.fontFamily = 'Arial, sans-serif';
+      pre.textContent = session.messages.map((message) => message.role.toUpperCase() + '\n\n' + message.content).join('\n\n');
+      popup.document.body.append(heading, pre); popup.focus(); popup.print();
+    }
   };
 
   const getCategoryIcon = (category: AfgChatSession['category']) => {
