@@ -47,7 +47,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({ language }) => {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const loadAdminData = useCallback(async () => {
+  const loadAdminData = useCallback(async (): Promise<boolean> => {
     setLoading(true);
     setError('');
     try {
@@ -59,9 +59,11 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({ language }) => {
       setPriceDrafts(Object.fromEntries((modelData.models || []).map((model: ModelRow) => [model.providerId + ':' + model.id, { input: model.inputCostPerMillion == null ? '' : String(model.inputCostPerMillion), output: model.outputCostPerMillion == null ? '' : String(model.outputCostPerMillion) }])));
       setFallbacks(fallbackData.fallbacks || []);
       setAuthenticated(true);
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load admin settings.');
       setAuthenticated(false);
+      return false;
     } finally { setLoading(false); }
   }, []);
 
@@ -81,8 +83,8 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({ language }) => {
           : { email, password }),
       });
       setBootstrapToken('');
-      await loadAdminData();
-      setNotice(dari ? 'ورود مدیر موفق بود.' : 'Administrator session established.');
+      const loaded = await loadAdminData();
+      if (loaded) setNotice(dari ? 'ورود مدیر موفق بود.' : 'Administrator session established.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed.');
     } finally { setLoading(false); }
@@ -120,8 +122,8 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({ language }) => {
         method: 'PATCH',
         body: JSON.stringify({
           providerId: model.providerId, modelId: model.id, enabled: !model.enabled,
-          inputCostPerMillion: model.inputCostPerMillion,
-          outputCostPerMillion: model.outputCostPerMillion,
+          inputCostPerMillion: model.inputCostPerMillion == null ? null : Number(model.inputCostPerMillion),
+          outputCostPerMillion: model.outputCostPerMillion == null ? null : Number(model.outputCostPerMillion),
         }),
       });
       await loadAdminData();
@@ -139,6 +141,12 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({ language }) => {
       setNotice(dari ? 'زنجیره جایگزین ذخیره شد.' : 'Fallback order saved.');
     } catch (err) { setError(err instanceof Error ? err.message : 'Fallback update failed.'); }
   };
+
+  useEffect(() => {
+    const item = fallbacks.find((entry) => entry.capability === fallbackCapability);
+    const value = Array.isArray(item?.ordered_models) ? item.ordered_models : [];
+    setFallbackText(value.join('\n'));
+  }, [fallbacks, fallbackCapability]);
 
   const selectFallback = (capability: string) => {
     setFallbackCapability(capability);
