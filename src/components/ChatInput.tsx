@@ -97,14 +97,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      // Simulate quick dictation speech test
-      if (!isRecording) {
-        setIsRecording(true);
-        setTimeout(() => {
-          setText((prev) => (prev ? prev + ' Explain the latest news' : 'Explain the latest news'));
-          setIsRecording(false);
-        }, 1500);
-      }
+      alert('Speech recognition is not supported in this browser.');
       return;
     }
 
