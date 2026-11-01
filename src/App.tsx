@@ -148,6 +148,7 @@ export default function App() {
       })
       .catch(() => {
         setAvailableModels([]);
+        setModelOptions([]);
         setSelectedModel('');
         setCapabilitySnapshot({
           verified: false,
