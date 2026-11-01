@@ -155,8 +155,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     });
 
     if (!upstream.ok) {
-      const details = await upstream.text();
-      console.error('AI_PROVIDER_REQUEST_FAILED', JSON.stringify({ requestId: id, status: upstream.status, model, details: details.slice(0, 800) }));
+      console.error('AI_PROVIDER_REQUEST_FAILED', JSON.stringify({ requestId: id, status: upstream.status, provider: 'cloudflare', model }));
       sendJson(req, res, upstream.status, {
         error: 'The AI provider rejected the request. Check model access or try another verified model.',
         requestId: id,
@@ -202,7 +201,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
               res.write(`data: ${JSON.stringify({ type: 'content', text: piece })}\n\n`);
             }
             if (event.error) {
-              console.error('AI_PROVIDER_STREAM_ERROR', JSON.stringify({ requestId: id, model, error: event.error }).slice(0, 1000));
+              console.error('AI_PROVIDER_STREAM_ERROR', JSON.stringify({ requestId: id, model, provider: 'cloudflare' }));
             }
           } catch {
             // Ignore non-JSON SSE events.
@@ -216,8 +215,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       reader.releaseLock();
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown server error';
-    console.error('AI_CHAT_HANDLER_ERROR', JSON.stringify({ requestId: id, message }));
+    console.error('AI_CHAT_HANDLER_ERROR', JSON.stringify({ requestId: id, provider: 'cloudflare' }));
     if (!res.headersSent) {
       sendJson(req, res, 500, { error: 'The AI request failed unexpectedly. Please retry.', requestId: id }, id);
     } else {
