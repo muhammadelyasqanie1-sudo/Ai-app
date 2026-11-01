@@ -28,7 +28,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     sendAuthJson(res, 503, { error: 'Admin controls require DATABASE_URL and the database schema.' });
     return true;
   }
-  if (!['GET', 'PATCH'].includes(req.method || '')) {
+  if (!['GET', 'PATCH', 'POST'].includes(req.method || '')) {
     sendAuthJson(res, 405, { error: 'Method not allowed.' });
     return true;
   }
@@ -48,12 +48,39 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     sendAuthJson(res, 403, { error: 'Administrator access is required.' });
     return true;
   }
-  if (req.method === 'PATCH' && !verifyCsrf(req)) {
+  if (req.method !== 'GET' && !verifyCsrf(req)) {
     sendAuthJson(res, 403, { error: 'CSRF validation failed.' });
     return true;
   }
 
   try {
+    if (req.method === 'POST' && pathname === '/api/admin/notifications/product-update') {
+      const body = await readJsonBody(req, 12000);
+      const title = typeof body.title === 'string' ? body.title.trim().slice(0, 120) : '';
+      const message = typeof body.body === 'string' ? body.body.trim().slice(0, 2000) : '';
+      if (!title || !message) {
+        sendAuthJson(res, 400, { error: 'A title and message are required.' });
+        return true;
+      }
+      const delivered = await pool.query(
+        `INSERT INTO user_notification_events(user_id,event_type,title,body)
+         SELECT u.id,'product.update',$1,$2
+           FROM users u
+           LEFT JOIN user_preferences p ON p.user_id=u.id
+          WHERE u.status='active'
+            AND COALESCE((p.notifications_json->>'productUpdates')::boolean,false)=true
+            AND COALESCE((p.notifications_json->>'inApp')::boolean,true)=true
+         RETURNING id`,
+        [title, message],
+      );
+      await pool.query(
+        'INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+        [user.id,'notification.product_update_broadcast','notification','product.update',JSON.stringify({title,recipientCount:delivered.rowCount||0})],
+      );
+      sendAuthJson(res, 200, { sent: true, recipientCount: delivered.rowCount || 0 });
+      return true;
+    }
+
     if (req.method === 'GET' && pathname === '/api/admin/providers') {
       const registry = getProviderRegistry();
       const settings = await pool.query('SELECT provider_key, enabled, display_name FROM provider_configs');
