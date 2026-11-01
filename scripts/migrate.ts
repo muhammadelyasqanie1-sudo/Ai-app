@@ -21,7 +21,7 @@ if (!connectionString) {
   const directory = path.join(here, '..', 'database', 'migrations');
   try {
     await pool.query('CREATE TABLE IF NOT EXISTS schema_migrations (version text PRIMARY KEY, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())');
-    const files = (await readdir(directory)).filter((name) => /^\\d+_[a-z0-9_-]+\\.sql$/.test(name)).sort();
+    const files = (await readdir(directory)).filter((name) => /^\d+_[a-z0-9_-]+\.sql$/.test(name)).sort();
     for (const name of files) {
       const sql = await readFile(path.join(directory, name), 'utf8');
       const checksum = createHash('sha256').update(sql).digest('hex');
