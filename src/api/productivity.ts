@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { randomUUID } from 'crypto';
 import { pool } from './database.ts';
 import { authenticateRequest, verifyCsrf, readJsonBody, sendAuthJson } from './auth.ts';
 
