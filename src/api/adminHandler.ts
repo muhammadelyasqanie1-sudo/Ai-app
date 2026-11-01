@@ -320,6 +320,11 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const enabled = body.enabled;
       const inputCost = body.inputCostPerMillion;
       const outputCost = body.outputCostPerMillion;
+      const capabilityNames = ['text','streaming','vision','imageGen','imageEdit','ocr','tts','stt','tools','jsonMode'];
+      const capabilities = body.capabilities === undefined ? null : body.capabilities;
+      if (capabilities !== null && (!Array.isArray(capabilities) || capabilities.some((item: unknown) => typeof item !== 'string' || !capabilityNames.includes(item)))) {
+        sendAuthJson(res, 400, { error: 'Invalid model capability override.' }); return true;
+      }
       const descriptor = (await getVerifiedModelDescriptors()).find((model) => model.providerId === providerId && model.id === modelId);
       if (!descriptor || typeof enabled !== 'boolean') {
         sendAuthJson(res, 400, { error: 'Select a discovered model and provide a boolean enabled value.' });
@@ -333,11 +338,12 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       }
       await pool.query(
         `INSERT INTO model_catalog
-          (provider_key, model_key, display_name, capabilities, enabled, context_window, input_cost_per_million, output_cost_per_million, verified_at, last_health_ok, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+          (provider_key, model_key, display_name, capabilities, capabilities_override, enabled, context_window, input_cost_per_million, output_cost_per_million, verified_at, last_health_ok, updated_at)
+         VALUES ($1, $2, $3, $4, $11, $5, $6, $7, $8, $9, $10, now())
          ON CONFLICT (provider_key, model_key) DO UPDATE SET
            display_name = EXCLUDED.display_name,
            capabilities = EXCLUDED.capabilities,
+           capabilities_override = COALESCE(EXCLUDED.capabilities_override, model_catalog.capabilities_override),
            enabled = EXCLUDED.enabled,
            context_window = EXCLUDED.context_window,
            input_cost_per_million = EXCLUDED.input_cost_per_million,
@@ -348,7 +354,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         [providerId, modelId, descriptor.displayName,
           Object.entries(descriptor.capabilities).filter(([, value]) => value).map(([key]) => key),
           enabled, descriptor.contextWindow, inputCost ?? null, outputCost ?? null,
-          descriptor.verifiedAt, descriptor.verifiedAt !== null],
+          descriptor.verifiedAt, descriptor.verifiedAt !== null, capabilities],
       );
       await pool.query(
         'INSERT INTO audit_logs (actor_user_id, action, target_type, target_id, metadata) VALUES ($1, $2, $3, $4, $5)',
