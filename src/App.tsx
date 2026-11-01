@@ -29,12 +29,12 @@ import type {
 } from './types/afg';
 
 const DEFAULT_USER: UserProfile = {
-  name: 'Unknown',
-  nameEn: 'Unknown',
-  email: 'unknown',
+  name: 'Guest',
+  nameEn: 'Guest',
+  email: '',
   avatar: '',
-  isPremium: true,
-  tier: 'Pro',
+  isPremium: false,
+  tier: 'Free',
 };
 
 const INITIAL_MESSAGES: AfgMessage[] = [
