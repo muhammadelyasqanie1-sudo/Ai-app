@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { prepareVerifiedChat } from '../services/chatService.ts';
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
 import { buildToolModePrompt } from '../services/toolModes.ts';
+import { getProductivityPrompt } from './productivity.ts';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
@@ -152,6 +153,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         : 'Respond in clear English unless the user explicitly requests another language.',
       'You are AFG AI. Be honest about uncertainty and limitations. Never fabricate citations, URLs, quotations, sources, or tool results. Cite only sources actually supplied or retrieved in this request. If no verifiable source is available, say so clearly. Distinguish confirmed facts from estimates and opinions.',
       toolMode.prompt,
+      getProductivityPrompt(body.productivityType, body.productivityParameters, requestedLanguage),
     ].filter(Boolean);
 
     const upstreamMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
