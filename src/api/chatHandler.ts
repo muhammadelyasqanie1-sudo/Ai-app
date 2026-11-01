@@ -242,7 +242,6 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     const prepared = await prepareVerifiedChat({ model, messages: upstreamMessages, signal: abortController.signal });
     const { providerId, modelId, stream } = prepared;
     activeModelId = modelId;
-    res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId })}\\n\\n`);
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
@@ -250,6 +249,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       'X-Request-Id': id,
       ...corsHeaders(req),
     });
+    res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId })}\\n\\n`);
 
     let emittedContent = false;
     heartbeat = setInterval(() => {
