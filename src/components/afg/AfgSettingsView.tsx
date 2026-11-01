@@ -39,8 +39,6 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
   onOpenShortcuts,
 }) => {
   const t = translations[language];
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [soundsEnabled, setSoundsEnabled] = useState(true);
   const [showAboutModal, setShowAboutModal] = useState(false);
 
   return (
@@ -124,53 +122,21 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
           </div>
         </div>
 
-        {/* Notifications Toggle */}
-        <div 
-          onClick={() => setNotificationsEnabled(!notificationsEnabled)}
-          className="p-4 flex items-center justify-between hover:bg-cyan-950/30 cursor-pointer transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center text-sky-400">
-              <Bell className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-sm font-bold text-white block">
-                {t.notifications}
-              </span>
-              <span className="text-xs text-slate-400">
-                {notificationsEnabled ? 'Enabled' : 'Disabled'}
-              </span>
-            </div>
-          </div>
-
-          <div className={`w-12 h-6 rounded-full p-1 transition-colors ${notificationsEnabled ? 'bg-cyan-500' : 'bg-slate-700'}`}>
-            <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationsEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
-          </div>
+        {/* Notification and sound integrations are not configured yet. */}
+      <div className="p-4 flex items-center justify-between border-b border-cyan-950/60">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center text-sky-400"><Bell className="w-5 h-5" /></div>
+          <div><span className="text-sm font-bold text-white block">{t.notifications}</span><span className="text-xs text-slate-400">{language === 'dari' ? 'اعلان‌ها هنوز پیکربندی نشده‌اند' : 'Not configured'}</span></div>
         </div>
-
-        {/* Sound Effects Toggle */}
-        <div 
-          onClick={() => setSoundsEnabled(!soundsEnabled)}
-          className="p-4 flex items-center justify-between hover:bg-cyan-950/30 cursor-pointer transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400">
-              <Volume2 className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-sm font-bold text-white block">
-                {t.soundEffects}
-              </span>
-              <span className="text-xs text-slate-400">
-                {soundsEnabled ? 'Enabled' : 'Disabled'}
-              </span>
-            </div>
-          </div>
-
-          <div className={`w-12 h-6 rounded-full p-1 transition-colors ${soundsEnabled ? 'bg-cyan-500' : 'bg-slate-700'}`}>
-            <div className={`w-4 h-4 rounded-full bg-white transition-transform ${soundsEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
-          </div>
+        <span className="text-xs text-amber-300">{language === 'dari' ? 'غیرفعال' : 'Unavailable'}</span>
+      </div>
+      <div className="p-4 flex items-center justify-between border-b border-cyan-950/60">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400"><Volume2 className="w-5 h-5" /></div>
+          <div><span className="text-sm font-bold text-white block">{t.soundEffects}</span><span className="text-xs text-slate-400">{language === 'dari' ? 'افکت‌های صوتی هنوز پیاده‌سازی نشده‌اند' : 'Not implemented'}</span></div>
         </div>
+        <span className="text-xs text-amber-300">{language === 'dari' ? 'غیرفعال' : 'Unavailable'}</span>
+      </div>
 
         {/* Keyboard Shortcuts Trigger (preserves request #9) */}
         <div 
@@ -246,7 +212,7 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
 
             <div className="pt-2 flex flex-col gap-2">
               <a
-                href="https://github.com"
+                href="https://github.com/muhammadelyasqanie1-sudo/Ai-app"
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-white"
@@ -254,16 +220,7 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
                 <Github className="w-4 h-4 text-cyan-400" />
                 <span>{t.github}</span>
               </a>
-              <a
-                href="https://t.me"
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-white"
-              >
-                <Send className="w-4 h-4 text-sky-400" />
-                <span>{t.telegram}</span>
-              </a>
-            </div>
+           </div>
 
             <div className="pt-4 border-t border-cyan-950 text-[11px] text-slate-400 flex flex-col items-center gap-1">
               <span className="flex items-center gap-1 text-slate-300">
