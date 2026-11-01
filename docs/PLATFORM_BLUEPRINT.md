@@ -83,3 +83,24 @@ The current architecture is documented in [SYSTEM_ARCHITECTURE.md](./SYSTEM_ARCH
 
 This is a modular monolith, not yet a deployed Workers/serverless, WebSocket, or queue-based system. Authentication middleware, CSRF for cookie sessions, distributed rate limiting, multi-provider fallback/retries, usage metering, object storage, queues, and user-owned persistence remain future release work. The PostgreSQL schema is a foundation and does not itself activate persistence.
 
+
+
+## Implementation status update — 2026-11-01
+
+The following are now present in source:
+- Shared API edge and SSE chat with heartbeat, cancellation, pre-first-token exponential retry, empty-output guard and uncertainty/source-honesty instruction.
+- Provider adapter contract with Cloudflare Workers AI and optional OpenAI-compatible adapter; provider-qualified model references.
+- Five-minute per-process model health verification, PostgreSQL provider/model enablement, administrator-entered prices and capability fallback chains.
+- One-time admin bootstrap, database-backed hashed sessions, CSRF checks, server-side admin role enforcement and audit logging.
+- Core message operations and localStorage conversation history with search, rename, pin, Markdown/JSON export, print-to-PDF, delete and clear.
+- Markdown GFM tables, LaTeX and code highlighting with raw HTML disabled.
+
+Still incomplete:
+- Public user registration, email verification, Google OAuth and account recovery.
+- PostgreSQL conversation/message persistence and cross-device history.
+- Distributed rate limiting, spend quotas, distributed health cache and resumable SSE.
+- Real image/vision/video/files/voice/research providers and object storage.
+- Pricing feeds; auto-routing can only compare prices entered by an administrator.
+- Full localization of every component.
+
+The PostgreSQL schema is source-only until manually applied. No tests, type checks, builds, migrations, workflows or deployments were run. Do not describe the application as production-validated.
