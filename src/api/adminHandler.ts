@@ -54,6 +54,167 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
   }
 
   try {
+    if (req.method === 'GET' && pathname === '/api/admin/users') {
+      const result = await pool.query(`
+        SELECT u.id,u.email,u.display_name,u.role,u.status,u.created_at,
+          (SELECT max(s.last_seen_at) FROM sessions s WHERE s.user_id=u.id) AS last_seen_at,
+          (SELECT count(*)::int FROM usage_events e WHERE e.user_id=u.id AND e.created_at>now()-interval '30 days') AS requests_30d
+        FROM users u ORDER BY u.created_at DESC LIMIT 250`);
+      sendAuthJson(res, 200, { users: result.rows }); return true;
+    }
+
+    if (req.method === 'PATCH' && pathname === '/api/admin/users') {
+      const body = await readJsonBody(req, 8000);
+      const targetId = typeof body.userId === 'string' ? body.userId : '';
+      const role = body.role;
+      const status = body.status;
+      if (!targetId || (role !== undefined && !['user','admin'].includes(role)) ||
+          (status !== undefined && !['active','suspended'].includes(status)) ||
+          (role === undefined && status === undefined)) {
+        sendAuthJson(res, 400, { error: 'Provide a user ID and a valid role or status.' }); return true;
+      }
+      if (targetId === user.id && (role === 'user' || status === 'suspended')) {
+        sendAuthJson(res, 400, { error: 'You cannot revoke your own administrator access or suspend your own account.' }); return true;
+      }
+      const result = await pool.query(`
+        UPDATE users SET role=COALESCE($2,role),status=COALESCE($3,status),updated_at=now()
+        WHERE id=$1 AND status <> 'deleted' RETURNING id,role,status`,
+        [targetId, role ?? null, status ?? null]);
+      if (!result.rowCount) { sendAuthJson(res, 404, { error: 'User not found.' }); return true; }
+      if (status === 'suspended') await pool.query('DELETE FROM sessions WHERE user_id=$1', [targetId]);
+      await pool.query(
+        'INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+        [user.id,'user.access.update','user',targetId,JSON.stringify({role:role ?? null,status:status ?? null})]);
+      sendAuthJson(res, 200, { user: result.rows[0] }); return true;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/admin/overview') {
+      const [usage,requests,users,storage] = await Promise.all([
+        pool.query(`SELECT date_trunc('day',created_at) AS day,count(*)::int AS requests,
+          COALESCE(sum(input_tokens+output_tokens),0)::bigint AS tokens
+          FROM usage_events WHERE created_at>now()-interval '14 days' GROUP BY 1 ORDER BY 1`),
+        pool.query(`SELECT count(*)::int AS total,
+          count(*) FILTER (WHERE status_code>=500)::int AS server_errors,
+          count(*) FILTER (WHERE status_code BETWEEN 400 AND 499)::int AS client_errors,
+          count(*) FILTER (WHERE status_code<400)::int AS successful
+          FROM admin_request_events WHERE created_at>now()-interval '24 hours'`),
+        pool.query(`SELECT count(*)::int AS total,
+          count(*) FILTER (WHERE status='active')::int AS active,
+          count(*) FILTER (WHERE status='suspended')::int AS suspended FROM users`),
+        pool.query(`SELECT pg_database_size(current_database())::bigint AS database_bytes,
+          (SELECT count(*)::bigint FROM generated_assets) AS asset_records,
+          (SELECT count(*)::bigint FROM conversations) AS conversations`)
+      ]);
+      sendAuthJson(res, 200, {
+        usage: usage.rows, requests: requests.rows[0], users: users.rows[0],
+        storage: { ...storage.rows[0], r2Configured: Boolean(process.env.R2_BUCKET && (process.env.R2_ACCESS_KEY_ID || process.env.CLOUDFLARE_R2_ACCESS_KEY_ID)), kvConfigured: Boolean(process.env.CLOUDFLARE_KV_NAMESPACE_ID || process.env.KV_REST_API_URL) }
+      }); return true;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/admin/audit') {
+      const result = await pool.query(`SELECT a.id,a.actor_user_id,u.email AS actor_email,a.action,
+        a.target_type,a.target_id,a.metadata,a.created_at FROM audit_logs a
+        LEFT JOIN users u ON u.id=a.actor_user_id ORDER BY a.id DESC LIMIT 250`);
+      sendAuthJson(res, 200, { events: result.rows }); return true;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/admin/security-events') {
+      const result = await pool.query(`SELECT id,event_type,severity,user_id,request_id,ip_hash,metadata,created_at
+        FROM security_events ORDER BY created_at DESC LIMIT 250`);
+      sendAuthJson(res, 200, { events: result.rows }); return true;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/admin/rate-limits') {
+      const result = await pool.query('SELECT id,scope_type,scope_key,requests,window_seconds,enabled,updated_at FROM rate_limit_policies ORDER BY scope_type,scope_key');
+      sendAuthJson(res, 200, { policies: result.rows }); return true;
+    }
+
+    if (req.method === 'PATCH' && pathname === '/api/admin/rate-limits') {
+      const body = await readJsonBody(req, 8000);
+      const scopeType = body.scopeType;
+      const scopeKey = typeof body.scopeKey === 'string' ? body.scopeKey.trim().slice(0,180) : '';
+      const requests = Number(body.requests), windowSeconds = Number(body.windowSeconds);
+      const enabled = body.enabled !== false;
+      if (!['user','tier','model'].includes(scopeType) || !scopeKey ||
+          !Number.isInteger(requests) || requests < 1 || requests > 1000000 ||
+          !Number.isInteger(windowSeconds) || windowSeconds < 1 || windowSeconds > 86400) {
+        sendAuthJson(res, 400, { error: 'Invalid rate-limit policy.' }); return true;
+      }
+      const result = await pool.query(`INSERT INTO rate_limit_policies(scope_type,scope_key,requests,window_seconds,enabled,updated_by)
+        VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(scope_type,scope_key) DO UPDATE SET
+        requests=EXCLUDED.requests,window_seconds=EXCLUDED.window_seconds,enabled=EXCLUDED.enabled,
+        updated_by=EXCLUDED.updated_by,updated_at=now()
+        RETURNING id,scope_type,scope_key,requests,window_seconds,enabled,updated_at`,
+        [scopeType,scopeKey,requests,windowSeconds,enabled,user.id]);
+      await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+        [user.id,'rate_limit.update','rate_limit',scopeType+':'+scopeKey,JSON.stringify({requests,windowSeconds,enabled})]);
+      sendAuthJson(res, 200, { policy: result.rows[0] }); return true;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/admin/feature-flags') {
+      const result = await pool.query('SELECT flag_key,enabled,description,updated_at FROM feature_flags ORDER BY flag_key');
+      sendAuthJson(res, 200, { flags: result.rows }); return true;
+    }
+
+    if (req.method === 'PATCH' && pathname === '/api/admin/feature-flags') {
+      const body = await readJsonBody(req, 8000);
+      if (typeof body.key !== 'string' || !/^[a-z][a-z0-9_.-]{1,79}$/.test(body.key) || typeof body.enabled !== 'boolean') {
+        sendAuthJson(res, 400, { error: 'A valid feature flag key and boolean enabled value are required.' }); return true;
+      }
+      const description = typeof body.description === 'string' ? body.description.trim().slice(0,300) : '';
+      await pool.query(`INSERT INTO feature_flags(flag_key,enabled,description,updated_by) VALUES($1,$2,$3,$4)
+        ON CONFLICT(flag_key) DO UPDATE SET enabled=EXCLUDED.enabled,description=EXCLUDED.description,
+        updated_by=EXCLUDED.updated_by,updated_at=now()`,[body.key,body.enabled,description,user.id]);
+      await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+        [user.id,'feature_flag.update','feature_flag',body.key,JSON.stringify({enabled:body.enabled})]);
+      sendAuthJson(res, 200, { key: body.key, enabled: body.enabled }); return true;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/admin/providers/test') {
+      const body = await readJsonBody(req, 4000);
+      const provider = getProviderRegistry().find((item) => item.id === body.providerId);
+      if (!provider) { sendAuthJson(res, 400, { error: 'Unknown provider.' }); return true; }
+      const adapter = getProviderAdapter(provider.id);
+      const started = Date.now();
+      let configured = false, connected = false, discoveredModels = 0;
+      try {
+        const config = await adapter?.validateConfig();
+        configured = Boolean(config?.valid);
+        if (configured) { const models = await adapter!.listModels(); discoveredModels = models.length; connected = true; }
+      } catch { connected = false; }
+      const latencyMs = Date.now() - started;
+      await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+        [user.id,'provider.connection_test','provider',provider.id,JSON.stringify({configured,connected,discoveredModels,latencyMs})]);
+      sendAuthJson(res, connected ? 200 : 502, { providerId: provider.id, configured, connected, discoveredModels, latencyMs,
+        message: connected ? 'Provider connection succeeded.' : (configured ? 'Provider connection failed.' : 'Provider credentials are not configured.') });
+      return true;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/admin/models/discover') {
+      const models = await getVerifiedModelDescriptors();
+      sendAuthJson(res, 200, { discovered: models.length, healthy: models.filter((model) => model.verifiedAt).length });
+      return true;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/admin/system-health') {
+      const started = Date.now();
+      await pool.query('SELECT 1');
+      const databaseLatencyMs = Date.now() - started;
+      const providers = await Promise.all(getProviderRegistry().map(async (provider) => {
+        const adapter = getProviderAdapter(provider.id); const before = Date.now();
+        try {
+          const config = await adapter?.validateConfig();
+          if (!config?.valid) return { id: provider.id, configured: false, healthy: false, latencyMs: null };
+          const models = await adapter!.listModels();
+          return { id: provider.id, configured: true, healthy: true, modelCount: models.length, latencyMs: Date.now()-before };
+        } catch { return { id: provider.id, configured: true, healthy: false, latencyMs: Date.now()-before }; }
+      }));
+      sendAuthJson(res, 200, { database: { healthy: true, latencyMs: databaseLatencyMs },
+        providers, queues: { configured: false, status: 'not_configured' },
+        storage: { r2Configured: Boolean(process.env.R2_BUCKET), kvConfigured: Boolean(process.env.CLOUDFLARE_KV_NAMESPACE_ID || process.env.KV_REST_API_URL) } });
+      return true;
+    }
+
     if (req.method === 'POST' && pathname === '/api/admin/notifications/product-update') {
       const body = await readJsonBody(req, 12000);
       const title = typeof body.title === 'string' ? body.title.trim().slice(0, 120) : '';
@@ -104,7 +265,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     if (req.method === 'GET' && pathname === '/api/admin/models') {
       const descriptors = await getVerifiedModelDescriptors();
       const rows = await pool.query(
-        `SELECT provider_key, model_key, enabled, input_cost_per_million, output_cost_per_million
+        `SELECT provider_key, model_key, enabled, input_cost_per_million, output_cost_per_million, capabilities_override
            FROM model_catalog`,
       );
       const settings = new Map(rows.rows.map((row) => [`${row.provider_key}:${row.model_key}`, row]));
@@ -113,6 +274,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           const setting = settings.get(`${model.providerId}:${model.id}`);
           return {
             ...model,
+            capabilities: setting?.capabilities_override ? Object.fromEntries(Object.keys(model.capabilities).map((key) => [key, setting.capabilities_override.includes(key)])) : model.capabilities,
             enabled: setting ? Boolean(setting.enabled) : model.enabled,
             inputCostPerMillion: setting?.input_cost_per_million ?? null,
             outputCostPerMillion: setting?.output_cost_per_million ?? null,
