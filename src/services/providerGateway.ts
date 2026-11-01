@@ -10,6 +10,10 @@ export function getProviderRegistry(): Array<Pick<ChatProviderAdapter, 'id' | 'k
   return providerRegistry.map(({ id, key, displayName }) => ({ id, key, displayName }));
 }
 
+export function getProviderAdapter(providerId: string): ChatProviderAdapter | undefined {
+  return providerRegistry.find((provider) => provider.id === providerId);
+}
+
 export function getChatProvider(): ChatProviderAdapter {
   const provider = providerRegistry.find((candidate) => candidate.id === 'cloudflare-workers-ai');
   if (!provider) throw new Error('No chat provider adapter is registered.');
