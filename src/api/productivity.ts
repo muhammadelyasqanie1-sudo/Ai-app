@@ -39,6 +39,19 @@ function cleanText(value: unknown, max = 20_000): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
 }
 
+function sanitizeParameters(type: ProductivityType, value: unknown): Record<string, unknown> {
+  const raw = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const clean: Record<string, unknown> = {};
+  for (const key of PARAM_SCHEMAS[type]) {
+    const item = raw[key];
+    if (typeof item === 'string') clean[key] = item.trim().slice(0, 500);
+    else if (typeof item === 'number' && Number.isFinite(item)) clean[key] = item;
+    else if (typeof item === 'boolean') clean[key] = item;
+    else if (Array.isArray(item)) clean[key] = item.filter((entry): entry is string => typeof entry === 'string').slice(0, 20).map(entry => entry.slice(0, 100));
+  }
+  return clean;
+}
+
 export async function handleProductivityApi(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
   if (!pathname.startsWith('/api/productivity/')) return false;
   if (!pool) { reply(res, 503, { error: 'Productivity storage requires DATABASE_URL and the current database schema.' }); return true; }
@@ -69,8 +82,7 @@ export async function handleProductivityApi(req: IncomingMessage, res: ServerRes
       const title = cleanText(body.title, 180);
       const content = cleanText(body.content, 20_000);
       if (!title || !content) { reply(res, 400, { error: 'A title and content are required.' }); return true; }
-      const rawParams = body.parameters && typeof body.parameters === 'object' && !Array.isArray(body.parameters) ? body.parameters as Record<string, unknown> : {};
-      const parameters = Object.fromEntries(PARAM_SCHEMAS[type].filter((key) => key in rawParams).map((key) => [key, rawParams[key]]));
+      const parameters = sanitizeParameters(type, body.parameters);
       const result = await pool.query(
         `INSERT INTO productivity_items (user_id, tool_type, title, content, parameters)
          VALUES ($1,$2,$3,$4,$5::jsonb)
@@ -88,8 +100,8 @@ export async function handleProductivityApi(req: IncomingMessage, res: ServerRes
       const body = await readJsonBody(req, 30_000);
       const updates: string[] = [];
       const values: unknown[] = [itemMatch[1], user.id];
-      if (typeof body.title === 'string') { values.push(cleanText(body.title, 180)); updates.push(`title = $3`); }
-      if (typeof body.content === 'string') { values.push(cleanText(body.content, 20_000)); updates.push(`content = $${values.length}`); }
+      if (typeof body.title === 'string') { const title=cleanText(body.title,180); if(!title){reply(res,400,{error:'Title cannot be empty.'});return true;} values.push(title); updates.push(`title = $3`); }
+      if (typeof body.content === 'string') { const content=cleanText(body.content,20_000); if(!content){reply(res,400,{error:'Content cannot be empty.'});return true;} values.push(content); updates.push(`content = ${values.length}`); }
       if (typeof body.isPinned === 'boolean') { values.push(body.isPinned); updates.push(`is_pinned = $${values.length}`); }
       if (!updates.length) { reply(res, 400, { error: 'No supported fields to update.' }); return true; }
       updates.push('updated_at = now()');
@@ -114,8 +126,7 @@ export async function handleProductivityApi(req: IncomingMessage, res: ServerRes
 export function getProductivityPrompt(typeValue: unknown, parametersValue: unknown, language: 'dari' | 'english') {
   const type = TYPES.includes(typeValue as ProductivityType) ? typeValue as ProductivityType : null;
   if (!type) return null;
-  const raw = parametersValue && typeof parametersValue === 'object' && !Array.isArray(parametersValue) ? parametersValue as Record<string, unknown> : {};
-  const parameters = Object.fromEntries(PARAM_SCHEMAS[type].filter((key) => key in raw).map((key) => [key, typeof raw[key] === 'string' ? String(raw[key]).slice(0, 500) : raw[key]]));
+  const parameters = sanitizeParameters(type, parametersValue);
   return [
     PROMPTS[type],
     `Selected language: ${language}. Parameter schema: ${PARAM_SCHEMAS[type].join(', ')}. Validated parameters: ${JSON.stringify(parameters)}.`,
