@@ -66,6 +66,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   
   // Speech synthesis state (Read Aloud)
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedThoughts, setExpandedThoughts] = useState<Record<string, boolean>>({});
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -81,43 +82,38 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
     }
   }, []);
 
-  // Web Speech API Read Aloud
-  const handleReadAloud = (msgId: string, text: string) => {
-    if (!('speechSynthesis' in window)) {
-      alert(language === 'dari' ? 'مرورگر شما از تبدیل متن به گفتار پشتیبانی نمی‌کند.' : 'Web Speech is not supported in this browser.');
-      return;
-    }
-
+  // Provider-backed Read Aloud; unavailable unless a verified TTS adapter exists.
+  const handleReadAloud = async (msgId: string, text: string) => {
+    if (!capabilities['text-to-speech']) return;
     if (speakingMsgId === msgId) {
-      window.speechSynthesis.cancel();
+      audioRef.current?.pause();
+      audioRef.current = null;
       setSpeakingMsgId(null);
       return;
     }
-
-    window.speechSynthesis.cancel();
-    // Clean markdown symbols for cleaner voice speech
-    const cleanText = text
-      .replace(/```[\s\S]*?```/g, 'Code block omitted.')
-      .replace(/[*#_`>]/g, '')
-      .trim();
-
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    
-    // Choose appropriate voice
-    const voices = window.speechSynthesis.getVoices();
-    if (language === 'dari') {
-      const persianVoice = voices.find(v => v.lang.startsWith('fa') || v.lang.startsWith('ar'));
-      if (persianVoice) utterance.voice = persianVoice;
-    } else {
-      const enVoice = voices.find(v => v.lang.startsWith('en'));
-      if (enVoice) utterance.voice = enVoice;
-    }
-
-    utterance.onend = () => setSpeakingMsgId(null);
-    utterance.onerror = () => setSpeakingMsgId(null);
-
+    audioRef.current?.pause();
     setSpeakingMsgId(msgId);
-    window.speechSynthesis.speak(utterance);
+    const cleanText = text.replace(/\x60\x60\x60[\\s\\S]*?\x60\x60\x60/g, 'Code block omitted.').replace(/[*#_\x60>]/g, '').trim();
+    try {
+      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/synthesize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: cleanText.slice(0, 5000) }),
+      });
+      const data = await response.json();
+      if (!response.ok || typeof data.audioBase64 !== 'string' || typeof data.mimeType !== 'string') {
+        throw new Error(data.error || 'Speech synthesis is unavailable.');
+      }
+      const audio = new Audio('data:' + data.mimeType + ';base64,' + data.audioBase64);
+      audioRef.current = audio;
+      audio.onended = () => { audioRef.current = null; setSpeakingMsgId(null); };
+      audio.onerror = () => { audioRef.current = null; setSpeakingMsgId(null); };
+      await audio.play();
+    } catch (error) {
+      audioRef.current = null;
+      setSpeakingMsgId(null);
+      alert(error instanceof Error ? error.message : (language === 'dari' ? 'تولید صدا ناموفق بود.' : 'Speech synthesis failed.'));
+    }
   };
 
   const handleCopy = (id: string, text: string) => {
