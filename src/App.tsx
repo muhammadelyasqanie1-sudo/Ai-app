@@ -18,6 +18,7 @@ import { AfgSideMenu } from './components/afg/AfgSideMenu';
 import { AfgLanguageModal } from './components/afg/AfgLanguageModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { ErrorBoundary } from './components/afg/AfgDesignSystem';
+import { applyDocumentLocale } from './utils/i18n';
 
 import type { 
   Language, 
@@ -59,7 +60,11 @@ export default function App() {
   // App State
   const [language, setLanguage] = useState<Language>(() => {
     const saved = localStorage.getItem('afg_language');
-    return (saved === 'dari' || saved === 'english') ? saved : 'dari';
+    return saved === 'english' ? 'english' : 'dari';
+  });
+  const [hasSelectedLanguage, setHasSelectedLanguage] = useState(() => {
+    const saved = localStorage.getItem('afg_language');
+    return saved === 'dari' || saved === 'english';
   });
 
   const [theme, setTheme] = useState<Theme>(() => {
@@ -96,15 +101,15 @@ export default function App() {
 
   // Modals state
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
-  const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(() => !localStorage.getItem('afg_language'));
+  const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
 
   // Sync RTL and Dark Mode with DOM
   useEffect(() => {
-    document.documentElement.dir = language === 'dari' ? 'rtl' : 'ltr';
-    document.documentElement.lang = language === 'dari' ? 'fa' : 'en';
+    if (!hasSelectedLanguage) return;
+    applyDocumentLocale(language);
     localStorage.setItem('afg_language', language);
-  }, [language]);
+  }, [language, hasSelectedLanguage]);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -231,7 +236,7 @@ export default function App() {
         .then((data) => {
           if (data?.authenticated && data.user) {
             setUser({ name: data.user.displayName || 'User', nameEn: data.user.displayName || 'User', email: data.user.email || '', avatar: '', isPremium: false, tier: 'Free' });
-            fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const saved=prefs?.preferences; if(saved?.appearance&&['light','dark','neon','system'].includes(saved.appearance))setTheme(saved.appearance); if(saved?.language&&['dari','english'].includes(saved.language))setLanguage(saved.language); document.documentElement.style.fontSize=String(saved?.font_size||14)+'px'; const accentMap:Record<string,string>={cyan:'#00e5ff',blue:'#3b82f6',violet:'#8b5cf6',emerald:'#10b981',rose:'#f43f5e'}; document.documentElement.style.setProperty('--accent-cyan',accentMap[saved?.accent_color]||accentMap.cyan); document.documentElement.dataset.afgDensity=saved?.density||'comfortable'; document.documentElement.dataset.afgChatWidth=saved?.chat_width||'comfortable'; document.documentElement.classList.toggle('afg-reduce-motion',saved?.animations_enabled===false); localStorage.setItem('afg_voice_enabled',String(saved?.voice_enabled!==false)); window.dispatchEvent(new Event('afg-voice-preference-change')); if(saved?.auto_select_model===false){setSelectedModel('');return;} const model=saved?.default_model; if(typeof model==='string'&&model)setSelectedModel(model); }).catch(() => {});
+            fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const saved=prefs?.preferences; if(saved?.appearance&&['light','dark','neon','system'].includes(saved.appearance))setTheme(saved.appearance); if(saved?.language&&['dari','english'].includes(saved.language)){setLanguage(saved.language);setHasSelectedLanguage(true);localStorage.setItem('afg_language',saved.language);} document.documentElement.style.fontSize=String(saved?.font_size||14)+'px'; const accentMap:Record<string,string>={cyan:'#00e5ff',blue:'#3b82f6',violet:'#8b5cf6',emerald:'#10b981',rose:'#f43f5e'}; document.documentElement.style.setProperty('--accent-cyan',accentMap[saved?.accent_color]||accentMap.cyan); document.documentElement.dataset.afgDensity=saved?.density||'comfortable'; document.documentElement.dataset.afgChatWidth=saved?.chat_width||'comfortable'; document.documentElement.classList.toggle('afg-reduce-motion',saved?.animations_enabled===false); localStorage.setItem('afg_voice_enabled',String(saved?.voice_enabled!==false)); window.dispatchEvent(new Event('afg-voice-preference-change')); if(saved?.auto_select_model===false){setSelectedModel('');return;} const model=saved?.default_model; if(typeof model==='string'&&model)setSelectedModel(model); }).catch(() => {});
           } else {
             setUser(DEFAULT_USER);
             localStorage.removeItem('afg_voice_enabled');
@@ -260,9 +265,23 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleToggleLanguage = () => {
-    setLanguage(prev => (prev === 'dari' ? 'english' : 'dari'));
+  const handleSetLanguage = (nextLanguage: Language) => {
+    setLanguage(nextLanguage);
+    setHasSelectedLanguage(true);
+    setIsLanguageModalOpen(false);
+    localStorage.setItem('afg_language', nextLanguage);
+    applyDocumentLocale(nextLanguage);
+    if (user.email) {
+      const csrf = document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '';
+      fetch(API_BASE_URL + '/api/account/preferences', {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': decodeURIComponent(csrf) },
+        body: JSON.stringify({ language: nextLanguage, defaultLanguage: nextLanguage }),
+      }).catch(() => console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));
+    }
   };
+
+  const handleToggleLanguage = () => handleSetLanguage(language === 'dari' ? 'english' : 'dari');
 
   const handleToggleTheme = () => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
@@ -464,6 +483,10 @@ export default function App() {
     setCurrentTab('chat');
   };
 
+  if (!hasSelectedLanguage) {
+    return <AfgLanguageModal isOpen={true} language={language} onSelectLanguage={handleSetLanguage} />;
+  }
+
   return (
     <div className={`min-h-screen w-full flex flex-col transition-colors duration-200 ${(theme === 'dark' || theme === 'neon' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) ? 'bg-[#060b18] text-slate-100' : 'bg-[#f4f7fc] text-slate-900'}`}>
       
@@ -550,7 +573,7 @@ export default function App() {
             language={language}
             theme={theme}
             user={user}
-            onSetLanguage={setLanguage}
+            onSetLanguage={handleSetLanguage}
             onToggleTheme={handleToggleTheme}
             onSetTheme={setTheme}
             onOpenShortcuts={() => setIsShortcutsOpen(true)}
@@ -572,16 +595,6 @@ export default function App() {
         onChangeTab={setCurrentTab}
         language={language}
         user={user}
-      />
-
-      {/* Language Picker Modal */}
-      <AfgLanguageModal
-        isOpen={isLanguageModalOpen}
-        language={language}
-        onSelectLanguage={(lang) => {
-          setLanguage(lang);
-          setIsLanguageModalOpen(false);
-        }}
       />
 
       {/* Keyboard Shortcuts Modal */}
