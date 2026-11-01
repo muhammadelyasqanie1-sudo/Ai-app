@@ -266,6 +266,19 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
     }catch{sendAuthJson(res,400,{error:'Could not create the account.'});return true;}
   }
 
+  if (pathname === '/api/auth/verify-email/resend' && req.method === 'POST') {
+    if (isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
+    try {
+      const body=await readJsonBody(req);const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';
+      const found=await pool.query("SELECT id FROM users WHERE lower(email)=$1 AND email_verified=false AND status='active' LIMIT 1",[email]);
+      if(!found.rows[0]){sendAuthJson(res,200,{message:'If the account needs verification, a new code will be sent.'});return true;}
+      const code=String(randomInt(0,1000000)).padStart(6,'0');
+      await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'verify_email',$2,now()+interval '10 minutes')",[found.rows[0].id,hashEmailCode(code)]);
+      if(!await sendEmailCode(email,code,'verify_email')){sendAuthJson(res,502,{error:'Could not send a new verification email.'});return true;}
+      sendAuthJson(res,200,{message:'A new verification code was sent if the account is awaiting verification.'});return true;
+    } catch { sendAuthJson(res,400,{error:'Could not resend the verification code.'});return true; }
+  }
+
   if (pathname === '/api/auth/verify-email' && req.method === 'POST') {
     if (isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
     try {
