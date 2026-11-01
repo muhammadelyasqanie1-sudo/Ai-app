@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { randomUUID } from 'crypto';
 import { handleChatApi } from './chatHandler.ts';
 import { checkDatabase } from './database.ts';
-import { getCloudflareModelCatalog } from './modelCatalog.ts';
+import { getProviderModelCatalog } from './modelCatalog.ts';
 import { getCapabilitySnapshot } from '../services/providerGateway.ts';
 import { handleAuthApi } from './auth.ts';
 import { handleAdminApi } from './adminHandler.ts';
