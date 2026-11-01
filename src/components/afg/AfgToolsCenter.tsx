@@ -420,7 +420,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-cyan-700/50 text-sm text-white focus:outline-none focus:border-cyan-400"
               />
               <p className="text-xs text-slate-400">
-                {language === 'dari' ? 'کد QR بلافاصله ساخته می‌شود و با هر دوربین گوشی قابل اسکن است.' : 'Instantly scannable by any mobile camera.'}
+                {language === 'dari' ? 'محتوای واردشده برای ساخت QR به سرویس بیرونی QRServer ارسال می‌شود.' : 'Your entered content is sent to the external QRServer service to generate the code.'}
               </p>
             </div>
 
@@ -508,10 +508,10 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
           <div className="p-5 rounded-2xl bg-slate-900/80 border border-teal-900/40 text-center space-y-3">
             <FolderArchive className="w-12 h-12 text-teal-400 mx-auto" />
             <h3 className="text-sm font-bold text-white">
-              {language === 'dari' ? 'فشرده‌سازی و تبدیل اسناد' : 'Document Compression & Converter'}
+              {language === 'dari' ? 'ابزار فایل هنوز فعال نیست' : 'File tools are unavailable'}
             </h3>
             <p className="text-xs text-slate-400 max-w-md mx-auto">
-              {language === 'dari' ? 'فرمت‌های تصاویر (PNG, JPG, WebP) و اسناد را به راحتی تبدیل و فشرده کنید.' : 'Easily convert and compress images, PDFs, and data files without losing quality.'}
+              {language === 'dari' ? 'تا پیاده‌سازی پردازش امن فایل، این قابلیت غیرفعال است.' : 'This feature is disabled until secure file processing is implemented.'}
             </p>
           </div>
         </div>
