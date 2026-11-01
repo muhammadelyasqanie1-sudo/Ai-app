@@ -48,18 +48,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
 
   // --- Code Gen State ---
   const [codePrompt, setCodePrompt] = useState('Create a responsive glassmorphic button in React with Tailwind CSS');
-  const [generatedCode, setGeneratedCode] = useState(`import React from 'react';
-
-export const NeonButton = ({ children, onClick }) => {
-  return (
-    <button
-      onClick={onClick}
-      className="px-6 py-3 rounded-2xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-bold border border-cyan-400/50 shadow-[0_0_20px_rgba(0,229,255,0.4)] hover:shadow-[0_0_30px_rgba(0,229,255,0.6)] transition-all transform hover:scale-105 active:scale-95"
-    >
-      {children}
-    </button>
-  );
-};`);
+  const [generatedCode] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
 
   // --- Summarizer State ---
@@ -277,7 +266,7 @@ export const NeonButton = ({ children, onClick }) => {
           </div>
 
           <pre className="p-4 rounded-2xl bg-black/80 border border-cyan-900/60 text-emerald-300 font-mono text-xs sm:text-sm overflow-x-auto leading-relaxed">
-            <code>{generatedCode}</code>
+            <code>{generatedCode || (language === 'dari' ? 'تولیدکننده کد به سرویس واقعی وصل نشده است.' : 'The code generator is not connected to a real service.')}</code>
           </pre>
         </div>
       )}
@@ -388,15 +377,15 @@ export const NeonButton = ({ children, onClick }) => {
               </p>
             </div>
 
-            <div className="flex flex-col items-center justify-center p-6 rounded-2xl bg-white w-fit mx-auto shadow-2xl">
+            {qrText.trim() ? <div className="flex flex-col items-center justify-center p-6 rounded-2xl bg-white w-fit mx-auto shadow-2xl">
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrText)}`}
                 alt="QR Code"
                 className="w-44 h-44 object-contain"
                 onError={(event) => { event.currentTarget.hidden = true; }}
               />
-              <span className="text-[11px] text-slate-600 font-bold mt-2">AFG AI Smart QR</span>
-            </div>
+              <span className="text-[11px] text-slate-600 font-bold mt-2">QRServer</span>
+            </div> : <p className="text-xs text-slate-500 text-center">{language === 'dari' ? 'برای تولید QR متن وارد کنید.' : 'Enter text to generate a QR code.'}</p>}
           </div>
         </div>
       )}
@@ -409,12 +398,11 @@ export const NeonButton = ({ children, onClick }) => {
             <span>{t.toolPdf}</span>
           </h2>
 
-          <div className="border-2 border-dashed border-rose-500/30 rounded-2xl p-6 text-center hover:border-rose-400/60 transition-colors cursor-pointer bg-rose-500/5">
+          <div className="border-2 border-dashed border-rose-500/30 rounded-2xl p-6 text-center bg-rose-500/5">
             <Upload className="w-8 h-8 text-rose-400 mx-auto mb-2" />
-            <p className="text-xs sm:text-sm font-semibold text-white">
-              {language === 'dari' ? 'فایل PDF، Word یا Text خود را اینجا بکشید یا کلیک کنید' : 'Drop your PDF, Word, or text document here'}
+            <p className="text-xs sm:text-sm font-semibold text-amber-200">
+              {language === 'dari' ? 'بارگذاری و پردازش فایل هنوز فعال نیست.' : 'File upload and document processing are not enabled yet.'}
             </p>
-            <p className="text-[11px] text-slate-400 mt-1">حداکثر حجم: ۵۰ مگابایت</p>
           </div>
 
           <div>
@@ -430,17 +418,9 @@ export const NeonButton = ({ children, onClick }) => {
             />
           </div>
 
-          <button
-            onClick={() => {
-              setSummaryResult(`### خلاصه نکات کلیدی سند (Key Takeaways):
-1. **تمرکز بر پیشرفت فناوری**: هوش مصنوعی در سال‌های آینده به یکی از ابزارهای حیاتی برای آموزش و اقتصاد افغانستان تبدیل خواهد شد.
-2. **سادگی و دسترسی**: ایجاد بسترهای دوزبانه (فارسی/دری و پشتو) به دسترسی عمومی کمک شایانی می‌کند.
-3. **امنیت داده‌ها**: حفاظت از حریم شخصی و پردازش سریع بر پایه معماری محلی.`);
-            }}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-rose-500 to-pink-500 text-white font-bold text-sm shadow-md"
-          >
-            {language === 'dari' ? 'استخراج و خلاصه‌سازی هوشمند' : 'Summarize Document with AI'}
-          </button>
+          <button disabled className="w-full py-3 rounded-xl bg-slate-800 text-slate-500 font-bold text-sm cursor-not-allowed">
+            {language === 'dari' ? 'خلاصه‌سازی تا اتصال مدل غیرفعال است' : 'Summarization unavailable until an AI provider is connected'}
+                    </button>
 
           {summaryResult && (
             <div className="p-4 rounded-2xl bg-slate-900/90 border border-rose-800/40 text-xs sm:text-sm text-slate-200 leading-relaxed whitespace-pre-line">
