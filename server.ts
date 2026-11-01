@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { handleChatApi } from './src/api/chatHandler.ts';
+import { checkDatabase } from './src/api/database.ts';
 
 dotenv.config();
 
@@ -10,6 +11,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+app.get('/api/health', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ status: 'ok', service: 'afg-ai-api', timestamp: new Date().toISOString() });
+});
+
+app.get('/api/ready', async (_req, res) => {
+  const database = await checkDatabase();
+  const ready = database.configured && database.connected;
+  res.setHeader('Cache-Control', 'no-store');
+  res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'degraded', database });
+});
 
 app.all('/api/chat', (req, res) => {
   handleChatApi(req, res);
