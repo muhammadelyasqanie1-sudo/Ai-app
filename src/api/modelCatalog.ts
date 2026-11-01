@@ -11,7 +11,7 @@ export interface VerifiedModelCatalog {
   };
 }
 
-export async function getCloudflareModelCatalog(): Promise<VerifiedModelCatalog> {
+export async function getProviderModelCatalog(): Promise<VerifiedModelCatalog> {
   const catalog = await getVerifiedProviderCatalog();
   return {
     status: catalog.status,
