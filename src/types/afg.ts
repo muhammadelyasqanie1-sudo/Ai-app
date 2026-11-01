@@ -90,9 +90,18 @@ export type AfgCapabilityKey =
   | 'text-to-speech'
   | 'research';
 
+export interface AfgModelOption {
+  id: string;
+  displayName: string;
+  selectable: boolean;
+  disabledReason: string | null;
+  verifiedAt: string | null;
+}
+
 export interface AfgCapabilitySnapshot {
   verified: boolean;
   models: string[];
+  modelDescriptors?: AfgModelOption[];
   capabilities: Record<AfgCapabilityKey, boolean>;
   checkedAt?: string;
 }
