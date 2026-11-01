@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomUUID } from 'crypto';
-import { selectCheapestModel, getProviderAdapter, getVerifiedModelDescriptors } from '../services/providerGateway.ts';
+import { getProviderAdapter, getVerifiedModelDescriptors } from '../services/providerGateway.ts';
 
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 const ALLOWED_AUDIO_TYPES = new Set(['audio/webm', 'audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/aac']);
@@ -30,7 +30,7 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
   const requestId = randomUUID();
   if (path === '/api/voice/voices' && req.method === 'GET') {
     const descriptors = await getVerifiedModelDescriptors();
-    const voices = descriptors.filter((model) => model.verifiedAt && model.capabilities.tts && Boolean(getProviderAdapter(model.providerId)?.synthesize))
+    const voices = descriptors.filter((model) => model.enabled && model.verifiedAt && model.capabilities.tts && Boolean(getProviderAdapter(model.providerId)?.synthesize))
       .flatMap((model) => getProviderAdapter(model.providerId)?.voiceOptions?.(model.id) || []);
     reply(res, 200, { available: voices.length > 0, voices }, requestId);
     return true;
@@ -53,13 +53,14 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
         reply(res, 413, { error: 'Audio must be between 1 byte and 10 MB.' }, requestId);
         return true;
       }
-      const selected = await selectCheapestModel('stt');
-      if (!selected) {
+      const descriptors = await getVerifiedModelDescriptors();
+      const selectedModel = descriptors.find((model) => model.enabled && model.verifiedAt && model.capabilities.stt && Boolean(getProviderAdapter(model.providerId)?.transcribe));
+      if (!selectedModel) {
         reply(res, 503, { available: false, error: 'No verified speech-to-text provider is available.' }, requestId);
         return true;
       }
-      const [providerId, modelId] = selected.split('::');
-      const adapter = getProviderAdapter(providerId);
+      const modelId = selectedModel.id;
+      const adapter = getProviderAdapter(selectedModel.providerId);
       if (!adapter?.transcribe) {
         reply(res, 503, { available: false, error: 'The selected provider does not implement speech recognition.' }, requestId);
         return true;
@@ -75,13 +76,13 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
       reply(res, 400, { error: 'Text-to-speech input must contain 1 to 5,000 characters.' }, requestId);
       return true;
     }
-    const selected = await selectCheapestModel('tts');
-    if (!selected) {
+    const descriptors = await getVerifiedModelDescriptors();
+    const selectedModel = descriptors.find((model) => model.enabled && model.verifiedAt && model.capabilities.tts && Boolean(getProviderAdapter(model.providerId)?.synthesize));
+    if (!selectedModel) {
       reply(res, 503, { available: false, error: 'No verified text-to-speech provider is available.' }, requestId);
       return true;
     }
-    const [providerId] = selected.split('::');
-    const adapter = getProviderAdapter(providerId);
+    const adapter = getProviderAdapter(selectedModel.providerId);
     if (!adapter?.synthesize) {
       reply(res, 503, { available: false, error: 'The selected provider does not implement speech synthesis.' }, requestId);
       return true;
