@@ -15,9 +15,9 @@ The Tools Center includes Notes, Summarizer, Idea Generator, Study Assistant, Ta
 Memory categories are `preferences`, `language`, `style` and `facts`. Users can list, add, edit and delete memory items and turn memory off. The chat handler injects saved memories only for an authenticated user when both account and preference-level memory switches are enabled. Sensitive-content detection requires an explicit per-item consent flag before storing a detected sensitive item. Memory is never needed for anonymous chat.
 
 ## 3.14 Settings and privacy
-Preferences persist per account: appearance (light/dark/neon/system), accent color, density, font size, chat width, animations, app language, default model, auto-select, response style/length, creativity, memory, voice and notification toggles. The app asks for a language choice on first launch and applies RTL for Dari. Settings also include password change, active-session listing/revocation, JSON data export, local conversation clearing, memory management and password-confirmed account deletion.
+Preferences persist per account: appearance (light/dark/neon/system), accent color, density, font size, chat width, animations, app language, default model, auto-select, response style/length, creativity, memory, voice and notification toggles. The app asks for a language choice on first launch and applies RTL for Dari. Settings also include password change, active-session listing/revocation, JSON data export, local conversation clearing, memory management and account deletion with a confirmation phrase (plus current-password confirmation when a password credential exists).
 
-Notification preferences are stored, and a private in-app notification read/list API is present. Product/usage/security email delivery still needs an event producer and mail-notification workflow; toggles alone do not send notifications.
+Security notifications are generated for successful sign-ins, email verification, password resets and password changes. They respect the in-app and security-alert toggles; when email notifications are enabled and Resend is configured, security alerts are also sent by email. Product-update and usage-alert event producers are not connected yet.
 
 ## Required setup
 1. Configure `DATABASE_URL` on Render.
@@ -28,7 +28,7 @@ Notification preferences are stored, and a private in-app notification read/list
 
 ## Operational limitations
 - No SMS provider is integrated; phone verification remains hidden/unavailable.
-- Notifications are preferences and an in-app event store; automatic product/usage/security notification generation and email delivery are not wired to events yet.
+- Product-update and usage-alert notifications still need their event producers. Security events are wired to the in-app inbox and optional Resend email delivery.
 - Local chat history remains browser/device storage. The export includes it from the browser; it is not synchronized to PostgreSQL by this feature.
 - Database schema changes must be applied manually before using authenticated workspace/account endpoints.
 - No build, lint, tests, database migration or deployment was run as part of these source changes.
