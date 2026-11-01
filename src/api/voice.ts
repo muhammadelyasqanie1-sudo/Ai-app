@@ -1,0 +1,96 @@
+import type { IncomingMessage, ServerResponse } from 'http';
+import { randomUUID } from 'crypto';
+import { selectCheapestModel, getProviderAdapter } from '../services/providerGateway.ts';
+
+const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
+const ALLOWED_AUDIO_TYPES = new Set(['audio/webm', 'audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/aac']);
+
+function reply(res: ServerResponse, status: number, payload: unknown, requestId: string) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Request-Id': requestId });
+  res.end(JSON.stringify({ ...(payload as object), requestId }));
+}
+
+async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const part of req) {
+    const chunk = Buffer.isBuffer(part) ? part : Buffer.from(part);
+    size += chunk.length;
+    if (size > 14 * 1024 * 1024) throw new Error('body_too_large');
+    chunks.push(chunk);
+  }
+  const parsed: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid_body');
+  return parsed as Record<string, unknown>;
+}
+
+export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  const path = new URL(req.url || '/', 'http://localhost').pathname;
+  if (path !== '/api/voice/transcribe' && path !== '/api/voice/synthesize') return false;
+  const requestId = randomUUID();
+  if (req.method !== 'POST') {
+    reply(res, 405, { error: 'Method not allowed.' }, requestId);
+    return true;
+  }
+  try {
+    const body = await readBody(req);
+    if (path.endsWith('/transcribe')) {
+      const mimeType = typeof body.mimeType === 'string' ? body.mimeType.toLowerCase() : '';
+      const encoded = typeof body.audioBase64 === 'string' ? body.audioBase64 : '';
+      if (!ALLOWED_AUDIO_TYPES.has(mimeType) || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) {
+        reply(res, 400, { error: 'Provide supported audio data and MIME type.' }, requestId);
+        return true;
+      }
+      const audio = Buffer.from(encoded, 'base64');
+      if (!audio.length || audio.length > MAX_AUDIO_BYTES) {
+        reply(res, 413, { error: 'Audio must be between 1 byte and 10 MB.' }, requestId);
+        return true;
+      }
+      const selected = await selectCheapestModel('stt');
+      if (!selected) {
+        reply(res, 503, { available: false, error: 'No verified speech-to-text provider is available.' }, requestId);
+        return true;
+      }
+      const [providerId, modelId] = selected.split('::');
+      const adapter = getProviderAdapter(providerId);
+      if (!adapter?.transcribe) {
+        reply(res, 503, { available: false, error: 'The selected provider does not implement speech recognition.' }, requestId);
+        return true;
+      }
+      const result = await adapter.transcribe({ audio: new Uint8Array(audio), mimeType });
+      reply(res, 200, { available: true, text: result.text }, requestId);
+      return true;
+    }
+
+    const text = typeof body.text === 'string' ? body.text.trim() : '';
+    const voice = typeof body.voice === 'string' ? body.voice.trim().slice(0, 100) : undefined;
+    if (!text || text.length > 5000) {
+      reply(res, 400, { error: 'Text-to-speech input must contain 1 to 5,000 characters.' }, requestId);
+      return true;
+    }
+    const selected = await selectCheapestModel('tts');
+    if (!selected) {
+      reply(res, 503, { available: false, error: 'No verified text-to-speech provider is available.' }, requestId);
+      return true;
+    }
+    const [providerId] = selected.split('::');
+    const adapter = getProviderAdapter(providerId);
+    if (!adapter?.synthesize) {
+      reply(res, 503, { available: false, error: 'The selected provider does not implement speech synthesis.' }, requestId);
+      return true;
+    }
+    const result = await adapter.synthesize({ text, voice });
+    if (!result.audio.length || result.audio.length > MAX_AUDIO_BYTES) {
+      reply(res, 502, { error: 'The voice provider returned an invalid audio result.' }, requestId);
+      return true;
+    }
+    reply(res, 200, { available: true, mimeType: result.mimeType, audioBase64: Buffer.from(result.audio).toString('base64') }, requestId);
+    return true;
+  } catch (error) {
+    const message = error instanceof Error && error.message === 'body_too_large'
+      ? 'Voice request is too large.'
+      : 'Voice processing failed. Please retry.';
+    reply(res, error instanceof Error && error.message === 'body_too_large' ? 413 : 502, { error: message }, requestId);
+    return true;
+  }
+}
