@@ -102,7 +102,7 @@ export async function getCapabilitySnapshot() {
       ...model,
       selectable: model.enabled && model.verifiedAt !== null &&
         Date.now() - Date.parse(model.verifiedAt) <= HEALTH_TTL_MS,
-      disabledReason: model.enabled && model.verifiedAt !== null ? null : 'Provider not reachable.',
+      disabledReason: !model.enabled ? 'Disabled by administrator.' : (model.verifiedAt !== null ? null : 'Provider not reachable.'),
     })),
     verified: capabilities.chat,
     checkedAt: new Date().toISOString(),
