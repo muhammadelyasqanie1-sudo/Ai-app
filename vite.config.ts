@@ -3,17 +3,31 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig } from 'vite';
 import { handleChatApi } from './src/api/chatHandler.ts';
+import { getCloudflareModelCatalog } from './src/api/modelCatalog.ts';
+import { randomUUID } from 'crypto';
 
 function apiPlugin() {
   return {
     name: 'api-chat-plugin',
     configureServer(server: any) {
       server.middlewares.use(async (req: any, res: any, next: any) => {
-        if (req.url?.startsWith('/api/chat')) {
+        const pathname = new URL(req.url || '/', 'http://localhost').pathname;
+        if (pathname === '/api/chat') {
           await handleChatApi(req, res);
-        } else {
-          next();
+          return;
         }
+        if (pathname === '/api/models' && req.method === 'GET') {
+          const requestId = randomUUID();
+          const catalog = await getCloudflareModelCatalog();
+          res.statusCode = catalog.status;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          res.setHeader('X-Request-Id', requestId);
+          console.info('API_REQUEST', JSON.stringify({ requestId, method: 'GET', path: '/api/models', status: catalog.status }));
+          res.end(JSON.stringify({ ...catalog.body, requestId }));
+          return;
+        }
+        next();
       });
     },
   };
