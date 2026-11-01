@@ -68,3 +68,62 @@ No tests, type checks, builds, migrations, workflow runs, or deployments were in
 - Updated `docs/SYSTEM_ARCHITECTURE.md` with the contract and explicit boundaries.
 
 No tests, type checks, builds, workflows, migrations, or deployments were run.
+
+
+## Superseding implementation update — 2.3, 3.1 and 3.2 (2026-11-01)
+
+This section supersedes earlier statements in this document that admin controls, all auth sessions, multi-provider registration and chat operations were entirely absent. It does not imply that all items in the feature specification are complete.
+
+### 2.3 Provider Registry & Admin Controls
+
+Implemented:
+- Registry now supports Cloudflare Workers AI and an optional OpenAI-compatible adapter, registered only when its server-side base URL and API key are configured.
+- Provider and model enablement is stored in PostgreSQL; model pricing is administrator-entered and stored per model.
+- Admin UI supports provider enable/disable, model enable/disable, pricing entry and capability-specific fallback-chain editing.
+- Admin APIs require a database-backed session and server-side users.role = admin authorization. State-changing admin APIs require CSRF validation.
+- First-admin bootstrap requires AFG_ADMIN_BOOTSTRAP_TOKEN (minimum 32 characters) and closes after an active admin exists. Password hashes use Node scrypt; session tokens are hashed in PostgreSQL; session cookies are HttpOnly.
+- Provider/model/fallback changes are written to audit_logs.
+- Fallback chain entries are checked against discovered, enabled models and advertised capability flags.
+
+Remaining:
+- No public user registration, email verification, Google OAuth, recovery or full user-management workflow.
+- Provider secrets remain environment variables and are not editable from the admin UI.
+- Database schema must be applied manually. No migration or deployment was run.
+- Registry currently contains two adapter implementations at most; vision/image/audio/embedding methods are not implemented by them.
+
+### 3.1 Core AI Chat
+
+Implemented:
+- SSE heartbeat comments every 15 seconds.
+- Exponential retry (500 ms, then 1 s) for connection/overload failures only before any response text is received. Partial output is preserved rather than replayed.
+- Stop action propagates abort from client to provider request.
+- Context is fitted to provider-supplied context-window metadata when available; older turns are compacted into a clearly labelled extractive summary. If metadata is absent, AFG_UNKNOWN_CONTEXT_BUDGET is used as a conservative estimate.
+- Copy, regenerate/retry, edit-and-resend, stop, branch and delete message controls.
+- Conversation history in localStorage supports new/search/rename/pin/export Markdown/export JSON/print-to-PDF/delete/clear.
+- Markdown rendering supports GFM tables, LaTeX math and syntax highlighting. Raw HTML is disabled.
+- Empty assistant streaming bubbles are hidden; empty provider responses become retryable errors.
+- System instructions require uncertainty honesty and prohibit fabricated citations, links, quotations and tool results.
+
+Remaining:
+- Conversation history is device/browser-local, not PostgreSQL-backed or synchronized between devices.
+- SSE does not yet support event IDs or server-side stream resumption after partial output.
+- Context compaction is extractive, not an LLM-generated semantic summary.
+- Full end-to-end behavior remains unverified because tests/builds were not run.
+
+### 3.2 Multi-Model System
+
+Implemented:
+- Live discovery for each registered/configured adapter.
+- Provider-qualified model references (providerId::modelId) prevent collisions between providers.
+- Manual model selection is grouped by provider and displays capability labels.
+- Auto mode chooses the lowest combined input/output price among healthy enabled text models when admin pricing exists. Without pricing, it uses the configured healthy fallback chain and does not claim to know the cheapest model.
+- If a manually selected model is no longer healthy, the configured fallback chain is tried before cost-based fallback.
+- Admin enable/disable is persistent for providers and models.
+- Authenticated users can store a default model preference; the client loads and updates it when a valid session exists.
+
+Remaining:
+- Cost values are administrator-entered metadata, not live provider price feeds.
+- Fallback routing is wired for chat text. Other capability chains are configurable but cannot be exercised until real adapters implement those capabilities.
+- Per-user default preferences require a provisioned authenticated account; a public signup/verification flow is not implemented.
+
+No tests, type checks, builds, migrations, workflows, or deployments were run for this feature pass.
