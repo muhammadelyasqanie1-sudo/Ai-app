@@ -70,7 +70,7 @@ Each model is probed with a bounded inference request. Successful health results
 
 - Manual selection is grouped by provider.
 - Auto selects the lowest combined input/output price among healthy, enabled text+streaming models when pricing has been configured by an administrator.
-- If no trustworthy price metadata exists, auto mode uses the administrator's configured healthy fallback order. It does not invent a price or claim to know the cheapest model.
+- If no trustworthy price metadata exists, auto mode uses the administrator's healthy fallback order; if none is configured, it chooses the first healthy model in registry order as a deterministic default. It does not claim that this unpriced default is the cheapest.
 - If a manually selected model becomes unhealthy, the configured fallback order is tried before cost-based selection.
 - Fallback chains are capability-specific: text, vision, imageGen, tts and stt. Only discovered enabled models advertising the selected capability can be saved.
 - User default model preference is stored in users.default_model and must reference a currently health-verified model.
@@ -79,7 +79,7 @@ Each model is probed with a bounded inference request. Successful health results
 
 - The service uses provider-supplied context window metadata when available, reserves headroom and compacts older conversation turns into an explicitly labelled extractive summary.
 - When the provider does not publish context metadata, AFG_UNKNOWN_CONTEXT_BUDGET (default 8192 estimated tokens) is a conservative configurable budget; it is not represented as the provider's actual context window.
-- The system instruction requires uncertainty honesty and forbids fabricated citations, URLs, quotations and tool results.
+- The server rejects client-supplied system-role messages and creates its own system instruction, which requires uncertainty honesty and forbids fabricated citations, URLs, quotations and tool results.
 - The server emits an error for empty provider output. The client hides empty streaming bubbles and shows a retryable error instead.
 - Client retries use exponential backoff only when no text has been received. Partial output is preserved and not silently replayed.
 
