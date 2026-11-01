@@ -76,3 +76,10 @@ AFG AI is one unified platform: one AI gateway, multiple verified capabilities, 
 
 The existing app currently has a live Cloudflare Workers AI chat adapter and live model-catalog discovery. Image and video generation are intentionally disabled until real providers are connected. Chat history is currently not persisted to PostgreSQL; the schema and database connection foundation exist, but authentication, ownership enforcement, migrations, and persistence endpoints still need implementation. Do not advertise those unfinished systems as active.
 
+
+## Layered architecture implementation
+
+The current architecture is documented in [SYSTEM_ARCHITECTURE.md](./SYSTEM_ARCHITECTURE.md). The implementation now has a shared API edge used by both Vite development and the Express production server, a typed chat service, a provider gateway/registry, and a Cloudflare Workers AI adapter. `GET /api/capabilities` exposes live verified model IDs and backend capability flags. Only chat can currently be true; unsupported capabilities remain false.
+
+This is a modular monolith, not yet a deployed Workers/serverless, WebSocket, or queue-based system. Authentication middleware, CSRF for cookie sessions, distributed rate limiting, multi-provider fallback/retries, usage metering, object storage, queues, and user-owned persistence remain future release work. The PostgreSQL schema is a foundation and does not itself activate persistence.
+
