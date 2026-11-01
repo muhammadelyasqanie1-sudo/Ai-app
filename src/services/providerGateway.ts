@@ -16,12 +16,6 @@ export function getProviderAdapter(providerId: string): ChatProviderAdapter | un
   return providerRegistry.find((provider) => provider.id === providerId);
 }
 
-export function getChatProvider(): ChatProviderAdapter {
-  const provider = providerRegistry.find((candidate) => candidate.id === 'cloudflare-workers-ai');
-  if (!provider) throw new Error('No chat provider adapter is registered.');
-  return provider;
-}
-
 async function isProviderEnabled(providerId: string): Promise<boolean> {
   if (!pool) return true;
   const result = await pool.query('SELECT enabled FROM provider_configs WHERE provider_key = $1 LIMIT 1', [providerId]);
@@ -126,7 +120,7 @@ export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> 
     try { providerEnabled = await isProviderEnabled(provider.id); } catch { providerEnabled = false; }
 
     if (!configValid || !providerEnabled) {
-      verified.push(...await getStoredModels(provider.id, !providerEnabled || !configValid));
+      verified.push(...await getStoredModels(provider.id, !providerEnabled));
       continue;
     }
 
