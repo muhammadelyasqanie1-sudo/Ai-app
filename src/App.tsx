@@ -41,11 +41,11 @@ const INITIAL_MESSAGES: AfgMessage[] = [
   {
     id: 'seed-welcome-1',
     role: 'assistant',
-    content: `سلام! 👋 به **AFG AI (هوش مصنوعی افغانستان)** خوش آمدید.
+    content: `سلام! 👋 به **AFG AI** خوش آمدید.
 
-من دستیار هوشمند شما هستم، طراحی شده برای همراهی شما در گفت‌وگو، تولید تصاویر خلاقانه 🎨، ساخت ویدیو 🎬، ترجمه زبان‌ها 🌐، کدنویسی 💻 و پردازش اسناد.
+در حال حاضر گفت‌وگوی متنی با مدل‌های تأییدشده فعال است. قابلیت‌های دیگر فقط پس از اتصال و بررسی ارائه‌دهنده واقعی فعال خواهند شد.
 
-چگونه می‌توانم امروز به شما کمک کنم؟ 🇦🇫❤️`,
+چگونه می‌توانم کمک کنم؟ 🇦🇫❤️`,
     timestamp: Date.now() - 1000 * 60 * 10,
   },
 ];
@@ -109,8 +109,8 @@ export default function App() {
           console.error('AI provider did not verify an available model catalog:', data.error || 'No verified models');
         }
       })
-      .catch((error) => {
-        console.error('Could not verify AI model catalog:', error);
+      .catch(() => {
+        console.error('AI_MODEL_CATALOG_UNAVAILABLE');
         setAvailableModels([]);
         setSelectedModel('');
       });
@@ -240,12 +240,10 @@ export default function App() {
           m.id === assistantId ? { ...m, isStreaming: false } : m
         )
       );
-    } catch (error) {
-      console.error('Cloudflare Workers AI request failed:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown API error';
+    } catch {
       const userFacingError = language === 'dari'
-        ? `اتصال به هوش مصنوعی برقرار نشد. لطفاً توکن Cloudflare، شناسه حساب و مدل انتخاب‌شده را در تنظیمات سرور بررسی کنید.\n\nجزئیات: ${errorMessage}`
-        : `Could not connect to AI. Please check the Cloudflare Workers AI token, account ID, and selected model on the server.\n\nDetails: ${errorMessage}`;
+        ? 'درخواست انجام نشد. پیام شما در گفتگو باقی مانده است؛ لطفاً اتصال و مدل انتخاب‌شده را بررسی کرده و دوباره تلاش کنید.'
+        : 'The request failed. Your message remains in this conversation; check the connection and selected model, then try again.';
 
       setMessages(prev =>
         prev.map(m =>
