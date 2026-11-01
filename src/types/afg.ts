@@ -1,5 +1,5 @@
 export type Language = 'dari' | 'english';
-export type Theme = 'dark' | 'light';
+export type Theme = 'dark' | 'light' | 'neon' | 'system';
 
 export type TabType = 
   | 'home' 
