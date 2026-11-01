@@ -101,7 +101,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
 
 
   useEffect(() => {
-    if (activeSubTab !== 'voice-tools' || !voiceEnabled || !(voiceEnabled && voiceTtsAvailable)) return;
+    if (activeSubTab !== 'voice-tools' || !voiceTtsAvailable) return;
     fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/voices')
       .then((response) => response.json())
       .then((data) => setVoiceOptions(Array.isArray(data.voices) ? data.voices.filter((voice: any) => typeof voice?.id === 'string' && typeof voice?.label === 'string') : []))
