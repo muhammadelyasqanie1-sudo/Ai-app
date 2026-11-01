@@ -51,6 +51,20 @@ function hashEmailCode(value: string): string {
   return createHash('sha256').update(pepper + ':' + value).digest('hex');
 }
 
+export async function recordAuthSecurityEvent(req: IncomingMessage, userId: string | null, eventType: string, severity = 'info'): Promise<void> {
+  if (!pool) return;
+  const address = (req as IncomingMessage & { ip?: string }).ip || req.socket.remoteAddress || 'unknown';
+  const ipHash = createHash('sha256').update(address).digest('hex');
+  try {
+    await pool.query(
+      'INSERT INTO security_events(event_type,severity,user_id,ip_hash,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+      [eventType,severity,userId,ipHash,JSON.stringify({source:'auth-api'})],
+    );
+  } catch {
+    // Security telemetry must never expose secrets or interrupt the authentication flow.
+  }
+}
+
 export async function recordSecurityNotification(userId: string, eventType: string, title: string, body: string) {
   try {
     const result = await pool.query(
@@ -313,6 +327,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         await pool.query("INSERT INTO auth_identities(user_id,provider,provider_subject,email_verified) VALUES($1,'google',$2,true) ON CONFLICT(provider,provider_subject) DO NOTHING", [userId, profile.sub]);
       }
       await createSession(userId!, res);
+      await recordAuthSecurityEvent(req,userId!,'auth.google_login');
       await recordSecurityNotification(userId!, 'security.sign_in', 'New sign-in', 'Your AFG AI account was signed in with Google.');
       clearOAuthState(res); res.writeHead(302, { Location: origin + '/', 'Cache-Control': 'no-store' }); res.end();
     } catch {
@@ -334,7 +349,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const code=String(randomInt(0,1000000)).padStart(6,'0');
       await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'verify_email',$2,now()+interval '10 minutes')",[created.rows[0].id,hashEmailCode(code)]);
       if(!await sendEmailCode(email,code,'verify_email')){await pool.query('DELETE FROM users WHERE id=$1',[created.rows[0].id]);sendAuthJson(res,502,{error:'Could not send the verification email. Check the email provider configuration.'});return true;}
-      sendAuthJson(res,201,{verificationRequired:true});return true;
+      await recordAuthSecurityEvent(req,created.rows[0].id,'auth.register');sendAuthJson(res,201,{verificationRequired:true});return true;
     }catch{sendAuthJson(res,400,{error:'Could not create the account.'});return true;}
   }
 
@@ -360,7 +375,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       if(!row||row.attempts>=5||!/^\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The verification code is invalid or expired.'});return true;}
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
       await pool.query('UPDATE users SET email_verified=true,updated_at=now() WHERE id=$1',[row.id]);
-      await createSession(row.id,res);await recordSecurityNotification(row.id,'security.email_verified','Email verified','Your AFG AI email address was verified.');sendAuthJson(res,200,{verified:true});return true;
+      await createSession(row.id,res);await recordAuthSecurityEvent(req,row.id,'auth.email_verified');await recordSecurityNotification(row.id,'security.email_verified','Email verified','Your AFG AI email address was verified.');sendAuthJson(res,200,{verified:true});return true;
     }catch{sendAuthJson(res,400,{error:'Could not verify this email.'});return true;}
   }
 
@@ -387,7 +402,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const row=found.rows[0];if(!row||row.attempts>=5||!/^\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
       await pool.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[await hashPassword(next),row.id]);
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
-      await revokeUserSessions(row.id);clearSessionCookies(res);await recordSecurityNotification(row.id,'security.password_reset','Password reset','Your AFG AI account password was reset. All previous sessions were revoked.');sendAuthJson(res,200,{reset:true});return true;
+      await revokeUserSessions(row.id);clearSessionCookies(res);await recordAuthSecurityEvent(req,row.id,'auth.password_reset','warning');await recordSecurityNotification(row.id,'security.password_reset','Password reset','Your AFG AI account password was reset. All previous sessions were revoked.');sendAuthJson(res,200,{reset:true});return true;
     }catch{sendAuthJson(res,400,{error:'Could not reset the password.'});return true;}
   }
 
@@ -413,6 +428,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const row = result.rows[0];
       const valid = Boolean(row?.password_hash) && await verifyPassword(password, row.password_hash);
       if (!valid || row.status !== 'active' || row.email_verified !== true) {
+        await recordAuthSecurityEvent(req,row?.id || null,'auth.login_failed','warning');
         sendAuthJson(res, 401, { error: 'Email or password is incorrect.' });
         return true;
       }
@@ -420,6 +436,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [await hashPassword(password), row.id]);
       }
       await createSession(row.id, res);
+      await recordAuthSecurityEvent(req,row.id,'auth.login');
       await recordSecurityNotification(row.id, 'security.sign_in', 'New sign-in', 'Your AFG AI account was signed in successfully.');
       sendAuthJson(res, 200, { authenticated: true });
       return true;
@@ -460,6 +477,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         [email, displayName, passwordHash],
       );
       await createSession(created.rows[0].id, res);
+      await recordAuthSecurityEvent(req,created.rows[0].id,'auth.admin_bootstrap','warning');
       sendAuthJson(res, 201, { authenticated: true, bootstrapped: true });
     } catch {
       sendAuthJson(res, 400, { error: 'Could not complete administrator bootstrap.' });
