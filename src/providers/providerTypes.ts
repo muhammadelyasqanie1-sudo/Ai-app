@@ -90,6 +90,7 @@ export interface ProviderAdapter {
   analyzeImage?(req: VisionRequest): Promise<VisionResult>;
   transcribe?(req: AudioRequest): Promise<Transcription>;
   synthesize?(req: TTSRequest): Promise<AudioResult>;
+  voiceOptions?(modelId: string): Array<{ id: string; label: string }>;
   embed?(text: string): Promise<number[]>;
 }
 
