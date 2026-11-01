@@ -533,7 +533,6 @@ export default function App() {
             language={language}
             theme={theme}
             user={user}
-            onToggleLanguage={handleToggleLanguage}
             onSetLanguage={setLanguage}
             onToggleTheme={handleToggleTheme}
             onSetTheme={setTheme}
