@@ -13,6 +13,8 @@ export interface CapabilityFlags {
   streaming: boolean;
   vision: boolean;
   imageGen: boolean;
+  imageEdit: boolean;
+  ocr: boolean;
   tts: boolean;
   stt: boolean;
   tools: boolean;
@@ -51,9 +53,22 @@ export interface ChatChunk {
   content: string;
 }
 
-export interface ImageRequest { prompt: string; }
-export interface ImageResult { url: string; }
-export interface VisionRequest { imageUrl: string; prompt: string; }
+export type ImageStyleId = 'realistic' | 'digital-art' | 'anime' | '3d' | 'logo' | 'wallpaper' | 'social';
+export interface ImageStylePreset { id: ImageStyleId; label: string; }
+export interface ImageGenerationOptions {
+  stylePresets: ImageStylePreset[];
+  aspectRatios: string[];
+  qualityLevels: string[];
+}
+export interface ImageRequest {
+  prompt: string;
+  stylePreset: ImageStyleId;
+  aspectRatio: string;
+  quality: string;
+}
+export interface ImageResult { url: string; mimeType?: string; }
+export interface ImageEditRequest { image: Uint8Array; mimeType: string; instruction: string; mask?: Uint8Array; }
+export interface VisionRequest { image: Uint8Array; mimeType: string; prompt: string; mode: 'describe' | 'ocr' | 'diagram' | 'screenshot'; }
 export interface VisionResult { text: string; }
 export interface AudioRequest { audio: Uint8Array; mimeType: string; }
 export interface Transcription { text: string; }
@@ -67,7 +82,9 @@ export interface ProviderAdapter {
   healthCheck(modelId: string): Promise<HealthStatus>;
   capabilities(modelId: string): CapabilityFlags;
   streamChat(req: ChatRequest): AsyncIterable<ChatChunk>;
+  imageGenerationOptions?(modelId: string): ImageGenerationOptions;
   generateImage?(req: ImageRequest): Promise<ImageResult>;
+  editImage?(req: ImageEditRequest): Promise<ImageResult>;
   analyzeImage?(req: VisionRequest): Promise<VisionResult>;
   transcribe?(req: AudioRequest): Promise<Transcription>;
   synthesize?(req: TTSRequest): Promise<AudioResult>;
