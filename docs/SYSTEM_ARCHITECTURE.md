@@ -19,7 +19,7 @@ The current production runtime remains the existing Express application on Rende
 │ src/api/http.ts                                               │
 │ Shared route table · CORS allowlist · request IDs             │
 │ structured request logs · HTTP status/error envelopes        │
-│ request-size and chat-input validation in chat handler        │
+│ request-size and chat-input validation · bounded chat concurrency        │
 └──────────────────────────────┬───────────────────────────────┘
                                │
 ┌──────────────────────────────▼───────────────────────────────┐
@@ -50,7 +50,7 @@ The current production runtime remains the existing Express application on Rende
 - The browser calls the same API paths in development and production.
 - `VITE_API_BASE_URL` is an optional public base URL for a separately deployed API. It must never contain provider credentials.
 - The app reads `GET /api/capabilities`; model IDs and enabled capability flags come from the server. If the endpoint cannot verify the provider, chat models are cleared and chat is unavailable.
-- The current UI supports English and Dari. RTL is enabled for Dari. Other locales and full translation of every component are future work.
+- The current UI supports English and Dari. RTL is enabled for Dari. AI output is rendered through React text nodes and a simple Markdown parser rather than raw HTML injection. Other locales and full translation of every component are future work.
 - Image, video, document processing, standalone translation, research, server-side speech-to-text, and TTS remain disabled because no matching backend services are registered.
 
 ## 3. API edge and route contract
@@ -69,7 +69,7 @@ Both runtimes use `src/api/http.ts`:
 | GET | `/api/capabilities` | Live capability snapshot and verified model IDs |
 | POST | `/api/chat` | Validated JSON request; SSE response |
 
-All API requests receive a server-generated `X-Request-Id`. API request logs contain request ID, method, path, status, and duration; prompts, authorization headers, and provider tokens are not logged. API JSON responses are non-cacheable and include the request ID. Chat uses bounded request and message sizes and validates roles, model identifier shape, and live model membership before inference.
+All API requests receive a server-generated `X-Request-Id`. API request logs contain request ID, method, path, status, and duration; prompts, authorization headers, and provider tokens are not logged. API JSON responses are non-cacheable and include the request ID. Chat uses bounded request and message sizes, validates roles/model shape/live model membership, and limits each server process to four concurrent chat requests with a 5-second Retry-After response when saturated. This is load shedding, not a per-user rate limiter.
 
 CORS only reflects origins configured in `APP_ORIGIN` or the local/Capacitor development allowlist. The current API does not use cookie authentication, so a cookie-based CSRF token flow is not active.
 
@@ -82,7 +82,7 @@ CORS only reflects origins configured in `APP_ORIGIN` or the local/Capacitor dev
 - Model IDs are passed unchanged from provider catalog to API response, client selection, chat request, and provider adapter.
 - A catalog failure produces an unavailable result; there is no hardcoded model fallback.
 - Only chat can currently be reported as available. Vision, image/video generation, files, speech, TTS, and research are explicitly false.
-- There is no multi-provider fallback, retry policy, usage metering, or distributed health registry yet. Provider calls have bounded network timeouts; a failed stream is surfaced as an SSE error rather than a fake completion.
+- There is no multi-provider fallback, retry policy, per-user/distributed rate limiter, usage metering, or distributed health registry yet. Provider calls have bounded network timeouts; a failed stream is surfaced as an SSE error rather than a fake completion.
 
 ## 5. Persistence and background processing
 
@@ -107,7 +107,7 @@ Not implemented yet:
 - Authentication middleware, session lifecycle, OAuth/email verification.
 - Server-side user roles, resource ownership, quotas, and admin authorization.
 - Cookie CSRF protection (not applicable until cookie-authenticated state-changing routes exist).
-- Per-user/distributed rate limiting and abuse/spend controls.
+- Per-user/distributed rate limiting and abuse/spend controls; only a process-local concurrency guard is active.
 - Provider retries and multi-provider fallback.
 - Upload scanning, object-storage access controls, and isolated file-processing workers.
 - Database migrations, conversation persistence, audit writes, and usage metering.
