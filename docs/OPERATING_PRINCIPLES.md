@@ -40,4 +40,4 @@
 - No Render Blueprint, Dockerfile, or deployment manifest exists in the repository. Render settings and auto-deploy behavior are external to source. The server start script is `tsx server.ts`; Render supplies `PORT`.
 - The Android workflow accepts optional `api_base_url` at manual dispatch. An APK must target the deployed HTTPS API; an APK build does not deploy the backend.
 
-No tests, lint, build, database migration, workflow run, or manual deployment was initiated. Render auto-deploy settings must be checked in the Render dashboard because they cannot be confirmed from this repository.
+Tests, lint, database migrations, and manual deployments were not initiated. Important exception: while the original workflow still had its `push` trigger, commits to `main` automatically triggered GitHub Actions APK builds. Runs #35–49 completed: 13 succeeded and 2 failed. The workflow is now manual-dispatch-only, so future pushes will not start APK builds. Render auto-deploy settings are external and must be checked in the Render dashboard; this repository cannot confirm whether those main-branch commits triggered a Render deployment.
