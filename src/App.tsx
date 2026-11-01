@@ -334,7 +334,8 @@ export default function App() {
           });
           if (!response.ok) {
             if ([429, 502, 503, 504].includes(response.status) && attempt < 2) {
-              await new Promise((resolve) => setTimeout(resolve, 500 * (2 ** attempt)));
+              const baseDelay = 500 * (2 ** attempt);
+              await new Promise((resolve) => setTimeout(resolve, baseDelay + Math.floor(Math.random() * Math.max(1, baseDelay * 0.35))));
               continue;
             }
             const payload = await response.json().catch(() => ({}));
@@ -369,7 +370,8 @@ export default function App() {
           streamCompleted = true;
         } catch (error) {
           if (abortController.signal.aborted || fullContent.trim() || attempt >= 2) throw error;
-          await new Promise((resolve) => setTimeout(resolve, 500 * (2 ** attempt)));
+          const baseDelay = 500 * (2 ** attempt);
+          await new Promise((resolve) => setTimeout(resolve, baseDelay + Math.floor(Math.random() * Math.max(1, baseDelay * 0.35))));
         }
       }
       if (!streamCompleted) throw new Error('The AI response could not be completed.');
