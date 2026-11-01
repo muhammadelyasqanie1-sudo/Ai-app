@@ -63,7 +63,7 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
             </p>
             <div className="mt-1.5 flex items-center gap-2">
               <span className="text-[11px] font-bold text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full border border-amber-500/40">
-                {t.premiumUser}
+                {language === 'dari' ? 'حساب مهمان • رایگان' : user.tier}
               </span>
             </div>
           </div>
@@ -216,14 +216,10 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
 
       </div>
 
-      {/* Logout Button */}
-      <button 
-        onClick={() => alert(language === 'dari' ? 'شما با موفقیت خارج شدید.' : 'Logged out successfully.')}
-        className="w-full py-3.5 rounded-2xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 font-bold text-sm flex items-center justify-center gap-2 transition-colors"
-      >
-        <LogOut className="w-4 h-4" />
-        <span>{t.logout}</span>
-      </button>
+      {/* Sign-out is unavailable until authentication and sessions are implemented. */}
+      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 text-xs leading-6 text-amber-100">
+        {language === 'dari' ? 'ورود و نشست کاربری هنوز فعال نیست؛ بنابراین خروج از حساب نیز در دسترس نیست.' : 'Sign-in and session management are not implemented yet, so sign-out is unavailable.'}
+      </div>
 
       {/* About AFG AI Modal (Screenshot 4) */}
       {showAboutModal && (
