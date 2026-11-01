@@ -19,7 +19,7 @@ function sendJson(res: ServerResponse, status: number, body: unknown, requestId:
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Request-Id', requestId);
-  res.end(JSON.stringify({ ...body as object, requestId }));
+  res.end(JSON.stringify({ ...(body as Record<string, unknown>), requestId }));
 }
 
 export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Promise<void> {
