@@ -478,6 +478,7 @@ export default function App() {
             language={language}
             onSelectChat={handleSelectHistoryChat}
             onNewChat={handleNewChat}
+            activeSessionId={currentSessionId}
           />
         )}
 
