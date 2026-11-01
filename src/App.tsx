@@ -177,10 +177,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!messages.some((message) => message.role === 'user')) return;
     try {
       const stored = JSON.parse(localStorage.getItem('afg_sessions') || '[]');
       const sessions = Array.isArray(stored) ? stored : [];
+      if (!messages.some((message) => message.role === 'user')) {
+        localStorage.setItem('afg_sessions', JSON.stringify(sessions.filter((item: any) => item?.id !== currentSessionId)));
+        return;
+      }
       const firstUser = messages.find((message) => message.role === 'user');
       const existingSession = sessions.find((item: any) => item?.id === currentSessionId);
       const latest = [...messages].reverse().find((message) => message.role === 'user' || (message.role === 'assistant' && message.content.trim()));
