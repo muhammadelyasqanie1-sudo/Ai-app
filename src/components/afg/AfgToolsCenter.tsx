@@ -102,7 +102,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
 
   useEffect(() => {
     if (activeSubTab !== 'voice-tools' || !voiceTtsAvailable) return;
-    fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/voices')
+    fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/voices', { credentials: 'include' })
       .then((response) => response.json())
       .then((data) => setVoiceOptions(Array.isArray(data.voices) ? data.voices.filter((voice: any) => typeof voice?.id === 'string' && typeof voice?.label === 'string') : []))
       .catch(() => setVoiceOptions([]));
@@ -179,7 +179,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
       try {
         const dataUrl = String(reader.result || '');
         const audioBase64 = dataUrl.split(',')[1] || '';
-        const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/transcribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mimeType: file.type, audioBase64, language: voiceLanguage }) });
+        const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/transcribe', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mimeType: file.type, audioBase64, language: voiceLanguage }) });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Speech recognition is unavailable.');
         setVoiceTranscript(typeof data.text === 'string' ? data.text : '');
@@ -195,7 +195,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
     if (!voiceText.trim() || voiceLoading) return;
     setVoiceLoading(true); setVoiceError(''); setVoiceAudioUrl('');
     try {
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/synthesize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: voiceText.trim(), voice: voiceId.trim() || undefined, language: voiceLanguage === 'auto' ? undefined : voiceLanguage }) });
+      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/synthesize', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: voiceText.trim(), voice: voiceId.trim() || undefined, language: voiceLanguage === 'auto' ? undefined : voiceLanguage }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Speech synthesis is unavailable.');
       setVoiceAudioUrl('data:' + data.mimeType + ';base64,' + data.audioBase64);
