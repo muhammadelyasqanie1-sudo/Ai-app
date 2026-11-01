@@ -10,6 +10,32 @@ type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 let activeChatRequests = 0;
 const MAX_CONCURRENT_CHAT_REQUESTS = 4;
 
+function splitTranslationDocument(text: string, maxChars = 6000): string[] {
+  const paragraphs = text.split(/(\\n\\s*\\n)/);
+  const chunks: string[] = [];
+  let current = '';
+  const push = () => { if (current.trim()) chunks.push(current); current = ''; };
+  for (const part of paragraphs) {
+    if (!part) continue;
+    if (part.length <= maxChars) {
+      if (current.length + part.length > maxChars) push();
+      current += part;
+      continue;
+    }
+    push();
+    let remaining = part;
+    while (remaining.length > maxChars) {
+      let cut = remaining.lastIndexOf(' ', maxChars);
+      if (cut < Math.floor(maxChars * 0.6)) cut = maxChars;
+      chunks.push(remaining.slice(0, cut));
+      remaining = remaining.slice(cut);
+    }
+    current = remaining;
+  }
+  push();
+  return chunks.length ? chunks : [text];
+}
+
 function getRequestId(req: IncomingMessage) {
   const supplied = req.headers['x-request-id'];
   return typeof supplied === 'string' && /^[a-zA-Z0-9._-]{8,100}$/.test(supplied)
@@ -144,6 +170,14 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     if (upstreamMessages[upstreamMessages.length - 1]?.role !== 'user') {
       sendJson(req, res, 400, { error: 'The final conversation message must be the new user prompt.', requestId: id }, id);
       return;
+    }
+    if (toolMode.mode === 'translation') {
+      const lastUser = upstreamMessages[upstreamMessages.length - 1];
+      if (lastUser.content.length > 6000) {
+        const chunks = splitTranslationDocument(lastUser.content);
+        lastUser.content = 'Translate every numbered segment in order. Keep terminology consistent across all segments, preserve the original paragraph and markup structure, and do not omit or summarize any segment. Return the translated segments in the same order.\\n\\n' +
+          chunks.map((chunk, index) => `[Segment ${index + 1} of ${chunks.length}]\\n${chunk}`).join('\\n\\n');
+      }
     }
 
     const prepared = await prepareVerifiedChat({ model, messages: upstreamMessages, signal: abortController.signal });
