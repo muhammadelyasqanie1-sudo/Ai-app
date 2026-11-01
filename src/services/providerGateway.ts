@@ -30,6 +30,8 @@ function capabilityFlagsFromStored(value: unknown): CapabilityFlags {
     streaming: has('streaming'),
     vision: has('vision'),
     imageGen: has('imageGen'),
+    imageEdit: has('imageEdit'),
+    ocr: has('ocr'),
     tts: has('tts'),
     stt: has('stt'),
     tools: has('tools'),
@@ -215,13 +217,49 @@ export async function getVerifiedProviderCatalog(): Promise<ProviderCatalog> {
   }
 }
 
+export async function getImageStudioSnapshot() {
+  const descriptors = await getVerifiedModelDescriptors();
+  const providers = descriptors.filter((model) =>
+    isRecentAndHealthy(model) && model.capabilities.imageGen &&
+    Boolean(getProviderAdapter(model.providerId)?.generateImage),
+  ).map((model) => {
+    const adapter = getProviderAdapter(model.providerId)!;
+    const options = adapter.imageGenerationOptions?.(model.id);
+    return options ? {
+      providerId: model.providerId,
+      modelId: model.id,
+      displayName: model.displayName,
+      stylePresets: options.stylePresets,
+      aspectRatios: options.aspectRatios,
+      qualityLevels: options.qualityLevels,
+      imageEdit: model.capabilities.imageEdit && Boolean(adapter.editImage),
+    } : null;
+  }).filter(Boolean);
+  return {
+    available: providers.length > 0,
+    providers,
+    message: providers.length ? null : 'No verified image-generation provider with declared options is available.',
+  };
+}
+
+export async function getFileAssistantSnapshot() {
+  return {
+    available: false,
+    storageConfigured: false,
+    extractionReady: false,
+    virusScannerReady: false,
+    acceptedFormats: ['PDF', 'TXT', 'DOCX', 'CSV', 'XLSX', 'JSON', 'source files', 'images'],
+    message: 'File processing is disabled until private object storage, file extraction, malware scanning and per-user quota enforcement are implemented and configured.',
+  };
+}
+
 export async function getCapabilitySnapshot() {
   const descriptors = await getVerifiedModelDescriptors();
   const selectable = descriptors.filter(isRecentAndHealthy);
   const capabilities: Record<AfgCapability, boolean> = {
     chat: selectable.some((model) => model.capabilities.text && model.capabilities.streaming),
-    vision: selectable.some((model) => model.capabilities.vision),
-    'image-generation': selectable.some((model) => model.capabilities.imageGen),
+    vision: selectable.some((model) => model.capabilities.vision && Boolean(getProviderAdapter(model.providerId)?.analyzeImage)),
+    'image-generation': selectable.some((model) => model.capabilities.imageGen && Boolean(getProviderAdapter(model.providerId)?.generateImage)),
     'video-generation': false,
     'file-processing': false,
     'speech-to-text': selectable.some((model) => model.capabilities.stt),
