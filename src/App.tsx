@@ -485,7 +485,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 w-full pb-20 md:pb-8 pt-2">
+      <main className="flex-1 w-full pb-24 md:pb-8 pt-2 md:ms-60">
         {currentTab === 'home' && (
           <AfgHomeView
             language={language}
