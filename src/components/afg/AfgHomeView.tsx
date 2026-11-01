@@ -337,24 +337,24 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
         <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-900/60 border border-cyan-900/40">
           <Zap className="w-5 h-5 text-cyan-400 shrink-0" />
           <div>
-            <h4 className="text-xs font-bold text-white">Provider status</h4>
-            <p className="text-[10px] text-slate-400">{capabilities.chat ? 'Chat verified' : 'Not verified'}</p>
+            <h4 className="text-xs font-bold text-white">{language === 'dari' ? 'وضعیت ارائه‌دهنده' : 'Provider status'}</h4>
+            <p className="text-[10px] text-slate-400">{capabilities.chat ? (language === 'dari' ? 'گفت‌وگو تأیید شده' : 'Chat verified') : (language === 'dari' ? 'تأیید نشده' : 'Not verified')}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-900/60 border border-cyan-900/40">
           <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
           <div>
-            <h4 className="text-xs font-bold text-white">Server-side secrets</h4>
-            <p className="text-[10px] text-slate-400">Provider keys stay on server</p>
+            <h4 className="text-xs font-bold text-white">{language === 'dari' ? 'کلیدهای سمت سرور' : 'Server-side secrets'}</h4>
+            <p className="text-[10px] text-slate-400">{language === 'dari' ? 'کلیدها در سرور نگهداری می‌شوند' : 'Provider keys stay on server'}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-900/60 border border-cyan-900/40">
           <Sparkles className="w-5 h-5 text-amber-400 shrink-0" />
           <div>
-            <h4 className="text-xs font-bold text-white">Verified capabilities</h4>
-            <p className="text-[10px] text-slate-400">Only supported features are enabled</p>
+            <h4 className="text-xs font-bold text-white">{language === 'dari' ? 'قابلیت‌های تأییدشده' : 'Verified capabilities'}</h4>
+            <p className="text-[10px] text-slate-400">{language === 'dari' ? 'فقط قابلیت‌های پشتیبانی‌شده فعال‌اند' : 'Only supported features are enabled'}</p>
           </div>
         </div>
 
