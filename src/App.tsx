@@ -192,7 +192,6 @@ export default function App() {
         lastMessage: latest?.content.slice(0, 180) || '',
         timestamp: Date.now(),
         messages,
-        category: 'general',
       };
       localStorage.setItem('afg_sessions', JSON.stringify([session, ...sessions.filter((item: any) => item?.id !== currentSessionId)].slice(0, 200)));
     } catch { console.error('AFG_AI_LOCAL_HISTORY_SAVE_FAILED'); }
