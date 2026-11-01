@@ -13,7 +13,7 @@ import {
   Sparkles,
   Paperclip
 } from 'lucide-react';
-import type { Language, ChatAttachment } from '../../types/afg';
+import type { Language, ChatAttachment, AfgModelOption } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
 
 interface AfgChatInputCapsuleProps {
@@ -21,6 +21,7 @@ interface AfgChatInputCapsuleProps {
   disabled?: boolean;
   language: Language;
   availableModels: string[];
+  modelOptions: AfgModelOption[];
   selectedModel: string;
   onSelectModel: (model: string) => void;
   modelsLoading?: boolean;
@@ -31,6 +32,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   disabled = false,
   language,
   availableModels,
+  modelOptions,
   selectedModel,
   onSelectModel,
   modelsLoading = false,
@@ -250,11 +252,15 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
           aria-label={language === 'dari' ? 'انتخاب مدل هوش مصنوعی' : 'Select AI model'}
           className="min-w-0 max-w-[72%] rounded-xl border border-cyan-700/50 bg-slate-900 px-2.5 py-2 text-[11px] text-cyan-100 outline-none focus:border-cyan-400 disabled:opacity-60"
         >
-          {availableModels.length === 0 ? (
-            <option value="">{language === 'dari' ? 'مدل موجود نیست' : 'No models available'}</option>
-          ) : availableModels.map((model) => (
+          {modelOptions.length > 0 ? modelOptions.map((model) => (
+            <option key={model.id} value={model.id} disabled={!model.selectable} title={model.selectable ? model.displayName : (model.disabledReason || 'Provider not reachable.')}>
+              {model.displayName}{model.selectable ? '' : ' — Provider not reachable.'}
+            </option>
+          )) : availableModels.length > 0 ? availableModels.map((model) => (
             <option key={model} value={model}>{model}</option>
-          ))}
+          )) : (
+            <option value="">{language === 'dari' ? 'مدل موجود نیست' : 'No models available'}</option>
+          )}
         </select>
       </div>
 
