@@ -78,6 +78,8 @@ function calculateExpression(expression: string): number {
 export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunTool, capabilities }) => {
   const t = translations[language];
   const [activeSubTab, setActiveSubTab] = useState<ToolSubTab>('overview');
+  const [voiceEnabled, setVoiceEnabled] = useState(() => localStorage.getItem('afg_voice_enabled') !== 'false');
+  useEffect(() => { const syncVoice = () => setVoiceEnabled(localStorage.getItem('afg_voice_enabled') !== 'false'); window.addEventListener('afg-voice-preference-change', syncVoice); window.addEventListener('afg-preferences-change', syncVoice); return () => { window.removeEventListener('afg-voice-preference-change', syncVoice); window.removeEventListener('afg-preferences-change', syncVoice); }; }, []);
   const [fileStatus, setFileStatus] = useState<{ available: boolean; acceptedFormats: string[]; message: string } | null>(null);
   useEffect(() => {
     if (activeSubTab !== 'file-tools') return;
@@ -97,12 +99,12 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
 
 
   useEffect(() => {
-    if (activeSubTab !== 'voice-tools' || !capabilities['text-to-speech']) return;
+    if (activeSubTab !== 'voice-tools' || !voiceEnabled || !(voiceEnabled && capabilities['text-to-speech'])) return;
     fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/voices')
       .then((response) => response.json())
       .then((data) => setVoiceOptions(Array.isArray(data.voices) ? data.voices.filter((voice: any) => typeof voice?.id === 'string' && typeof voice?.label === 'string') : []))
       .catch(() => setVoiceOptions([]));
-  }, [activeSubTab, capabilities]);
+  }, [activeSubTab, capabilities, voiceEnabled]);
 
   // --- Translation Tool State ---
   const [sourceLang, setSourceLang] = useState<'auto' | 'fa' | 'ps' | 'en' | 'ar'>('auto');
@@ -226,7 +228,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
     { id: 'code-help' as ToolSubTab, title: t.toolCodeHelp, desc: language === 'dari' ? 'تولید، توضیح، اشکال‌زدایی و بهینه‌سازی کد' : 'Generate, explain, debug and optimize code', ready: Boolean(capabilities.chat), icon: Code2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
     { id: 'writing-studio' as ToolSubTab, title: language === 'dari' ? 'استودیوی نویسندگی' : 'Writing Studio', desc: language === 'dari' ? 'ایمیل، مقاله، رزومه و محتوای تبلیغاتی' : 'Emails, articles, CVs and marketing content', ready: Boolean(capabilities.chat), icon: FileText, color: 'text-fuchsia-400', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30' },
     { id: 'research' as ToolSubTab, title: language === 'dari' ? 'پژوهش وب' : 'Web Research', desc: language === 'dari' ? 'جستجوی منابع واقعی و لینک‌های اصلی' : 'Search real sources and original URLs', ready: Boolean(capabilities.research), icon: Languages, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
-    { id: 'voice-tools' as ToolSubTab, title: t.toolVoice, desc: language === 'dari' ? 'نیازمند ارائه‌دهنده صوتی سازگار' : 'Requires a compatible voice provider', ready: Boolean(capabilities['speech-to-text'] || capabilities['text-to-speech']), icon: Mic, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
+    { id: 'voice-tools' as ToolSubTab, title: t.toolVoice, desc: !voiceEnabled ? (language === 'dari' ? 'در تنظیمات غیرفعال شده' : 'Disabled in settings') : (language === 'dari' ? 'نیازمند ارائه‌دهنده صوتی سازگار' : 'Requires a compatible voice provider'), ready: voiceEnabled && Boolean((voiceEnabled && capabilities['speech-to-text']) || capabilities['text-to-speech']), icon: Mic, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
     { id: 'pdf-tools' as ToolSubTab, title: t.toolPdf, desc: language === 'dari' ? 'بارگذاری و استخراج متن فعال نیست' : 'Upload and text extraction are unavailable', ready: false, icon: FileText, color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/30' },
     { id: 'calculator' as ToolSubTab, title: t.toolCalc, desc: language === 'dari' ? 'محاسبه محلی' : 'Local arithmetic calculator', ready: true, icon: Calculator, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/30' },
     { id: 'qr-scanner' as ToolSubTab, title: language === 'dari' ? 'تولیدکننده QR' : 'QR Generator', desc: language === 'dari' ? 'با سرویس بیرونی QRServer' : 'Uses the external QRServer service', ready: true, icon: QrCode, color: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30' },
