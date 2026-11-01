@@ -151,10 +151,16 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     const toolMode = buildToolModePrompt(body, requestedLanguage);
     const authenticatedUser = await authenticateRequest(req);
     let memoryPrompt = '';
+    let userPreferencePrompt = '';
     if (authenticatedUser && pool) {
       try {
         const preference = await pool.query('SELECT u.memory_enabled AS account_memory_enabled, COALESCE(p.memory_enabled, u.memory_enabled) AS memory_enabled FROM users u LEFT JOIN user_preferences p ON p.user_id=u.id WHERE u.id=$1', [authenticatedUser.id]);
         const userMemory = await pool.query('SELECT category, content FROM user_memories WHERE user_id=$1 ORDER BY updated_at DESC LIMIT 30', [authenticatedUser.id]);
+        const aiPreferences = await pool.query('SELECT response_style,response_length,creativity,default_language,voice_enabled FROM user_preferences WHERE user_id=$1', [authenticatedUser.id]);
+        if (aiPreferences.rows[0]) {
+          const p = aiPreferences.rows[0];
+          userPreferencePrompt = 'User AI preferences: response style=' + String(p.response_style).slice(0,40) + '; response length=' + String(p.response_length).slice(0,30) + '; creativity=' + String(p.creativity) + '; preferred language=' + String(p.default_language) + '. Follow these preferences unless the user asks otherwise.';
+        }
         if (preference.rows[0]?.account_memory_enabled !== false && preference.rows[0]?.memory_enabled !== false && userMemory.rows.length) {
           memoryPrompt = 'User-approved personal memory (use only when relevant; never expose it unnecessarily):\\n' + userMemory.rows.map((item) => '[' + item.category + '] ' + item.content).join('\\n');
         }
@@ -168,6 +174,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       toolMode.prompt,
       getProductivityPrompt(body.productivityType, body.productivityParameters, requestedLanguage),
       memoryPrompt,
+      userPreferencePrompt,
     ].filter(Boolean);
 
     const upstreamMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
