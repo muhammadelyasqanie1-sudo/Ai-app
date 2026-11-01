@@ -134,14 +134,20 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
     }catch{reply(res,400,{error:'Could not change password.'});}return true;
   }
   if(pathname==='/api/account/export'&&req.method==='GET'){
-    const [profile,prefs,memories,items,conversations]=await Promise.all([
+    const [profile,prefs,memories,items,conversations,identities,sessions,assets,usage,apiKeys,notifications]=await Promise.all([
       pool.query('SELECT id,email,display_name,preferred_language,created_at FROM users WHERE id=$1',[user.id]),
       pool.query('SELECT * FROM user_preferences WHERE user_id=$1',[user.id]),
       pool.query('SELECT category,content,consent_sensitive,created_at,updated_at FROM user_memories WHERE user_id=$1',[user.id]),
       pool.query('SELECT tool_type,title,content,parameters,created_at,updated_at FROM productivity_items WHERE user_id=$1',[user.id]),
       pool.query('SELECT c.id,c.title,c.created_at,c.updated_at,COALESCE(json_agg(json_build_object(\'role\',m.role,\'content\',m.content,\'createdAt\',m.created_at) ORDER BY m.created_at) FILTER (WHERE m.id IS NOT NULL),\'[]\'::json) AS messages FROM conversations c LEFT JOIN messages m ON m.conversation_id=c.id WHERE c.user_id=$1 GROUP BY c.id ORDER BY c.created_at',[user.id]),
+      pool.query('SELECT provider,email_verified,created_at FROM auth_identities WHERE user_id=$1',[user.id]),
+      pool.query('SELECT created_at,last_seen_at,expires_at FROM sessions WHERE user_id=$1 ORDER BY created_at DESC',[user.id]),
+      pool.query('SELECT asset_type,prompt,mime_type,metadata,created_at FROM generated_assets WHERE user_id=$1',[user.id]),
+      pool.query('SELECT provider_key,model_key,capability,input_tokens,output_tokens,cost_microusd,created_at FROM usage_events WHERE user_id=$1 ORDER BY created_at DESC LIMIT 5000',[user.id]),
+      pool.query('SELECT label,key_prefix,scopes,last_used_at,expires_at,revoked_at,created_at FROM api_keys WHERE owner_user_id=$1',[user.id]),
+      pool.query('SELECT event_type,title,body,read_at,created_at FROM user_notification_events WHERE user_id=$1 ORDER BY created_at DESC',[user.id]),
     ]);
-    reply(res,200,{exportedAt:new Date().toISOString(),profile:profile.rows[0],preferences:prefs.rows,memories:memories.rows,productivityItems:items.rows,conversations:conversations.rows});return true;
+    reply(res,200,{exportedAt:new Date().toISOString(),profile:profile.rows[0],preferences:prefs.rows,memories:memories.rows,productivityItems:items.rows,conversations:conversations.rows,linkedIdentities:identities.rows,sessionHistory:sessions.rows,generatedAssets:assets.rows,usageHistory:usage.rows,apiKeyMetadata:apiKeys.rows,notifications:notifications.rows});return true;
   }
   if(pathname==='/api/account'&&req.method==='DELETE'){
     try{
