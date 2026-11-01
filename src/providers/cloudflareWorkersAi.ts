@@ -18,6 +18,8 @@ const CHAT_CAPABILITIES: CapabilityFlags = {
   streaming: true,
   vision: false,
   imageGen: false,
+  imageEdit: false,
+  ocr: false,
   tts: false,
   stt: false,
   tools: false,
