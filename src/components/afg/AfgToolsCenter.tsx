@@ -25,6 +25,53 @@ interface AfgToolsCenterProps {
   language: Language;
 }
 
+function calculateExpression(expression: string): number {
+  const normalized = expression.replace(/\s+/g, '');
+  const tokens = normalized.match(/\d+(?:\.\d+)?|[()+\-*/]/g) || [];
+  if (!normalized || tokens.join('') !== normalized) throw new Error('Invalid expression');
+  let index = 0;
+  let parseExpression: () => number;
+
+  const parseFactor = (): number => {
+    const token = tokens[index++];
+    if (token === '+') return parseFactor();
+    if (token === '-') return -parseFactor();
+    if (token === '(') {
+      const value = parseExpression();
+      if (tokens[index++] !== ')') throw new Error('Missing closing parenthesis');
+      return value;
+    }
+    const value = Number(token);
+    if (!Number.isFinite(value)) throw new Error('Invalid number');
+    return value;
+  };
+
+  const parseTerm = (): number => {
+    let value = parseFactor();
+    while (tokens[index] === '*' || tokens[index] === '/') {
+      const operator = tokens[index++];
+      const right = parseFactor();
+      if (operator === '/' && right === 0) throw new Error('Division by zero');
+      value = operator === '*' ? value * right : value / right;
+    }
+    return value;
+  };
+
+  parseExpression = () => {
+    let value = parseTerm();
+    while (tokens[index] === '+' || tokens[index] === '-') {
+      const operator = tokens[index++];
+      const right = parseTerm();
+      value = operator === '+' ? value + right : value - right;
+    }
+    return value;
+  };
+
+  const result = parseExpression();
+  if (index !== tokens.length || !Number.isFinite(result)) throw new Error('Invalid expression');
+  return result;
+}
+
 export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
   const t = translations[language];
   const [activeSubTab, setActiveSubTab] = useState<ToolSubTab>('overview');
@@ -45,6 +92,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
 
   // --- QR Generator State ---
   const [qrText, setQrText] = useState('');
+  const [qrUnavailable, setQrUnavailable] = useState(false);
 
   // --- Code Gen State ---
   const [codePrompt, setCodePrompt] = useState('Create a responsive glassmorphic button in React with Tailwind CSS');
@@ -276,7 +324,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
         <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-purple-500/40 shadow-xl space-y-4">
           <h2 className="text-base font-bold text-white flex items-center gap-2">
             <Calculator className="w-5 h-5 text-purple-400" />
-            <span>{t.toolCalc}</span>
+            <span>{language === 'dari' ? 'محاسبه‌گر ساده' : 'Basic Calculator'}</span>
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -294,8 +342,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
                       else if (btn === '=') {
                         try {
                           // Simple safe math evaluation
-                          const sanitized = calcDisplay.replace(/[^0-9+\-*/().]/g, '');
-                          setCalcDisplay(String(Function(`'use strict'; return (${sanitized})`)()));
+                          setCalcDisplay(String(calculateExpression(calcDisplay)));
                         } catch {
                           setCalcDisplay('Error');
                         }
@@ -369,7 +416,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
               <input
                 type="text"
                 value={qrText}
-                onChange={(e) => setQrText(e.target.value)}
+                onChange={(e) => { setQrText(e.target.value); setQrUnavailable(false); }}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-cyan-700/50 text-sm text-white focus:outline-none focus:border-cyan-400"
               />
               <p className="text-xs text-slate-400">
@@ -377,15 +424,15 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
               </p>
             </div>
 
-            {qrText.trim() ? <div className="flex flex-col items-center justify-center p-6 rounded-2xl bg-white w-fit mx-auto shadow-2xl">
+            {qrText.trim() && !qrUnavailable ? <div className="flex flex-col items-center justify-center p-6 rounded-2xl bg-white w-fit mx-auto shadow-2xl">
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrText)}`}
                 alt="QR Code"
                 className="w-44 h-44 object-contain"
-                onError={(event) => { event.currentTarget.hidden = true; }}
+                onError={() => setQrUnavailable(true)}
               />
               <span className="text-[11px] text-slate-600 font-bold mt-2">QRServer</span>
-            </div> : <p className="text-xs text-slate-500 text-center">{language === 'dari' ? 'برای تولید QR متن وارد کنید.' : 'Enter text to generate a QR code.'}</p>}
+            </div> : <p className="text-xs text-slate-500 text-center">{qrUnavailable ? (language === 'dari' ? 'سرویس QR در دسترس نیست.' : 'QR service is unavailable.') : (language === 'dari' ? 'برای تولید QR متن وارد کنید.' : 'Enter text to generate a QR code.')}</p>}
           </div>
         </div>
       )}
