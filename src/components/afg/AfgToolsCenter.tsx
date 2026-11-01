@@ -95,6 +95,14 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   }, [activeSubTab, language]);
 
 
+  useEffect(() => {
+    if (activeSubTab !== 'voice-tools' || !capabilities['text-to-speech']) return;
+    fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/voices')
+      .then((response) => response.json())
+      .then((data) => setVoiceOptions(Array.isArray(data.voices) ? data.voices.filter((voice: any) => typeof voice?.id === 'string' && typeof voice?.label === 'string') : []))
+      .catch(() => setVoiceOptions([]));
+  }, [activeSubTab, capabilities]);
+
   // --- Translation Tool State ---
   const [sourceLang, setSourceLang] = useState<'auto' | 'fa' | 'ps' | 'en' | 'ar'>('auto');
   const [targetLang, setTargetLang] = useState<'fa' | 'ps' | 'en' | 'ar'>('en');
@@ -137,6 +145,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [voiceError, setVoiceError] = useState('');
   const [voiceLoading, setVoiceLoading] = useState(false);
+  const [voiceOptions, setVoiceOptions] = useState<Array<{ id: string; label: string }>>([]);
 
   // Translation uses the selected verified text-generation model.
   const handleTranslate = () => {
@@ -606,7 +615,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
             <section className="rounded-2xl bg-slate-900/80 border border-amber-900/40 p-4 space-y-3">
               <h3 className="text-sm font-bold text-white">{language === 'dari' ? 'متن به گفتار' : 'Text to Speech'}</h3>
               <textarea value={voiceText} onChange={(e) => setVoiceText(e.target.value)} maxLength={5000} rows={4} placeholder={language === 'dari' ? 'متن برای خواندن...' : 'Text to speak...'} className="w-full rounded-xl bg-slate-950 border border-slate-700 p-2 text-sm text-white" />
-              <input value={voiceId} onChange={(e) => setVoiceId(e.target.value)} placeholder={language === 'dari' ? 'شناسه صدای ارائه‌دهنده (اختیاری)' : 'Provider voice ID (optional)'} disabled={!capabilities['text-to-speech']} className="w-full rounded-xl bg-slate-950 border border-slate-700 p-2 text-xs text-white disabled:opacity-40" />
+              {voiceOptions.length > 0 ? <select value={voiceId} onChange={(e) => setVoiceId(e.target.value)} disabled={!capabilities['text-to-speech']} className="w-full rounded-xl bg-slate-950 border border-slate-700 p-2 text-xs text-white disabled:opacity-40"><option value="">{language === 'dari' ? 'صدای پیش‌فرض' : 'Default voice'}</option>{voiceOptions.map((voice) => <option key={voice.id} value={voice.id}>{voice.label}</option>)}</select> : <input value={voiceId} onChange={(e) => setVoiceId(e.target.value)} placeholder={language === 'dari' ? 'شناسه صدای ارائه‌دهنده (اختیاری)' : 'Provider voice ID (optional)'} disabled={!capabilities['text-to-speech']} className="w-full rounded-xl bg-slate-950 border border-slate-700 p-2 text-xs text-white disabled:opacity-40" />}
               <button onClick={handleSynthesize} disabled={!capabilities['text-to-speech'] || !voiceText.trim() || voiceLoading} className="w-full rounded-xl bg-amber-400 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-40">{voiceLoading ? '…' : (language === 'dari' ? 'تولید صدا' : 'Generate speech')}</button>
               {!capabilities['text-to-speech'] && <p className="text-xs text-amber-200">{language === 'dari' ? 'تا اتصال مدل و آداپتر واقعی TTS غیرفعال است.' : 'Disabled until a real TTS model and adapter are configured.'}</p>}
               {voiceAudioUrl && <audio controls src={voiceAudioUrl} className="w-full" />}
