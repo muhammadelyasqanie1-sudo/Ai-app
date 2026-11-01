@@ -41,3 +41,17 @@
 - The Android workflow accepts optional `api_base_url` at manual dispatch. An APK must target the deployed HTTPS API; an APK build does not deploy the backend.
 
 Tests, lint, database migrations, and manual deployments were not initiated. Important exception: while the original workflow still had its `push` trigger, commits to `main` automatically triggered GitHub Actions APK builds. Runs #35–49 completed: 13 succeeded and 2 failed. The workflow is now manual-dispatch-only, so future pushes will not start APK builds. Render auto-deploy settings are external and must be checked in the Render dashboard; this repository cannot confirm whether those main-branch commits triggered a Render deployment.
+
+## System architecture implementation pass (2026-11-01)
+
+- Inspected the repository tree, source/configuration files, API routes, PostgreSQL schema, environment sample, Vite and Express entrypoints, Capacitor configuration, Android workflow, and deployment notes before changing architecture code.
+- Added typed provider contracts in `src/providers/providerTypes.ts`, a Cloudflare Workers AI adapter in `src/providers/cloudflareWorkersAi.ts`, a provider registry/capability gateway in `src/services/providerGateway.ts`, and a verified chat service in `src/services/chatService.ts`.
+- Moved live model discovery behind the provider gateway. Model identifiers are passed unchanged through the catalog, client selection, chat service, and provider adapter.
+- Added `GET /api/capabilities`; the frontend now obtains its model list and capability flags from this backend response. Only chat is eligible to be reported as available. Image, video, vision, files, speech, TTS, and research remain false.
+- Added `src/api/http.ts` as the shared API edge. Both Vite development and Express production now route through the same route table: `/api/health`, `/api/ready`, `/api/models`, `/api/capabilities`, and `/api/chat`.
+- The home screen now displays provider status from the live capability response rather than claiming the service is always online. Unsupported capabilities remain described as unavailable.
+- Documented the implemented and planned architecture in `docs/SYSTEM_ARCHITECTURE.md` and updated the platform blueprint.
+
+Not implemented by this architecture-only pass: authentication/session middleware, CSRF tokens for cookie-authenticated routes, distributed/per-user rate limiting, multi-provider fallback, retries, usage metering, object storage, queues, WebSockets, migrations, and authenticated persistence. These remain explicit gaps, not simulated features.
+
+No tests, type checks, builds, migrations, workflow runs, or deployments were initiated.
