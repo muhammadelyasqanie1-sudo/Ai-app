@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
 import { authenticateRequest, verifyCsrf, readJsonBody, sendAuthJson } from './auth.ts';
+import { z } from 'zod';
 
 const TYPES = ['note','summary','idea','study','task','meeting','email','brainstorm','content_plan','knowledge'] as const;
 type ProductivityType = typeof TYPES[number];
@@ -17,6 +18,18 @@ const PARAM_SCHEMAS: Record<ProductivityType, string[]> = {
   content_plan: ['platform','audience','frequency','goal'],
   knowledge: ['topic','source','tags','confidence'],
 };
+
+const productivityCreateSchema = z.object({
+  type: z.enum(TYPES),
+  title: z.string().trim().min(1).max(180),
+  content: z.string().trim().min(1).max(20_000),
+  parameters: z.record(z.string(), z.unknown()).optional(),
+}).strict();
+const productivityPatchSchema = z.object({
+  title: z.string().trim().min(1).max(180).optional(),
+  content: z.string().trim().min(1).max(20_000).optional(),
+  isPinned: z.boolean().optional(),
+}).strict().refine((value) => Object.keys(value).length > 0);
 
 const PROMPTS: Record<ProductivityType, string> = {
   note: 'You are AFG AI Notes Assistant. Organize notes clearly, preserve all important facts, and never invent missing details.',
@@ -76,12 +89,12 @@ export async function handleProductivityApi(req: IncomingMessage, res: ServerRes
   }
   if (pathname === '/api/productivity/items' && req.method === 'POST') {
     try {
-      const body = await readJsonBody(req, 40_000);
-      const type = body.type as ProductivityType;
-      if (!TYPES.includes(type)) { reply(res, 400, { error: 'Unsupported productivity tool type.' }); return true; }
-      const title = cleanText(body.title, 180);
-      const content = cleanText(body.content, 20_000);
-      if (!title || !content) { reply(res, 400, { error: 'A title and content are required.' }); return true; }
+      const parsed = productivityCreateSchema.safeParse(await readJsonBody(req, 40_000));
+      if (!parsed.success) { reply(res,400,{error:'Provide a supported tool type, title, content and valid parameters.'}); return true; }
+      const body = parsed.data;
+      const type = body.type;
+      const title = body.title;
+      const content = body.content;
       const parameters = sanitizeParameters(type, body.parameters);
       const usage = await pool.query('SELECT COUNT(*)::int AS item_count, COALESCE(SUM(octet_length(content)),0)::bigint AS content_bytes FROM productivity_items WHERE user_id=$1',[user.id]);
       const itemCount = Number(usage.rows[0]?.item_count || 0);
@@ -104,7 +117,9 @@ export async function handleProductivityApi(req: IncomingMessage, res: ServerRes
   const itemMatch = pathname.match(/^\/api\/productivity\/items\/([0-9a-f-]{36})$/i);
   if (itemMatch && req.method === 'PATCH') {
     try {
-      const body = await readJsonBody(req, 30_000);
+      const parsed = productivityPatchSchema.safeParse(await readJsonBody(req, 30_000));
+      if (!parsed.success) { reply(res,400,{error:'Provide at least one valid field to update.'}); return true; }
+      const body = parsed.data;
       const updates: string[] = [];
       const values: unknown[] = [itemMatch[1], user.id];
       if (typeof body.title === 'string') { const title=cleanText(body.title,180); if(!title){reply(res,400,{error:'Title cannot be empty.'});return true;} values.push(title); updates.push(`title = $3`); }
