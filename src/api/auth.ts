@@ -132,6 +132,23 @@ export async function readJsonBody(req: IncomingMessage, maxBytes = 16_384): Pro
   return parsed as Record<string, unknown>;
 }
 
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 8;
+
+function isLoginRateLimited(req: IncomingMessage): boolean {
+  const forwarded = req.headers['x-forwarded-for'];
+  const address = (typeof forwarded === 'string' ? forwarded.split(',')[0] : req.socket.remoteAddress) || 'unknown';
+  const now = Date.now();
+  const current = loginAttempts.get(address);
+  if (!current || current.resetAt <= now) {
+    loginAttempts.set(address, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    return false;
+  }
+  current.count += 1;
+  return current.count > LOGIN_MAX_ATTEMPTS;
+}
+
 export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
   if (!pathname.startsWith('/api/auth/')) return false;
   if (!pool) {
@@ -140,6 +157,11 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
   }
 
   if (pathname === '/api/auth/login' && req.method === 'POST') {
+    if (isLoginRateLimited(req)) {
+      res.setHeader('Retry-After', '900');
+      sendAuthJson(res, 429, { error: 'Too many sign-in attempts. Try again later.' });
+      return true;
+    }
     try {
       const body = await readJsonBody(req);
       const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -165,6 +187,41 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       sendAuthJson(res, 400, { error: 'Unable to process the sign-in request.' });
       return true;
     }
+  }
+
+  if (pathname === '/api/auth/bootstrap-admin' && req.method === 'POST') {
+    try {
+      const configuredToken = process.env.AFG_ADMIN_BOOTSTRAP_TOKEN || '';
+      const body = await readJsonBody(req);
+      const suppliedToken = typeof body.bootstrapToken === 'string' ? body.bootstrapToken : '';
+      if (configuredToken.length < 32 || suppliedToken.length !== configuredToken.length ||
+          !timingSafeEqual(Buffer.from(suppliedToken), Buffer.from(configuredToken))) {
+        sendAuthJson(res, 403, { error: 'Admin bootstrap is not authorized or is not configured.' });
+        return true;
+      }
+      const existingAdmins = await pool.query("SELECT 1 FROM users WHERE role = 'admin' AND status = 'active' LIMIT 1");
+      if (existingAdmins.rows.length) {
+        sendAuthJson(res, 409, { error: 'An active administrator already exists. Bootstrap is permanently closed.' });
+        return true;
+      }
+      const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+      const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 100) : 'AFG AI Administrator';
+      const password = typeof body.password === 'string' ? body.password : '';
+      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || password.length < 12 || password.length > 256) {
+        sendAuthJson(res, 400, { error: 'Use a valid email and a password of at least 12 characters.' });
+        return true;
+      }
+      const passwordHash = await hashPassword(password);
+      const created = await pool.query(
+        "INSERT INTO users (email, display_name, password_hash, role) VALUES ($1, $2, $3, 'admin') ON CONFLICT (email) DO UPDATE SET display_name = EXCLUDED.display_name, password_hash = EXCLUDED.password_hash, role = 'admin', status = 'active', updated_at = now() RETURNING id",
+        [email, displayName, passwordHash],
+      );
+      await createSession(created.rows[0].id, res);
+      sendAuthJson(res, 201, { authenticated: true, bootstrapped: true });
+    } catch {
+      sendAuthJson(res, 400, { error: 'Could not complete administrator bootstrap.' });
+    }
+    return true;
   }
 
   if (pathname === '/api/auth/me' && req.method === 'GET') {
