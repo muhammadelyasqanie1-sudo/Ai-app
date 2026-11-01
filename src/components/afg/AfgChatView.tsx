@@ -23,6 +23,7 @@ import { AfgChatInputCapsule } from './AfgChatInputCapsule';
 import { MarkdownRenderer } from '../MarkdownRenderer';
 import type { Language, AfgMessage, ChatAttachment, UserProfile, AfgCapabilityKey, AfgModelOption } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
+import { getIntlLocale } from '../../utils/i18n';
 
 interface AfgChatViewProps {
   messages: AfgMessage[];
@@ -238,7 +239,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                   </span>
                   <span>•</span>
                   <span>
-                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {new Intl.DateTimeFormat(getIntlLocale(language), { hour: '2-digit', minute: '2-digit' }).format(new Date(msg.timestamp))}
                   </span>
                 </div>
 
