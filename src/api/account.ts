@@ -4,6 +4,8 @@ import { pool } from './database.ts';
 import { authenticateRequest, verifyCsrf, readJsonBody, sendAuthJson, hashPassword, verifyPassword, clearSessionCookies } from './auth.ts';
 
 function reply(res: ServerResponse, status: number, body: Record<string, unknown>) { sendAuthJson(res, status, body); }
+const SENSITIVE_MEMORY_PATTERN = /\b(password|passcode|secret|api.?key|token|otp|verification.?code|recovery.?code|private.?key|credential|passport|national.?id|identity.?card|social.?security|ssn|driver.?license|medical|diagnosis|medication|prescription|hospital|doctor|disease|symptom|health|diabetes|cancer|pregnan|depression|anxiety|allergy|blood.?pressure|bank.?account|account.?number|credit.?card|debit.?card|cvv|iban)\b|رمز|پاسورد|تذکره|پاسپورت|کارت هویت|شماره هویت|کلید خصوصی|کد تایید|کد تأیید|رمز یکبار مصرف|صحت|مریض|دوا|دارو|تشخیص|بیماری|شفاخانه|داکتر|دکتر|حساسیت|فشار خون|شکر|سرطان|حاملگی|بارداری|افسردگی|اضطراب|حساب بانکی|شماره حساب|کارت بانکی/i;
+function containsSensitiveMemory(value: string): boolean { return SENSITIVE_MEMORY_PATTERN.test(value); }
 function cookieToken(req: IncomingMessage, name: string): string {
   const entry = (req.headers.cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith(name + '='));
   if (!entry) return '';
@@ -57,7 +59,7 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
       const category=['preferences','language','style','facts'].includes(String(body.category))?String(body.category):'';
       const content=typeof body.content==='string'?body.content.trim():'';
       if(!category||!content||content.length>2000){reply(res,400,{error:'Choose a category and provide 1–2,000 characters.'});return true;}
-      const sensitive=/\b(password|passcode|secret|api.?key|token|passport|national.?id|ssn|medical|diagnosis|medication|health|bank.?account|credit.?card)\b|رمز|پاسورد|تذکره|پاسپورت|صحت|مریض|دوا|تشخیص/i.test(content);
+      const sensitive=containsSensitiveMemory(content);
       if(sensitive&&body.consentSensitive!==true){reply(res,400,{error:'This may contain sensitive information. Explicit per-item consent is required.'});return true;}
       const result=await pool.query('INSERT INTO user_memories(user_id,category,content,consent_sensitive) VALUES($1,$2,$3,$4) RETURNING id,category,content,consent_sensitive AS "consentSensitive",created_at AS "createdAt"',[user.id,category,content,sensitive]);
       reply(res,201,{memory:result.rows[0]});
