@@ -147,6 +147,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   const [voiceError, setVoiceError] = useState('');
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [voiceOptions, setVoiceOptions] = useState<Array<{ id: string; label: string }>>([]);
+  const [voiceConversationMode, setVoiceConversationMode] = useState(false);
 
   // Translation uses the selected verified text-generation model.
   const handleTranslationFile = async (file?: File) => {
@@ -177,6 +178,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Speech recognition is unavailable.');
         setVoiceTranscript(typeof data.text === 'string' ? data.text : '');
+        if (voiceConversationMode && typeof data.text === 'string' && data.text.trim()) onRunTool(data.text.trim(), { toolMode: 'chat' });
       } catch (error) { setVoiceError(error instanceof Error ? error.message : 'Transcription failed.'); }
       finally { setVoiceLoading(false); }
     };
@@ -616,6 +618,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
       {activeSubTab === 'voice-tools' && (
         <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-amber-500/40 shadow-xl space-y-4">
           <h2 className="text-base font-bold text-white flex items-center gap-2"><Mic className="w-5 h-5 text-amber-400" /><span>{t.toolVoice}</span></h2>
+          <label className="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" checked={voiceConversationMode} onChange={(e) => setVoiceConversationMode(e.target.checked)} disabled={!capabilities['speech-to-text']} />{language === 'dari' ? 'حالت مکالمه: متن تشخیص‌شده را خودکار به چت بفرست' : 'Conversation mode: automatically send recognized speech to Chat'}</label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <section className="rounded-2xl bg-slate-900/80 border border-amber-900/40 p-4 space-y-3">
               <h3 className="text-sm font-bold text-white">{language === 'dari' ? 'گفتار به متن' : 'Speech to Text'}</h3>
