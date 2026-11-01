@@ -13,3 +13,5 @@ The canonical data-model migration is additive and preserves legacy tables and c
 Existing installations initialized with database/schema.sql can run the migration runner afterwards. New installations should use the migration runner as the schema source of truth. The older schema.sql remains a legacy bootstrap/reference file until all environments have migrated.
 
 See BACKUP-RESTORE.md for the documented backup and recovery procedure. Never commit database dumps or secrets.
+
+Locale persistence is introduced by `0003_user_locale_settings.sql`. It creates `user_settings.locale` and backfills it from existing account preferences. Apply it with the normal migration runner before deploying the updated account API.
