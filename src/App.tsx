@@ -147,6 +147,12 @@ export default function App() {
         setAvailableModels(data.models);
         setSelectedModel((current) => data.models.includes(current) ? current : (data.models[0] || ''));
         setCapabilitySnapshot(data as AfgCapabilitySnapshot);
+        fetch(API_BASE_URL + '/api/auth/me', { credentials: 'include' })
+          .then((authResponse) => authResponse.ok ? authResponse.json() : null)
+          .then((authData) => {
+            const preferred = authData?.user?.defaultModel;
+            if (typeof preferred === 'string' && data.models.includes(preferred)) setSelectedModel(preferred);
+          }).catch(() => {});
       })
       .catch(() => {
         setAvailableModels([]);
@@ -188,6 +194,16 @@ export default function App() {
       localStorage.setItem('afg_sessions', JSON.stringify([session, ...sessions.filter((item: any) => item?.id !== currentSessionId)].slice(0, 200)));
     } catch { console.error('AFG_AI_LOCAL_HISTORY_SAVE_FAILED'); }
   }, [messages, currentSessionId]);
+
+  const handleSelectModel = (model: string) => {
+    setSelectedModel(model);
+    const csrf = document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '';
+    fetch(API_BASE_URL + '/api/auth/preferences', {
+      method: 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': decodeURIComponent(csrf) },
+      body: JSON.stringify({ defaultModel: model === 'auto' ? '' : model }),
+    }).catch(() => {});
+  };
 
   // Global Keyboard Shortcuts (Ctrl+/ or Cmd+/)
   useEffect(() => {
@@ -435,7 +451,7 @@ export default function App() {
             availableModels={availableModels}
             modelOptions={modelOptions}
             selectedModel={selectedModel}
-            onSelectModel={setSelectedModel}
+            onSelectModel={handleSelectModel}
             capabilities={capabilitySnapshot.capabilities}
           />
         )}
