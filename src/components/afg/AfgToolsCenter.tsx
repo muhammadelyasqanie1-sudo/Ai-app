@@ -146,7 +146,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
       const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/research', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: researchQuery.trim() }) });
       const data = await response.json();
       if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Research is unavailable.');
-      const sources = Array.isArray(data.sources) ? data.sources.filter((item: any) => typeof item?.url === 'string' && /^https?:\\/\\//i.test(item.url) && typeof item?.title === 'string') : [];
+      const sources = Array.isArray(data.sources) ? data.sources.filter((item: any) => typeof item?.url === 'string' && /^https?:\/\//i.test(item.url) && typeof item?.title === 'string') : [];
       setResearchSources(sources);
       if (!sources.length) setResearchError(language === 'dari' ? 'منبع قابل تأیید پیدا نشد.' : 'No verified source URLs were returned.');
     } catch (error) { setResearchError(error instanceof Error ? error.message : 'Research failed.'); }
@@ -365,7 +365,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
           </div>
 
           <pre className="p-4 rounded-2xl bg-black/80 border border-cyan-900/60 text-emerald-300 font-mono text-xs sm:text-sm overflow-x-auto leading-relaxed">
-            <code>{generatedCode || (language === 'dari' ? 'تولیدکننده کد به سرویس واقعی وصل نشده است.' : 'The code generator is not connected to a real service.')}</code>
+            <code>{generatedCode || (language === 'dari' ? 'درخواست خود را بنویسید و تولید کد را بزنید؛ پاسخ در صفحه چت نمایش داده می‌شود.' : 'Describe the coding task and choose Generate Code; the response will open in Chat.')}</code>
           </pre>
         </div>
       )}
