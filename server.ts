@@ -31,8 +31,9 @@ app.all('/api/chat', (req, res) => {
 app.get('/api/models', async (_req, res) => {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
   const apiToken = process.env.CLOUDFLARE_API_TOKEN?.trim();
+  res.setHeader('Cache-Control', 'no-store');
   if (!accountId || !apiToken) {
-    res.status(503).json({ error: 'Cloudflare Workers AI is not configured. Add CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in Render Environment.' });
+    res.status(503).json({ error: 'AI model catalog is unavailable: Cloudflare credentials are not configured.', models: [], verified: false });
     return;
   }
 
@@ -45,36 +46,26 @@ app.get('/api/models', async (_req, res) => {
       result?: Array<{ name?: string; id?: string; model?: string; task?: { name?: string } | string }>;
       errors?: Array<{ message?: string }>;
     };
-    if (!response.ok || payload.success === false) {
-      console.error('Cloudflare model list failed:', response.status, JSON.stringify(payload.errors || []).slice(0, 800));
-      console.error('Cloudflare model catalog unavailable; using the known chat model fallback.');
-      res.setHeader('Cache-Control', 'no-store');
-      res.json({ models: ['@cf/openai/gpt-oss-120b'], source: 'fallback' });
+    if (!response.ok || payload.success !== true) {
+      console.error('AI_MODEL_CATALOG_FAILED', JSON.stringify({ status: response.status, errors: payload.errors || [] }));
+      res.status(502).json({ error: 'The AI provider could not verify its model catalog. Try again later.', models: [], verified: false });
       return;
     }
 
     const models = (payload.result || [])
       .filter((item) => {
         const taskName = typeof item.task === 'string' ? item.task : item.task?.name;
-        return !taskName || /text generation|text-generation|chat/i.test(taskName);
+        return Boolean(taskName && /text generation|text-generation|chat/i.test(taskName));
       })
       .map((item) => item.name || item.id || item.model || '')
-      .filter((name): name is string => typeof name === 'string' && name.startsWith('@cf/'))
+      .filter((name): name is string => typeof name === 'string' && /^@cf\\/[a-zA-Z0-9._-]+\\/[a-zA-Z0-9._-]+$/.test(name))
       .filter((name, index, all) => all.indexOf(name) === index)
       .sort((a, b) => a.localeCompare(b));
 
-    // Keep the model picker usable if Cloudflare's catalog permission is missing
-    // or the catalog response contains no chat entries. This is the known chat
-    // model previously selected for this AFG AI account; actual access is still
-    // enforced by Cloudflare when a message is sent.
-    const visibleModels = models.length > 0 ? models : ['@cf/openai/gpt-oss-120b'];
-
-    res.setHeader('Cache-Control', 'no-store');
-    res.json({ models: visibleModels, source: models.length > 0 ? 'cloudflare-catalog' : 'fallback' });
+    res.json({ models, source: 'cloudflare-live-catalog', verified: true, checkedAt: new Date().toISOString() });
   } catch (error) {
-    console.error('Cloudflare model list failed; using fallback:', error);
-    res.setHeader('Cache-Control', 'no-store');
-    res.json({ models: ['@cf/openai/gpt-oss-120b'], source: 'fallback' });
+    console.error('AI_MODEL_CATALOG_ERROR', error instanceof Error ? error.message : 'Unknown error');
+    res.status(502).json({ error: 'Could not contact the AI provider to verify models.', models: [], verified: false });
   }
 });
 
