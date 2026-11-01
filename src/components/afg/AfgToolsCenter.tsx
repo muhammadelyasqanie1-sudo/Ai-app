@@ -44,7 +44,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
   const [afnAmount, setAfnAmount] = useState('1000');
 
   // --- QR Generator State ---
-  const [qrText, setQrText] = useState('https://afg-ai.com');
+  const [qrText, setQrText] = useState('');
 
   // --- Code Gen State ---
   const [codePrompt, setCodePrompt] = useState('Create a responsive glassmorphic button in React with Tailwind CSS');
@@ -66,25 +66,9 @@ export const NeonButton = ({ children, onClick }) => {
   const [summarizeText, setSummarizeText] = useState('');
   const [summaryResult, setSummaryResult] = useState('');
 
-  // Handle Translation
+  // Translation remains disabled until a real translation provider is connected.
   const handleTranslate = () => {
-    if (!transInput.trim()) return;
-    setIsTranslating(true);
-    setTimeout(() => {
-      // High quality bilingual translation dictionary / logic
-      if (sourceLang === 'fa' && targetLang === 'en') {
-        setTransOutput('Hello, I am from Afghanistan and I am using artificial intelligence.');
-      } else if (sourceLang === 'en' && targetLang === 'fa') {
-        setTransOutput('سلام، من از دستیار هوشمند AFG AI استفاده می‌کنم.');
-      } else if (targetLang === 'ps') {
-        setTransOutput('سلام، زه د افغانستان څخه یم او زه د مصنوعي استخباراتو څخه کار اخلم.');
-      } else if (targetLang === 'ar') {
-        setTransOutput('مرحبًا، أنا من أفغانستان وأستخدم الذكاء الاصطناعي الذكي.');
-      } else {
-        setTransOutput(`Translated: ${transInput}`);
-      }
-      setIsTranslating(false);
-    }, 600);
+    setTransOutput(language === 'dari' ? 'سرویس ترجمه هنوز به سرور وصل نشده است.' : 'A translation provider is not configured yet.');
   };
 
   const handleCopy = (text: string, setFn: (val: boolean) => void) => {
@@ -251,7 +235,7 @@ export const NeonButton = ({ children, onClick }) => {
 
           <button
             onClick={handleTranslate}
-            disabled={isTranslating}
+            disabled={true}
             className="w-full py-3 rounded-xl gradient-btn-cyan text-slate-950 font-bold text-sm shadow-md"
           >
             {isTranslating ? 'در حال ترجمه هوشمند...' : (language === 'dari' ? 'ترجمه کن' : 'Translate Now')}
@@ -285,9 +269,7 @@ export const NeonButton = ({ children, onClick }) => {
               className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-cyan-700/50 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
             />
             <button
-              onClick={() => {
-                setGeneratedCode(`// Generated for: "${codePrompt}"\n\nimport axios from 'axios';\n\nexport async function fetchAfgData(endpoint: string) {\n  try {\n    const response = await axios.get(\`https://api.afg-ai.com/v1/\${endpoint}\`);\n    return response.data;\n  } catch (err) {\n    console.error('AFG AI Error:', err);\n    throw err;\n  }\n}`);
-              }}
+              disabled={true}
               className="px-4 py-2.5 rounded-xl gradient-btn-cyan text-slate-950 font-bold text-xs"
             >
               Generate Code
@@ -367,13 +349,13 @@ export const NeonButton = ({ children, onClick }) => {
                 <div className="p-2.5 rounded-xl bg-purple-950/30 border border-purple-800/30 flex justify-between items-center text-xs">
                   <span className="text-slate-300">USD ($) دلار آمریکا:</span>
                   <span className="font-mono font-bold text-emerald-400">
-                    ${(Number(afnAmount || 0) / 71.5).toFixed(2)} USD
+                    Live rate unavailable
                   </span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-purple-950/30 border border-purple-800/30 flex justify-between items-center text-xs">
                   <span className="text-slate-300">EUR (€) یورو اروپا:</span>
                   <span className="font-mono font-bold text-sky-400">
-                    €{(Number(afnAmount || 0) / 76.8).toFixed(2)} EUR
+                    {language === 'dari' ? 'نرخ زنده موجود نیست' : 'Live rate unavailable'}
                   </span>
                 </div>
               </div>
@@ -408,9 +390,10 @@ export const NeonButton = ({ children, onClick }) => {
 
             <div className="flex flex-col items-center justify-center p-6 rounded-2xl bg-white w-fit mx-auto shadow-2xl">
               <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrText || 'https://afg-ai.com')}`}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrText)}`}
                 alt="QR Code"
                 className="w-44 h-44 object-contain"
+                onError={(event) => { event.currentTarget.hidden = true; }}
               />
               <span className="text-[11px] text-slate-600 font-bold mt-2">AFG AI Smart QR</span>
             </div>
