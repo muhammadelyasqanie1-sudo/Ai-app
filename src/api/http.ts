@@ -126,7 +126,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
 
   // Cookie-authenticated state changes must pass the double-submit CSRF check.
   const unsafeMethod = !['GET','HEAD','OPTIONS'].includes(req.method || 'GET');
-  const hasSessionCookie = /(?:^|;)\\s*afg_session=/.test(req.headers.cookie || '');
+  const hasSessionCookie = /(?:^|;)\s*afg_session=/.test(req.headers.cookie || '');
   if (unsafeMethod && hasSessionCookie && !verifyCsrf(req)) {
     sendJson(res, 403, { error: 'CSRF validation failed.' }, requestId);
     return;
