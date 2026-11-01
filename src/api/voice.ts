@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomUUID } from 'crypto';
 import { getProviderAdapter, getVerifiedModelDescriptors } from '../services/providerGateway.ts';
+import { authenticateRequest } from './auth.ts';
+import { pool } from './database.ts';
 
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 const MAX_CONCURRENT_VOICE_REQUESTS = 2;
@@ -31,6 +33,11 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
   const path = new URL(req.url || '/', 'http://localhost').pathname;
   if (path !== '/api/voice/transcribe' && path !== '/api/voice/synthesize' && path !== '/api/voice/voices') return false;
   const requestId = randomUUID();
+  const user = await authenticateRequest(req);
+  if (user && pool) {
+    const preference = await pool.query('SELECT COALESCE(p.voice_enabled,true) AS voice_enabled FROM users u LEFT JOIN user_preferences p ON p.user_id=u.id WHERE u.id=$1',[user.id]);
+    if (preference.rows[0]?.voice_enabled === false) { reply(res,403,{available:false,error:'Voice features are disabled in your account settings.'},requestId); return true; }
+  }
   if (path === '/api/voice/voices' && req.method === 'GET') {
     const descriptors = await getVerifiedModelDescriptors();
     const voiceModel = descriptors.find((model) => model.enabled && model.verifiedAt && model.capabilities.tts && Boolean(getProviderAdapter(model.providerId)?.synthesize));
