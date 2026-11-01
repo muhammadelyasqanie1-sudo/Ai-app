@@ -152,8 +152,12 @@ export default function App() {
         setCapabilitySnapshot(data as AfgCapabilitySnapshot);
         fetch(API_BASE_URL + '/api/auth/me', { credentials: 'include' })
           .then((authResponse) => authResponse.ok ? authResponse.json() : null)
-          .then((authData) => {
-            const preferred = authData?.user?.defaultModel;
+          .then(async (authData) => {
+            if (!authData?.authenticated) return;
+            const preferencesResponse = await fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' });
+            const preferencesData = preferencesResponse.ok ? await preferencesResponse.json() : null;
+            if (preferencesData?.preferences?.auto_select_model === false) { setSelectedModel(''); return; }
+            const preferred = authData?.user?.defaultModel || preferencesData?.preferences?.default_model;
             if (typeof preferred === 'string' && data.models.includes(preferred)) setSelectedModel(preferred);
           }).catch(() => {});
       })
