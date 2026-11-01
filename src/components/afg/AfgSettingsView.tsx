@@ -64,7 +64,7 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
             </p>
             <div className="mt-1.5 flex items-center gap-2">
               <span className="text-[11px] font-bold text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full border border-amber-500/40">
-                {language === 'dari' ? 'حساب مهمان • رایگان' : user.tier}
+                {language === 'dari' ? (user.email ? 'حساب فعال • رایگان' : 'حساب مهمان • رایگان') : user.tier}
               </span>
             </div>
           </div>
