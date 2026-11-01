@@ -160,7 +160,10 @@ async function sendEmailCode(email: string, code: string, purpose: 'verify_email
 }
 function clearOAuthState(res: ServerResponse) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-  res.setHeader('Set-Cookie', 'afg_oauth_state=; Path=/; HttpOnly; SameSite=Lax' + secure + '; Max-Age=0');
+  const existing = res.getHeader('Set-Cookie');
+  const cookiesToKeep = Array.isArray(existing) ? existing.map(String) : (existing ? [String(existing)] : []);
+  cookiesToKeep.push('afg_oauth_state=; Path=/; HttpOnly; SameSite=Lax' + secure + '; Max-Age=0');
+  res.setHeader('Set-Cookie', cookiesToKeep);
 }
 function configuredAppOrigin(): string {
   return (process.env.APP_ORIGIN || '').split(',')[0].trim().replace(/\\/$/, '');
