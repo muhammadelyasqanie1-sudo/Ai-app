@@ -27,7 +27,6 @@ export function FileDropzone({onFiles,accept,multiple=true}:{onFiles:(files:File
 export function ImageGrid({images,onSelect}:{images:{src:string;alt:string}[];onSelect?:(v:{src:string;alt:string})=>void}) {
  return <div className="afg-image-grid">{images.map((v,i)=><button type="button" key={v.src||i} aria-label={v.alt} onClick={()=>onSelect?.(v)}><img src={v.src} alt={v.alt} loading="lazy"/></button>)}</div>;
 }
-export function SettingsSectionPlaceholder(){}
 export function ConfirmDialog({open,title,description,onConfirm,onCancel}:{open:boolean;title:string;description:string;onConfirm:()=>void;onCancel:()=>void}) {
  const ref=useRef<HTMLButtonElement>(null);useEffect(()=>{if(open)ref.current?.focus();},[open]);useEffect(()=>{if(!open)return;const f=(e:KeyboardEvent)=>{if(e.key==='Escape')onCancel();};window.addEventListener('keydown',f);return()=>window.removeEventListener('keydown',f);},[open,onCancel]);
  if(!open)return null;return <div className="afg-dialog-backdrop"><section className="afg-dialog" role="alertdialog" aria-modal="true" aria-labelledby="afg-dialog-title"><h2 id="afg-dialog-title">{title}</h2><p>{description}</p><button type="button" onClick={onCancel}>Cancel</button><button ref={ref} type="button" onClick={onConfirm}>Confirm</button></section></div>;
