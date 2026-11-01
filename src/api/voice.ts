@@ -3,6 +3,9 @@ import { randomUUID } from 'crypto';
 import { getProviderAdapter, getVerifiedModelDescriptors } from '../services/providerGateway.ts';
 
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
+const MAX_CONCURRENT_VOICE_REQUESTS = 2;
+let activeVoiceRequests = 0;
+const voiceRate = new Map<string,{startedAt:number;count:number}>();
 const ALLOWED_AUDIO_TYPES = new Set(['audio/webm', 'audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/aac']);
 
 function reply(res: ServerResponse, status: number, payload: unknown, requestId: string) {
@@ -39,6 +42,15 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
     reply(res, 405, { error: 'Method not allowed.' }, requestId);
     return true;
   }
+  const clientKey = req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const rate = voiceRate.get(clientKey);
+  if (!rate || now - rate.startedAt >= 60_000) voiceRate.set(clientKey,{startedAt:now,count:1});
+  else if (rate.count >= 8) { reply(res,429,{error:'Voice rate limit reached. Please wait before trying again.'},requestId); return true; }
+  else rate.count += 1;
+  if (voiceRate.size > 500) for (const [key,value] of voiceRate) if (now-value.startedAt>=60_000) voiceRate.delete(key);
+  if (activeVoiceRequests >= MAX_CONCURRENT_VOICE_REQUESTS) { reply(res,503,{error:'Voice processing is busy. Please retry shortly.'},requestId); return true; }
+  activeVoiceRequests += 1;
   try {
     const body = await readBody(req);
     if (path.endsWith('/transcribe')) {
@@ -102,5 +114,7 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
       : 'Voice processing failed. Please retry.';
     reply(res, error instanceof Error && error.message === 'body_too_large' ? 413 : 502, { error: message }, requestId);
     return true;
+  } finally {
+    activeVoiceRequests = Math.max(0, activeVoiceRequests - 1);
   }
 }
