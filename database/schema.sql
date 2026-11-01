@@ -230,3 +230,57 @@ CREATE TABLE IF NOT EXISTS user_notification_events (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS notification_events_owner_idx ON user_notification_events(user_id, created_at DESC);
+
+
+-- Admin dashboard: operational telemetry, feature flags, rate policies and security feed.
+CREATE TABLE IF NOT EXISTS feature_flags (
+  flag_key text PRIMARY KEY CHECK (flag_key ~ '^[a-z][a-z0-9_.-]{1,79}$'),
+  enabled boolean NOT NULL DEFAULT false,
+  description text NOT NULL DEFAULT '',
+  updated_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS rate_limit_policies (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  scope_type text NOT NULL CHECK (scope_type IN ('user','tier','model')),
+  scope_key text NOT NULL,
+  requests integer NOT NULL CHECK (requests BETWEEN 1 AND 1000000),
+  window_seconds integer NOT NULL CHECK (window_seconds BETWEEN 1 AND 86400),
+  enabled boolean NOT NULL DEFAULT true,
+  updated_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(scope_type, scope_key)
+);
+CREATE TABLE IF NOT EXISTS security_events (
+  id bigserial PRIMARY KEY,
+  event_type text NOT NULL,
+  severity text NOT NULL DEFAULT 'info' CHECK (severity IN ('info','warning','critical')),
+  user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  request_id text,
+  ip_hash text,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS security_events_created_idx ON security_events(created_at DESC);
+CREATE TABLE IF NOT EXISTS admin_request_events (
+  id bigserial PRIMARY KEY,
+  request_id text NOT NULL,
+  method text NOT NULL,
+  route text NOT NULL,
+  status_code integer NOT NULL,
+  duration_ms integer NOT NULL DEFAULT 0,
+  classification text NOT NULL DEFAULT 'success',
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS admin_request_events_created_idx ON admin_request_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS admin_request_events_status_idx ON admin_request_events(status_code, created_at DESC);
+CREATE OR REPLACE FUNCTION prevent_audit_log_mutation() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'audit_logs is append-only';
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS audit_logs_no_update ON audit_logs;
+CREATE TRIGGER audit_logs_no_update BEFORE UPDATE OR DELETE ON audit_logs
+FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_mutation();
