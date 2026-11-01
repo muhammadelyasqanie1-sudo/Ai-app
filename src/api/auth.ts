@@ -33,6 +33,19 @@ function cookies(req: IncomingMessage): Record<string, string> {
 function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
+const AUTH_INPUT = {
+  register: z.object({ email: z.string().trim().email().max(254), password: z.string().min(12).max(256), displayName: z.string().trim().max(100).optional() }).strict(),
+  login: z.object({ email: z.string().trim().email().max(254), password: z.string().min(8).max(256) }).strict(),
+  email: z.object({ email: z.string().trim().email().max(254) }).strict(),
+  verify: z.object({ email: z.string().trim().email().max(254), code: z.string().regex(/^\\d{6}$/) }).strict(),
+  reset: z.object({ email: z.string().trim().email().max(254), code: z.string().regex(/^\\d{6}$/), newPassword: z.string().min(12).max(256) }).strict(),
+  bootstrap: z.object({ bootstrapToken: z.string().min(32).max(512), email: z.string().trim().email().max(254), displayName: z.string().trim().max(100).optional(), password: z.string().min(12).max(256) }).strict(),
+};
+function parseAuthInput<T extends z.ZodTypeAny>(schema: T, body: Record<string, unknown>): z.infer<T> | null {
+  const result = schema.safeParse(body);
+  return result.success ? result.data : null;
+}
+
 function hashEmailCode(value: string): string {
   const pepper = process.env.AFG_EMAIL_CODE_PEPPER || process.env.RESEND_API_KEY || '';
   return createHash('sha256').update(pepper + ':' + value).digest('hex');
@@ -297,8 +310,8 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
     if (isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
     try {
       if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) { sendAuthJson(res,503,{error:'Email verification is unavailable until RESEND_API_KEY and EMAIL_FROM are configured.'}); return true; }
-      const body=await readJsonBody(req); const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';
-      const password=typeof body.password==='string'?body.password:''; const displayName=typeof body.displayName==='string'?body.displayName.trim().slice(0,100):'';
+      const parsed=parseAuthInput(AUTH_INPUT.register,await readJsonBody(req)); if(!parsed){sendAuthJson(res,400,{error:'Use a valid email and a password of at least 12 characters.'});return true;}
+      const body=parsed; const email=body.email.toLowerCase(); const password=body.password; const displayName=body.displayName || '';
       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||password.length<12||password.length>256){sendAuthJson(res,400,{error:'Use a valid email and a password of at least 12 characters.'});return true;}
       const passwordHash=await hashPassword(password);
       const created=await pool.query("INSERT INTO users(email,display_name,password_hash,email_verified) VALUES($1,$2,$3,false) ON CONFLICT(email) DO NOTHING RETURNING id",[email,displayName||email,passwordHash]);
@@ -313,7 +326,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
   if (pathname === '/api/auth/verify-email/resend' && req.method === 'POST') {
     if (isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
     try {
-      const body=await readJsonBody(req);const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';
+      const parsed=parseAuthInput(AUTH_INPUT.email,await readJsonBody(req));if(!parsed){sendAuthJson(res,400,{error:'Enter a valid email address.'});return true;} const email=parsed.email.toLowerCase();
       const found=await pool.query("SELECT id FROM users WHERE lower(email)=$1 AND email_verified=false AND status='active' LIMIT 1",[email]);
       if(!found.rows[0]){sendAuthJson(res,200,{message:'If the account needs verification, a new code will be sent.'});return true;}
       const code=String(randomInt(0,1000000)).padStart(6,'0');
@@ -326,7 +339,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
   if (pathname === '/api/auth/verify-email' && req.method === 'POST') {
     if (isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
     try {
-      const body=await readJsonBody(req);const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';const code=typeof body.code==='string'?body.code.trim():'';
+      const parsed=parseAuthInput(AUTH_INPUT.verify,await readJsonBody(req));if(!parsed){sendAuthJson(res,400,{error:'Enter a valid email and six-digit code.'});return true;} const email=parsed.email.toLowerCase();const code=parsed.code;
       const found=await pool.query("SELECT u.id,c.id AS code_id,c.code_hash,c.attempts FROM users u JOIN email_verification_codes c ON c.user_id=u.id WHERE lower(u.email)=$1 AND c.purpose='verify_email' AND c.consumed_at IS NULL AND c.expires_at>now() ORDER BY c.created_at DESC LIMIT 1",[email]);
       const row=found.rows[0];
       if(!row||row.attempts>=5||!/^\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The verification code is invalid or expired.'});return true;}
@@ -339,7 +352,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
   if (pathname === '/api/auth/password-reset/request' && req.method === 'POST') {
     if (isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
     try {
-      const body=await readJsonBody(req);const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';
+      const parsed=parseAuthInput(AUTH_INPUT.email,await readJsonBody(req));if(!parsed){sendAuthJson(res,400,{error:'Enter a valid email address.'});return true;} const email=parsed.email.toLowerCase();
       const found=await pool.query("SELECT id FROM users WHERE lower(email)=$1 AND status='active' AND email_verified=true LIMIT 1",[email]);
       if(found.rows[0]&&process.env.RESEND_API_KEY&&process.env.EMAIL_FROM){
         const code=String(randomInt(0,1000000)).padStart(6,'0');
@@ -353,8 +366,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
   if (pathname === '/api/auth/password-reset/confirm' && req.method === 'POST') {
     if (isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
     try {
-      const body=await readJsonBody(req);const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';const code=typeof body.code==='string'?body.code.trim():'';
-      const next=typeof body.newPassword==='string'?body.newPassword:'';
+      const parsed=parseAuthInput(AUTH_INPUT.reset,await readJsonBody(req));if(!parsed){sendAuthJson(res,400,{error:'Enter a valid email, six-digit code and password of at least 12 characters.'});return true;} const email=parsed.email.toLowerCase();const code=parsed.code;const next=parsed.newPassword;
       if(next.length<12||next.length>256){sendAuthJson(res,400,{error:'New password must be at least 12 characters.'});return true;}
       const found=await pool.query("SELECT u.id,c.id AS code_id,c.code_hash,c.attempts FROM users u JOIN email_verification_codes c ON c.user_id=u.id WHERE lower(u.email)=$1 AND c.purpose='password_reset' AND c.consumed_at IS NULL AND c.expires_at>now() ORDER BY c.created_at DESC LIMIT 1",[email]);
       const row=found.rows[0];if(!row||row.attempts>=5||!/^\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
@@ -371,9 +383,10 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       return true;
     }
     try {
-      const body = await readJsonBody(req);
-      const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-      const password = typeof body.password === 'string' ? body.password : '';
+      const parsed = parseAuthInput(AUTH_INPUT.login, await readJsonBody(req));
+      if (!parsed) { sendAuthJson(res, 400, { error: 'Enter a valid email and password.' }); return true; }
+      const email = parsed.email.toLowerCase();
+      const password = parsed.password;
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 8 || password.length > 256) {
         sendAuthJson(res, 400, { error: 'Enter a valid email and password.' });
         return true;
@@ -404,8 +417,11 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
   if (pathname === '/api/auth/bootstrap-admin' && req.method === 'POST') {
     try {
       const configuredToken = process.env.AFG_ADMIN_BOOTSTRAP_TOKEN || '';
-      const body = await readJsonBody(req);
-      const suppliedToken = typeof body.bootstrapToken === 'string' ? body.bootstrapToken : '';
+      const rawBody = await readJsonBody(req);
+      const parsed = parseAuthInput(AUTH_INPUT.bootstrap, rawBody);
+      if (!parsed) { sendAuthJson(res, 400, { error: 'Provide a valid bootstrap token, email and password of at least 12 characters.' }); return true; }
+      const body = parsed;
+      const suppliedToken = body.bootstrapToken;
       if (configuredToken.length < 32 || suppliedToken.length !== configuredToken.length ||
           !timingSafeEqual(Buffer.from(suppliedToken), Buffer.from(configuredToken))) {
         sendAuthJson(res, 403, { error: 'Admin bootstrap is not authorized or is not configured.' });
