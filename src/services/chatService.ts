@@ -55,12 +55,22 @@ function verified(model: ModelDescriptor | undefined): model is ModelDescriptor 
 
 export async function prepareVerifiedChat(input: ChatInput): Promise<AsyncIterable<{ content: string }>> {
   const descriptors = await getVerifiedModelDescriptors();
-  let selected = descriptors.find((model) => model.id === input.model && verified(model));
+  const separator = input.model.indexOf('::');
+  const requestedProviderId = separator >= 0 ? input.model.slice(0, separator) : '';
+  const requestedModelId = separator >= 0 ? input.model.slice(separator + 2) : input.model;
+  let selected = input.model === 'auto' ? undefined : descriptors.find((model) =>
+    model.id === requestedModelId && (!requestedProviderId || model.providerId === requestedProviderId) && verified(model),
+  );
 
   // If the manually selected model is unavailable, use the administrator's healthy fallback order.
   if (!selected) {
     const fallbackId = await selectCheapestModel('text', input.model !== 'auto');
-    selected = descriptors.find((model) => model.id === fallbackId && verified(model));
+    if (fallbackId) {
+      const split = fallbackId.indexOf('::');
+      const fallbackProvider = split >= 0 ? fallbackId.slice(0, split) : '';
+      const fallbackModel = split >= 0 ? fallbackId.slice(split + 2) : fallbackId;
+      selected = descriptors.find((model) => model.id === fallbackModel && (!fallbackProvider || model.providerId === fallbackProvider) && verified(model));
+    }
   }
 
   if (!selected) {
