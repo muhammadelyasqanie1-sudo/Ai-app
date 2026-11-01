@@ -26,7 +26,6 @@ interface AfgSettingsViewProps {
   language: Language;
   theme: Theme;
   user: UserProfile;
-  onToggleLanguage: () => void;
   onSetLanguage: (language: Language) => void;
   onToggleTheme: () => void;
   onSetTheme: (theme: Theme) => void;
@@ -37,7 +36,6 @@ export const AfgSettingsView: React.FC<AfgSettingsViewProps> = ({
   language,
   theme,
   user,
-  onToggleLanguage,
   onSetLanguage,
   onToggleTheme,
   onSetTheme,
