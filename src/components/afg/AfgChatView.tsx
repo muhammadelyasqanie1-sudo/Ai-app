@@ -70,6 +70,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   const ttsAvailable=voiceEnabled&&capabilities['text-to-speech'];
   useEffect(()=>{const sync=()=>setVoiceEnabled(localStorage.getItem('afg_voice_enabled')!=='false');window.addEventListener('afg-voice-preference-change',sync);window.addEventListener('afg-preferences-change',sync);return()=>{window.removeEventListener('afg-voice-preference-change',sync);window.removeEventListener('afg-preferences-change',sync);};},[]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  useEffect(()=>{if(!voiceEnabled){audioRef.current?.pause();audioRef.current=null;setSpeakingMsgId(null);}},[voiceEnabled]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedThoughts, setExpandedThoughts] = useState<Record<string, boolean>>({});
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
