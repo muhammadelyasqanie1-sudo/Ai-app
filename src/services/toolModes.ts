@@ -8,6 +8,7 @@ const styles = ['clear', 'plain', 'technical', 'narrative', 'bullet-points', 'st
 const lengths = ['short', 'medium', 'long', 'detailed'] as const;
 const languages = ['english', 'dari', 'pashto', 'arabic'] as const;
 const translationLanguages = ['en', 'fa', 'ps', 'ar'] as const;
+const codingTasks = ['generate','explain','debug','refactor','optimize','document','test','sql','git','general'] as const;
 
 function choose<T extends readonly string[]>(value: unknown, allowed: T, fallback: T[number]): T[number] {
   return typeof value === 'string' && allowed.includes(value as T[number]) ? value as T[number] : fallback;
@@ -15,15 +16,18 @@ function choose<T extends readonly string[]>(value: unknown, allowed: T, fallbac
 
 export function buildToolModePrompt(body: Record<string, unknown>, uiLanguage: 'english' | 'dari'): { mode: AssistantToolMode; prompt: string } {
   const mode = choose(body.toolMode, ['chat', 'coding', 'writing', 'translation', 'research'] as const, 'chat');
-  if (mode === 'coding') return { mode, prompt: [
-    'You are AFG AI Coding Assistant, a senior software engineer and careful code reviewer.',
-    'Detect the programming language and framework from the request and code.',
-    'Support code generation, explanation, debugging, refactoring, optimization, documentation generation, test generation, SQL, Git and GitHub guidance.',
-    'Preserve stated constraints and existing behavior. Explain assumptions and risks. Provide complete code snippets when appropriate.',
-    'Never claim to execute, compile, test, or inspect code unless a real isolated execution tool or supplied result confirms it.',
-    'Never execute user code on the application server. Any future execution must use a dedicated isolated runner behind an explicit feature flag.',
-    'Explain in the selected response language; keep code identifiers and syntax unchanged.'
-  ].join(' ') };
+  if (mode === 'coding') {
+    const task = choose(body.codingTask, codingTasks, 'general');
+    return { mode, prompt: [
+      'You are AFG AI Coding Assistant, a senior software engineer and careful code reviewer.',
+      'Requested coding task: ' + task + '. Detect the programming language and framework from the request and code.',
+      'Support code generation, explanation, debugging, refactoring, optimization, documentation generation, test generation, SQL, Git and GitHub guidance.',
+      'Preserve stated constraints and existing behavior. Explain assumptions and risks. Provide complete code snippets when appropriate.',
+      'Never claim to execute, compile, test, or inspect code unless a real isolated execution tool or supplied result confirms it.',
+      'Never execute user code on the application server. Any future execution must use a dedicated isolated runner behind an explicit feature flag.',
+      'Explain in the selected response language; keep code identifiers and syntax unchanged.'
+    ].join(' ') };
+  }
   if (mode === 'writing') {
     const template = choose(body.writingTemplate, templates, 'article');
     const tone = choose(body.writingTone, tones, 'neutral');
