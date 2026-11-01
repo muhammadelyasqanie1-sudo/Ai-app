@@ -106,13 +106,17 @@ export default function App() {
   }, [language]);
 
   useEffect(() => {
-    const resolved = theme === 'system'
-      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-      : theme;
-    document.documentElement.classList.toggle('dark', resolved === 'dark' || resolved === 'neon');
-    document.documentElement.classList.toggle('light', resolved === 'light');
-    document.documentElement.classList.toggle('neon', resolved === 'neon');
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const applyTheme = () => {
+      const resolved = theme === 'system' ? (media.matches ? 'dark' : 'light') : theme;
+      document.documentElement.classList.toggle('dark', resolved === 'dark' || resolved === 'neon');
+      document.documentElement.classList.toggle('light', resolved === 'light');
+      document.documentElement.classList.toggle('neon', resolved === 'neon');
+    };
+    applyTheme();
     localStorage.setItem('afg_theme', theme);
+    if (theme === 'system') media.addEventListener('change', applyTheme);
+    return () => media.removeEventListener('change', applyTheme);
   }, [theme]);
 
   useEffect(() => {
