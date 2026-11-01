@@ -78,6 +78,7 @@ export default function App() {
   const [currentSessionId, setCurrentSessionId] = useState(() => `chat-${Date.now()}`);
   const [isLoading, setIsLoading] = useState(false);
   const activeChatAbortRef = useRef<AbortController | null>(null);
+  const localeChangedThisSession = useRef(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [modelOptions, setModelOptions] = useState<AfgModelOption[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
@@ -236,7 +237,7 @@ export default function App() {
         .then((data) => {
           if (data?.authenticated && data.user) {
             setUser({ name: data.user.displayName || 'User', nameEn: data.user.displayName || 'User', email: data.user.email || '', avatar: '', isPremium: false, tier: 'Free' });
-            fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const saved=prefs?.preferences; if(saved?.appearance&&['light','dark','neon','system'].includes(saved.appearance))setTheme(saved.appearance); if(saved?.language&&['dari','english'].includes(saved.language)){setLanguage(saved.language);setHasSelectedLanguage(true);localStorage.setItem('afg_language',saved.language);} document.documentElement.style.fontSize=String(saved?.font_size||14)+'px'; const accentMap:Record<string,string>={cyan:'#00e5ff',blue:'#3b82f6',violet:'#8b5cf6',emerald:'#10b981',rose:'#f43f5e'}; document.documentElement.style.setProperty('--accent-cyan',accentMap[saved?.accent_color]||accentMap.cyan); document.documentElement.dataset.afgDensity=saved?.density||'comfortable'; document.documentElement.dataset.afgChatWidth=saved?.chat_width||'comfortable'; document.documentElement.classList.toggle('afg-reduce-motion',saved?.animations_enabled===false); localStorage.setItem('afg_voice_enabled',String(saved?.voice_enabled!==false)); window.dispatchEvent(new Event('afg-voice-preference-change')); if(saved?.auto_select_model===false){setSelectedModel('');return;} const model=saved?.default_model; if(typeof model==='string'&&model)setSelectedModel(model); }).catch(() => {});
+            fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const saved=prefs?.preferences; if(saved?.appearance&&['light','dark','neon','system'].includes(saved.appearance))setTheme(saved.appearance); if(saved?.language&&['dari','english'].includes(saved.language)){if(localeChangedThisSession.current){const chosen=localStorage.getItem('afg_language')==='english'?'english':'dari';const csrf=document.cookie.split('; ').find((item)=>item.startsWith('afg_csrf='))?.slice('afg_csrf='.length)||'';void fetch(API_BASE_URL+'/api/account/preferences',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(csrf)},body:JSON.stringify({language:chosen,defaultLanguage:chosen})}).catch(()=>console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));}else{setLanguage(saved.locale==='english'||saved.language==='english'?'english':'dari');setHasSelectedLanguage(true);localStorage.setItem('afg_language',saved.locale==='english'||saved.language==='english'?'english':'dari');}} document.documentElement.style.fontSize=String(saved?.font_size||14)+'px'; const accentMap:Record<string,string>={cyan:'#00e5ff',blue:'#3b82f6',violet:'#8b5cf6',emerald:'#10b981',rose:'#f43f5e'}; document.documentElement.style.setProperty('--accent-cyan',accentMap[saved?.accent_color]||accentMap.cyan); document.documentElement.dataset.afgDensity=saved?.density||'comfortable'; document.documentElement.dataset.afgChatWidth=saved?.chat_width||'comfortable'; document.documentElement.classList.toggle('afg-reduce-motion',saved?.animations_enabled===false); localStorage.setItem('afg_voice_enabled',String(saved?.voice_enabled!==false)); window.dispatchEvent(new Event('afg-voice-preference-change')); if(saved?.auto_select_model===false){setSelectedModel('');return;} const model=saved?.default_model; if(typeof model==='string'&&model)setSelectedModel(model); }).catch(() => {});
           } else {
             setUser(DEFAULT_USER);
             localStorage.removeItem('afg_voice_enabled');
@@ -266,19 +267,21 @@ export default function App() {
   }, []);
 
   const handleSetLanguage = (nextLanguage: Language) => {
+    localeChangedThisSession.current = true;
     setLanguage(nextLanguage);
     setHasSelectedLanguage(true);
     setIsLanguageModalOpen(false);
     localStorage.setItem('afg_language', nextLanguage);
     applyDocumentLocale(nextLanguage);
-    if (user.email) {
+    fetch(API_BASE_URL + '/api/auth/me', { credentials: 'include' }).then((response) => response.ok ? response.json() : null).then((authData) => {
+      if (!authData?.authenticated) return;
       const csrf = document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '';
-      fetch(API_BASE_URL + '/api/account/preferences', {
+      return fetch(API_BASE_URL + '/api/account/preferences', {
         method: 'PATCH', credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': decodeURIComponent(csrf) },
         body: JSON.stringify({ language: nextLanguage, defaultLanguage: nextLanguage }),
-      }).catch(() => console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));
-    }
+      }).then((response) => { if (!response.ok) throw new Error('Locale preference save failed'); });
+    }).catch(() => console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));
   };
 
   const handleToggleLanguage = () => handleSetLanguage(language === 'dari' ? 'english' : 'dari');
