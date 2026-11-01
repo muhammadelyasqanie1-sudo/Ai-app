@@ -37,8 +37,24 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
   if (!user) { reply(res, 401, { error: 'Sign in is required.' }); return true; }
   if (req.method !== 'GET' && !verifyCsrf(req)) { reply(res, 403, { error: 'CSRF validation failed.' }); return true; }
 
+  if (pathname === '/api/account/locale' && req.method === 'GET') {
+    const result = await pool.query("SELECT COALESCE(s.locale,u.preferred_language,'dari') AS locale FROM users u LEFT JOIN user_settings s ON s.user_id=u.id WHERE u.id=$1", [user.id]);
+    reply(res,200,{locale:result.rows[0]?.locale || 'dari'}); return true;
+  }
+  if (pathname === '/api/account/locale' && req.method === 'PATCH') {
+    try {
+      const parsed = z.object({ locale: z.enum(['dari','english']) }).strict().safeParse(await readJsonBody(req,2000));
+      if (!parsed.success) { reply(res,400,{error:'A supported locale is required.'}); return true; }
+      const locale = parsed.data.locale;
+      await pool.query('UPDATE users SET preferred_language=$1,updated_at=now() WHERE id=$2',[locale,user.id]);
+      await pool.query('INSERT INTO user_settings(user_id,locale,updated_at) VALUES($1,$2,now()) ON CONFLICT(user_id) DO UPDATE SET locale=EXCLUDED.locale,updated_at=now()',[user.id,locale]);
+      await pool.query('INSERT INTO user_preferences(user_id,language,default_language) VALUES($1,$2,$2) ON CONFLICT(user_id) DO UPDATE SET language=EXCLUDED.language,default_language=EXCLUDED.default_language,updated_at=now()',[user.id,locale]);
+      reply(res,200,{locale,saved:true});
+    } catch { reply(res,400,{error:'Could not save the language preference.'}); }
+    return true;
+  }
   if (pathname === '/api/account/preferences' && req.method === 'GET') {
-    const result = await pool.query('SELECT p.*, s.locale FROM user_preferences p LEFT JOIN user_settings s ON s.user_id=p.user_id WHERE p.user_id=$1', [user.id]);
+    const result = await pool.query("SELECT p.*, COALESCE(s.locale,u.preferred_language,'dari') AS locale FROM users u LEFT JOIN user_preferences p ON p.user_id=u.id LEFT JOIN user_settings s ON s.user_id=u.id WHERE u.id=$1", [user.id]);
     reply(res, 200, { preferences: result.rows[0] || null }); return true;
   }
   if (pathname === '/api/account/preferences' && req.method === 'PATCH') {
