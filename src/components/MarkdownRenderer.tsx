@@ -20,7 +20,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, isS
         skipHtml
         urlTransform={(url) => {
           const value = url.trim();
-          return /^(https?:|mailto:)/i.test(value) || /^(\\/|#|\\.\\.?\\/)/.test(value) ? value : '';
+          return /^(https?:|mailto:)/i.test(value) || value.startsWith('/') || value.startsWith('#') || value.startsWith('./') || value.startsWith('../') ? value : '';
         }}
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex, rehypeHighlight]}
