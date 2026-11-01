@@ -138,6 +138,10 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       sendJson(req, res, 400, { error: 'At least one user message is required.', requestId: id }, id);
       return;
     }
+    if (upstreamMessages[upstreamMessages.length - 1]?.role !== 'user') {
+      sendJson(req, res, 400, { error: 'The final conversation message must be the new user prompt.', requestId: id }, id);
+      return;
+    }
 
     const prepared = await prepareVerifiedChat({ model, messages: upstreamMessages, signal: abortController.signal });
     const { providerId, modelId, stream } = prepared;
