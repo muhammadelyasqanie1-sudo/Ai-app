@@ -6,14 +6,12 @@ import { translations } from '../../utils/afgTranslations';
 
 interface AfgLanguageModalProps {
   isOpen: boolean;
-  onClose: () => void;
   language: Language;
   onSelectLanguage: (lang: Language) => void;
 }
 
 export const AfgLanguageModal: React.FC<AfgLanguageModalProps> = ({
   isOpen,
-  onClose,
   language,
   onSelectLanguage,
 }) => {
@@ -23,13 +21,6 @@ export const AfgLanguageModal: React.FC<AfgLanguageModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
       <div className="relative w-full max-w-sm rounded-3xl bg-[#09122c] border border-cyan-500/40 p-6 shadow-2xl text-center space-y-5">
         
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
         <AfgBrainLogo size="lg" showBadge className="mx-auto" />
 
         <div>
@@ -89,13 +80,6 @@ export const AfgLanguageModal: React.FC<AfgLanguageModalProps> = ({
             )}
           </button>
         </div>
-
-        <button
-          onClick={onClose}
-          className="w-full py-3 rounded-xl gradient-btn-cyan text-slate-950 font-bold text-sm shadow-md"
-        >
-          {language === 'dari' ? 'ذخیره و ادامه →' : 'Continue →'}
-        </button>
 
         <p className="text-[11px] text-slate-500">
           Powered by AFG AI ❤️
