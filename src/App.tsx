@@ -377,6 +377,7 @@ export default function App() {
             availableModels={availableModels}
             selectedModel={selectedModel}
             onSelectModel={setSelectedModel}
+            capabilities={capabilitySnapshot.capabilities}
           />
         )}
 
