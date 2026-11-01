@@ -102,7 +102,6 @@ export default function App() {
 
   // Modals state
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
-  const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
 
   // Sync RTL and Dark Mode with DOM
@@ -270,7 +269,6 @@ export default function App() {
     localeChangedThisSession.current = true;
     setLanguage(nextLanguage);
     setHasSelectedLanguage(true);
-    setIsLanguageModalOpen(false);
     localStorage.setItem('afg_language', nextLanguage);
     applyDocumentLocale(nextLanguage);
     fetch(API_BASE_URL + '/api/auth/me', { credentials: 'include' }).then((response) => response.ok ? response.json() : null).then((authData) => {
