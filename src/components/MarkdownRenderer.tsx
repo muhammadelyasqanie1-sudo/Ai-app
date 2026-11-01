@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import rehypeHighlight from 'rehype-highlight';
 import { Check, Copy } from 'lucide-react';
-import { parseMarkdownBlocks, type MarkdownBlock } from '../utils/chatLogic';
+import 'katex/dist/katex.min.css';
+import 'highlight.js/styles/github-dark.css';
 
 interface MarkdownRendererProps {
   content: string;
@@ -8,162 +14,61 @@ interface MarkdownRendererProps {
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, isStreaming }) => {
-  const blocks = parseMarkdownBlocks(content);
-
   return (
-    <div className="space-y-3 leading-relaxed text-[15px] select-text">
-      {blocks.map((block, idx) => {
-        if (block.type === 'code') {
-          return <CodeBlock key={idx} code={block.content} lang={block.lang} />;
-        }
-        if (block.type === 'heading') {
-          return <HeadingBlock key={idx} level={block.level || 2} text={block.content} />;
-        }
-        return <ParagraphBlock key={idx} text={block.content} isLast={idx === blocks.length - 1 && isStreaming} />;
-      })}
+    <div className="space-y-3 leading-relaxed text-[15px] select-text afg-markdown">
+      <ReactMarkdown
+        skipHtml
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex, rehypeHighlight]}
+        components={{
+          h1: ({ children }) => <h1 className="mt-4 mb-2 text-xl font-bold">{children}</h1>,
+          h2: ({ children }) => <h2 className="mt-3 mb-1.5 text-lg font-semibold">{children}</h2>,
+          h3: ({ children }) => <h3 className="mt-2 mb-1 text-base font-semibold">{children}</h3>,
+          p: ({ children }) => <p className="my-2 whitespace-pre-wrap">{children}</p>,
+          ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-6">{children}</ul>,
+          ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-6">{children}</ol>,
+          blockquote: ({ children }) => <blockquote className="my-3 border-l-2 border-cyan-500/60 pl-3 text-slate-300">{children}</blockquote>,
+          table: ({ children }) => <div className="my-3 overflow-x-auto rounded-xl border border-slate-700"><table className="w-full border-collapse text-sm">{children}</table></div>,
+          th: ({ children }) => <th className="border-b border-slate-700 bg-slate-800/80 px-3 py-2 text-left font-semibold">{children}</th>,
+          td: ({ children }) => <td className="border-t border-slate-800 px-3 py-2 align-top">{children}</td>,
+          a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-cyan-300 underline underline-offset-2">{children}</a>,
+          code: ({ className, children }) => <code className={className ? className + ' rounded bg-slate-900/70 px-1 py-0.5 font-mono text-[0.9em]' : 'rounded bg-slate-800 px-1 py-0.5 font-mono text-[0.9em]'}>{children}</code>,
+          pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+      {isStreaming && <span className="streaming-cursor" />}
     </div>
   );
 };
 
-const CodeBlock: React.FC<{ code: string; lang?: string }> = ({ code, lang = 'text' }) => {
+const CodeBlock: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [copied, setCopied] = useState(false);
+  const codeText = React.Children.toArray(children).map((child) => {
+    if (React.isValidElement<{ children?: React.ReactNode }>(child)) {
+      return React.Children.toArray(child.props.children).map((part) => typeof part === 'string' ? part : '').join('');
+    }
+    return typeof child === 'string' ? child : '';
+  }).join('');
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(codeText);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // fallback
-    }
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch { /* Clipboard access may be unavailable in the current webview. */ }
   };
 
   return (
-    <div className="my-3 rounded-lg overflow-hidden border border-neutral-700/60 bg-[#1e1e1e] text-neutral-100 font-mono text-[13px] shadow-sm">
-      <div className="flex items-center justify-between px-4 py-1.5 bg-[#2d2d2d] text-neutral-400 text-xs select-none">
-        <span className="font-sans lowercase">{lang || 'code'}</span>
-        <button
-          onClick={handleCopy}
-          className="flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-neutral-700/60 text-neutral-300 transition-colors cursor-pointer"
-          aria-label="Copy code to clipboard"
-        >
-          {copied ? (
-            <>
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-emerald-400">Copied!</span>
-            </>
-          ) : (
-            <>
-              <Copy className="w-3.5 h-3.5" />
-              <span>Copy code</span>
-            </>
-          )}
+    <div className="my-3 overflow-hidden rounded-xl border border-slate-700/70 bg-[#0d1117] shadow-sm">
+      <div className="flex items-center justify-end bg-slate-800/80 px-3 py-1.5">
+        <button onClick={() => void handleCopy()} className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-slate-300 hover:bg-slate-700" aria-label="Copy code">
+          {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+          <span>{copied ? 'Copied' : 'Copy code'}</span>
         </button>
       </div>
-      <div className="p-4 overflow-x-auto">
-        <pre className="m-0 leading-5">
-          <code>{code}</code>
-        </pre>
-      </div>
+      <pre className="m-0 overflow-x-auto p-4 text-[13px] leading-5">{children}</pre>
     </div>
   );
 };
-
-const HeadingBlock: React.FC<{ level: number; text: string }> = ({ level, text }) => {
-  if (level === 1) {
-    return <h1 className="text-xl font-bold mt-4 mb-2 text-inherit">{text}</h1>;
-  }
-  if (level === 2) {
-    return <h2 className="text-lg font-semibold mt-3 mb-1.5 text-inherit">{text}</h2>;
-  }
-  return <h3 className="text-base font-semibold mt-2 mb-1 text-inherit">{text}</h3>;
-};
-
-const ParagraphBlock: React.FC<{ text: string; isLast?: boolean }> = ({ text, isLast }) => {
-  const lines = text.split('\n');
-
-  return (
-    <div className="space-y-1.5">
-      {lines.map((line, lIdx) => {
-        const trimmed = line.trim();
-
-        // Bullet list item
-        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-          return (
-            <div key={lIdx} className="flex items-start gap-2 pl-2">
-              <span className="text-neutral-400 select-none">•</span>
-              <span className="flex-1">{renderInline(trimmed.slice(2))}</span>
-            </div>
-          );
-        }
-
-        // Numbered list item
-        const matchNum = trimmed.match(/^(\d+)\.\s+(.*)/);
-        if (matchNum) {
-          return (
-            <div key={lIdx} className="flex items-start gap-2 pl-2">
-              <span className="text-neutral-400 select-none font-medium">{matchNum[1]}.</span>
-              <span className="flex-1">{renderInline(matchNum[2])}</span>
-            </div>
-          );
-        }
-
-        if (!trimmed) {
-          return <div key={lIdx} className="h-2" />;
-        }
-
-        return (
-          <p key={lIdx} className="m-0">
-            {renderInline(line)}
-            {isLast && lIdx === lines.length - 1 && <span className="streaming-cursor" />}
-          </p>
-        );
-      })}
-    </div>
-  );
-};
-
-function renderInline(text: string): React.ReactNode {
-  // Simple token parser for **bold**, *italic*, and `inline code`
-  const parts: React.ReactNode[] = [];
-  let remaining = text;
-  let key = 0;
-
-  while (remaining.length > 0) {
-    // Bold: **text**
-    const boldMatch = remaining.match(/^(.*?)\*\*(.*?)\*\*(.*)$/);
-    // Inline code: `text`
-    const codeMatch = remaining.match(/^(.*?)`([^`]+)`(.*)$/);
-
-    if (codeMatch && (!boldMatch || codeMatch[1].length <= boldMatch[1].length)) {
-      if (codeMatch[1]) parts.push(<span key={key++}>{codeMatch[1]}</span>);
-      parts.push(
-        <code
-          key={key++}
-          className="px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-pink-600 dark:text-pink-400 font-mono text-[13px]"
-        >
-          {codeMatch[2]}
-        </code>
-      );
-      remaining = codeMatch[3];
-      continue;
-    }
-
-    if (boldMatch) {
-      if (boldMatch[1]) parts.push(<span key={key++}>{boldMatch[1]}</span>);
-      parts.push(
-        <strong key={key++} className="font-semibold text-inherit">
-          {boldMatch[2]}
-        </strong>
-      );
-      remaining = boldMatch[3];
-      continue;
-    }
-
-    // No more formatting matches
-    parts.push(<span key={key++}>{remaining}</span>);
-    break;
-  }
-
-  return parts;
-}
