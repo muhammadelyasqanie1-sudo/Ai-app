@@ -186,7 +186,9 @@ export default function App() {
       const latest = [...messages].reverse().find((message) => message.role === 'user' || (message.role === 'assistant' && message.content.trim()));
       const session = {
         id: currentSessionId,
-        title: (firstUser?.content || 'New chat').replace(/\\s+/g, ' ').slice(0, 64),
+        title: existingSession?.title || (firstUser?.content || 'New chat').replace(/\\s+/g, ' ').slice(0, 64),
+        isPinned: Boolean(existingSession?.isPinned),
+        category: existingSession?.category || 'general',
         lastMessage: latest?.content.slice(0, 180) || '',
         timestamp: Date.now(),
         messages,
