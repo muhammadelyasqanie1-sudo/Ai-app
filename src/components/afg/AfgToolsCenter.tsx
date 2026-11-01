@@ -128,9 +128,8 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   const [qrUnavailable, setQrUnavailable] = useState(false);
 
   // --- Code Gen State ---
-  const [codePrompt, setCodePrompt] = useState('Create a responsive glassmorphic button in React with Tailwind CSS');
-  const [generatedCode] = useState('');
-  const [copiedCode, setCopiedCode] = useState(false);
+  const [codePrompt, setCodePrompt] = useState('');
+  const [codingTask, setCodingTask] = useState('generate');
 
   // --- Summarizer State ---
   const [summarizeText, setSummarizeText] = useState('');
@@ -403,44 +402,17 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
       {/* Tool 2: Code Help & Generator */}
       {activeSubTab === 'code-help' && (
         <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-cyan-500/40 shadow-xl space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-cyan-900/40">
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <Code2 className="w-5 h-5 text-emerald-400" />
-              <span>{t.toolCodeHelp}</span>
-            </h2>
-            <button
-              onClick={() => handleCopy(generatedCode, setCopiedCode)}
-              disabled={!generatedCode}
-              className="px-3 py-1.5 rounded-xl bg-slate-800 text-xs text-cyan-300 hover:bg-slate-700 flex items-center gap-1.5 border border-cyan-800/40"
-            >
-              {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copiedCode ? t.copied : t.copy}</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={codePrompt}
-              onChange={(e) => setCodePrompt(e.target.value)}
-              placeholder={language === 'dari' ? 'مثلاً: یک اسکریپت پایتون برای خواندن CSV بساز...' : 'e.g. Write a Python script to parse CSV...'}
-              className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-cyan-700/50 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
-            />
-            <button
-              onClick={() => { if (codePrompt.trim()) onRunTool(codePrompt.trim(), { toolMode: 'coding' }); }}
-              disabled={!codePrompt.trim()}
-              className="px-4 py-2.5 rounded-xl gradient-btn-cyan text-slate-950 font-bold text-xs"
-            >
-              {language === 'dari' ? 'تولید کد' : 'Generate Code'}
-            </button>
-          </div>
-
-          <pre className="p-4 rounded-2xl bg-black/80 border border-cyan-900/60 text-emerald-300 font-mono text-xs sm:text-sm overflow-x-auto leading-relaxed">
-            <code>{generatedCode || (language === 'dari' ? 'درخواست خود را بنویسید و تولید کد را بزنید؛ پاسخ در صفحه چت نمایش داده می‌شود.' : 'Describe the coding task and choose Generate Code; the response will open in Chat.')}</code>
-          </pre>
+          <h2 className="text-base font-bold text-white flex items-center gap-2"><Code2 className="w-5 h-5 text-emerald-400" /><span>{t.toolCodeHelp}</span></h2>
+          <label className="block text-xs text-slate-300">{language === 'dari' ? 'نوع کار برنامه‌نویسی' : 'Coding task'}
+            <select value={codingTask} onChange={e=>setCodingTask(e.target.value)} className="mt-1 w-full rounded-xl bg-slate-900 border border-cyan-700/50 p-3 text-sm text-white">
+              {([['generate',language==='dari'?'تولید کد':'Generate code'],['explain',language==='dari'?'توضیح کد':'Explain code'],['debug',language==='dari'?'اشکال‌زدایی':'Debug'],['refactor',language==='dari'?'بازنویسی':'Refactor'],['optimize',language==='dari'?'بهینه‌سازی':'Optimize'],['document',language==='dari'?'مستندسازی':'Documentation'],['test',language==='dari'?'ساخت آزمون':'Generate tests'],['sql',language==='dari'?'SQL و پایگاه داده':'SQL and databases'],['git',language==='dari'?'Git و GitHub':'Git and GitHub'],['general',language==='dari'?'راهنمایی عمومی':'General guidance']] as string[][]).map(([value,label])=><option key={value} value={value}>{label}</option>)}
+            </select>
+          </label>
+          <textarea rows={5} value={codePrompt} onChange={e=>setCodePrompt(e.target.value)} placeholder={language === 'dari' ? 'درخواست، کد یا خطا را اینجا وارد کنید...' : 'Describe the task, paste code or include the error message...'} className="w-full rounded-2xl bg-slate-900 border border-cyan-700/50 p-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400" />
+          <button onClick={() => { if (codePrompt.trim()) onRunTool(codePrompt.trim(), { toolMode: 'coding', codingTask }); }} disabled={!codePrompt.trim()} className="w-full py-3 rounded-xl gradient-btn-cyan text-slate-950 font-bold text-sm disabled:opacity-40">{language === 'dari' ? 'ارسال به دستیار برنامه‌نویسی' : 'Ask Coding Assistant'}</button>
+          <p className="rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-3 text-xs leading-6 text-slate-300">{language === 'dari' ? 'پاسخ کامل در صفحه چت نمایش داده می‌شود. کد شما در سرور اصلی اجرا نمی‌شود؛ اجرای کد نیازمند محیط ایزوله جداگانه است.' : 'The complete response appears in Chat. Your code is never executed on the main application server; execution requires a separate isolated runner.'}</p>
         </div>
       )}
-
       {activeSubTab === 'research' && (
         <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-blue-500/40 shadow-xl space-y-4">
           <h2 className="text-base font-bold text-white">{language === 'dari' ? 'پژوهش وب با منابع واقعی' : 'Web Research with real sources'}</h2>
