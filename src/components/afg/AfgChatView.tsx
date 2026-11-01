@@ -93,7 +93,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
     }
     audioRef.current?.pause();
     setSpeakingMsgId(msgId);
-    const cleanText = text.replace(/\x60\x60\x60[\\s\\S]*?\x60\x60\x60/g, 'Code block omitted.').replace(/[*#_\x60>]/g, '').trim();
+    const cleanText = text.replace(/\x60\x60\x60[\s\S]*?\x60\x60\x60/g, 'Code block omitted.').replace(/[*#_\x60>]/g, '').trim();
     try {
       const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/voice/synthesize', {
         method: 'POST',
