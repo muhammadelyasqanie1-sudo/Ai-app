@@ -41,7 +41,7 @@ async function getVerifiedChatModels(accountId: string, apiToken: string): Promi
       return Boolean(task && /text generation|text-generation|chat/i.test(task));
     })
     .map((item) => item.name || item.id || item.model || '')
-    .filter((name): name is string => /^@cf\\/[a-zA-Z0-9._-]+\\/[a-zA-Z0-9._-]+$/.test(name))
+    .filter((name): name is string => /^@cf\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(name))
     .filter((name, index, all) => all.indexOf(name) === index);
 }
 
@@ -97,7 +97,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       sendJson(req, res, 413, { error: 'Conversation is too large. Shorten the message history.', requestId: id }, id);
       return;
     }
-    if (!model || !/^@cf\\/[a-zA-Z0-9._-]+\\/[a-zA-Z0-9._-]+$/.test(model)) {
+    if (!model || !/^@cf\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(model)) {
       sendJson(req, res, 400, { error: 'Select a valid model from the verified provider catalog.', requestId: id }, id);
       return;
     }
@@ -130,8 +130,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     if (customInstructions) systemMessages.unshift(customInstructions);
 
     const upstreamMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
-    if (systemMessages.join('\\n\\n').trim()) {
-      upstreamMessages.push({ role: 'system', content: systemMessages.join('\\n\\n') });
+    if (systemMessages.join('\n\n').trim()) {
+      upstreamMessages.push({ role: 'system', content: systemMessages.join('\n\n') });
     }
     upstreamMessages.push(...messages
       .filter((message) => message.role === 'user' || message.role === 'assistant')
@@ -183,10 +183,10 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split(/\\r?\\n\\r?\\n/);
+        const events = buffer.split(/\r?\n\r?\n/);
         buffer = events.pop() || '';
         for (const eventText of events) {
-          const dataLine = eventText.split(/\\r?\\n/).find((line) => line.startsWith('data:'));
+          const dataLine = eventText.split(/\r?\n/).find((line) => line.startsWith('data:'));
           if (!dataLine) continue;
           const data = dataLine.slice(5).trim();
           if (!data || data === '[DONE]') continue;
@@ -198,7 +198,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
               typeof event.choices?.[0]?.delta?.content === 'string' ? event.choices[0].delta.content :
               undefined;
             if (typeof piece === 'string' && piece.length > 0) {
-              res.write(`data: ${JSON.stringify({ type: 'content', text: piece })}\\n\\n`);
+              res.write(`data: ${JSON.stringify({ type: 'content', text: piece })}\n\n`);
             }
             if (event.error) {
               console.error('AI_PROVIDER_STREAM_ERROR', JSON.stringify({ requestId: id, model, error: event.error }).slice(0, 1000));
@@ -208,8 +208,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
           }
         }
       }
-      res.write(`data: ${JSON.stringify({ type: 'done', requestId: id })}\\n\\n`);
-      res.write('data: [DONE]\\n\\n');
+      res.write(`data: ${JSON.stringify({ type: 'done', requestId: id })}\n\n`);
+      res.write('data: [DONE]\n\n');
       res.end();
     } finally {
       reader.releaseLock();
@@ -220,7 +220,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     if (!res.headersSent) {
       sendJson(req, res, 500, { error: 'The AI request failed unexpectedly. Please retry.', requestId: id }, id);
     } else {
-      res.write(`data: ${JSON.stringify({ type: 'error', error: 'The AI response stream was interrupted.', requestId: id })}\\n\\n`);
+      res.write(`data: ${JSON.stringify({ type: 'error', error: 'The AI response stream was interrupted.', requestId: id })}\n\n`);
       res.end();
     }
   }
