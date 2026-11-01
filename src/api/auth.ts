@@ -33,6 +33,15 @@ function hashEmailCode(value: string): string {
   return createHash('sha256').update(pepper + ':' + value).digest('hex');
 }
 
+async function recordSecurityNotification(userId: string, eventType: string, title: string, body: string) {
+  try {
+    await pool.query(
+      "INSERT INTO user_notification_events(user_id,event_type,title,body) SELECT $1,$2,$3,$4 WHERE COALESCE((SELECT (notifications_json->>'inApp')::boolean FROM user_preferences WHERE user_id=$1),true)",
+      [userId,eventType,title,body],
+    );
+  } catch { console.error('AFG_SECURITY_NOTIFICATION_UNAVAILABLE'); }
+}
+
 function cookieOptions() {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   return `Path=/; HttpOnly; SameSite=Lax${secure}`;
@@ -242,6 +251,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         await pool.query("INSERT INTO auth_identities(user_id,provider,provider_subject,email_verified) VALUES($1,'google',$2,true) ON CONFLICT(provider,provider_subject) DO NOTHING", [userId, profile.sub]);
       }
       await createSession(userId!, res);
+      await recordSecurityNotification(userId!, 'security.sign_in', 'New sign-in', 'Your AFG AI account was signed in with Google.');
       clearOAuthState(res); res.writeHead(302, { Location: origin + '/', 'Cache-Control': 'no-store' }); res.end();
     } catch {
       clearOAuthState(res); res.writeHead(302, { Location: configuredAppOrigin() + '/?auth=google_failed' }); res.end();
@@ -288,7 +298,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       if(!row||row.attempts>=5||!/^\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The verification code is invalid or expired.'});return true;}
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
       await pool.query('UPDATE users SET email_verified=true,updated_at=now() WHERE id=$1',[row.id]);
-      await createSession(row.id,res);sendAuthJson(res,200,{verified:true});return true;
+      await createSession(row.id,res);await recordSecurityNotification(row.id,'security.email_verified','Email verified','Your AFG AI email address was verified.');sendAuthJson(res,200,{verified:true});return true;
     }catch{sendAuthJson(res,400,{error:'Could not verify this email.'});return true;}
   }
 
@@ -316,7 +326,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const row=found.rows[0];if(!row||row.attempts>=5||!/^\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
       await pool.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[await hashPassword(next),row.id]);
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
-      await pool.query('DELETE FROM sessions WHERE user_id=$1',[row.id]);sendAuthJson(res,200,{reset:true});return true;
+      await pool.query('DELETE FROM sessions WHERE user_id=$1',[row.id]);await recordSecurityNotification(row.id,'security.password_reset','Password reset','Your AFG AI account password was reset. All previous sessions were revoked.');sendAuthJson(res,200,{reset:true});return true;
     }catch{sendAuthJson(res,400,{error:'Could not reset the password.'});return true;}
   }
 
@@ -348,6 +358,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [await hashPassword(password), row.id]);
       }
       await createSession(row.id, res);
+      await recordSecurityNotification(row.id, 'security.sign_in', 'New sign-in', 'Your AFG AI account was signed in successfully.');
       sendAuthJson(res, 200, { authenticated: true });
       return true;
     } catch {
