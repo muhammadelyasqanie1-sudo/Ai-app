@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import type { Language, ToolSubTab } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
+import { AfgProductivityCenter } from './AfgProductivityCenter';
 
 interface AfgToolsCenterProps {
   language: Language;
@@ -220,6 +221,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   };
 
   const toolCards = [
+    { id: 'productivity' as ToolSubTab, title: language === 'dari' ? 'مرکز بهره‌وری' : 'Productivity Center', desc: language === 'dari' ? 'یادداشت، وظایف، آموزش، جلسه و برنامه‌ریزی' : 'Notes, tasks, study, meetings and planning', ready: Boolean(capabilities.chat), icon: Sparkles, color: 'text-cyan-300', bg: 'bg-cyan-500/10', border: 'border-cyan-400/40' },
     { id: 'translate' as ToolSubTab, title: t.toolTranslate, desc: language === 'dari' ? 'ترجمه با مدل چت تأییدشده' : 'Uses the verified chat model', ready: Boolean(capabilities.chat), icon: Languages, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/30' },
     { id: 'code-help' as ToolSubTab, title: t.toolCodeHelp, desc: language === 'dari' ? 'تولید، توضیح، اشکال‌زدایی و بهینه‌سازی کد' : 'Generate, explain, debug and optimize code', ready: Boolean(capabilities.chat), icon: Code2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
     { id: 'writing-studio' as ToolSubTab, title: language === 'dari' ? 'استودیوی نویسندگی' : 'Writing Studio', desc: language === 'dari' ? 'ایمیل، مقاله، رزومه و محتوای تبلیغاتی' : 'Emails, articles, CVs and marketing content', ready: Boolean(capabilities.chat), icon: FileText, color: 'text-fuchsia-400', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30' },
@@ -289,6 +291,8 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
           })}
         </div>
       )}
+
+      {activeSubTab === 'productivity' && <AfgProductivityCenter language={language} onRunTool={onRunTool} />}
 
       {/* Tool 1: Interactive Translator (Text & Voice) */}
       {activeSubTab === 'translate' && (
