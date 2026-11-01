@@ -20,6 +20,7 @@ export type ToolSubTab =
   | 'calculator'
   | 'qr-scanner'
   | 'code-help'
+  | 'writing-studio'
   | 'summarizer';
 
 export interface UserProfile {
