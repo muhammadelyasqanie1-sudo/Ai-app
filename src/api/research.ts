@@ -1,5 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomUUID } from 'crypto';
+import { z } from 'zod';
+import { authenticateRequest } from './auth.ts';
 
 const MAX_QUERY_LENGTH = 500;
 let activeSearches = 0;
@@ -14,6 +16,8 @@ export async function handleResearchApi(req: IncomingMessage, res: ServerRespons
   const pathname = new URL(req.url || '/', 'http://localhost').pathname;
   if (pathname !== '/api/research') return false;
   const requestId = randomUUID();
+  const user = await authenticateRequest(req);
+  if (!user) { reply(res,401,{error:'Sign in is required to use Web Research.'},requestId); return true; }
   if (req.method !== 'POST') {
     reply(res, 405, { error: 'Method not allowed.' }, requestId);
     return true;
@@ -62,11 +66,12 @@ export async function handleResearchApi(req: IncomingMessage, res: ServerRespons
       reply(res, 400, { error: 'A valid JSON request is required.' }, requestId);
       return true;
     }
-    const query = typeof body.query === 'string' ? body.query.trim() : '';
-    if (!query || query.length > MAX_QUERY_LENGTH) {
+    const input = z.object({query:z.string().trim().min(1).max(MAX_QUERY_LENGTH)}).strict().safeParse(body);
+    if (!input.success) {
       reply(res, 400, { error: 'Enter a research query of up to 500 characters.' }, requestId);
       return true;
     }
+    const query = input.data.query;
     const upstream = await fetch('https://api.tavily.com/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
