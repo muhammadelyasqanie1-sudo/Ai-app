@@ -3,7 +3,7 @@ import { ProviderAdapterError } from './providerTypes.ts';
 
 type OpenAIModel = { id?: string; name?: string; description?: string; context_length?: number; context_window?: number };
 const CAPABILITIES: CapabilityFlags = {
-  text: true, streaming: true, vision: false, imageGen: false,
+  text: true, streaming: true, vision: false, imageGen: false, imageEdit: false, ocr: false,
   tts: false, stt: false, tools: false, jsonMode: false,
 };
 
