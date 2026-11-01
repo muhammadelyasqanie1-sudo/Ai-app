@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { randomUUID } from 'crypto';
 import { prepareVerifiedChat } from '../services/chatService.ts';
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
+import { buildToolModePrompt } from '../services/toolModes.ts';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
@@ -118,12 +119,14 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
+    const toolMode = buildToolModePrompt(body, requestedLanguage);
     const systemMessages = [
       requestedLanguage === 'dari'
         ? 'Respond in clear, natural Dari Persian. Keep the entire response in Dari unless the user explicitly requests another language.'
         : 'Respond in clear English unless the user explicitly requests another language.',
       'You are AFG AI. Be honest about uncertainty and limitations. Never fabricate citations, URLs, quotations, sources, or tool results. Cite only sources actually supplied or retrieved in this request. If no verifiable source is available, say so clearly. Distinguish confirmed facts from estimates and opinions.',
-    ];
+      toolMode.prompt,
+    ].filter(Boolean);
 
     const upstreamMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
     if (systemMessages.join('\n\n').trim()) {
