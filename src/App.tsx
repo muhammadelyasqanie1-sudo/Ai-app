@@ -199,8 +199,10 @@ export default function App() {
       }
 
       const reader = response.body?.getReader();
+      if (!reader) throw new Error('Missing response stream');
       const decoder = new TextDecoder();
       let fullContent = '';
+      let streamFailed = false;
       let streamBuffer = '';
 
       if (reader) {
@@ -226,6 +228,8 @@ export default function App() {
                       m.id === assistantId ? { ...m, content: fullContent } : m
                     )
                   );
+                } else if (parsed.type === 'error') {
+                  streamFailed = true;
                 }
               } catch {
                 // ignore SSE json parse error
@@ -235,6 +239,7 @@ export default function App() {
         }
       }
 
+      if (streamFailed || !fullContent.trim()) throw new Error('Incomplete AI response');
       setMessages(prev =>
         prev.map(m =>
           m.id === assistantId ? { ...m, isStreaming: false } : m
