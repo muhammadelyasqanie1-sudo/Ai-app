@@ -25,7 +25,14 @@
     "motion": "^12.23.24",
     "@capacitor/core": "^8.0.0",
     "@capacitor/android": "^8.0.0",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "rehype-katex": "^7.0.1",
+    "rehype-highlight": "^7.0.2",
+    "katex": "^0.16.22",
+    "highlight.js": "^11.11.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
