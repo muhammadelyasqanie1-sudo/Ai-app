@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Languages, 
   FileText, 
@@ -75,6 +75,23 @@ function calculateExpression(expression: string): number {
 export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
   const t = translations[language];
   const [activeSubTab, setActiveSubTab] = useState<ToolSubTab>('overview');
+  const [fileStatus, setFileStatus] = useState<{ available: boolean; acceptedFormats: string[]; message: string } | null>(null);
+  useEffect(() => {
+    if (activeSubTab !== 'file-tools') return;
+    fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/files/status')
+      .then((response) => response.json())
+      .then((data) => setFileStatus({
+        available: data.available === true,
+        acceptedFormats: Array.isArray(data.acceptedFormats) ? data.acceptedFormats : [],
+        message: typeof data.message === 'string' ? data.message : '',
+      }))
+      .catch(() => setFileStatus({
+        available: false,
+        acceptedFormats: ['PDF', 'TXT', 'DOCX', 'CSV', 'XLSX', 'JSON', 'source files', 'images'],
+        message: language === 'dari' ? 'وضعیت سرویس فایل قابل دریافت نیست.' : 'File service status could not be reached.',
+      }));
+  }, [activeSubTab, language]);
+
 
   // --- Translation Tool State ---
   const [sourceLang, setSourceLang] = useState<'fa' | 'ps' | 'en' | 'ar'>('fa');
@@ -507,14 +524,37 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language }) => {
             <FolderArchive className="w-5 h-5 text-teal-400" />
             <span>{t.toolFile}</span>
           </h2>
-          <div className="p-5 rounded-2xl bg-slate-900/80 border border-teal-900/40 text-center space-y-3">
-            <FolderArchive className="w-12 h-12 text-teal-400 mx-auto" />
-            <h3 className="text-sm font-bold text-white">
-              {language === 'dari' ? 'ابزار فایل هنوز فعال نیست' : 'File tools are unavailable'}
-            </h3>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">
-              {language === 'dari' ? 'تا پیاده‌سازی پردازش امن فایل، این قابلیت غیرفعال است.' : 'This feature is disabled until secure file processing is implemented.'}
-            </p>
+          <div className="p-5 rounded-2xl bg-slate-900/80 border border-teal-900/40 space-y-4">
+            <div className="text-center space-y-2">
+              <FolderArchive className="w-12 h-12 text-teal-400 mx-auto" />
+              <h3 className="text-sm font-bold text-white">
+                {language === 'dari' ? 'دستیار فایل و اسناد' : 'File & Document Assistant'}
+              </h3>
+              <p className="text-xs text-slate-400 max-w-xl mx-auto">
+                {language === 'dari'
+                  ? 'قالب‌های هدف: PDF، TXT، DOCX، CSV، XLSX، JSON، فایل‌های کد و تصاویر.'
+                  : 'Planned formats: PDF, TXT, DOCX, CSV, XLSX, JSON, source code and images.'}
+              </p>
+            </div>
+            <div className="flex flex-wrap justify-center gap-2">
+              {(fileStatus?.acceptedFormats || ['PDF', 'TXT', 'DOCX', 'CSV', 'XLSX', 'JSON', 'Source files', 'Images']).map((format) => (
+                <span key={format} className="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-[11px] text-slate-300">{format}</span>
+              ))}
+            </div>
+            <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 text-center">
+              <p className="text-sm font-semibold text-amber-200">
+                {fileStatus?.available ? (language === 'dari' ? 'سرویس آماده است' : 'File service is ready') : (language === 'dari' ? 'بارگذاری فایل هنوز غیرفعال است' : 'File upload is not enabled yet')}
+              </p>
+              <p className="mt-2 text-xs leading-6 text-slate-400">
+                {fileStatus?.message || (language === 'dari'
+                  ? 'تا فعال‌شدن ذخیره‌سازی خصوصی، بررسی نوع و امضای فایل، اسکن بدافزار، استخراج متن و سهمیه‌بندی هر کاربر، فایل‌ها پذیرفته نمی‌شوند.'
+                  : 'Files are not accepted until private object storage, MIME and magic-byte validation, malware scanning, text extraction and per-user quotas are implemented.')}
+              </p>
+            </div>
+            <div className="text-xs text-slate-400">
+              <p className="font-semibold text-slate-300">{language === 'dari' ? 'عملیات برنامه‌ریزی‌شده' : 'Planned operations'}</p>
+              <p className="mt-1">{language === 'dari' ? 'خلاصه‌سازی، پرسش و پاسخ، استخراج، توضیح، ترجمه، سازمان‌دهی، تحلیل جدول، ساخت گزارش و مقایسه.' : 'Summarize, Q&A, extract, explain, translate, organize, analyze tables, generate reports and compare documents.'}</p>
+            </div>
           </div>
         </div>
       )}
