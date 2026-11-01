@@ -21,6 +21,7 @@ export type ToolSubTab =
   | 'qr-scanner'
   | 'code-help'
   | 'writing-studio'
+  | 'research'
   | 'summarizer';
 
 export interface UserProfile {
