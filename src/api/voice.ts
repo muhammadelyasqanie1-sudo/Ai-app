@@ -65,7 +65,8 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
         reply(res, 503, { available: false, error: 'The selected provider does not implement speech recognition.' }, requestId);
         return true;
       }
-      const result = await adapter.transcribe({ audio: new Uint8Array(audio), mimeType });
+      const language = ['auto', 'en', 'fa', 'ps', 'ar'].includes(String(body.language)) ? String(body.language) : 'auto';
+      const result = await adapter.transcribe({ audio: new Uint8Array(audio), mimeType, language });
       reply(res, 200, { available: true, text: result.text }, requestId);
       return true;
     }
@@ -87,7 +88,8 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
       reply(res, 503, { available: false, error: 'The selected provider does not implement speech synthesis.' }, requestId);
       return true;
     }
-    const result = await adapter.synthesize({ text, voice });
+    const language = ['en', 'fa', 'ps', 'ar'].includes(String(body.language)) ? String(body.language) : undefined;
+    const result = await adapter.synthesize({ text, voice, language });
     if (!result.audio.length || result.audio.length > MAX_AUDIO_BYTES) {
       reply(res, 502, { error: 'The voice provider returned an invalid audio result.' }, requestId);
       return true;
