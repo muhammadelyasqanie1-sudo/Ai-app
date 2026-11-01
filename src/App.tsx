@@ -246,7 +246,7 @@ export default function App() {
   };
 
   // Chat message sending & streaming logic
-  const handleSendMessage = async (text: string, attachments: ChatAttachment[], baseMessages: AfgMessage[] = messages) => {
+  const handleSendMessage = async (text: string, attachments: ChatAttachment[], baseMessages: AfgMessage[] = messages, toolOptions: Record<string, unknown> = {}) => {
     if (!text.trim() && attachments.length === 0) return;
     if (!selectedModel) {
       setCurrentTab('chat');
@@ -300,6 +300,7 @@ export default function App() {
               messages: [...baseMessages, userMessage].map((m) => ({ role: m.role, content: m.content })),
               model: selectedModel,
               language,
+              ...toolOptions,
             }),
             signal: abortController.signal,
           });
@@ -478,7 +479,7 @@ export default function App() {
         )}
 
         {currentTab === 'tools' && (
-          <AfgToolsCenter language={language} />
+          <AfgToolsCenter language={language} onRunTool={(prompt, options) => { setCurrentTab('chat'); void handleSendMessage(prompt, [], messages, options); }} />
         )}
 
         {currentTab === 'history' && (
