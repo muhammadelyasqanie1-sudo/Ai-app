@@ -290,9 +290,7 @@ export default function App() {
             body: JSON.stringify({
               messages: [...baseMessages, userMessage].map((m) => ({ role: m.role, content: m.content })),
               model: selectedModel,
-              customInstructions: language === 'dari'
-                ? 'پاسخ‌های شما باید به زبان فارسی/دری شیوا، دقیق و صمیمانه باشد. درباره عدم قطعیت صادق باشید و منبع یا نقل‌قول ساختگی ارائه نکنید.'
-                : 'Respond clearly and supportively. Be honest about uncertainty and never invent sources or citations.',
+              language,
             }),
             signal: abortController.signal,
           });
