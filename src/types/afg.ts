@@ -94,6 +94,9 @@ export type AfgCapabilityKey =
 
 export interface AfgModelOption {
   id: string;
+  providerId: string;
+  contextWindow: number;
+  capabilities: Record<string, boolean>;
   displayName: string;
   selectable: boolean;
   disabledReason: string | null;
