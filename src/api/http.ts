@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomUUID } from 'crypto';
 import { handleChatApi } from './chatHandler.ts';
-import { checkDatabase } from './database.ts';
+import { checkDatabase, pool } from './database.ts';
 import { getProviderModelCatalog } from './modelCatalog.ts';
 import { getCapabilitySnapshot, getImageStudioSnapshot, getFileAssistantSnapshot } from '../services/providerGateway.ts';
 import { handleAuthApi } from './auth.ts';
@@ -37,13 +37,22 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
   Object.entries(corsHeaders(req)).forEach(([key, value]) => res.setHeader(key, value));
 
   res.on('finish', () => {
-    console.info('API_REQUEST', JSON.stringify({
-      requestId,
-      method: req.method,
-      path: pathname,
-      status: res.statusCode,
-      durationMs: Date.now() - startedAt,
-    }));
+    const durationMs = Date.now() - startedAt;
+    console.info('API_REQUEST', JSON.stringify({ requestId, method: req.method, path: pathname, status: res.statusCode, durationMs }));
+    if (pool && pathname.startsWith('/api/')) {
+      const classification = res.statusCode >= 500 ? 'server_error' : res.statusCode >= 400 ? 'client_error' : 'success';
+      void pool.query(
+        'INSERT INTO admin_request_events(request_id,method,route,status_code,duration_ms,classification) VALUES($1,$2,$3,$4,$5,$6)',
+        [requestId, req.method || 'GET', pathname.slice(0,240), res.statusCode, durationMs, classification],
+      ).catch(() => {});
+      if (res.statusCode === 401 || res.statusCode === 403 || res.statusCode >= 500) {
+        void pool.query(
+          'INSERT INTO security_events(event_type,severity,request_id,metadata) VALUES($1,$2,$3,$4::jsonb)',
+          [res.statusCode >= 500 ? 'api.server_error' : 'auth.access_denied', res.statusCode >= 500 ? 'warning' : 'info', requestId,
+            JSON.stringify({ method: req.method || 'GET', route: pathname.slice(0,240), status: res.statusCode })],
+        ).catch(() => {});
+      }
+    }
   });
 
   if (req.method === 'OPTIONS') {
