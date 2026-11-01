@@ -135,8 +135,8 @@ export default function App() {
             capabilities: {
               chat: false,
               vision: false,
-
-              vision: false,
+              ocr: false,
+              'image\u002dedit': false,
               'image-generation': false,
               'video-generation': false,
               'file-processing': false,
@@ -168,8 +168,8 @@ export default function App() {
           capabilities: {
             chat: false,
             vision: false,
-
-            vision: false,
+            ocr: false,
+            'image\u002dedit': false,
             'image-generation': false,
             'video-generation': false,
             'file-processing': false,
