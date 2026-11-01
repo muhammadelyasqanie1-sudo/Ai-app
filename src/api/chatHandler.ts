@@ -140,9 +140,10 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
 
     let emittedContent = false;
     try {
-      for await (const piece of stream) {
+      for await (const chunk of stream) {
+        if (!chunk.content) continue;
         emittedContent = true;
-        res.write(`data: ${JSON.stringify({ type: 'content', text: piece })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'content', text: chunk.content })}\n\n`);
       }
       if (!emittedContent) {
         res.write(`data: ${JSON.stringify({ type: 'error', error: 'The AI provider returned an empty response.', requestId: id })}\n\n`);
