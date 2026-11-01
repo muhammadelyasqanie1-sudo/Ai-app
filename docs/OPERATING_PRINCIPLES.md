@@ -77,7 +77,7 @@ This section supersedes earlier statements in this document that admin controls,
 ### 2.3 Provider Registry & Admin Controls
 
 Implemented:
-- Registry now supports Cloudflare Workers AI and an optional OpenAI-compatible adapter, registered only when its server-side base URL and API key are configured.
+- Registry now supports Cloudflare Workers AI and an optional OpenAI-compatible adapter, registered in the admin registry at all times, but only becomes usable when its server-side base URL and API key are configured.
 - Provider and model enablement is stored in PostgreSQL; model pricing is administrator-entered and stored per model.
 - Admin UI supports provider enable/disable, model enable/disable, pricing entry and capability-specific fallback-chain editing.
 - Admin APIs require a database-backed session and server-side users.role = admin authorization. State-changing admin APIs require CSRF validation.
