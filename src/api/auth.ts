@@ -350,7 +350,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const row=found.rows[0];if(!row||row.attempts>=5||!/^\d{6}$/.test(code)||hashEmailCode(code)!==row.code_hash){if(row)await pool.query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=$1',[row.code_id]);sendAuthJson(res,400,{error:'The reset code is invalid or expired.'});return true;}
       await pool.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[await hashPassword(next),row.id]);
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
-      await pool.query('DELETE FROM sessions WHERE user_id=$1',[row.id]);await recordSecurityNotification(row.id,'security.password_reset','Password reset','Your AFG AI account password was reset. All previous sessions were revoked.');sendAuthJson(res,200,{reset:true});return true;
+      await pool.query('DELETE FROM sessions WHERE user_id=$1',[row.id]);clearSessionCookies(res);await recordSecurityNotification(row.id,'security.password_reset','Password reset','Your AFG AI account password was reset. All previous sessions were revoked.');sendAuthJson(res,200,{reset:true});return true;
     }catch{sendAuthJson(res,400,{error:'Could not reset the password.'});return true;}
   }
 
