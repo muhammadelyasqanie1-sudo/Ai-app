@@ -36,13 +36,21 @@ function hashEmailCode(value: string): string {
 export async function recordSecurityNotification(userId: string, eventType: string, title: string, body: string) {
   try {
     const result = await pool.query(
-      "SELECT u.email, COALESCE((p.notifications_json->>'inApp')::boolean,true) AS in_app, COALESCE((p.notifications_json->>'email')::boolean,false) AS email_enabled, COALESCE((p.notifications_json->>'securityAlerts')::boolean,true) AS security_enabled FROM users u LEFT JOIN user_preferences p ON p.user_id=u.id WHERE u.id=$1",
+      "SELECT u.email, u.preferred_language, COALESCE((p.notifications_json->>'inApp')::boolean,true) AS in_app, COALESCE((p.notifications_json->>'email')::boolean,false) AS email_enabled, COALESCE((p.notifications_json->>'securityAlerts')::boolean,true) AS security_enabled FROM users u LEFT JOIN user_preferences p ON p.user_id=u.id WHERE u.id=$1",
       [userId],
     );
     const preference = result.rows[0];
     if (!preference || preference.security_enabled !== true) return;
+    const dari = preference.preferred_language === 'dari';
+    const localized: Record<string,{title:string;body:string}> = {
+      'security.sign_in': { title: dari ? 'ورود جدید' : title, body: dari ? 'حساب AFG AI شما با موفقیت وارد شد.' : body },
+      'security.email_verified': { title: dari ? 'ایمیل تأیید شد' : title, body: dari ? 'نشانی ایمیل حساب AFG AI شما تأیید شد.' : body },
+      'security.password_reset': { title: dari ? 'رمز عبور بازنشانی شد' : title, body: dari ? 'رمز عبور حساب شما تغییر کرد و نشست‌های قبلی لغو شدند.' : body },
+      'security.password_changed': { title: dari ? 'رمز عبور تغییر کرد' : title, body: dari ? 'رمز عبور حساب AFG AI شما تغییر داده شد.' : body },
+    };
+    const message = localized[eventType] || { title, body };
     if (preference.in_app === true) {
-      await pool.query('INSERT INTO user_notification_events(user_id,event_type,title,body) VALUES($1,$2,$3,$4)',[userId,eventType,title,body]);
+      await pool.query('INSERT INTO user_notification_events(user_id,event_type,title,body) VALUES($1,$2,$3,$4)',[userId,eventType,message.title,message.body]);
     }
     const apiKey = process.env.RESEND_API_KEY || '';
     const from = process.env.EMAIL_FROM || '';
@@ -51,7 +59,7 @@ export async function recordSecurityNotification(userId: string, eventType: stri
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ from, to: [preference.email], subject: 'AFG AI security alert: ' + title, text: body + '\n\nIf this activity was not yours, sign in and secure your account.' }),
+          body: JSON.stringify({ from, to: [preference.email], subject: 'AFG AI security alert: ' + message.title, text: message.body + '\n\nIf this activity was not yours, sign in and secure your account.' }),
         });
       } catch { console.error('AFG_SECURITY_EMAIL_UNAVAILABLE'); }
     }
