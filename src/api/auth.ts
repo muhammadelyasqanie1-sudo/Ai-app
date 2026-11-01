@@ -36,7 +36,7 @@ function hashEmailCode(value: string): string {
 async function recordSecurityNotification(userId: string, eventType: string, title: string, body: string) {
   try {
     await pool.query(
-      "INSERT INTO user_notification_events(user_id,event_type,title,body) SELECT $1,$2,$3,$4 WHERE COALESCE((SELECT (notifications_json->>'inApp')::boolean FROM user_preferences WHERE user_id=$1),true)",
+      "INSERT INTO user_notification_events(user_id,event_type,title,body) SELECT $1,$2,$3,$4 WHERE COALESCE((SELECT COALESCE((notifications_json->>'inApp')::boolean,true) AND COALESCE((notifications_json->>'securityAlerts')::boolean,true) FROM user_preferences WHERE user_id=$1),true)",
       [userId,eventType,title,body],
     );
   } catch { console.error('AFG_SECURITY_NOTIFICATION_UNAVAILABLE'); }
