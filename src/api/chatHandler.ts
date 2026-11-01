@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomUUID } from 'crypto';
+import { getCloudflareModelCatalog } from './modelCatalog.ts';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
@@ -25,25 +26,6 @@ function sendJson(req: IncomingMessage, res: ServerResponse, status: number, pay
     ...corsHeaders(req),
   });
   res.end(JSON.stringify(payload));
-}
-
-async function getVerifiedChatModels(accountId: string, apiToken: string): Promise<string[] | null> {
-  const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/models/search?per_page=100&hide_experimental=true`, {
-    headers: { Authorization: `Bearer ${apiToken}`, Accept: 'application/json' },
-  });
-  const payload = await response.json() as {
-    success?: boolean;
-    result?: Array<{ name?: string; id?: string; model?: string; task?: { name?: string } | string }>;
-  };
-  if (!response.ok || payload.success !== true || !Array.isArray(payload.result)) return null;
-  return payload.result
-    .filter((item) => {
-      const task = typeof item.task === 'string' ? item.task : item.task?.name;
-      return Boolean(task && /text generation|text-generation|chat/i.test(task));
-    })
-    .map((item) => item.name || item.id || item.model || '')
-    .filter((name): name is string => /^@cf\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(name))
-    .filter((name, index, all) => all.indexOf(name) === index);
 }
 
 export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
@@ -110,17 +92,12 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
-    let verifiedModels: string[] | null;
-    try {
-      verifiedModels = await getVerifiedChatModels(accountId, apiToken);
-    } catch {
-      verifiedModels = null;
-    }
-    if (!verifiedModels) {
-      sendJson(req, res, 502, { error: 'The AI provider could not verify its model catalog. Please retry.', requestId: id }, id);
+    const catalog = await getCloudflareModelCatalog();
+    if (catalog.status !== 200) {
+      sendJson(req, res, catalog.status, { error: catalog.body.error || 'The AI provider could not verify its model catalog. Please retry.', requestId: id }, id);
       return;
     }
-    if (!verifiedModels.includes(model)) {
+    if (!catalog.body.models.includes(model)) {
       sendJson(req, res, 400, { error: 'This model is not currently verified as available for chat. Refresh the model list.', requestId: id }, id);
       return;
     }
