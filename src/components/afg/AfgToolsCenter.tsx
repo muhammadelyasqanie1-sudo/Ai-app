@@ -152,7 +152,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   // Translation uses the selected verified text-generation model.
   const handleTranslationFile = async (file?: File) => {
     if (!file) return;
-    if (file.size > 1_000_000) { setTransOutput(language === 'dari' ? 'فایل متنی باید کمتر از ۱ مگابایت باشد.' : 'Text document must be 1 MB or smaller.'); return; }
+    if (file.size > 45_000) { setTransOutput(language === 'dari' ? 'فایل متنی باید کمتر از ۱ مگابایت باشد.' : 'Text document must be 45 KB or smaller.'); return; }
     const extension = file.name.split('.').pop()?.toLowerCase();
     if (!['txt', 'md', 'csv', 'json'].includes(extension || '')) { setTransOutput(language === 'dari' ? 'فعلاً فقط فایل‌های TXT، MD، CSV و JSON متنی پشتیبانی می‌شوند.' : 'Only text-based TXT, MD, CSV and JSON documents are supported here.'); return; }
     try { setTransInput(await file.text()); setTranslationFileName(file.name); setTransOutput(''); }
@@ -346,9 +346,10 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
               {translationFileName && <p className="mb-2 text-[11px] text-cyan-300">{translationFileName}</p>}
               <textarea
                 rows={5}
+                maxLength={45000}
                 value={transInput}
                 onChange={(e) => setTransInput(e.target.value)}
-                placeholder="Type or paste text..."
+                placeholder={language === 'dari' ? 'متن را بنویسید یا جای‌گذاری کنید...' : 'Type or paste text...'}
                 className="w-full rounded-2xl bg-slate-900/80 border border-cyan-900/50 p-3 text-sm text-white focus:outline-none focus:border-cyan-400 resize-none leading-relaxed"
               />
             </div>
@@ -413,7 +414,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
               type="text"
               value={codePrompt}
               onChange={(e) => setCodePrompt(e.target.value)}
-              placeholder="e.g. Write a python script to parse CSV and send email..."
+              placeholder={language === 'dari' ? 'مثلاً: یک اسکریپت پایتون برای خواندن CSV بساز...' : 'e.g. Write a Python script to parse CSV...'}
               className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-cyan-700/50 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
             />
             <button
