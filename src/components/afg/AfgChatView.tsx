@@ -17,7 +17,7 @@ import {
 import { AfgBrainLogo } from './AfgBrainLogo';
 import { AfgChatInputCapsule } from './AfgChatInputCapsule';
 import { MarkdownRenderer } from '../MarkdownRenderer';
-import type { Language, AfgMessage, ChatAttachment, UserProfile, AfgCapabilityKey } from '../../types/afg';
+import type { Language, AfgMessage, ChatAttachment, UserProfile, AfgCapabilityKey, AfgModelOption } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
 
 interface AfgChatViewProps {
@@ -28,6 +28,7 @@ interface AfgChatViewProps {
   user: UserProfile;
   initialPrompt?: string;
   availableModels: string[];
+  modelOptions: AfgModelOption[];
   selectedModel: string;
   onSelectModel: (model: string) => void;
   capabilities: Record<AfgCapabilityKey, boolean>;
@@ -41,6 +42,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   user,
   initialPrompt,
   availableModels,
+  modelOptions,
   selectedModel,
   onSelectModel,
   capabilities,
@@ -350,6 +352,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
           disabled={isLoading || availableModels.length === 0}
           language={language}
           availableModels={availableModels}
+          modelOptions={modelOptions}
           selectedModel={selectedModel}
           onSelectModel={onSelectModel}
           modelsLoading={isLoading}
