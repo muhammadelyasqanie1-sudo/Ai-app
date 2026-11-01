@@ -86,6 +86,8 @@ export interface GeneratedVideo {
 export type AfgCapabilityKey =
   | 'chat'
   | 'vision'
+  | 'ocr'
+  | 'image-edit'
   | 'image-generation'
   | 'video-generation'
   | 'file-processing'
