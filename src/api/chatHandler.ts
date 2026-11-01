@@ -96,7 +96,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     }
     if (messages.some((message) =>
       !message || typeof message !== 'object' ||
-      !['user', 'assistant', 'system'].includes(message.role) ||
+      !['user', 'assistant'].includes(message.role) ||
       typeof message.content !== 'string' || message.content.length > 50_000
     )) {
       sendJson(req, res, 400, { error: 'Each message must have a valid role and text content under 50,000 characters.', requestId: id }, id);
@@ -133,7 +133,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
-    const stream = await prepareVerifiedChat({ model, messages: upstreamMessages, signal: abortController.signal });
+    const prepared = await prepareVerifiedChat({ model, messages: upstreamMessages, signal: abortController.signal });
+    const { providerId, modelId, stream } = prepared;
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
@@ -163,8 +164,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       console.error('AI_PROVIDER_STREAM_FAILED', JSON.stringify({
         requestId: id,
-        provider: 'cloudflare-workers-ai',
-        model,
+        provider: prepared.providerId,
+        model: prepared.modelId,
         code: error instanceof ProviderAdapterError ? error.code : 'unexpected_stream_error',
       }));
       if (!res.destroyed && !res.writableEnded) {
@@ -181,7 +182,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     const providerError = error instanceof ProviderAdapterError ? error : null;
     console.error('AI_CHAT_REQUEST_FAILED', JSON.stringify({
       requestId: id,
-      provider: 'cloudflare-workers-ai',
+      provider: 'unknown-or-not-selected',
       code: providerError?.code || 'request_failed',
       status: providerError?.status || 500,
     }));
