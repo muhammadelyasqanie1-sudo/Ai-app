@@ -79,3 +79,20 @@ export interface GeneratedVideo {
   timestamp: number;
 }
 
+
+export type AfgCapabilityKey =
+  | 'chat'
+  | 'vision'
+  | 'image-generation'
+  | 'video-generation'
+  | 'file-processing'
+  | 'speech-to-text'
+  | 'text-to-speech'
+  | 'research';
+
+export interface AfgCapabilitySnapshot {
+  verified: boolean;
+  models: string[];
+  capabilities: Record<AfgCapabilityKey, boolean>;
+  checkedAt?: string;
+}
