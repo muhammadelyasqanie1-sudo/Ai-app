@@ -32,7 +32,7 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
   onToggleTheme,
   onOpenSettings,
   onOpenMenu,
-  unreadNotifications = 1,
+  unreadNotifications = 0,
 }) => {
   const t = translations[language];
 
@@ -67,14 +67,6 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
           </div>
         </div>
 
-        {/* Center Section: Server Status Ready Pill (from Screenshot 1) */}
-        <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900/80 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.15)]">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
-          <span className="text-xs font-medium text-emerald-400 tracking-wide flex items-center gap-1">
-            {t.serverReady}
-          </span>
-        </div>
-
         {/* Right Section: Language Switch, Theme, Notifications & User Avatar */}
         <div className="flex items-center gap-1.5 sm:gap-2.5">
 
@@ -104,18 +96,7 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
             )}
           </button>
 
-          {/* Notifications Bell */}
-          <button
-            onClick={onOpenSettings}
-            className="relative p-2 rounded-xl text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-700/70 border border-slate-700/40 transition-colors"
-            title="Notifications"
-            aria-label="View notifications"
-          >
-            <Bell className="w-4 h-4 text-cyan-300" />
-            {unreadNotifications > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444]" />
-            )}
-          </button>
+
         </div>
 
       </div>
