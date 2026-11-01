@@ -16,6 +16,7 @@ const chatRequestSchema = z.object({
   }).passthrough()).min(1).max(100),
   model: z.string().trim().min(1).max(300),
   language: z.enum(['dari','english']).optional(),
+  no_fallback: z.boolean().optional(),
 }).passthrough();
 
 // Per-process load shedding; identity-based/distributed rate limits require authenticated users.
@@ -239,7 +240,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
 
     // Bound the complete upstream generation, including provider retries and stream reads.
     requestTimer = setTimeout(() => { timedOut = true; abortController.abort(); }, 60_000);
-    const prepared = await prepareVerifiedChat({ model, messages: upstreamMessages, signal: abortController.signal });
+    const prepared = await prepareVerifiedChat({ model, messages: upstreamMessages, signal: abortController.signal, noFallback: body.no_fallback === true });
     const { providerId, modelId, stream } = prepared;
     activeModelId = modelId;
     res.writeHead(200, {
