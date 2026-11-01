@@ -13,7 +13,10 @@ import {
   BrainCircuit,
   MessageSquare,
   Bot,
-  Square
+  Square,
+  Pencil,
+  GitBranch,
+  Trash2
 } from 'lucide-react';
 import { AfgBrainLogo } from './AfgBrainLogo';
 import { AfgChatInputCapsule } from './AfgChatInputCapsule';
@@ -26,6 +29,9 @@ interface AfgChatViewProps {
   onSendMessage: (text: string, attachments: ChatAttachment[]) => void;
   onStop: () => void;
   onRetryMessage: (messageId: string) => void;
+  onEditMessage: (messageId: string, editedText: string) => void;
+  onBranchMessage: (messageId: string) => void;
+  onDeleteMessage: (messageId: string) => void;
   isLoading: boolean;
   language: Language;
   user: UserProfile;
@@ -42,6 +48,9 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   onSendMessage,
   onStop,
   onRetryMessage,
+  onEditMessage,
+  onBranchMessage,
+  onDeleteMessage,
   isLoading,
   language,
   user,
@@ -59,6 +68,8 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedThoughts, setExpandedThoughts] = useState<Record<string, boolean>>({});
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -284,10 +295,32 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                   )}
                 </div>
 
+                {isUser && !isLoading && (
+                  <div className="mt-2 w-full space-y-2">
+                    {editingMessageId === msg.id ? (
+                      <div className="space-y-2">
+                        <textarea value={editDraft} onChange={(event) => setEditDraft(event.target.value)} rows={3} className="w-full rounded-xl border border-cyan-700 bg-slate-950 p-3 text-sm text-white" />
+                        <div className="flex gap-2">
+                          <button onClick={() => { onEditMessage(msg.id, editDraft); setEditingMessageId(null); }} className="rounded-lg bg-cyan-500 px-3 py-1.5 text-xs font-bold text-slate-950">{language === 'dari' ? 'ویرایش و ارسال' : 'Edit & resend'}</button>
+                          <button onClick={() => setEditingMessageId(null)} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300">{language === 'dari' ? 'لغو' : 'Cancel'}</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 px-1 text-[11px] text-slate-500">
+                        <button onClick={() => { setEditingMessageId(msg.id); setEditDraft(msg.content); }} className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-slate-800 hover:text-cyan-300"><Pencil className="h-3 w-3" />{language === 'dari' ? 'ویرایش' : 'Edit'}</button>
+                        <button onClick={() => onBranchMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-slate-800 hover:text-cyan-300"><GitBranch className="h-3 w-3" />{language === 'dari' ? 'شاخه جدید' : 'Branch'}</button>
+                        <button onClick={() => onDeleteMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-red-500/10 hover:text-red-300"><Trash2 className="h-3 w-3" />{language === 'dari' ? 'حذف' : 'Delete'}</button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Message Actions Bar (Read Aloud, Copy) */}
                 {!isUser && !msg.isStreaming && (
                   <div className="flex items-center gap-2 mt-1.5 px-1 text-slate-400">
-                    {msg.retryable && <button onClick={() => onRetryMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-amber-300 hover:bg-amber-500/10"><RefreshCw className="w-3.5 h-3.5" />{language === 'dari' ? 'تلاش دوباره' : 'Retry'}</button>}
+                    <button onClick={() => onRetryMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-amber-300 hover:bg-amber-500/10"><RefreshCw className="w-3.5 h-3.5" />{msg.retryable ? (language === 'dari' ? 'تلاش دوباره' : 'Retry') : (language === 'dari' ? 'تولید دوباره' : 'Regenerate')}</button>
+                    <button onClick={() => onBranchMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-800"><GitBranch className="w-3.5 h-3.5" />{language === 'dari' ? 'شاخه' : 'Branch'}</button>
+                    <button onClick={() => onDeleteMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-red-500/10 hover:text-red-300"><Trash2 className="w-3.5 h-3.5" />{language === 'dari' ? 'حذف' : 'Delete'}</button>
                     {/* Read Aloud Button (User Request #7) */}
                     <button
                       onClick={() => handleReadAloud(msg.id, msg.content)}
