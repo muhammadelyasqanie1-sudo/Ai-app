@@ -154,3 +154,5 @@ CREATE TABLE IF NOT EXISTS provider_fallback_chains (
 
 CREATE INDEX IF NOT EXISTS users_role_status_idx ON users(role, status);
 CREATE INDEX IF NOT EXISTS model_catalog_enabled_idx ON model_catalog(provider_key, enabled);
+
+ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS health_checked_at timestamptz;
