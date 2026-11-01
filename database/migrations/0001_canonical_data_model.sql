@@ -115,3 +115,11 @@ DROP TRIGGER IF EXISTS users_sync_profile ON users;
 CREATE TRIGGER users_sync_profile
 AFTER INSERT OR UPDATE OF display_name,avatar_url,preferred_language,memory_enabled ON users
 FOR EACH ROW EXECUTE FUNCTION afg_sync_user_profile();
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='users_role_name_fk') THEN
+    ALTER TABLE users ADD CONSTRAINT users_role_name_fk FOREIGN KEY(role) REFERENCES roles(name) ON UPDATE CASCADE ON DELETE RESTRICT;
+  END IF;
+END;
+$$;
