@@ -240,6 +240,25 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
     return true;
   }
 
+  if (pathname === '/api/auth/preferences' && req.method === 'PATCH') {
+    const user = await authenticateRequest(req);
+    if (!user) { sendAuthJson(res, 401, { error: 'Sign in is required.' }); return true; }
+    if (!verifyCsrf(req)) { sendAuthJson(res, 403, { error: 'CSRF validation failed.' }); return true; }
+    try {
+      const body = await readJsonBody(req);
+      const defaultModel = typeof body.defaultModel === 'string' ? body.defaultModel.trim() : '';
+      if (defaultModel) {
+        const { getVerifiedModelDescriptors } = await import('../services/providerGateway.ts');
+        const available = await getVerifiedModelDescriptors();
+        const selected = available.find((model) => model.id === defaultModel && model.enabled && model.verifiedAt);
+        if (!selected) { sendAuthJson(res, 400, { error: 'Default model must be enabled and health-verified.' }); return true; }
+      }
+      await pool.query('UPDATE users SET default_model = $1, updated_at = now() WHERE id = $2', [defaultModel || null, user.id]);
+      sendAuthJson(res, 200, { defaultModel: defaultModel || null });
+    } catch { sendAuthJson(res, 400, { error: 'Could not update account preferences.' }); }
+    return true;
+  }
+
   if (pathname === '/api/auth/logout' && req.method === 'POST') {
     if (!verifyCsrf(req)) {
       sendAuthJson(res, 403, { error: 'CSRF validation failed.' });
