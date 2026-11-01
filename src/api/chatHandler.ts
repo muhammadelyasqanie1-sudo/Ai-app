@@ -5,6 +5,10 @@ import { ProviderAdapterError } from '../providers/providerTypes.ts';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
+// Per-process load shedding; identity-based/distributed rate limits require authenticated users.
+let activeChatRequests = 0;
+const MAX_CONCURRENT_CHAT_REQUESTS = 4;
+
 function getRequestId(req: IncomingMessage) {
   const supplied = req.headers['x-request-id'];
   return typeof supplied === 'string' && /^[a-zA-Z0-9._-]{8,100}$/.test(supplied)
@@ -49,6 +53,12 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     sendJson(req, res, 405, { error: 'Method not allowed', requestId: id }, id);
     return;
   }
+  if (activeChatRequests >= MAX_CONCURRENT_CHAT_REQUESTS) {
+    res.setHeader('Retry-After', '5');
+    sendJson(req, res, 503, { error: 'The chat service is busy. Please retry in a few seconds.', requestId: id }, id);
+    return;
+  }
+  activeChatRequests += 1;
 
   try {
     let bodyStr = '';
@@ -172,5 +182,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     } else {
       res.end();
     }
+  } finally {
+    activeChatRequests = Math.max(0, activeChatRequests - 1);
   }
 }
