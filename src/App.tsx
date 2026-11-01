@@ -241,91 +241,75 @@ export default function App() {
 
     setMessages(prev => [...prev, initialAssistantMessage]);
 
+    let fullContent = '';
     try {
-      const response = await fetch(`${API_BASE_URL}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [...baseMessages, userMessage].map(m => ({
-            role: m.role,
-            content: m.content,
-          })),
-          model: selectedModel,
-          customInstructions: language === 'dari'
-            ? 'پاسخ‌های شما باید به زبان فارسی/دری شیوا، دقیق و صمیمانه باشد و در صورت لزوم از شعرها یا نمونه‌های مرتبط با افغانستان استفاده نمایید.'
-            : 'Respond insightfully, clearly, and supportively as the AFG AI assistant.',
-        }),
-        signal: abortController.signal,
-      });
-
-      if (!response.ok) {
-        let detail = `HTTP ${response.status}`;
+      let streamCompleted = false;
+      for (let attempt = 0; attempt < 3 && !streamCompleted; attempt++) {
         try {
-          const payload = await response.json();
-          detail = payload.details || payload.error || detail;
-        } catch {
-          // Keep the HTTP status when the server response is not JSON.
-        }
-        throw new Error(detail);
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('Missing response stream');
-      const decoder = new TextDecoder();
-      let fullContent = '';
-      let streamFailed = false;
-      let streamBuffer = '';
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          streamBuffer += decoder.decode(value, { stream: true });
-          const lines = streamBuffer.split('\n');
-          streamBuffer = lines.pop() || '';
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('data: ')) {
+          const response = await fetch(`${API_BASE_URL}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [...baseMessages, userMessage].map((m) => ({ role: m.role, content: m.content })),
+              model: selectedModel,
+              customInstructions: language === 'dari'
+                ? 'پاسخ‌های شما باید به زبان فارسی/دری شیوا، دقیق و صمیمانه باشد. درباره عدم قطعیت صادق باشید و منبع یا نقل‌قول ساختگی ارائه نکنید.'
+                : 'Respond clearly and supportively. Be honest about uncertainty and never invent sources or citations.',
+            }),
+            signal: abortController.signal,
+          });
+          if (!response.ok) {
+            if ([429, 502, 503, 504].includes(response.status) && attempt < 2) {
+              await new Promise((resolve) => setTimeout(resolve, 500 * (2 ** attempt)));
+              continue;
+            }
+            const payload = await response.json().catch(() => ({}));
+            throw new Error(payload.error || `HTTP ${response.status}`);
+          }
+          const reader = response.body?.getReader();
+          if (!reader) throw new Error('Missing response stream');
+          const decoder = new TextDecoder();
+          let streamFailed = false;
+          let streamBuffer = '';
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            streamBuffer += decoder.decode(value, { stream: true });
+            const lines = streamBuffer.split('\n');
+            streamBuffer = lines.pop() || '';
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed.startsWith('data: ')) continue;
               const dataStr = trimmed.slice(6);
               if (dataStr === '[DONE]') continue;
               try {
                 const parsed = JSON.parse(dataStr);
-                if (parsed.type === 'content') {
+                if (parsed.type === 'content' && typeof parsed.text === 'string') {
                   fullContent += parsed.text;
-                  setMessages(prev =>
-                    prev.map(m =>
-                      m.id === assistantId ? { ...m, content: fullContent } : m
-                    )
-                  );
-                } else if (parsed.type === 'error') {
-                  streamFailed = true;
-                }
-              } catch {
-                // ignore SSE json parse error
-              }
+                  setMessages((previous) => previous.map((message) => message.id === assistantId ? { ...message, content: fullContent } : message));
+                } else if (parsed.type === 'error') { streamFailed = true; }
+              } catch { /* Ignore malformed individual SSE events. */ }
             }
           }
+          if (streamFailed || !fullContent.trim()) throw new Error('The AI returned an empty or interrupted response.');
+          streamCompleted = true;
+        } catch (error) {
+          if (abortController.signal.aborted || fullContent.trim() || attempt >= 2) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 500 * (2 ** attempt)));
         }
       }
-
-      if (streamFailed || !fullContent.trim()) throw new Error('Incomplete AI response');
-      setMessages(prev =>
-        prev.map(m =>
-          m.id === assistantId ? { ...m, isStreaming: false } : m
-        )
-      );
+      if (!streamCompleted) throw new Error('The AI response could not be completed.');
+      setMessages((previous) => previous.map((message) => message.id === assistantId ? { ...message, isStreaming: false } : message));
     } catch {
       const userFacingError = language === 'dari'
-        ? 'درخواست انجام نشد. پیام شما در گفتگو باقی مانده است؛ لطفاً اتصال و مدل انتخاب‌شده را بررسی کرده و دوباره تلاش کنید.'
-        : 'The request failed. Your message remains in this conversation; check the connection and selected model, then try again.';
+        ? 'پاسخ کامل نشد. پیام شما باقی مانده است؛ اتصال و مدل را بررسی کرده و دوباره تلاش کنید.'
+        : 'The response could not be completed. Your prompt is preserved; check the connection and model, then retry.';
 
       if (abortController.signal.aborted) {
         setMessages(prev => prev.filter((message) => message.id !== assistantId));
       } else {
         setMessages(prev => prev.map(m =>
-          m.id === assistantId ? { ...m, content: userFacingError, isStreaming: false, isError: true, retryable: true } : m
+          m.id === assistantId ? { ...m, content: fullContent.trim() ? `${fullContent}\n\n${userFacingError}` : userFacingError, isStreaming: false, isError: true, retryable: true } : m
         ));
       }
     } finally {
