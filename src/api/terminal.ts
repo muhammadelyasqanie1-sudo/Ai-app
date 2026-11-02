@@ -122,7 +122,7 @@ export async function handleTerminalApi(req: IncomingMessage, res: ServerRespons
 
   if (pathname === '/api/terminal/sessions' && method === 'GET') {
     if (!hasScope(auth,'terminal.read')) { send(res,403,{error:'Missing terminal.read permission.'},requestId); return true; }
-    const result = await pool.query('SELECT id,surface,created_at,last_active_at,revoked_at FROM terminal_sessions WHERE user_id=$1 AND revoked_at IS NULL AND last_active_at>now()-interval '15 minutes' ORDER BY created_at DESC LIMIT 50',[auth.user.id]);
+    const result = await pool.query(`SELECT id,surface,created_at,last_active_at,revoked_at FROM terminal_sessions WHERE user_id=$1 AND revoked_at IS NULL AND last_active_at>now()-interval '15 minutes' ORDER BY created_at DESC LIMIT 50`,[auth.user.id]);
     send(res,200,{sessions:result.rows,executionEnabled:false},requestId); return true;
   }
   if (pathname === '/api/terminal/sessions' && method === 'POST') {
@@ -137,7 +137,7 @@ export async function handleTerminalApi(req: IncomingMessage, res: ServerRespons
   if (sessionMatch) {
     const sessionId = sessionMatch[1];
     const action = sessionMatch[2] || '';
-    const owned = await pool.query('SELECT id FROM terminal_sessions WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL AND last_active_at>now()-interval '15 minutes'',[sessionId,auth.user.id]);
+    const owned = await pool.query(`SELECT id FROM terminal_sessions WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL AND last_active_at>now()-interval '15 minutes'`,[sessionId,auth.user.id]);
     if (!owned.rowCount) { send(res,404,{error:'Terminal session not found.'},requestId); return true; }
     if (!action && method === 'DELETE') {
       await pool.query('UPDATE terminal_sessions SET revoked_at=now() WHERE id=$1 AND user_id=$2',[sessionId,auth.user.id]);
