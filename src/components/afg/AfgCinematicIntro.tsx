@@ -32,10 +32,10 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
   const t = copy[language];
 
   useEffect(() => {
-    const reveal = window.setTimeout(() => setPhase('reveal'), 650);
-    const finish = window.setTimeout(() => setPhase('exit'), 3900);
-    const complete = window.setTimeout(onComplete, 4550);
-    const progressTimer = window.setInterval(() => setProgress(value => Math.min(100, value + 2)), 82);
+    const reveal = window.setTimeout(() => setPhase('reveal'), 900);
+    const finish = window.setTimeout(() => setPhase('exit'), 6900);
+    const complete = window.setTimeout(onComplete, 7650);
+    const progressTimer = window.setInterval(() => setProgress(value => Math.min(100, value + 1)), 76);
     return () => {
       window.clearTimeout(reveal);
       window.clearTimeout(finish);
@@ -49,6 +49,8 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
       <div className="afg-intro-grain" aria-hidden="true" />
       <div className="afg-intro-grid" aria-hidden="true" />
       <div className="afg-intro-vignette" aria-hidden="true" />
+      <div className="afg-intro-aurora" aria-hidden="true"><i /><i /><i /></div>
+      <div className="afg-intro-light-beams" aria-hidden="true"><i /><i /><i /><i /></div>
       <div className="afg-intro-orbit orbit-one" aria-hidden="true" />
       <div className="afg-intro-orbit orbit-two" aria-hidden="true" />
       <div className="afg-intro-orbit orbit-three" aria-hidden="true" />
@@ -65,13 +67,16 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
 
       <section className="afg-intro-stage">
         <div className="afg-intro-halo" aria-hidden="true" />
+        <div className="afg-intro-energy-disc" aria-hidden="true"><i /><i /><i /><i /></div>
+        <div className="afg-intro-data-orbit orbit-data-one" aria-hidden="true"><i /><i /><i /></div>
+        <div className="afg-intro-data-orbit orbit-data-two" aria-hidden="true"><i /><i /><i /></div>
         <div className="afg-intro-ring ring-a" aria-hidden="true" />
         <div className="afg-intro-ring ring-b" aria-hidden="true" />
         <div className="afg-intro-ring ring-c" aria-hidden="true" />
         <div className="afg-intro-core">
           <div className="afg-intro-core-glow" />
           <AfgBrainLogo size="xl" showBadge={false} className="afg-intro-logo" />
-          <span className="afg-intro-core-scan" />
+          <span className="afg-intro-core-scan" /><span className="afg-intro-core-pulse" />
         </div>
 
         <div className="afg-intro-glass-card card-left" aria-hidden="true">
@@ -91,6 +96,9 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
         </div>
         <div className="afg-intro-crosshair crosshair-one" aria-hidden="true">+</div>
         <div className="afg-intro-crosshair crosshair-two" aria-hidden="true">+</div>
+        <div className="afg-intro-hud hud-left" aria-hidden="true"><b>AFG / NEURAL NETWORK</b><span>CORE SYSTEM <i>ONLINE</i></span><span>LATENCY <i>OPTIMAL</i></span><small>01.000 · 10.101 · 11.010</small></div>
+        <div className="afg-intro-hud hud-right" aria-hidden="true"><b>LIVE INTELLIGENCE</b><span className="hud-wave"><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /></span><small>PROCESSING CAPACITY</small></div>
+        <div className="afg-intro-coordinate" aria-hidden="true">34°31′N&nbsp; 69°11′E <span>·</span> GLOBAL NODE</div>
       </section>
 
       <section className="afg-intro-copy">
