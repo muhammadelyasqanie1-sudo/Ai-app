@@ -140,10 +140,10 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   ];
 
   return (
-    <div style={{ maxWidth: "var(--afg-chat-width, 64rem)" }} className="flex h-[calc(100dvh-5.25rem)] min-h-0 flex-col mx-auto w-full px-2 sm:px-4">
+    <div style={{ maxWidth: "var(--afg-chat-width, 64rem)" }} className="afg-chat-view flex h-[calc(100dvh-5.25rem)] min-h-0 flex-col mx-auto w-full px-2 sm:px-4">
       
       {/* Top Session Status Bar */}
-      <div className="flex items-center justify-between py-2 px-3 border-b border-cyan-900/30 mb-2">
+      <div className="afg-chat-statusbar flex items-center justify-between py-2 px-3 border-b border-cyan-900/30 mb-2">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
             <Bot className="w-4 h-4 text-cyan-400" />
@@ -166,13 +166,13 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
         
         {/* If no messages yet, show welcome prompt cards (Matching Screenshot 2 & 4) */}
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center max-w-lg mx-auto space-y-6 animate-in fade-in duration-300">
+          <div className="afg-chat-welcome flex flex-col items-center justify-center min-h-[60vh] text-center max-w-2xl mx-auto space-y-6 animate-in fade-in duration-500">
             <div className="relative">
               <AfgBrainLogo size="xl" showBadge />
             </div>
 
             <div>
-              <h2 className="text-2xl font-black text-white">
+              <h2 className="afg-chat-welcome-title text-2xl font-black text-white">
                 {t.brandName}
               </h2>
               <p className="text-sm text-cyan-300 font-medium mt-1">
@@ -185,7 +185,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                 <button
                   key={idx}
                   onClick={() => onSendMessage(prompt, [])}
-                  className="p-3 rounded-2xl bg-slate-900/70 hover:bg-cyan-950/40 border border-cyan-900/50 hover:border-cyan-500/50 text-xs text-start text-slate-300 hover:text-cyan-200 transition-all group shadow-md"
+                  className="afg-prompt-card p-3 rounded-2xl bg-slate-900/70 hover:bg-cyan-950/40 border border-cyan-900/50 hover:border-cyan-500/50 text-xs text-start text-slate-300 hover:text-cyan-200 transition-all group shadow-md"
                 >
                   <span className="font-semibold block mb-0.5 group-hover:text-cyan-300">
                     💡 {language === 'dari' ? 'پیشنهاد' : 'Suggestion'} {idx + 1}
