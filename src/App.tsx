@@ -334,7 +334,7 @@ export default function App() {
           const response = await fetch(`${API_BASE_URL}/api/chat`, {
             method: 'POST',
             credentials: 'include',
-            headers: { 'Content-Type': 'application/json', ...(selectedModel ? { 'X-AFG-Model': selectedModel } : {}) },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               messages: [...baseMessages, userMessage].map((m) => ({ role: m.role, content: m.content })),
               model: selectedModel,
