@@ -134,7 +134,7 @@ export default function App() {
         setModelOptions(options);
         if (!verified) {
           setAvailableModels([]);
-          setSelectedModel('');
+          setSelectedModel('auto');
           setCapabilitySnapshot({
             verified: false,
             models: [],
@@ -164,7 +164,7 @@ export default function App() {
             if (!authData?.authenticated) return;
             const preferencesResponse = await fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' });
             const preferencesData = preferencesResponse.ok ? await preferencesResponse.json() : null;
-            if (preferencesData?.preferences?.auto_select_model === false) { setSelectedModel(''); return; }
+            if (preferencesData?.preferences?.auto_select_model === false) { setSelectedModel('auto'); return; }
             const preferred = authData?.user?.defaultModel || preferencesData?.preferences?.default_model;
             if (typeof preferred === 'string' && data.models.includes(preferred)) setSelectedModel(preferred);
           }).catch(() => {});
@@ -172,7 +172,7 @@ export default function App() {
       .catch(() => {
         setAvailableModels([]);
         setModelOptions([]);
-        setSelectedModel('');
+        setSelectedModel('auto');
         setCapabilitySnapshot({
           verified: false,
           models: [],
@@ -236,7 +236,7 @@ export default function App() {
           if (data?.authenticated && data.user) {
             wasAuthenticatedRef.current = true;
             setUser({ name: data.user.displayName || 'User', nameEn: data.user.displayName || 'User', email: data.user.email || '', avatar: '', isPremium: false, tier: 'Free' });
-            fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const saved=prefs?.preferences; if(saved?.appearance&&['light','dark','neon','system'].includes(saved.appearance))setTheme(saved.appearance); if((saved?.locale||saved?.language)&&['dari','english'].includes(saved.locale||saved.language)){if(localeChangedThisSession.current){const chosen=localStorage.getItem('afg_language')==='english'?'english':'dari';const csrf=document.cookie.split('; ').find((item)=>item.startsWith('afg_csrf='))?.slice('afg_csrf='.length)||'';void fetch(API_BASE_URL+'/api/account/locale',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(csrf)},body:JSON.stringify({locale:chosen})}).catch(()=>console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));}else{setLanguage(saved.locale==='english'||saved.language==='english'?'english':'dari');setHasSelectedLanguage(true);localStorage.setItem('afg_language',saved.locale==='english'||saved.language==='english'?'english':'dari');}} document.documentElement.style.fontSize=String(saved?.font_size||14)+'px'; const accentMap:Record<string,string>={cyan:'#00e5ff',blue:'#3b82f6',violet:'#8b5cf6',emerald:'#10b981',rose:'#f43f5e'}; document.documentElement.style.setProperty('--accent-cyan',accentMap[saved?.accent_color]||accentMap.cyan); document.documentElement.dataset.afgDensity=saved?.density||'comfortable'; document.documentElement.dataset.afgChatWidth=saved?.chat_width||'comfortable'; document.documentElement.classList.toggle('afg-reduce-motion',saved?.animations_enabled===false); localStorage.setItem('afg_voice_enabled',String(saved?.voice_enabled!==false)); window.dispatchEvent(new Event('afg-voice-preference-change')); if(saved?.auto_select_model===false){setSelectedModel('');return;} const model=saved?.default_model; if(typeof model==='string'&&model)setSelectedModel(model); }).catch(() => {});
+            fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const saved=prefs?.preferences; if(saved?.appearance&&['light','dark','neon','system'].includes(saved.appearance))setTheme(saved.appearance); if((saved?.locale||saved?.language)&&['dari','english'].includes(saved.locale||saved.language)){if(localeChangedThisSession.current){const chosen=localStorage.getItem('afg_language')==='english'?'english':'dari';const csrf=document.cookie.split('; ').find((item)=>item.startsWith('afg_csrf='))?.slice('afg_csrf='.length)||'';void fetch(API_BASE_URL+'/api/account/locale',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(csrf)},body:JSON.stringify({locale:chosen})}).catch(()=>console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));}else{setLanguage(saved.locale==='english'||saved.language==='english'?'english':'dari');setHasSelectedLanguage(true);localStorage.setItem('afg_language',saved.locale==='english'||saved.language==='english'?'english':'dari');}} document.documentElement.style.fontSize=String(saved?.font_size||14)+'px'; const accentMap:Record<string,string>={cyan:'#00e5ff',blue:'#3b82f6',violet:'#8b5cf6',emerald:'#10b981',rose:'#f43f5e'}; document.documentElement.style.setProperty('--accent-cyan',accentMap[saved?.accent_color]||accentMap.cyan); document.documentElement.dataset.afgDensity=saved?.density||'comfortable'; document.documentElement.dataset.afgChatWidth=saved?.chat_width||'comfortable'; document.documentElement.classList.toggle('afg-reduce-motion',saved?.animations_enabled===false); localStorage.setItem('afg_voice_enabled',String(saved?.voice_enabled!==false)); window.dispatchEvent(new Event('afg-voice-preference-change')); if(saved?.auto_select_model===false){setSelectedModel('auto');return;} const model=saved?.default_model; if(typeof model==='string'&&model)setSelectedModel(model); }).catch(() => {});
           } else {
             if (wasAuthenticatedRef.current) {
               wasAuthenticatedRef.current = false;
@@ -270,7 +270,7 @@ export default function App() {
     const response = await apiFetch('/api/conversations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getCsrfHeaders() },
-      body: JSON.stringify({ title: title.trim().replace(/\\s+/g, ' ').slice(0, 64) || 'New chat', model: selectedModel || null }),
+      body: JSON.stringify({ title: title.trim().replace(/\\s+/g, ' ').slice(0, 64) || 'New chat', model: selectedModel || 'auto' }),
     });
     const payload = await response.json() as { conversation?: { id?: string } };
     if (!payload.conversation?.id) throw new Error('Conversation creation returned no ID.');
@@ -344,21 +344,8 @@ export default function App() {
   // Chat message sending & streaming logic
   const handleSendMessage = async (text: string, attachments: ChatAttachment[], baseMessages: AfgMessage[] = messages, toolOptions: Record<string, unknown> = {}) => {
     if (!text.trim() && attachments.length === 0) return;
-    if (!selectedModel) {
-      setCurrentTab('chat');
-      setMessages((previous) => [...previous, {
-        id: `usr-${Date.now()}`,
-        role: 'user',
-        content: text,
-        timestamp: Date.now(),
-      }, {
-        id: `ast-${Date.now()}`,
-        role: 'assistant',
-        content: language === 'dari' ? 'هیچ مدل چت تأییدشده‌ای در دسترس نیست. پس از تنظیم ارائه‌دهنده دوباره تلاش کنید.' : 'No verified chat model is available. Configure the provider and try again.',
-        timestamp: Date.now(),
-      }]);
-      return;
-    }
+    // Use server-side automatic selection when no model is selected or the catalog is temporarily unavailable.
+    const modelToUse = selectedModel || 'auto';
 
     const userMessage: AfgMessage = {
       id: `usr-${Date.now()}`,
@@ -407,7 +394,7 @@ export default function App() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               messages: [...baseMessages, userMessage].map((m) => ({ role: m.role, content: m.content })),
-              model: selectedModel,
+              model: modelToUse,
               language,
               ...toolOptions,
             }),
