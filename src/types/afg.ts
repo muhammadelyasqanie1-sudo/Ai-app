@@ -7,6 +7,8 @@ export type TabType =
   | 'image-gen' 
   | 'video-gen' 
   | 'tools' 
+  | 'terminal'
+  | 'offline-learning'
   | 'history'
   | 'settings' 
   | 'admin';
