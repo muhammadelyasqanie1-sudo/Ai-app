@@ -25,6 +25,10 @@ function reply(res: ServerResponse, status: number, body: Record<string, unknown
   sendAuthJson(res, status, body);
 }
 
+async function safeReadBody(req: IncomingMessage, maxBytes: number): Promise<Record<string, unknown> | null> {
+  try { return await readJsonBody(req, maxBytes); } catch { return null; }
+}
+
 /** Conversation and message CRUD. Every read/write is scoped to the authenticated owner. */
 export async function handleConversationsApi(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
   if (!pathname.startsWith('/api/conversations')) return false;
@@ -49,8 +53,9 @@ export async function handleConversationsApi(req: IncomingMessage, res: ServerRe
   }
 
   if (pathname === '/api/conversations' && req.method === 'POST') {
-    const parsed = createSchema.safeParse(await readJsonBody(req,12_000));
-    if (!parsed.success) { reply(res,400,{error:'Provide valid conversation details.'}); return true; }
+    const raw = await safeReadBody(req,12_000);
+    const parsed = raw ? createSchema.safeParse(raw) : null;
+    if (!parsed?.success) { reply(res,400,{error:'Provide valid conversation details.'}); return true; }
     const result = await pool.query(
       `INSERT INTO conversations(user_id,title,model,provider) VALUES($1,$2,$3,$4)
        RETURNING id,title,model,provider,created_at AS "createdAt",updated_at AS "updatedAt",archived_at AS "archivedAt"`,
@@ -75,8 +80,9 @@ export async function handleConversationsApi(req: IncomingMessage, res: ServerRe
     reply(res,200,{messages:result.rows}); return true;
   }
   if (subresource === 'messages' && req.method === 'POST') {
-    const parsed = messageSchema.safeParse(await readJsonBody(req,60_000));
-    if (!parsed.success) { reply(res,400,{error:'Provide a valid user or assistant message.'}); return true; }
+    const raw = await safeReadBody(req,60_000);
+    const parsed = raw ? messageSchema.safeParse(raw) : null;
+    if (!parsed?.success) { reply(res,400,{error:'Provide a valid user or assistant message.'}); return true; }
     const result = await pool.query(
       `INSERT INTO messages(conversation_id,role,content,model,status)
        VALUES($1,$2,$3,$4,$5)
@@ -97,8 +103,9 @@ export async function handleConversationsApi(req: IncomingMessage, res: ServerRe
     reply(res,200,{conversation:result.rows[0]}); return true;
   }
   if (req.method === 'PATCH') {
-    const parsed = patchSchema.safeParse(await readJsonBody(req,12_000));
-    if (!parsed.success) { reply(res,400,{error:'Provide valid conversation updates.'}); return true; }
+    const raw = await safeReadBody(req,12_000);
+    const parsed = raw ? patchSchema.safeParse(raw) : null;
+    if (!parsed?.success) { reply(res,400,{error:'Provide valid conversation updates.'}); return true; }
     const value = parsed.data;
     const result = await pool.query(
       `UPDATE conversations SET
@@ -108,8 +115,8 @@ export async function handleConversationsApi(req: IncomingMessage, res: ServerRe
          updated_at=now()
        WHERE id=$1 AND user_id=$2
        RETURNING id,title,model,provider,created_at AS "createdAt",updated_at AS "updatedAt",archived_at AS "archivedAt"`,
-      [conversationId,user.id,value.title ?? null,Object.hasOwn(value,'model'),value.model ?? null,
-       Object.hasOwn(value,'provider'),value.provider ?? null,Object.hasOwn(value,'archived'),Boolean(value.archived)],
+      [conversationId,user.id,value.title ?? null,Object.prototype.hasOwnProperty.call(value,'model'),value.model ?? null,
+       Object.prototype.hasOwnProperty.call(value,'provider'),value.provider ?? null,Object.prototype.hasOwnProperty.call(value,'archived'),Boolean(value.archived)],
     );
     reply(res,200,{conversation:result.rows[0]}); return true;
   }
