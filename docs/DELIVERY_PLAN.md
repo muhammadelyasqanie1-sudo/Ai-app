@@ -1,6 +1,6 @@
 # AFG AI phased delivery plan
 
-This plan defines release gates, not a claim that every feature currently exists. A phase is **shippable** only after its complete user path works from UI through API/provider and persistence, with authorization, validation, loading/empty/error states and recovery behavior. Existing capabilities remain in place while later phases are added. Every feature must also pass the [mandatory acceptance criteria](./ACCEPTANCE_CRITERIA.md); otherwise it must be reported as **Incomplete** or **Blocked** with exact gaps.
+This plan defines release gates, not a claim that every feature currently exists. A phase is **shippable** only after its complete user path works from UI through API/provider and persistence, with authorization, validation, loading/empty/error states and recovery behavior. Existing capabilities remain in place while later phases are added. Every feature must also pass the [mandatory acceptance criteria](./ACCEPTANCE_CRITERIA.md); otherwise it must be reported as **Incomplete** or **Blocked** with exact gaps. Every task's final response must use the [mandatory implementation report format](./FINAL_REPORT_FORMAT.md).
 
 ## Release policy
 - Do not start a later phase by silently weakening an earlier phase.
