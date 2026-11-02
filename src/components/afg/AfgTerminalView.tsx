@@ -3,7 +3,7 @@ import { apiFetch } from '../../lib/apiClient';
 import type { Language } from '../../types/afg';
 
 type Session = { id:string; surface:string; created_at:string; last_active_at:string };
-type Audit = { command:string; exit_code:number; duration_ms:number; request_id:string; created_at:string };
+type Audit = { command:string; output_text:string; exit_code:number; duration_ms:number; request_id:string; created_at:string };
 type CliToken = { id:string; name:string; token_prefix:string; created_at:string; expires_at:string; last_used_at:string|null; revoked_at:string|null; scopes:string[] };
 
 export function AfgTerminalView({ language }: { language: Language }) {
@@ -90,7 +90,7 @@ export function AfgTerminalView({ language }: { language: Language }) {
     } catch (cause:any) {
       const id=cause?.requestId || '';
       setRequestId(id);
-      setEntries(prev=>[...prev,{command:value,exit_code:1,duration_ms:0,request_id:id,created_at:new Date().toISOString()}]);
+      setEntries(prev=>[...prev,{command:value,output_text:cause?.message || 'Command failed.',exit_code:1,duration_ms:0,request_id:id,created_at:new Date().toISOString()}]);
       setError(cause?.message || (dari?'فرمان اجرا نشد.':'Command failed.'));
     } finally {setBusy(false);}
   }
@@ -155,7 +155,8 @@ export function AfgTerminalView({ language }: { language: Language }) {
           {!filteredEntries.length&&<p className="text-slate-400">{text.empty}<br/>{text.commands}: afg help · afg version · afg models list · afg conv list · afg files list</p>}
           {filteredEntries.map((item,index)=><article key={item.request_id || index} className="border-b border-white/10 pb-3">
             <p className="text-cyan-300">$ {item.command}</p>
-            <p className={item.exit_code===0?'mt-1 text-slate-200':'mt-1 text-amber-300'}>{item.exit_code===0?'Completed':`Exit code: ${item.exit_code}`} · {item.duration_ms} ms</p>
+            <pre className="mt-1 whitespace-pre-wrap break-words text-slate-200">{item.output_text || (item.exit_code===0?'Completed':`Exit code: ${item.exit_code}`)}</pre>
+            <p className="mt-1 text-[11px] text-slate-500">{item.exit_code===0?'Exit 0':`Exit ${item.exit_code}`} · {item.duration_ms} ms</p>
             <p className="mt-1 break-all text-[11px] text-slate-500">{text.req}: {item.request_id}</p>
             {item.request_id&&<button type="button" onClick={()=>void copy(item.request_id)} className="mt-1 text-[11px] text-cyan-300 underline">{text.copy} {text.req}</button>}
           </article>)}
