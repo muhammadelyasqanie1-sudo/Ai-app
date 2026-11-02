@@ -102,6 +102,7 @@ function sendJson(req: IncomingMessage, res: ServerResponse, status: number, pay
 }
 
 export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
+  const startedAt = Date.now();
   const id = getRequestId(req);
   res.setHeader('X-Request-Id', id);
 
