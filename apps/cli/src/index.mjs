@@ -100,7 +100,7 @@ async function nativeCommand(config, command) {
 async function main() {
   const args = process.argv.slice(2);
   const [group, action] = args;
-  if (!args.length || group === '--help' || group === '-h' || action === '--help') return stdout.write(HELP);
+  if (!args.length || group === '--help' || group === '-h' || group === 'help' || action === '--help') return stdout.write(HELP);
   if (group === 'version' || group === '--version') return stdout.write('AFG AI CLI 0.1.0 (API client)\n');
   const config = await loadConfig();
 
