@@ -18,12 +18,10 @@ const MAX_CONCURRENT_CHAT_REQUESTS = 4;
 async function enforceSelectedModelRateLimit(
   providerId: string,
   modelId: string,
-  req: IncomingMessage,
   requestId: string,
-  res: ServerResponse,
   userId: string | null,
-): Promise<boolean> {
-  if (!pool) return false;
+): Promise<void> {
+  if (!pool) return;
   const scopeKey = providerId + '::' + modelId;
   try {
     const configured = await pool.query(
@@ -42,20 +40,13 @@ async function enforceSelectedModelRateLimit(
       [scopeKey, windowSeconds],
     );
     if (Number(counter.rows[0]?.request_count || 0) > requests) {
-      res.setHeader('Retry-After', String(windowSeconds));
       console.warn('AI_CHAT_RATE_LIMITED', JSON.stringify({
         requestId, providerId, modelId, userId, scope: 'model', windowSeconds,
       }));
-      sendJson(req, res, 429, {
-        error: 'This model is temporarily rate limited. Please retry later.',
-        errorCode: 'model_rate_limited',
-        retryable: true,
-        requestId,
-      }, requestId);
-      return true;
+      throw new ProviderAdapterError('This model is temporarily rate limited. Please retry later.', 429, 'model_rate_limited');
     }
-    return false;
-  } catch {
+  } catch (error) {
+    if (error instanceof ProviderAdapterError) throw error;
     throw new ProviderAdapterError('Model rate limiting is temporarily unavailable.', 503, 'rate_limit_unavailable');
   }
 }
@@ -144,6 +135,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
   let timedOut = false;
   let requestUserId: string | null = null;
   let activeModelId = '';
+  const rateLimitedModels = new Set<string>();
   const classifyError = (error: unknown): string => {
     if (timedOut || (error instanceof Error && error.name === 'TimeoutError')) return 'timeout';
     if (abortController.signal.aborted) return 'network';
@@ -277,10 +269,19 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
 
     // Bound the complete upstream generation, including provider retries and stream reads.
     requestTimer = setTimeout(() => { timedOut = true; abortController.abort(); }, 60_000);
-    const prepared = await prepareVerifiedChat({ model, messages: upstreamMessages, signal: abortController.signal, noFallback: body.no_fallback === true, onModelSelected: (_providerId, selectedModelId) => { if (activeModelId !== selectedModelId) { activeModelId = selectedModelId; if (res.headersSent && !res.writableEnded) res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: selectedModelId })}\n\n`); } } });
+    const prepared = await prepareVerifiedChat({ model, messages: upstreamMessages, signal: abortController.signal, noFallback: body.no_fallback === true, onModelSelected: async (selectedProviderId, selectedModelId) => {
+      const selectedKey = selectedProviderId + '::' + selectedModelId;
+      if (activeModelId !== selectedKey) {
+        activeModelId = selectedKey;
+        if (res.headersSent && !res.writableEnded) res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: selectedKey })}\n\n`);
+      }
+      if (!rateLimitedModels.has(selectedKey)) {
+        rateLimitedModels.add(selectedKey);
+        await enforceSelectedModelRateLimit(selectedProviderId, selectedModelId, id, requestUserId);
+      }
+    } });
     const { providerId, modelId, stream } = prepared;
     activeModelId = modelId;
-    if (await enforceSelectedModelRateLimit(providerId, modelId, req, id, res, requestUserId)) return;
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
