@@ -390,7 +390,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
       <div className="py-2">
         <AfgChatInputCapsule
           onSendMessage={onSendMessage}
-          disabled={isLoading || availableModels.length === 0}
+          disabled={isLoading}
           language={language}
           availableModels={availableModels}
           modelOptions={modelOptions}
