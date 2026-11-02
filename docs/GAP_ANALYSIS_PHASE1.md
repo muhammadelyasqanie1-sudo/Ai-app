@@ -42,7 +42,7 @@
 **Missing / incomplete**
 - `AfgHistoryView.tsx` now loads signed-in conversation lists and messages through the owner-scoped API; guest History continues to use browser localStorage.
 - `App.tsx` now creates a server conversation for signed-in chat and attempts to persist the user message before generation and the assistant result after completion/failure. New branch/retry/edit flows create a separate conversation and preserve the supplied context where possible.
-- Persistence is best-effort: if a message write fails, chat continues and the UI does not yet show a persistent-history warning or queue a reliable resync. Message writes are not idempotent or transactional. A failed user-message write can leave the generated answer only in local UI state/localStorage.
+- Persistence is best-effort: if a message write fails, chat continues and the UI does not yet show a persistent-history warning or queue a reliable resync. Message append and conversation timestamp updates now run in one transaction, but message writes are not idempotent. A failed user-message write can leave the generated answer only in local UI state/localStorage.
 - Conversation API responses do not consistently carry the request ID, despite the outer HTTP router having one.
 - Conversation append performs message insert and conversation timestamp update as separate queries, not one transaction.
 - Message append endpoint is not idempotent; a retry can create duplicates.
@@ -110,6 +110,7 @@ Committed to `main` after the source review:
 - Moved model-specific rate enforcement into the chat stream's asynchronous gateway model-selection callback. The policy key is now built from the actual provider/model selected by the gateway, including fallback candidates; each candidate is counted at most once per request. If the database-backed limiter is unavailable, the chat fails closed for that model-selection attempt. If no database is configured, model-specific distributed limiting is unavailable and only the existing process-level concurrency guard remains.
 - Added a feature-specific structured chat success event and retained structured stream failure/empty-response events. The completion/failure logs now identify the actual selected fallback model rather than always reporting the originally prepared model.
 - Added the outer request ID to conversation API JSON responses when the shared HTTP boundary supplies it.
+- Made message insertion and conversation timestamp updates atomic in one database transaction.
 - Removed the obsolete client-supplied model-limit header from the chat UI.
 - Added the missing root `README.md` with local setup, migration, provider, environment, Android and operational guidance.
 - Expanded `.env.example` with the OAuth, email and research variables used by the inspected code, and corrected its database migration instructions.
