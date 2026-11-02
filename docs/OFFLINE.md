@@ -1,23 +1,51 @@
 # AFG AI Offline Learning — implementation status
 
-## Current status: unavailable / disabled
+## Current status: foundation only; user-facing tutor disabled
 
-Offline Learning is not implemented yet. There is no Ollama adapter, WebLLM/WASM runtime, PWA offline model store, signed pack catalog, Ed25519 verifier, model hash installer, lesson/quiz pack, local progress database or consent-based sync UI in this repository.
+The repository now contains reusable foundations under `packages/offline`:
 
-The environment variables in `.env.example` are placeholders only. In particular, `PACK_SIGNING_PUBKEY` and `PACK_MIRROR_URL` must not be treated as a functioning pack trust system. `OLLAMA_BASE_URL` is a future local-daemon setting and the server does not proxy to it.
+- Strict pack manifest schema for subjects, languages, runtime, model license, quantization, minimum RAM, size, SHA-256 and lesson hashes.
+- Node-side Ed25519 signature + model SHA-256 verifier (`verifyPackBundle`).
+- Browser WebCrypto Ed25519 + SHA-256 verifier (`verifyBrowserPack`); requires a browser with Ed25519 WebCrypto support and a raw 32-byte public key encoded as base64.
+- IndexedDB local store for verified model blobs, lessons, lesson progress and export/uninstall operations. The installer rechecks model and lesson hashes before storing.
+- Conservative education-only first-pass request policy with the required general-scope refusal and a separate high-stakes refusal.
 
-## Safety contract
+These modules are not yet connected to a pack catalog, downloader, model runtime or tutor screen. Do not present Offline Learning as an available AI tutor.
 
-Do not advertise Offline Learning as available and do not silently send offline requests to a cloud provider. Until the complete local runtime and signed-pack verification path exist, users must be told the feature is unavailable. No pack should be installed or loaded without a verified Ed25519 signature and SHA-256 model digest.
+## Trust and installation contract
 
-The eventual tutor must be education-only, refuse medical/legal/financial/safety-critical and other out-of-scope requests with the exact guardrail text in the product specification, and keep progress local unless the user explicitly opts into sync.
+The signature covers the exact raw bytes of `manifest.json`. The signed manifest includes the model SHA-256, exact model byte size, publisher, license, minimum RAM, runtime compatibility, declared languages, subjects and lesson file hashes. The browser installer verifies signature and model digest before writing local records, and verifies each lesson digest before saving.
 
-## Required future work
+The server-side verifier currently accepts an Ed25519 PEM public key. The browser verifier currently accepts the raw 32-byte Ed25519 public key encoded as base64. A production key provisioning/rotation policy, pack publisher onboarding, signed catalog API, download mirror and resumable download implementation are still missing.
 
-1. Choose and implement a local browser runtime (WebLLM/WebGPU or llama.cpp WASM) and a desktop-only localhost Ollama bridge.
-2. Define a signed pack manifest schema and trusted Ed25519 public key rotation process.
-3. Implement resumable download, signature and SHA-256 verification before installation.
-4. Ship at least one licensed English lessons pack and run the fixed post-install health prompt.
-5. Implement the offline-only tutor guardrail, citations, language coverage and explicit online-consent boundary.
-6. Add local lesson progress, quiz attempts, flashcards, uninstall cleanup and opt-in export/sync.
-7. Verify behavior with network disabled in a dedicated test environment when explicitly authorized.
+## Local storage
+
+IndexedDB database: `afg-ai-offline-learning`. Stores: packs, lessons_local, lesson_progress, quiz_attempts and offline_sessions. The storage module keeps data local and provides pack uninstall with optional progress deletion and JSON export. It is not yet wired to the app UI, OPFS, quota preflight, model loader or a runtime health check.
+
+## Educational guardrails
+
+The current `evaluateOfflineEducationRequest` is a conservative keyword-based pre-filter, not a semantic safety classifier. It must not be treated as sufficient on its own. Before enabling any model, combine it with pack-specific system instructions, output checks, citation validation and human review. The model must not answer medical, legal, financial or safety-critical requests. General out-of-scope questions must receive exactly:
+
+> I'm your offline study tutor. I can help with English, science, math, and school subjects. Please switch to online AFG AI for general questions.
+
+The separate high-stakes refusal is documented in `educationPolicy.ts`.
+
+## Database and sync
+
+Migration `0007_offline_pack_registry.sql` adds pack registry/version metadata and opt-in sync consent, usage and progress tables. Sync is not implemented: no API writes to these tables, and local progress is not uploaded. Consent defaults to false.
+
+## Environment
+
+`OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_PULL_ON_INSTALL`, `PACK_SIGNING_PUBKEY`, `PACK_MIRROR_URL` and `OFFLINE_SYNC_DEFAULT` are reserved configuration only. The application does not proxy Ollama and does not download model packs.
+
+## Remaining work before release
+
+1. Implement an actual signed catalog API, publisher approval and key rotation/revocation.
+2. Implement resumable downloads with exact progress and disk quota checks; verify signature before install and hashes before load.
+3. Ship a licensed English learning pack and validate its references, quiz content and model license.
+4. Implement WebLLM or llama.cpp WASM model execution, model loading/health checks and strict network isolation.
+5. Implement a desktop app and localhost-only Ollama bridge; do not point cloud servers at localhost.
+6. Add offline tutor chat, lesson browser, quiz, flashcards, progress dashboard, pack manager and uninstall confirmation.
+7. Implement exact out-of-scope refusal, high-stakes refusal, answer language enforcement and lesson citation validation around the runtime.
+8. Implement per-user consent UX, revocation, export and server sync APIs. No phone-home behavior before consent.
+9. Verify with network disabled in a dedicated test environment only when explicitly authorized.
