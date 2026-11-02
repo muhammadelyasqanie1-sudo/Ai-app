@@ -12,6 +12,7 @@ import { handleVoiceApi } from './voice.ts';
 import { handleProductivityApi } from './productivity.ts';
 import { handleAccountApi } from './account.ts';
 import { handleConversationsApi } from './conversations.ts';
+import { handleTerminalApi } from './terminal.ts';
 
 type ApiRequest = IncomingMessage & { originalUrl?: string };
 
@@ -155,6 +156,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     if (await handleAuthApi(req, res, pathname)) return;
     if (await handleAccountApi(req, res, pathname)) return;
     if (await handleConversationsApi(req, res, pathname)) return;
+    if (await handleTerminalApi(req, res, pathname, requestId)) return;
     if (await handleProductivityApi(req, res, pathname)) return;
     if (await handleAdminApi(req, res, pathname)) return;
 
