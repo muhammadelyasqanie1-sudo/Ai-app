@@ -39,11 +39,25 @@ CREATE INDEX IF NOT EXISTS terminal_audit_session_created_idx ON terminal_audit(
 CREATE INDEX IF NOT EXISTS terminal_audit_user_created_idx ON terminal_audit(user_id,created_at DESC);
 
 -- Database-enforced append-only audit records for the application role.
-CREATE OR REPLACE FUNCTION afg_terminal_audit_no_mutation() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION afg_terminal_audit_no_mutation() RETURNS trigger AS $
 BEGIN
-  RAISE EXCEPTION 'terminal_audit is append-only';
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'terminal_audit is append-only';
+  END IF;
+  IF NEW.command IS DISTINCT FROM OLD.command
+     OR NEW.exit_code IS DISTINCT FROM OLD.exit_code
+     OR NEW.duration_ms IS DISTINCT FROM OLD.duration_ms
+     OR NEW.request_id IS DISTINCT FROM OLD.request_id
+     OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+    RAISE EXCEPTION 'terminal audit event content is immutable';
+  END IF;
+  -- Foreign-key cleanup may null the owner/session references; event content remains immutable.
+  RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS terminal_audit_no_update ON terminal_audit;
-CREATE TRIGGER terminal_audit_no_update BEFORE UPDATE OR DELETE ON terminal_audit
+DROP TRIGGER IF EXISTS terminal_audit_no_delete ON terminal_audit;
+CREATE TRIGGER terminal_audit_no_update BEFORE UPDATE ON terminal_audit
+FOR EACH ROW EXECUTE FUNCTION afg_terminal_audit_no_mutation();
+CREATE TRIGGER terminal_audit_no_delete BEFORE DELETE ON terminal_audit
 FOR EACH ROW EXECUTE FUNCTION afg_terminal_audit_no_mutation();
