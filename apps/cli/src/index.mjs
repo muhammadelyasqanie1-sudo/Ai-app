@@ -100,7 +100,7 @@ async function nativeCommand(config, command) {
 }
 function printCommandResult(result) {
   const { data, requestId } = result;
-  stdout.write((data.output || '') + `\\nRequest ID: ${data.requestId || requestId}\\n`);
+  stdout.write((data.output || '') + `\nRequest ID: ${data.requestId || requestId}\n`);
 }
 
 async function main() {
@@ -143,7 +143,7 @@ async function main() {
   if (group === 'terminal' && action === 'sessions') {
     const { data } = await request(config, '/api/terminal/sessions');
     const sessions = data.sessions || [];
-    stdout.write(sessions.length ? sessions.map(item => `${item.id}  ${item.surface}  last active ${item.last_active_at}`).join('\\n') + '\\n' : 'No active Terminal sessions.\\n');
+    stdout.write(sessions.length ? sessions.map(item => `${item.id}  ${item.surface}  last active ${item.last_active_at}`).join('\n') + '\n' : 'No active Terminal sessions.\n');
     return;
   }
   if (group === 'terminal' && action === 'history') {
@@ -151,14 +151,14 @@ async function main() {
     if (!/^[0-9a-f-]{36}$/i.test(sessionId)) return exit(1, 'Invalid session ID.');
     const { data } = await request(config, `/api/terminal/sessions/${sessionId}/history`);
     const rows = data.history || [];
-    stdout.write(rows.length ? rows.map(item => `[${item.created_at}] ${item.command}\\n${item.output_text || ''}\\nexit ${item.exit_code} · ${item.duration_ms}ms · ${item.request_id}`).join('\\n\\n') + '\\n' : 'No command history for this session.\\n');
+    stdout.write(rows.length ? rows.map(item => `[${item.created_at}] ${item.command}\n${item.output_text || ''}\nexit ${item.exit_code} · ${item.duration_ms}ms · ${item.request_id}`).join('\n\n') + '\n' : 'No command history for this session.\n');
     return;
   }
   if (group === 'terminal' && action === 'close') {
     const sessionId = args[2];
     if (!sessionId || !/^[0-9a-f-]{36}$/i.test(sessionId)) return exit(1, 'Usage: afg terminal close <session-id>');
     await request(config, `/api/terminal/sessions/${sessionId}`, { method: 'DELETE' });
-    stdout.write('Terminal session closed.\\n'); return;
+    stdout.write('Terminal session closed.\n'); return;
   }
   if (group === 'term') {
     const requested = args.slice(1);
