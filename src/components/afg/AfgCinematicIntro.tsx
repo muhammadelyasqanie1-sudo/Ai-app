@@ -42,7 +42,7 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
       window.clearTimeout(complete);
       window.clearInterval(progressTimer);
     };
-  }, [onComplete]);
+  }, []);
 
   return (
     <main className={`afg-cinematic-intro phase-${phase}`} lang={language === 'dari' ? 'fa-AF' : 'en'} dir={language === 'dari' ? 'rtl' : 'ltr'} aria-label="AFG AI intro">
