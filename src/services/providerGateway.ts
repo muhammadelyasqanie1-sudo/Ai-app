@@ -93,7 +93,8 @@ async function verifyModel(provider: ChatProviderAdapter, model: ModelDescriptor
     let result: { healthy: boolean; checkedAt: string };
     try {
       result = await provider.healthCheck(model.id);
-    } catch {
+    } catch (error) {
+      console.error('AI_PROVIDER_HEALTH_CHECK_ERROR', JSON.stringify({ provider: provider.id, model: model.id, error: error instanceof Error ? error.message : 'unknown_error' }));
       result = { healthy: false, checkedAt: new Date().toISOString() };
     }
     health = { healthy: result.healthy, checkedAt: result.checkedAt };
@@ -139,6 +140,7 @@ export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> 
     try { providerEnabled = await isProviderEnabled(provider.id); } catch { providerEnabled = false; }
 
     if (!configValid || !providerEnabled) {
+      console.warn('AI_PROVIDER_NOT_READY', JSON.stringify({ provider: provider.id, configured: configValid, enabled: providerEnabled }));
       verified.push(...await getStoredModels(provider.id, !providerEnabled));
       continue;
     }
@@ -146,7 +148,8 @@ export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> 
     let models: ModelDescriptor[];
     try {
       models = await provider.listModels();
-    } catch {
+    } catch (error) {
+      console.error('AI_PROVIDER_MODEL_CATALOG_ERROR', JSON.stringify({ provider: provider.id, error: error instanceof Error ? error.message : 'unknown_error' }));
       verified.push(...await getStoredModels(provider.id));
       continue;
     }
@@ -162,7 +165,8 @@ export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> 
         const batch = configuredModels.slice(i, i + 4);
         verified.push(...await Promise.all(batch.map((model) => model.enabled ? verifyModel(provider, model) : Promise.resolve({ ...model, verifiedAt: null }))));
       }
-    } catch {
+    } catch (error) {
+      console.error('AI_PROVIDER_MODEL_SYNC_ERROR', JSON.stringify({ provider: provider.id, error: error instanceof Error ? error.message : 'unknown_error' }));
       verified.push(...await getStoredModels(provider.id));
     }
   }
