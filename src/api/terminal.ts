@@ -67,6 +67,11 @@ export async function handleTerminalApi(req: IncomingMessage, res: ServerRespons
   if (!auth) { send(res,401,{error:'Sign in or provide a valid CLI token.'},requestId); return true; }
   const method = req.method || 'GET';
 
+  if (pathname === '/api/terminal/whoami' && method === 'GET') {
+    if (!hasScope(auth,'terminal.read')) { send(res,403,{error:'Missing terminal.read permission.'},requestId); return true; }
+    send(res,200,{user:{id:auth.user.id,role:auth.user.role},authentication:auth.tokenId?'cli_token':'browser_session',scopes:auth.scopes.filter(scope=>scope==='terminal.read')},requestId); return true;
+  }
+
   if (pathname === '/api/terminal/tokens' && method === 'POST') {
     if (parseBearer(req)) { send(res,403,{error:'A CLI token cannot create another token.'},requestId); return true; }
     const body = await readJsonBody(req);
