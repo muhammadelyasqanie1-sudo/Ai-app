@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 import { homedir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import { mkdir, readFile, writeFile, chmod, unlink } from 'node:fs/promises';
-import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 
 const CONFIG_DIR = join(homedir(), '.afg');
