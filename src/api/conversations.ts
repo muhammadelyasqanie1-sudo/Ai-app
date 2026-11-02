@@ -86,14 +86,26 @@ export async function handleConversationsApi(req: IncomingMessage, res: ServerRe
     const raw = await safeReadBody(req,60_000);
     const parsed = raw ? messageSchema.safeParse(raw) : null;
     if (!parsed?.success) { reply(res,400,{error:'Provide a valid user or assistant message.'}); return true; }
-    const result = await pool.query(
-      `INSERT INTO messages(conversation_id,role,content,model,status)
-       VALUES($1,$2,$3,$4,$5)
-       RETURNING id,role,content,model,status,created_at AS "createdAt"`,
-      [conversationId,parsed.data.role,parsed.data.content,parsed.data.model ?? null,parsed.data.status || 'complete'],
-    );
-    await pool.query('UPDATE conversations SET updated_at=now() WHERE id=$1 AND user_id=$2',[conversationId,user.id]);
-    reply(res,201,{message:result.rows[0]}); return true;
+    const client = await pool.connect();
+    let savedMessage;
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `INSERT INTO messages(conversation_id,role,content,model,status)
+         VALUES($1,$2,$3,$4,$5)
+         RETURNING id,role,content,model,status,created_at AS "createdAt"`,
+        [conversationId,parsed.data.role,parsed.data.content,parsed.data.model ?? null,parsed.data.status || 'complete'],
+      );
+      await client.query('UPDATE conversations SET updated_at=now() WHERE id=$1 AND user_id=$2',[conversationId,user.id]);
+      await client.query('COMMIT');
+      savedMessage = result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    reply(res,201,{message:savedMessage}); return true;
   }
   if (subresource) { reply(res,405,{error:'Method not allowed.'}); return true; }
 
