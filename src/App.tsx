@@ -19,6 +19,7 @@ import { AfgLanguageModal } from './components/afg/AfgLanguageModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { ErrorBoundary } from './components/afg/AfgDesignSystem';
 import { applyDocumentLocale } from './utils/i18n';
+import { apiFetch } from './lib/apiClient';
 
 import type { 
   Language, 
@@ -67,6 +68,7 @@ export default function App() {
   const [currentSessionId, setCurrentSessionId] = useState(() => `chat-${Date.now()}`);
   const [isLoading, setIsLoading] = useState(false);
   const activeChatAbortRef = useRef<AbortController | null>(null);
+  const serverConversationRef = useRef<string | null>(null);
   const localeChangedThisSession = useRef(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [modelOptions, setModelOptions] = useState<AfgModelOption[]>([]);
@@ -239,6 +241,42 @@ export default function App() {
     return () => { window.removeEventListener('afg-auth-change', syncAccount); window.removeEventListener('afg-preferences-change', syncAccount); };
   }, []);
 
+  useEffect(() => {
+    serverConversationRef.current = null;
+  }, [user.email]);
+
+  const getCsrfHeaders = () => {
+    const token = document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '';
+    return token ? { 'X-CSRF-Token': decodeURIComponent(token) } : {};
+  };
+
+  const ensureServerConversation = async (title: string): Promise<string> => {
+    if (serverConversationRef.current) return serverConversationRef.current;
+    const response = await apiFetch('/api/conversations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getCsrfHeaders() },
+      body: JSON.stringify({ title: title.trim().replace(/\\s+/g, ' ').slice(0, 64) || 'New chat', model: selectedModel || null }),
+    });
+    const payload = await response.json() as { conversation?: { id?: string } };
+    if (!payload.conversation?.id) throw new Error('Conversation creation returned no ID.');
+    serverConversationRef.current = payload.conversation.id;
+    setCurrentSessionId(payload.conversation.id);
+    return payload.conversation.id;
+  };
+
+  const persistServerMessage = async (
+    conversationId: string,
+    role: 'user' | 'assistant',
+    content: string,
+    status: 'complete' | 'failed' = 'complete',
+  ) => {
+    await apiFetch('/api/conversations/' + encodeURIComponent(conversationId) + '/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getCsrfHeaders() },
+      body: JSON.stringify({ role, content: content.slice(0, 50_000), model: selectedModel || null, status }),
+    });
+  };
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -311,6 +349,17 @@ export default function App() {
 
     setMessages(baseMessages.concat(userMessage));
     setIsLoading(true);
+    let persistedConversationId: string | null = null;
+    let userMessagePersisted = false;
+    if (user.email) {
+      try {
+        persistedConversationId = await ensureServerConversation(text);
+        await persistServerMessage(persistedConversationId, 'user', text);
+        userMessagePersisted = true;
+      } catch {
+        console.warn('AFG_CONVERSATION_USER_MESSAGE_SAVE_FAILED');
+      }
+    }
     const abortController = new AbortController();
     activeChatAbortRef.current = abortController;
 
@@ -405,6 +454,10 @@ export default function App() {
           if (!response.ok) console.warn('AFG_PRODUCTIVITY_SAVE_UNAVAILABLE', response.status);
         }).catch(() => console.warn('AFG_PRODUCTIVITY_SAVE_UNAVAILABLE'));
       }
+      if (persistedConversationId && userMessagePersisted && fullContent.trim()) {
+        try { await persistServerMessage(persistedConversationId, 'assistant', fullContent); }
+        catch { console.warn('AFG_CONVERSATION_ASSISTANT_MESSAGE_SAVE_FAILED'); }
+      }
       setMessages((previous) => previous.map((message) => message.id === assistantId ? { ...message, isStreaming: false } : message));
     } catch {
       const supportReference = requestId ? (language === 'dari' ? `\nشناسه پیگیری: ${requestId}` : `\nRequest ID: ${requestId}`) : '';
@@ -415,9 +468,14 @@ export default function App() {
       if (abortController.signal.aborted) {
         setMessages(prev => prev.filter((message) => message.id !== assistantId));
       } else {
+        const failedContent = fullContent.trim() ? `${fullContent}\n\n${userFacingError}` : userFacingError;
         setMessages(prev => prev.map(m =>
-          m.id === assistantId ? { ...m, content: fullContent.trim() ? `${fullContent}\n\n${userFacingError}` : userFacingError, isStreaming: false, isError: true, retryable: true } : m
+          m.id === assistantId ? { ...m, content: failedContent, isStreaming: false, isError: true, retryable: true } : m
         ));
+        if (persistedConversationId && userMessagePersisted) {
+          try { await persistServerMessage(persistedConversationId, 'assistant', failedContent, 'failed'); }
+          catch { console.warn('AFG_CONVERSATION_FAILED_MESSAGE_SAVE_FAILED'); }
+        }
       }
     } finally {
       if (activeChatAbortRef.current === abortController) activeChatAbortRef.current = null;
@@ -437,6 +495,7 @@ export default function App() {
   const handleBranchMessage = (messageId: string) => {
     const index = messages.findIndex((message) => message.id === messageId);
     if (index < 0) return;
+    serverConversationRef.current = null;
     setCurrentSessionId(`chat-${Date.now()}`);
     setMessages(messages.slice(0, index + 1));
   };
@@ -462,12 +521,14 @@ export default function App() {
   };
 
   const handleSelectHistoryChat = (session: AfgChatSession) => {
+    serverConversationRef.current = session.id.startsWith('chat-') ? null : session.id;
     setCurrentSessionId(session.id);
     setMessages(session.messages);
     setCurrentTab('chat');
   };
 
   const handleNewChat = () => {
+    serverConversationRef.current = null;
     setCurrentSessionId(`chat-${Date.now()}`);
     setMessages([]);
     setCurrentTab('chat');
@@ -554,6 +615,7 @@ export default function App() {
             onSelectChat={handleSelectHistoryChat}
             onNewChat={handleNewChat}
             activeSessionId={currentSessionId}
+            isAuthenticated={Boolean(user.email)}
           />
         )}
 
