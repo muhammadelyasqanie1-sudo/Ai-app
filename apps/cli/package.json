@@ -1,0 +1,16 @@
+{
+  "name": "@afg-ai/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AFG AI companion command-line client",
+  "type": "module",
+  "bin": {
+    "afg": "./src/index.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node ./src/index.mjs"
+  }
+}
