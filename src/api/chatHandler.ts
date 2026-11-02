@@ -6,18 +6,10 @@ import { buildToolModePrompt } from '../services/toolModes.ts';
 import { getProductivityPrompt } from './productivity.ts';
 import { authenticateRequest } from './auth.ts';
 import { pool } from './database.ts';
-import { z } from 'zod';
+import { ChatRequestSchema } from '../../packages/shared/src/schemas';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
-const chatRequestSchema = z.object({
-  messages: z.array(z.object({
-    role: z.enum(['user','assistant']),
-    content: z.string().max(50_000),
-  }).passthrough()).min(1).max(100),
-  model: z.string().trim().min(1).max(300),
-  language: z.enum(['dari','english']).optional(),
-  no_fallback: z.boolean().optional(),
-}).passthrough();
+const chatRequestSchema = ChatRequestSchema;;
 
 // Per-process load shedding; identity-based/distributed rate limits require authenticated users.
 let activeChatRequests = 0;
