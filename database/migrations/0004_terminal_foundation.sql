@@ -1,7 +1,7 @@
 -- AFG AI Terminal Foundation (Phase 1). Execution is intentionally not enabled.
 CREATE TABLE IF NOT EXISTS cli_tokens (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES users(id) ON DELETE SET NULL,
   token_hash text NOT NULL UNIQUE,
   token_prefix text NOT NULL,
   name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 80),
@@ -27,7 +27,7 @@ CREATE INDEX IF NOT EXISTS terminal_sessions_user_active_idx ON terminal_session
 
 CREATE TABLE IF NOT EXISTS terminal_audit (
   id bigserial PRIMARY KEY,
-  session_id uuid NOT NULL REFERENCES terminal_sessions(id) ON DELETE CASCADE,
+  session_id uuid REFERENCES terminal_sessions(id) ON DELETE SET NULL,
   user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   command text NOT NULL,
   exit_code integer NOT NULL,
