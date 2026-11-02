@@ -14,11 +14,11 @@ See `.env.example` and the root README for the complete current configuration in
 
 ## Terminal
 
-Apply migration `0004_terminal_foundation.sql` after backup and only through the normal migration process. The Terminal API is read-only and uses PostgreSQL-backed sessions, scoped tokens and audit records. Keep `TERMINAL_EXEC_ENABLED=false`. No sandbox backend is currently available; setting this flag to true does not make shell execution safe or supported.
+Apply migrations `0004_terminal_foundation.sql`, `0005_cli_token_rate_limits.sql`, `0006_terminal_audit_output.sql`, and `0007_offline_pack_registry.sql` after backup and only through the normal migration process. These migrations have not been applied by this work. The Terminal API is read-only and uses PostgreSQL-backed sessions, scoped tokens and audit records. Keep `TERMINAL_EXEC_ENABLED=false`. No sandbox backend is currently available; setting this flag to true does not make shell execution safe or supported.
 
 ## Offline Learning
 
-Offline Learning is not deployable in this release. The Ollama and pack variables are placeholders. Do not configure a public Ollama endpoint or proxy local Ollama through the cloud API. A signed catalog, trusted public key, static pack mirror, local runtime and offline storage implementation are prerequisites.
+Offline Learning is not deployable in this release. The Ollama and pack variables are placeholders. Reusable Ed25519/SHA-256 verifiers and IndexedDB local-store foundations now exist under `packages/offline`, but they are not connected to a catalog or runtime. Do not configure a public Ollama endpoint or proxy local Ollama through the cloud API. A signed catalog, trusted key rotation, static pack mirror, local model runtime and offline tutor are prerequisites.
 
 ## Migrations
 
