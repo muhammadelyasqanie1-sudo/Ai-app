@@ -676,6 +676,7 @@ export default function App() {
         onChangeTab={setCurrentTab}
         language={language}
         user={user}
+        onNewChat={handleNewChat}
       />
 
       {/* Keyboard Shortcuts Modal */}
