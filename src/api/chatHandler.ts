@@ -15,6 +15,50 @@ const chatRequestSchema = ChatRequestSchema;
 let activeChatRequests = 0;
 const MAX_CONCURRENT_CHAT_REQUESTS = 4;
 
+async function enforceSelectedModelRateLimit(
+  providerId: string,
+  modelId: string,
+  requestId: string,
+  res: ServerResponse,
+  userId: string | null,
+): Promise<boolean> {
+  if (!pool) return false;
+  const scopeKey = providerId + '::' + modelId;
+  try {
+    const configured = await pool.query(
+      "SELECT requests,window_seconds FROM rate_limit_policies WHERE enabled=true AND scope_type='model' AND scope_key=$1 LIMIT 1",
+      [scopeKey],
+    );
+    const policy = configured.rows[0] || { requests: 60, window_seconds: 60 };
+    const requests = Math.max(1, Number(policy.requests) || 60);
+    const windowSeconds = Math.max(1, Number(policy.window_seconds) || 60);
+    const counter = await pool.query(
+      `INSERT INTO rate_limit_counters(scope_type,scope_key,window_start,request_count)
+       VALUES('model',$1,to_timestamp((floor(extract(epoch FROM now())/$2)*$2)::double precision),1)
+       ON CONFLICT(scope_type,scope_key,window_start)
+       DO UPDATE SET request_count=rate_limit_counters.request_count+1
+       RETURNING request_count`,
+      [scopeKey, windowSeconds],
+    );
+    if (Number(counter.rows[0]?.request_count || 0) > requests) {
+      res.setHeader('Retry-After', String(windowSeconds));
+      console.warn('AI_CHAT_RATE_LIMITED', JSON.stringify({
+        requestId, providerId, modelId, userId, scope: 'model', windowSeconds,
+      }));
+      sendJson({ headers: {} } as IncomingMessage, res, 429, {
+        error: 'This model is temporarily rate limited. Please retry later.',
+        errorCode: 'model_rate_limited',
+        retryable: true,
+        requestId,
+      }, requestId);
+      return true;
+    }
+    return false;
+  } catch {
+    throw new ProviderAdapterError('Model rate limiting is temporarily unavailable.', 503, 'rate_limit_unavailable');
+  }
+}
+
 function splitTranslationDocument(text: string, maxChars = 6000): string[] {
   const paragraphs = text.split(/(\n\s*\n)/);
   const chunks: string[] = [];
@@ -235,6 +279,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     const prepared = await prepareVerifiedChat({ model, messages: upstreamMessages, signal: abortController.signal, noFallback: body.no_fallback === true, onModelSelected: (_providerId, selectedModelId) => { if (activeModelId !== selectedModelId) { activeModelId = selectedModelId; if (res.headersSent && !res.writableEnded) res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: selectedModelId })}\n\n`); } } });
     const { providerId, modelId, stream } = prepared;
     activeModelId = modelId;
+    if (await enforceSelectedModelRateLimit(providerId, modelId, id, res, requestUserId)) return;
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
@@ -255,10 +300,18 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         res.write(`data: ${JSON.stringify({ type: 'content', text: chunk.content })}\n\n`);
       }
       if (!emittedContent) {
+        console.warn('AI_CHAT_EMPTY_RESPONSE', JSON.stringify({
+          requestId: id, providerId: prepared.providerId, modelId: prepared.modelId,
+          userId: requestUserId, latencyMs: Date.now() - startedAt,
+        }));
         res.write(`data: ${JSON.stringify({ type: 'error', error: 'The AI provider returned an empty response. Please retry.', retryable: true, requestId: id })}\n\n`);
         res.end();
         return;
       }
+      console.info('AI_CHAT_COMPLETED', JSON.stringify({
+        requestId: id, providerId: prepared.providerId, modelId: prepared.modelId,
+        userId: requestUserId, outcome: 'success', latencyMs: Date.now() - startedAt,
+      }));
       res.write(`data: ${JSON.stringify({ type: 'done', requestId: id })}\n\n`);
       res.write('data: [DONE]\n\n');
       res.end();
