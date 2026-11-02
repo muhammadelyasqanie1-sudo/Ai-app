@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
 import { authenticateRequest, readJsonBody } from './auth.ts';
