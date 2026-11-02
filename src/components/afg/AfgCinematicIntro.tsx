@@ -53,7 +53,7 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
       <div className="afg-intro-orbit orbit-two" aria-hidden="true" />
       <div className="afg-intro-orbit orbit-three" aria-hidden="true" />
       <div className="afg-intro-particles" aria-hidden="true">
-        {Array.from({ length: 24 }, (_, i) => <i key={i} style={{ '--particle-index': i } as React.CSSProperties} />)}
+        {Array.from({ length: 24 }, (_, i) => <i key={i} style={{ left: ((i * 41 + 7) % 97) + '%', top: ((i * 67 + 9) % 91) + '%' }} />)}
       </div>
 
       <div className="afg-intro-topline">
