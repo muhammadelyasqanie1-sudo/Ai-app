@@ -40,7 +40,7 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
   const t = translations[language];
 
   return (
-    <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-[#060b18]/85 dark:bg-[#060b18]/90 light:bg-white/90 border-b border-cyan-900/30 transition-colors">
+    <header className="afg-app-header sticky top-0 z-40 w-full backdrop-blur-xl bg-[#060b18]/85 dark:bg-[#060b18]/90 light:bg-white/90 border-b border-cyan-900/30 transition-colors">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
         
         {/* Left Section: Menu Toggle + Brand Logo & Title */}
