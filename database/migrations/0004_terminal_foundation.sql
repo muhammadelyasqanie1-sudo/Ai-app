@@ -1,7 +1,7 @@
 -- AFG AI Terminal Foundation (Phase 1). Execution is intentionally not enabled.
 CREATE TABLE IF NOT EXISTS cli_tokens (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token_hash text NOT NULL UNIQUE,
   token_prefix text NOT NULL,
   name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 80),
@@ -28,7 +28,7 @@ CREATE INDEX IF NOT EXISTS terminal_sessions_user_active_idx ON terminal_session
 CREATE TABLE IF NOT EXISTS terminal_audit (
   id bigserial PRIMARY KEY,
   session_id uuid REFERENCES terminal_sessions(id) ON DELETE SET NULL,
-  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES users(id) ON DELETE SET NULL,
   command text NOT NULL,
   exit_code integer NOT NULL,
   duration_ms integer NOT NULL,
@@ -39,7 +39,7 @@ CREATE INDEX IF NOT EXISTS terminal_audit_session_created_idx ON terminal_audit(
 CREATE INDEX IF NOT EXISTS terminal_audit_user_created_idx ON terminal_audit(user_id,created_at DESC);
 
 -- Database-enforced append-only audit records for the application role.
-CREATE OR REPLACE FUNCTION afg_terminal_audit_no_mutation() RETURNS trigger AS $
+CREATE OR REPLACE FUNCTION afg_terminal_audit_no_mutation() RETURNS trigger AS $afg$
 BEGIN
   IF TG_OP = 'DELETE' THEN
     RAISE EXCEPTION 'terminal_audit is append-only';
@@ -54,7 +54,7 @@ BEGIN
   -- Foreign-key cleanup may null the owner/session references; event content remains immutable.
   RETURN NEW;
 END;
-$ LANGUAGE plpgsql;
+$afg$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS terminal_audit_no_update ON terminal_audit;
 DROP TRIGGER IF EXISTS terminal_audit_no_delete ON terminal_audit;
 CREATE TRIGGER terminal_audit_no_update BEFORE UPDATE ON terminal_audit
