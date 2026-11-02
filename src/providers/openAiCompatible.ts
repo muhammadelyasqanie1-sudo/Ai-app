@@ -58,7 +58,15 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
         }
         const payload = await response.json() as { data?: OpenAIModel[] };
         if (!Array.isArray(payload.data)) throw new ProviderAdapterError('Provider returned an invalid model catalog.', 502, 'invalid_model_catalog');
-        return payload.data.filter((model) => typeof model.id === 'string' && /^[a-zA-Z0-9@][a-zA-Z0-9._:/-]{0,299}$/.test(model.id))
+        const geminiChatModels = new Set(['gemini-3.8-flash', 'gemini-3.5-flash-lite']);
+        const listedModels = payload.data.filter((model) => typeof model.id === 'string' && /^[a-zA-Z0-9@][a-zA-Z0-9._:/-]{0,299}$/.test(model.id));
+        // Gemini exposes many modalities and preview endpoints through /models. Keep the
+        // chat catalog to Google's currently recommended stable text models to avoid
+        // presenting image/audio/retired models as chat choices.
+        const usableModels = current.id === 'gemini-openai-compatible'
+          ? listedModels.filter((model) => geminiChatModels.has(model.id || ''))
+          : listedModels;
+        return usableModels
           .map((model) => ({
             id: model.id as string,
             providerId: current.id,
@@ -83,10 +91,11 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
         return { healthy: false, checkedAt, message: 'Provider not reachable.' };
       }
       try {
-        const response = await fetch(current.baseUrl + '/chat/completions', {
-          method: 'POST',
-          headers: { Authorization: 'Bearer ' + current.apiKey, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: modelId, messages: [{ role: 'user', content: 'Reply with OK.' }], max_tokens: 1, stream: false }),
+        // Validate model access without generating tokens. A completion-based health
+        // probe consumes quota and can rate-limit the real user's first chat request.
+        const response = await fetch(current.baseUrl + '/models/' + encodeURIComponent(modelId), {
+          method: 'GET',
+          headers: { Authorization: 'Bearer ' + current.apiKey, Accept: 'application/json' },
           signal: AbortSignal.timeout(12_000),
         });
         if (!response.ok) {
