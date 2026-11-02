@@ -5,6 +5,7 @@ import {
   Search, Play, Power, Save, Plus, AlertTriangle
 } from 'lucide-react';
 import type { Language } from '../../types/afg';
+import { getIntlLocale } from '../../utils/i18n';
 
 interface AfgAdminPanelProps { language: Language; }
 type Tab = 'overview'|'users'|'providers'|'models'|'usage'|'limits'|'health'|'flags'|'audit'|'security';
@@ -42,11 +43,12 @@ async function api(path:string, options:RequestInit = {}) {
   if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
   return body;
 }
-const fmt = (value:any) => value == null ? '—' : Number(value).toLocaleString();
-const date = (value:any) => value ? new Date(value).toLocaleString() : 'Never';
 
 export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const dari = language === 'dari';
+  const locale = getIntlLocale(language);
+  const fmt = (value:any) => value == null ? '—' : new Intl.NumberFormat(locale).format(Number(value));
+  const date = (value:any) => value ? new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)) : (dari ? 'هرگز' : 'Never');
   const [authenticated,setAuthenticated] = useState(false);
   const [tab,setTab] = useState<Tab>('overview');
   const [email,setEmail] = useState('');
