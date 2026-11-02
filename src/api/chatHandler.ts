@@ -319,7 +319,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       res.end();
     } catch (error) {
       const streamErrorCode = classifyError(error);
-      const streamRetryable = !['invalid_request','content_policy','auth'].includes(streamErrorCode);
+      const streamRetryable = !['invalid_request','content_policy','auth','rate_limit'].includes(streamErrorCode);
       console.error('AI_PROVIDER_STREAM_FAILED', JSON.stringify({
         requestId: id,
         provider: activeModelId.split('::')[0] || prepared.providerId,
