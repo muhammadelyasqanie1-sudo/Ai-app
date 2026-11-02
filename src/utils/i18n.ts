@@ -42,4 +42,5 @@ export function applyDocumentLocale(language: Language): void {
   const locale = getIntlLocale(language);
   document.documentElement.lang = locale;
   document.documentElement.dir = language === 'dari' ? 'rtl' : 'ltr';
+  document.title = language === 'dari' ? 'AFG AI — دستیار هوشمند شما' : 'AFG AI — Your Smart AI Assistant';
 }
