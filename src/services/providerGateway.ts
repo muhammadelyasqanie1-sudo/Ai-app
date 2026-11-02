@@ -18,8 +18,14 @@ export function getProviderAdapter(providerId: string): ChatProviderAdapter | un
 
 async function isProviderEnabled(providerId: string): Promise<boolean> {
   if (!pool) return true;
-  const result = await pool.query('SELECT enabled FROM provider_configs WHERE provider_key = $1 LIMIT 1', [providerId]);
-  return result.rows.length ? Boolean(result.rows[0].enabled) : true;
+  try {
+    const result = await pool.query('SELECT enabled FROM provider_configs WHERE provider_key = $1 LIMIT 1', [providerId]);
+    return result.rows.length ? Boolean(result.rows[0].enabled) : true;
+  } catch (error) {
+    // An uninitialized optional catalog must not disable a configured AI provider.
+    console.warn('AI_PROVIDER_CONFIG_DB_UNAVAILABLE', JSON.stringify({ provider: providerId, error: error instanceof Error ? error.message : 'unknown_error' }));
+    return true;
+  }
 }
 
 function capabilityFlagsFromStored(value: unknown): CapabilityFlags {
@@ -41,25 +47,31 @@ function capabilityFlagsFromStored(value: unknown): CapabilityFlags {
 
 async function getStoredModels(providerId: string, forceDisabled = false): Promise<ModelDescriptor[]> {
   if (!pool) return [];
-  const result = await pool.query(
-    `SELECT model_key, display_name, COALESCE(capabilities_override, capabilities) AS capabilities, enabled, context_window
-       FROM model_catalog WHERE provider_key = $1 ORDER BY display_name`,
-    [providerId],
-  );
-  return result.rows.map((row) => ({
-    id: row.model_key,
-    providerId,
-    displayName: row.display_name || row.model_key,
-    description: 'Previously discovered model. The provider could not be reached for a fresh catalog check.',
-    contextWindow: Number(row.context_window) || 0,
-    capabilities: capabilityFlagsFromStored(row.capabilities),
-    enabled: forceDisabled ? false : Boolean(row.enabled),
-    verifiedAt: null,
-  }));
+  try {
+    const result = await pool.query(
+      `SELECT model_key, display_name, COALESCE(capabilities_override, capabilities) AS capabilities, enabled, context_window
+         FROM model_catalog WHERE provider_key = $1 ORDER BY display_name`,
+      [providerId],
+    );
+    return result.rows.map((row) => ({
+      id: row.model_key,
+      providerId,
+      displayName: row.display_name || row.model_key,
+      description: 'Previously discovered model. The provider could not be reached for a fresh catalog check.',
+      contextWindow: Number(row.context_window) || 0,
+      capabilities: capabilityFlagsFromStored(row.capabilities),
+      enabled: forceDisabled ? false : Boolean(row.enabled),
+      verifiedAt: null,
+    }));
+  } catch {
+    console.warn('AI_PROVIDER_STORED_MODELS_UNAVAILABLE', JSON.stringify({ provider: providerId }));
+    return [];
+  }
 }
 
 async function syncDiscoveredModels(provider: ChatProviderAdapter, models: ModelDescriptor[]): Promise<Map<string, boolean>> {
   if (!pool) return new Map(models.map((model) => [model.id, model.enabled]));
+  try {
   for (const model of models) {
     await pool.query(
       `INSERT INTO model_catalog
@@ -80,6 +92,10 @@ async function syncDiscoveredModels(provider: ChatProviderAdapter, models: Model
     [provider.id],
   );
   return new Map(result.rows.map((row) => [row.model_key, Boolean(row.enabled)]));
+  } catch (error) {
+    console.warn('AI_PROVIDER_MODEL_DB_UNAVAILABLE', JSON.stringify({ provider: provider.id, error: error instanceof Error ? error.message : 'unknown_error' }));
+    return new Map(models.map((model) => [model.id, model.enabled]));
+  }
 }
 
 async function verifyModel(provider: ChatProviderAdapter, model: ModelDescriptor): Promise<ModelDescriptor> {
@@ -108,7 +124,9 @@ async function verifyModel(provider: ChatProviderAdapter, model: ModelDescriptor
                 updated_at = now()
           WHERE provider_key = $1 AND model_key = $4`,
         [provider.id, result.checkedAt, result.healthy, model.id],
-      );
+      ).catch(() => {
+        console.warn('AI_PROVIDER_HEALTH_DB_UNAVAILABLE', JSON.stringify({ provider: provider.id, model: model.id }));
+      });
     }
   }
   return { ...model, verifiedAt: health.healthy ? health.checkedAt : null };
@@ -116,10 +134,16 @@ async function verifyModel(provider: ChatProviderAdapter, model: ModelDescriptor
 
 async function applyCapabilityOverrides(providerId: string, models: ModelDescriptor[]): Promise<ModelDescriptor[]> {
   if (!pool || !models.length) return models;
-  const result = await pool.query(
-    'SELECT model_key, capabilities_override FROM model_catalog WHERE provider_key=$1 AND capabilities_override IS NOT NULL',
-    [providerId],
-  );
+  let result;
+  try {
+    result = await pool.query(
+      'SELECT model_key, capabilities_override FROM model_catalog WHERE provider_key=$1 AND capabilities_override IS NOT NULL',
+      [providerId],
+    );
+  } catch {
+    console.warn('AI_PROVIDER_CAPABILITY_OVERRIDES_UNAVAILABLE', JSON.stringify({ provider: providerId }));
+    return models;
+  }
   const overrides = new Map(result.rows.map((row) => [row.model_key, row.capabilities_override as string[]]));
   return models.map((model) => {
     const override = overrides.get(model.id);
@@ -136,8 +160,8 @@ export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> 
   for (const provider of providerRegistry) {
     let configValid = false;
     try { configValid = (await provider.validateConfig()).valid; } catch { configValid = false; }
-    let providerEnabled = false;
-    try { providerEnabled = await isProviderEnabled(provider.id); } catch { providerEnabled = false; }
+    let providerEnabled = true;
+    try { providerEnabled = await isProviderEnabled(provider.id); } catch { providerEnabled = true; }
 
     if (!configValid || !providerEnabled) {
       console.warn('AI_PROVIDER_NOT_READY', JSON.stringify({ provider: provider.id, configured: configValid, enabled: providerEnabled }));
@@ -186,31 +210,35 @@ export async function selectCheapestModel(capability: keyof CapabilityFlags = 't
   if (!capable.length) return null;
 
   if (pool) {
-    const fallback = await pool.query(
-      'SELECT ordered_models FROM provider_fallback_chains WHERE capability = $1 LIMIT 1',
-      [capability],
-    );
-    const ordered = Array.isArray(fallback.rows[0]?.ordered_models) ? fallback.rows[0].ordered_models as string[] : [];
-    const chooseFallback = () => ordered.find((modelId) => capable.some((model) => model.providerId + '::' + model.id === modelId)) || null;
-    if (preferFallback) {
-      const fallbackModel = chooseFallback();
-      if (fallbackModel) return fallbackModel;
-    }
-
-    const costs = await pool.query(
-      `SELECT provider_key, model_key, input_cost_per_million, output_cost_per_million
-         FROM model_catalog WHERE enabled = true`,
-    );
-    const costById = new Map<string, number>();
-    for (const row of costs.rows) {
-      if (row.input_cost_per_million !== null && row.output_cost_per_million !== null) {
-        costById.set(row.provider_key + '::' + row.model_key, Number(row.input_cost_per_million) + Number(row.output_cost_per_million));
+    try {
+      const fallback = await pool.query(
+        'SELECT ordered_models FROM provider_fallback_chains WHERE capability = $1 LIMIT 1',
+        [capability],
+      );
+      const ordered = Array.isArray(fallback.rows[0]?.ordered_models) ? fallback.rows[0].ordered_models as string[] : [];
+      const chooseFallback = () => ordered.find((modelId) => capable.some((model) => model.providerId + '::' + model.id === modelId)) || null;
+      if (preferFallback) {
+        const fallbackModel = chooseFallback();
+        if (fallbackModel) return fallbackModel;
       }
+
+      const costs = await pool.query(
+        `SELECT provider_key, model_key, input_cost_per_million, output_cost_per_million
+           FROM model_catalog WHERE enabled = true`,
+      );
+      const costById = new Map<string, number>();
+      for (const row of costs.rows) {
+        if (row.input_cost_per_million !== null && row.output_cost_per_million !== null) {
+          costById.set(row.provider_key + '::' + row.model_key, Number(row.input_cost_per_million) + Number(row.output_cost_per_million));
+        }
+      }
+      const priced = capable.filter((model) => costById.has(model.providerId + '::' + model.id))
+        .sort((a, b) => (costById.get(a.providerId + '::' + a.id) || 0) - (costById.get(b.providerId + '::' + b.id) || 0));
+      if (priced.length) return priced[0].providerId + '::' + priced[0].id;
+      return chooseFallback() || (capable[0] ? capable[0].providerId + '::' + capable[0].id : null);
+    } catch (error) {
+      console.warn('AI_MODEL_FALLBACK_DB_UNAVAILABLE', JSON.stringify({ error: error instanceof Error ? error.message : 'unknown_error' }));
     }
-    const priced = capable.filter((model) => costById.has(model.providerId + '::' + model.id))
-      .sort((a, b) => (costById.get(a.providerId + '::' + a.id) || 0) - (costById.get(b.providerId + '::' + b.id) || 0));
-    if (priced.length) return priced[0].providerId + '::' + priced[0].id;
-    return chooseFallback() || (capable[0] ? capable[0].providerId + '::' + capable[0].id : null);
   }
 
   // No database means no stored prices/fallback chain; choose a healthy deterministic default without claiming it is cheapest.
