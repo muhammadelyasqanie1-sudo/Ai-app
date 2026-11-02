@@ -442,3 +442,40 @@ html[dir="ltr"] { font-family:system-ui,-apple-system,"Plus Jakarta Sans","Segoe
 @keyframes intro-hud-wave {to{transform:scaleY(.25);opacity:.5}}
 @keyframes intro-title-shine {to{background-position:200% center}}
 @media(prefers-reduced-motion:reduce){.afg-intro-aurora i,.afg-intro-light-beams i,.afg-intro-energy-disc,.afg-intro-data-orbit,.afg-intro-core-pulse,.hud-wave i,.afg-intro-copy h1 em{animation:none!important}}
+
+
+/* Persistent AFG AI product shell — the premium experience continues after the intro */
+body {background:radial-gradient(ellipse at 50% -18%,rgba(15,91,132,.22),transparent 54%),var(--bg-main);}
+body:before,body:after {content:"";position:fixed;z-index:-1;pointer-events:none;border-radius:50%;filter:blur(85px);opacity:.17}
+body:before {width:38rem;height:38rem;top:16%;left:-22rem;background:#087eae}
+body:after {width:32rem;height:32rem;right:-18rem;bottom:4%;background:#5142a8}
+.afg-app-header {height:70px;border-bottom-color:rgba(70,206,232,.17)!important;background:rgba(4,12,27,.82)!important;box-shadow:0 12px 42px rgba(0,0,0,.16),inset 0 1px rgba(255,255,255,.035)}
+.afg-app-header>div {max-width:1440px!important;height:100%!important}
+.afg-app-header button {transition:transform .22s ease,background .22s ease,border-color .22s ease,box-shadow .22s ease}
+.afg-app-header button:hover {transform:translateY(-1px);box-shadow:0 7px 22px rgba(23,196,224,.12)}
+.afg-chat-view {max-width:1120px!important;position:relative;padding-top:1.2rem;padding-bottom:1rem}
+.afg-chat-statusbar {position:relative;min-height:62px;margin-bottom:1rem;padding:0 1rem;border:1px solid rgba(77,205,230,.15);border-radius:18px;background:linear-gradient(110deg,rgba(12,31,55,.88),rgba(8,20,42,.72));box-shadow:0 12px 36px rgba(0,0,0,.15),inset 0 1px rgba(255,255,255,.04);backdrop-filter:blur(18px)}
+.afg-chat-statusbar:after {content:"";position:absolute;inset-inline-start:0;top:18%;bottom:18%;width:2px;border-radius:4px;background:linear-gradient(transparent,#56efff,transparent);box-shadow:0 0 12px #48eaff}
+.afg-chat-welcome {position:relative!important;max-width:850px!important;min-height:0!important;padding:clamp(1.2rem,4vw,2.7rem) 1rem 1.5rem!important;gap:1.4rem!important}
+.afg-chat-welcome:before {content:"";position:absolute;z-index:-1;inset:8% -10% 0;border:1px solid rgba(87,214,237,.09);border-radius:44% 44% 22px 22px;background:radial-gradient(ellipse at 50% 20%,rgba(17,112,148,.16),transparent 66%);filter:drop-shadow(0 20px 70px rgba(0,0,0,.18))}
+.afg-chat-welcome-orb {padding:1.15rem;border:1px solid rgba(101,230,249,.3);border-radius:34px;background:linear-gradient(145deg,rgba(25,75,103,.46),rgba(8,18,39,.68));box-shadow:0 0 0 8px rgba(40,194,224,.035),0 0 0 18px rgba(40,194,224,.02),0 0 70px rgba(27,194,231,.2),inset 0 1px rgba(255,255,255,.13);animation:afg-welcome-float 5s ease-in-out infinite}
+.afg-chat-welcome-title {font-size:clamp(2rem,5vw,3.25rem)!important;letter-spacing:-.055em;text-shadow:0 0 38px rgba(46,209,239,.18)}
+.afg-chat-welcome>div:nth-child(2)>p {color:#9cc8d9!important;font-size:.95rem!important;letter-spacing:.025em}
+.afg-chat-welcome>div:nth-child(3) {width:min(100%,740px)!important;gap:.8rem!important}
+.afg-prompt-card {position:relative;min-height:86px!important;padding:1rem 1.05rem!important;border-radius:18px!important;border-color:rgba(74,191,222,.2)!important;background:linear-gradient(145deg,rgba(15,36,62,.84),rgba(7,17,37,.9))!important;box-shadow:0 10px 26px rgba(0,0,0,.14),inset 0 1px rgba(255,255,255,.045)!important;backdrop-filter:blur(12px)}
+.afg-prompt-card:hover {transform:translateY(-3px);border-color:rgba(74,232,246,.55)!important;box-shadow:0 16px 35px rgba(0,0,0,.24),0 0 24px rgba(26,198,222,.1)!important}
+.afg-chat-view .max-w-4xl {max-width:850px!important}
+.afg-chat-view textarea {border-radius:16px}
+.afg-chat-view [class*="rounded-2xl"][class*="bg-[#08112b"] {border-color:rgba(83,209,232,.24)!important;background:linear-gradient(110deg,rgba(9,29,52,.94),rgba(8,17,38,.94))!important;box-shadow:0 8px 28px rgba(0,0,0,.13),inset 0 1px rgba(255,255,255,.04)}
+.afg-chat-view .afg-message-card {border-color:rgba(75,190,222,.2);background:linear-gradient(145deg,rgba(13,31,54,.96),rgba(7,17,36,.96));box-shadow:0 12px 35px rgba(0,0,0,.13)}
+.afg-chat-view .afg-message-card.is-user {background:linear-gradient(135deg,rgba(8,75,101,.45),rgba(10,31,58,.94));border-color:rgba(45,212,230,.28)}
+@keyframes afg-welcome-float {0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-8px) rotate(1deg)}}
+@media(max-width:640px) {
+ .afg-app-header {height:62px}
+ .afg-chat-view {padding-inline:.25rem;padding-top:.65rem}
+ .afg-chat-statusbar {min-height:56px;border-radius:15px;padding-inline:.7rem}
+ .afg-chat-welcome {padding-top:1.4rem!important;gap:1.1rem!important}
+ .afg-chat-welcome-orb {padding:.8rem;border-radius:27px}
+ .afg-prompt-card {min-height:74px!important}
+}
+@media(prefers-reduced-motion:reduce){.afg-chat-welcome-orb{animation:none}}
