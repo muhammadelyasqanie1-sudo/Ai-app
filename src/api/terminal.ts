@@ -74,7 +74,7 @@ export async function handleTerminalApi(req: IncomingMessage, res: ServerRespons
     if (!name) { send(res,400,{error:'A token name is required.'},requestId); return true; }
     const days = Math.min(90,Math.max(1,Number.isInteger(body.ttlDays) ? Number(body.ttlDays) : Number(process.env.CLI_TOKEN_TTL_DAYS || 30)));
     const requested = Array.isArray(body.scopes) ? body.scopes.filter((s): s is string => typeof s === 'string') : ['terminal.read'];
-    const allowed = new Set(['chat','files','image','offline','terminal.read']);
+    const allowed = new Set(['terminal.read']);
     const scopes = [...new Set(requested.filter(s=>allowed.has(s)))];
     if (!scopes.includes('terminal.read')) scopes.push('terminal.read');
     const token = 'afg_cli_' + randomBytes(32).toString('base64url');
@@ -103,10 +103,12 @@ export async function handleTerminalApi(req: IncomingMessage, res: ServerRespons
   }
 
   if (pathname === '/api/terminal/sessions' && method === 'GET') {
+    if (!hasScope(auth,'terminal.read')) { send(res,403,{error:'Missing terminal.read permission.'},requestId); return true; }
     const result = await pool.query('SELECT id,surface,created_at,last_active_at,revoked_at FROM terminal_sessions WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50',[auth.user.id]);
     send(res,200,{sessions:result.rows,executionEnabled:false},requestId); return true;
   }
   if (pathname === '/api/terminal/sessions' && method === 'POST') {
+    if (!hasScope(auth,'terminal.read')) { send(res,403,{error:'Missing terminal.read permission.'},requestId); return true; }
     const body = await readJsonBody(req);
     const surface = body.surface === 'cli' && parseBearer(req) ? 'cli' : 'web';
     const result = await pool.query('INSERT INTO terminal_sessions(user_id,surface,cli_token_id) VALUES($1,$2,$3) RETURNING id,surface,created_at,last_active_at',[auth.user.id,surface,auth.tokenId]);
