@@ -27,6 +27,17 @@ async function authenticateTerminal(req: IncomingMessage): Promise<Auth | null> 
     );
     const row = found.rows[0];
     if (!row || row.status !== 'active') return null;
+    const limit = Math.max(10,Math.min(1000,Number.parseInt(process.env.CLI_RATE_LIMIT_PER_HOUR || '120',10) || 120));
+    const bucket = await pool.query(
+      `INSERT INTO cli_token_rate_limits(token_id,bucket_start,request_count)
+       VALUES($1,date_trunc('hour',now()),1)
+       ON CONFLICT(token_id,bucket_start) DO UPDATE
+         SET request_count=cli_token_rate_limits.request_count+1
+         WHERE cli_token_rate_limits.request_count < $2
+       RETURNING request_count`,
+      [row.token_id,limit],
+    );
+    if (!bucket.rowCount) throw Object.assign(new Error('CLI token hourly request limit reached.'),{statusCode:429});
     void pool.query('UPDATE cli_tokens SET last_used_at=now() WHERE id=$1',[row.token_id]).catch(()=>{});
     return { user: { id: row.id, role: row.role, status: row.status }, tokenId: row.token_id, scopes: row.scopes || [] };
   }
@@ -63,7 +74,9 @@ async function runNativeCommand(command: string, userId: string): Promise<{ outp
 export async function handleTerminalApi(req: IncomingMessage, res: ServerResponse, pathname: string, requestId: string): Promise<boolean> {
   if (!pathname.startsWith('/api/terminal')) return false;
   if (!pool) { send(res,503,{error:'Terminal requires the PostgreSQL database.'},requestId); return true; }
-  const auth = await authenticateTerminal(req);
+  let auth: Auth | null;
+  try { auth = await authenticateTerminal(req); }
+  catch (error:any) { send(res,error?.statusCode===429?429:503,{error:error?.statusCode===429?error.message:'Terminal authentication service unavailable.'},requestId); return true; }
   if (!auth) { send(res,401,{error:'Sign in or provide a valid CLI token.'},requestId); return true; }
   const method = req.method || 'GET';
 
@@ -109,7 +122,7 @@ export async function handleTerminalApi(req: IncomingMessage, res: ServerRespons
 
   if (pathname === '/api/terminal/sessions' && method === 'GET') {
     if (!hasScope(auth,'terminal.read')) { send(res,403,{error:'Missing terminal.read permission.'},requestId); return true; }
-    const result = await pool.query('SELECT id,surface,created_at,last_active_at,revoked_at FROM terminal_sessions WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50',[auth.user.id]);
+    const result = await pool.query('SELECT id,surface,created_at,last_active_at,revoked_at FROM terminal_sessions WHERE user_id=$1 AND revoked_at IS NULL AND last_active_at>now()-interval '15 minutes' ORDER BY created_at DESC LIMIT 50',[auth.user.id]);
     send(res,200,{sessions:result.rows,executionEnabled:false},requestId); return true;
   }
   if (pathname === '/api/terminal/sessions' && method === 'POST') {
@@ -124,7 +137,7 @@ export async function handleTerminalApi(req: IncomingMessage, res: ServerRespons
   if (sessionMatch) {
     const sessionId = sessionMatch[1];
     const action = sessionMatch[2] || '';
-    const owned = await pool.query('SELECT id FROM terminal_sessions WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL',[sessionId,auth.user.id]);
+    const owned = await pool.query('SELECT id FROM terminal_sessions WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL AND last_active_at>now()-interval '15 minutes'',[sessionId,auth.user.id]);
     if (!owned.rowCount) { send(res,404,{error:'Terminal session not found.'},requestId); return true; }
     if (!action && method === 'DELETE') {
       await pool.query('UPDATE terminal_sessions SET revoked_at=now() WHERE id=$1 AND user_id=$2',[sessionId,auth.user.id]);
@@ -145,7 +158,7 @@ export async function handleTerminalApi(req: IncomingMessage, res: ServerRespons
       const duration = Date.now()-started;
       await pool.query('INSERT INTO terminal_audit(session_id,user_id,command,exit_code,duration_ms,request_id) VALUES($1,$2,$3,$4,$5,$6)',[sessionId,auth.user.id,command,result.exitCode,duration,requestId]);
       await pool.query('UPDATE terminal_sessions SET last_active_at=now() WHERE id=$1',[sessionId]);
-      send(res,result.exitCode===0?200:400,{output:result.output,exitCode:result.exitCode,executionEnabled:false},requestId); return true;
+      send(res,result.exitCode===0?200:400,{output:result.output,exitCode:result.exitCode,executionEnabled:false,requestId},requestId); return true;
     }
   }
   send(res,404,{error:'Terminal route not found.'},requestId); return true;
