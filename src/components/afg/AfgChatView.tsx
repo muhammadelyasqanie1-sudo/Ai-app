@@ -140,7 +140,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   ];
 
   return (
-    <div style={{ maxWidth: "var(--afg-chat-width, 64rem)" }} className="flex flex-col h-[calc(100vh-8.5rem)] mx-auto w-full px-2 sm:px-4">
+    <div style={{ maxWidth: "var(--afg-chat-width, 64rem)" }} className="flex h-[calc(100dvh-5.25rem)] min-h-0 flex-col mx-auto w-full px-2 sm:px-4">
       
       {/* Top Session Status Bar */}
       <div className="flex items-center justify-between py-2 px-3 border-b border-cyan-900/30 mb-2">
@@ -180,15 +180,15 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full text-left">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full text-start">
               {promptSuggestions.map((prompt, idx) => (
                 <button
                   key={idx}
                   onClick={() => onSendMessage(prompt, [])}
-                  className="p-3 rounded-2xl bg-slate-900/70 hover:bg-cyan-950/40 border border-cyan-900/50 hover:border-cyan-500/50 text-xs text-slate-300 hover:text-cyan-200 transition-all text-right group shadow-md"
+                  className="p-3 rounded-2xl bg-slate-900/70 hover:bg-cyan-950/40 border border-cyan-900/50 hover:border-cyan-500/50 text-xs text-start text-slate-300 hover:text-cyan-200 transition-all group shadow-md"
                 >
                   <span className="font-semibold block mb-0.5 group-hover:text-cyan-300">
-                    💡 پیشنهاد {idx + 1}
+                    💡 {language === 'dari' ? 'پیشنهاد' : 'Suggestion'} {idx + 1}
                   </span>
                   <span className="line-clamp-2 text-[11px] text-slate-400">
                     {prompt}
