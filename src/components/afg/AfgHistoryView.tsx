@@ -19,12 +19,14 @@ import {
 import type { Language, AfgChatSession, TabType } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
 import { getIntlLocale } from '../../utils/i18n';
+import { apiFetch } from '../../lib/apiClient';
 
 interface AfgHistoryViewProps {
   language: Language;
   onSelectChat: (session: AfgChatSession) => void;
   onNewChat: () => void;
   activeSessionId: string;
+  isAuthenticated?: boolean;
 }
 
 export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
@@ -32,6 +34,7 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
   onSelectChat,
   onNewChat,
   activeSessionId,
+  isAuthenticated = false,
 }) => {
   const t = translations[language];
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,8 +42,66 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
     try { const saved = JSON.parse(localStorage.getItem('afg_sessions') || '[]'); return Array.isArray(saved) ? saved : []; }
     catch { return []; }
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  useEffect(() => { localStorage.setItem('afg_sessions', JSON.stringify(sessions)); }, [sessions]);
+  useEffect(() => {
+    if (!isAuthenticated) {
+      try { const saved = JSON.parse(localStorage.getItem('afg_sessions') || '[]'); setSessions(Array.isArray(saved) ? saved : []); }
+      catch { setSessions([]); }
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    apiFetch('/api/conversations')
+      .then((response) => response.json())
+      .then((payload: any) => {
+        if (cancelled) return;
+        const rows = Array.isArray(payload.conversations) ? payload.conversations : [];
+        setSessions(rows.map((row: any) => ({
+          id: String(row.id),
+          title: String(row.title || 'New chat'),
+          lastMessage: String(row.lastMessage || ''),
+          timestamp: new Date(row.updatedAt || row.createdAt || Date.now()).getTime(),
+          messages: [],
+          category: 'general' as const,
+          isPinned: false,
+        })));
+      })
+      .catch(() => {
+        if (!cancelled) setError(language === 'dari' ? 'بارگذاری تاریخچه از سرور ناموفق بود. اتصال و ورود حساب را بررسی کنید.' : 'Could not load server history. Check your connection and sign-in.');
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [isAuthenticated, language]);
+
+  useEffect(() => {
+    if (!isAuthenticated) localStorage.setItem('afg_sessions', JSON.stringify(sessions));
+  }, [sessions, isAuthenticated]);
+
+  const loadSessionMessages = async (session: AfgChatSession): Promise<AfgChatSession> => {
+    if (!isAuthenticated || session.id.startsWith('chat-')) return session;
+    const response = await apiFetch('/api/conversations/' + encodeURIComponent(session.id) + '/messages');
+    const payload = await response.json() as { messages?: Array<{ id: string; role: 'user' | 'assistant'; content: string; createdAt: string }> };
+    const loaded = (payload.messages || []).map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      timestamp: new Date(message.createdAt).getTime(),
+    }));
+    return { ...session, messages: loaded };
+  };
+
+  const handleSelect = async (session: AfgChatSession) => {
+    try {
+      setError('');
+      const loaded = await loadSessionMessages(session);
+      onSelectChat(loaded);
+    } catch {
+      setError(language === 'dari' ? 'بازکردن گفتگو ناموفق بود. دوباره تلاش کنید.' : 'Could not open this conversation. Please try again.');
+    }
+  };
 
   const filteredSessions = useMemo(() => sessions
     .filter((session) => session.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -49,16 +110,40 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
     .sort((a, b) => Number(Boolean(b.isPinned)) - Number(Boolean(a.isPinned)) || b.timestamp - a.timestamp),
   [sessions, searchQuery]);
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSessions((previous) => previous.filter((session) => session.id !== id));
-    if (id === activeSessionId) onNewChat();
+    try {
+      setError('');
+      if (isAuthenticated && !id.startsWith('chat-')) {
+        await apiFetch('/api/conversations/' + encodeURIComponent(id), { method: 'DELETE', headers: { 'X-CSRF-Token': decodeURIComponent(document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '') } });
+      }
+      setSessions((previous) => previous.filter((session) => session.id !== id));
+      if (id === activeSessionId) onNewChat();
+    } catch {
+      setError(language === 'dari' ? 'حذف گفتگو ناموفق بود.' : 'Could not delete this conversation.');
+    }
   };
 
   const handleRename = (session: AfgChatSession, e: React.MouseEvent) => {
     e.stopPropagation();
     const title = window.prompt(language === 'dari' ? 'نام جدید گفتگو' : 'Rename conversation', session.title);
-    if (title && title.trim()) setSessions((previous) => previous.map((item) => item.id === session.id ? { ...item, title: title.trim().slice(0, 100) } : item));
+    if (title && title.trim()) {
+      const nextTitle = title.trim().slice(0, 180);
+      void (async () => {
+        try {
+          if (isAuthenticated && !session.id.startsWith('chat-')) {
+            const csrf = decodeURIComponent(document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '');
+            await apiFetch('/api/conversations/' + encodeURIComponent(session.id), {
+              method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+              body: JSON.stringify({ title: nextTitle }),
+            });
+          }
+          setSessions((previous) => previous.map((item) => item.id === session.id ? { ...item, title: nextTitle } : item));
+        } catch {
+          setError(language === 'dari' ? 'تغییر نام گفتگو ناموفق بود.' : 'Could not rename this conversation.');
+        }
+      })();
+    }
   };
 
   const handlePin = (session: AfgChatSession, e: React.MouseEvent) => {
@@ -76,19 +161,25 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleExport = (session: AfgChatSession, format: 'md' | 'json' | 'pdf', e: React.MouseEvent) => {
+  const handleExport = async (session: AfgChatSession, format: 'md' | 'json' | 'pdf', e: React.MouseEvent) => {
     e.stopPropagation();
-    if (format === 'json') downloadText(session.title + '.json', JSON.stringify(session, null, 2), 'application/json');
-    else if (format === 'md') downloadText(session.title + '.md', sessionMarkdown(session), 'text/markdown');
-    else {
-      const popup = window.open('', '_blank');
-      if (!popup) return;
-      popup.document.title = session.title;
-      const heading = popup.document.createElement('h1'); heading.textContent = session.title;
-      const pre = popup.document.createElement('pre');
-      pre.style.whiteSpace = 'pre-wrap'; pre.style.fontFamily = 'Arial, sans-serif';
-      pre.textContent = session.messages.map((message) => message.role.toUpperCase() + '\n\n' + message.content).join('\n\n');
-      popup.document.body.append(heading, pre); popup.focus(); popup.print();
+    try {
+      const completeSession = await loadSessionMessages(session);
+      setSessions((previous) => previous.map((item) => item.id === session.id ? completeSession : item));
+      if (format === 'json') downloadText(session.title + '.json', JSON.stringify(completeSession, null, 2), 'application/json');
+      else if (format === 'md') downloadText(session.title + '.md', sessionMarkdown(completeSession), 'text/markdown');
+      else {
+        const popup = window.open('', '_blank');
+        if (!popup) return;
+        popup.document.title = session.title;
+        const heading = popup.document.createElement('h1'); heading.textContent = session.title;
+        const pre = popup.document.createElement('pre');
+        pre.style.whiteSpace = 'pre-wrap'; pre.style.fontFamily = 'Arial, sans-serif';
+        pre.textContent = completeSession.messages.map((message) => message.role.toUpperCase() + '\n\n' + message.content).join('\n\n');
+        popup.document.body.append(heading, pre); popup.focus(); popup.print();
+      }
+    } catch {
+      setError(language === 'dari' ? 'دریافت گفتگو برای خروجی ناموفق بود.' : 'Could not load this conversation for export.');
     }
   };
 
@@ -133,14 +224,25 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
       </div>
 
       <div className="flex justify-end">
-        <button onClick={() => { if (window.confirm(language === 'dari' ? 'تمام گفتگوهای ذخیره‌شده پاک شود؟' : 'Delete all saved conversations?')) { setSessions([]); onNewChat(); } }} className="flex items-center gap-1 rounded-lg px-3 py-2 text-xs text-red-300 hover:bg-red-500/10">
+        <button onClick={() => { if (window.confirm(language === 'dari' ? 'تمام گفتگوهای ذخیره‌شده پاک شود؟' : 'Delete all saved conversations?')) { void (async () => {
+          try {
+            if (isAuthenticated) {
+              const csrf = decodeURIComponent(document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '');
+              await Promise.all(sessions.filter((item) => !item.id.startsWith('chat-')).map((item) => apiFetch('/api/conversations/' + encodeURIComponent(item.id), { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } })));
+            }
+            setSessions([]); onNewChat();
+          } catch { setError(language === 'dari' ? 'پاک‌کردن همه گفتگوها ناموفق بود.' : 'Could not clear all conversations.'); }
+        })(); } }} className="flex items-center gap-1 rounded-lg px-3 py-2 text-xs text-red-300 hover:bg-red-500/10">
           <Trash className="w-3.5 h-3.5" />{language === 'dari' ? 'پاک‌کردن همه' : 'Clear all'}
         </button>
       </div>
 
+      {error && <p role="alert" className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">{error}</p>}
       {/* Sessions List */}
       <div className="space-y-3">
-        {filteredSessions.length === 0 ? (
+        {loading ? (
+          <div className="p-8 text-center rounded-2xl bg-slate-900/40 border border-slate-800 text-slate-400 text-sm">{language === 'dari' ? 'در حال بارگذاری تاریخچه...' : 'Loading conversation history...'}</div>
+        ) : filteredSessions.length === 0 ? (
           <div className="p-8 text-center rounded-2xl bg-slate-900/40 border border-slate-800 text-slate-400 text-sm">
             {t.emptyHistory}
           </div>
@@ -148,7 +250,7 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
           filteredSessions.map((session) => (
             <div
               key={session.id}
-              onClick={() => onSelectChat(session)}
+              onClick={() => { void handleSelect(session); }}
               className="p-4 rounded-2xl bg-[#09122c]/80 hover:bg-[#0e1b3d] border border-cyan-900/40 hover:border-cyan-500/50 cursor-pointer transition-all flex items-center justify-between gap-4 shadow-md group"
             >
               <div className="flex items-start gap-3 min-w-0">
@@ -172,7 +274,7 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
               </div>
 
               <div className="flex items-center gap-1 shrink-0">
-                <button onClick={(e) => handlePin(session, e)} className="p-1.5 rounded-lg text-slate-500 hover:text-amber-300" title="Pin"><Pin className="w-4 h-4" /></button>
+                {!isAuthenticated && <button onClick={(e) => handlePin(session, e)} className="p-1.5 rounded-lg text-slate-500 hover:text-amber-300" title={language === 'dari' ? 'سنجاق' : 'Pin'}><Pin className="w-4 h-4" /></button>}
                 <button onClick={(e) => handleRename(session, e)} className="p-1.5 rounded-lg text-slate-500 hover:text-cyan-300" title="Rename"><Pencil className="w-4 h-4" /></button>
                 <button onClick={(e) => handleExport(session, 'md', e)} className="p-1.5 rounded-lg text-slate-500 hover:text-cyan-300" title="Export Markdown"><FileText className="w-4 h-4" /></button>
                 <button onClick={(e) => handleExport(session, 'json', e)} className="p-1.5 rounded-lg text-slate-500 hover:text-cyan-300" title="Export JSON"><FileJson className="w-4 h-4" /></button>
