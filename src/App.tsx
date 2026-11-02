@@ -17,6 +17,7 @@ import { AfgTerminalView } from './components/afg/AfgTerminalView';
 import { AfgOfflineView } from './components/afg/AfgOfflineView';
 import { AfgSideMenu } from './components/afg/AfgSideMenu';
 import { AfgLanguageModal } from './components/afg/AfgLanguageModal';
+import { AfgCinematicIntro } from './components/afg/AfgCinematicIntro';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { ErrorBoundary } from './components/afg/AfgDesignSystem';
 import { applyDocumentLocale } from './utils/i18n';
@@ -54,6 +55,10 @@ export default function App() {
     return saved === 'english' ? 'english' : 'dari';
   });
   const [hasSelectedLanguage, setHasSelectedLanguage] = useState(() => {
+    const saved = localStorage.getItem('afg_language');
+    return saved === 'dari' || saved === 'english';
+  });
+  const [isIntroVisible, setIsIntroVisible] = useState(() => {
     const saved = localStorage.getItem('afg_language');
     return saved === 'dari' || saved === 'english';
   });
@@ -311,6 +316,7 @@ export default function App() {
     localeChangedThisSession.current = true;
     setLanguage(nextLanguage);
     setHasSelectedLanguage(true);
+    setIsIntroVisible(true);
     localStorage.setItem('afg_language', nextLanguage);
     applyDocumentLocale(nextLanguage);
     fetch(API_BASE_URL + '/api/auth/me', { credentials: 'include' }).then((response) => response.ok ? response.json() : null).then((authData) => {
@@ -567,6 +573,10 @@ export default function App() {
 
   if (!hasSelectedLanguage) {
     return <AfgLanguageModal isOpen={true} language={null} onSelectLanguage={handleSetLanguage} />;
+  }
+
+  if (isIntroVisible) {
+    return <AfgCinematicIntro language={language} onComplete={() => setIsIntroVisible(false)} />;
   }
 
   return (
