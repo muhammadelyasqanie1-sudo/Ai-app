@@ -144,7 +144,7 @@ export async function handleTerminalApi(req: IncomingMessage, res: ServerRespons
       send(res,200,{revoked:true},requestId); return true;
     }
     if (action === 'history' && method === 'GET') {
-      const history = await pool.query('SELECT command,exit_code,duration_ms,request_id,created_at FROM terminal_audit WHERE session_id=$1 AND user_id=$2 ORDER BY created_at DESC LIMIT 100',[sessionId,auth.user.id]);
+      const history = await pool.query('SELECT command,output_text,exit_code,duration_ms,request_id,created_at FROM terminal_audit WHERE session_id=$1 AND user_id=$2 ORDER BY created_at DESC LIMIT 100',[sessionId,auth.user.id]);
       send(res,200,{history:history.rows},requestId); return true;
     }
     if (action === 'commands' && method === 'POST') {
@@ -156,9 +156,11 @@ export async function handleTerminalApi(req: IncomingMessage, res: ServerRespons
       const started = Date.now();
       const result = await runNativeCommand(command,auth.user.id);
       const duration = Date.now()-started;
-      await pool.query('INSERT INTO terminal_audit(session_id,user_id,command,exit_code,duration_ms,request_id) VALUES($1,$2,$3,$4,$5,$6)',[sessionId,auth.user.id,command,result.exitCode,duration,requestId]);
+      const outputLimit = Math.max(1024,Math.min(262144,Number.parseInt(process.env.TERMINAL_MAX_OUTPUT_BYTES || '262144',10) || 262144));
+      const safeOutput = Buffer.from(result.output,'utf8').subarray(0,outputLimit).toString('utf8');
+      await pool.query('INSERT INTO terminal_audit(session_id,user_id,command,output_text,exit_code,duration_ms,request_id) VALUES($1,$2,$3,$4,$5,$6,$7)',[sessionId,auth.user.id,command,safeOutput,result.exitCode,duration,requestId]);
       await pool.query('UPDATE terminal_sessions SET last_active_at=now() WHERE id=$1',[sessionId]);
-      send(res,result.exitCode===0?200:400,{output:result.output,exitCode:result.exitCode,executionEnabled:false,requestId},requestId); return true;
+      send(res,result.exitCode===0?200:400,{output:safeOutput,exitCode:result.exitCode,executionEnabled:false,requestId},requestId); return true;
     }
   }
   send(res,404,{error:'Terminal route not found.'},requestId); return true;
