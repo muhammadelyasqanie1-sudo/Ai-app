@@ -84,7 +84,7 @@ async function* reliableStream(candidates: ModelDescriptor[], input: ChatInput):
     const provider = getProviderAdapter(candidate.providerId);
     if (!provider) continue;
     for (let attempt = 0; attempt < 3; attempt++) {
-      input.onModelSelected?.(candidate.providerId, candidate.id);
+      await input.onModelSelected?.(candidate.providerId, candidate.id);
       if (input.signal?.aborted) throw new ProviderAdapterError('The request was cancelled.', 499, 'request_aborted');
       let emitted = false;
       try {
