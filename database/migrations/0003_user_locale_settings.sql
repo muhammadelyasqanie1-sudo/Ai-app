@@ -12,3 +12,15 @@ SELECT u.id,
 FROM users u
 LEFT JOIN user_preferences p ON p.user_id = u.id
 ON CONFLICT (user_id) DO NOTHING;
+
+INSERT INTO user_preferences(user_id, language, default_language)
+SELECT u.id,
+       CASE WHEN p.language IN ('dari','english') THEN p.language
+            WHEN u.preferred_language IN ('dari','english') THEN u.preferred_language
+            ELSE 'dari' END,
+       CASE WHEN p.default_language IN ('dari','english') THEN p.default_language
+            WHEN u.preferred_language IN ('dari','english') THEN u.preferred_language
+            ELSE 'dari' END
+FROM users u
+LEFT JOIN user_preferences p ON p.user_id=u.id
+ON CONFLICT (user_id) DO NOTHING;
