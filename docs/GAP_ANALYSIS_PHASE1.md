@@ -103,7 +103,7 @@ Highest leverage is to make the existing core path honest and enforceable before
 This task begins with items 1–3 as focused backend hardening. Items 4–5 remain the next implementation milestone if not completed in this change. No unsupported provider feature will be enabled to make the interface appear fuller.
 
 
-## 5. Changes made during this task
+## 4. Changes made during this task
 
 Committed to `main` after the source review:
 - Removed the generic API middleware's model limiter that trusted the client-controlled `X-AFG-Model` header.
@@ -116,6 +116,6 @@ Committed to `main` after the source review:
 
 **These are focused backend/documentation improvements, not a complete Phase 1 delivery.** The signed-in chat flow still does not create/restore server conversations or persist user/assistant messages, and History remains localStorage-backed. Those are the highest-priority remaining implementation tasks.
 
-## 4. Verification boundary
+## 5. Verification boundary
 
 This is source inspection, not runtime proof. No tests, type-check, lint, build, database migration, provider smoke test, manual UI verification or deployment were run. Provider availability, deployed environment values, live database schema and current production behavior remain unverified.
