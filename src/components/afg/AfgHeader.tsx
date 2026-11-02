@@ -7,7 +7,8 @@ import {
   Globe, 
   Crown,
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  Plus
 } from 'lucide-react';
 import { AfgBrainLogo } from './AfgBrainLogo';
 import type { Language, Theme, UserProfile } from '../../types/afg';
@@ -21,6 +22,7 @@ interface AfgHeaderProps {
   onToggleTheme: () => void;
   onOpenSettings: () => void;
   onOpenMenu: () => void;
+  onNewChat: () => void;
   unreadNotifications?: number;
 }
 
@@ -32,6 +34,7 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
   onToggleTheme,
   onOpenSettings,
   onOpenMenu,
+  onNewChat,
   unreadNotifications = 0,
 }) => {
   const t = translations[language];
@@ -69,6 +72,11 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
 
         {/* Right Section: Language Switch, Theme, Notifications & User Avatar */}
         <div className="flex items-center gap-1.5 sm:gap-2.5">
+
+          <button type="button" onClick={onNewChat} className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-800/40 bg-cyan-500/10 px-2.5 py-2 text-xs font-semibold text-cyan-200 transition-colors hover:bg-cyan-500/20" aria-label={language === 'dari' ? 'گفت‌وگوی جدید' : 'New chat'} title={language === 'dari' ? 'گفت‌وگوی جدید' : 'New chat'}>
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">{language === 'dari' ? 'گفت‌وگوی جدید' : 'New chat'}</span>
+          </button>
 
           {/* Language Switcher */}
           <button
