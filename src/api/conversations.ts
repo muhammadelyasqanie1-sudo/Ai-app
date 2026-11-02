@@ -22,7 +22,10 @@ const messageSchema = z.object({
 }).strict();
 
 function reply(res: ServerResponse, status: number, body: Record<string, unknown>) {
-  sendAuthJson(res, status, body);
+  const headerValue = res.getHeader('X-Request-Id');
+  const requestId = typeof headerValue === 'string' ? headerValue : undefined;
+  if (requestId) res.setHeader('X-Request-Id', requestId);
+  sendAuthJson(res, status, { ...body, ...(requestId ? { requestId } : {}) });
 }
 
 async function safeReadBody(req: IncomingMessage, maxBytes: number): Promise<Record<string, unknown> | null> {
