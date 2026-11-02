@@ -6,13 +6,13 @@ Audited against the current main tree and source files. Code inspection only; no
 |---|---|---|---|
 | React/Vite, Express, PostgreSQL | Root app, API router, database pool, migrations | Physical workspace split remains a facade | Existing |
 | Auth / CSRF | Cookie sessions, authenticated user lookup, CSRF | CLI token path not runtime verified | Existing + partial |
-| Terminal UI | New Terminal tab and basic read-only page | xterm, tabs, scrollback search, keyboard history, completion, audit drawer | Partial |
-| CLI tokens | SHA-256 hashes, prefix, scopes, expiry, last-used, revoke | Per-token hourly limiter and CLI config/keyring | Partial |
-| Terminal API | Sessions and read-only commands: help, version, models list, conv list, files list | Full command matrix, streaming, uploads, image, admin, search/export/rename/pin | Partial |
+| Terminal UI | Terminal tab, session list, persisted command/output scrollback, search, arrow-key history, token create/revoke panel | xterm.js, terminal tabs, tab completion, audit drawer polish | Partial |
+| CLI tokens | SHA-256 hashes, prefix, scopes, expiry, last-used, revoke; hourly bucket limiter | OS keyring and compiled binary | Partial |
+| Terminal API | Sessions, whoami, read-only commands, request IDs, bounded output audit | Full command matrix, chat streaming, uploads, image, admin, search/export/rename/pin | Partial |
 | Terminal audit | Request ID, command, exit code, duration; immutable event content | Runtime verification and retention policy | Partial |
 | Shell execution | Explicitly disabled | Isolated sandbox, allowlist executor, timeout/output caps, admin opt-in | Missing; correctly disabled |
-| Offline Learning | Navigation and explicit unavailable notice | Tutor, lessons, quizzes, flashcards, progress, pack manager | Disabled / missing |
-| Ollama | Environment placeholders | Local adapter and tags/show/chat/pull integration | Missing |
+| Offline Learning | Navigation, explicit unavailable notice, manifest schema, Node/WebCrypto Ed25519 + SHA-256 verification modules, IndexedDB local pack/lesson/progress/quiz/session store, education-only first-pass policy | Signed catalog, downloader/resume, actual model runtime, tutor UI, curated packs, semantic/output guardrails, health check | Foundation only / disabled |
+| Ollama | Environment placeholders | Desktop-local adapter and tags/show/chat/pull integration | Missing |
 | Signed packs | None | Manifest, Ed25519 verification, SHA-256, key rotation, mirror/catalog, resumable install | Missing |
 | Browser offline | None | WebLLM/WASM, IndexedDB/OPFS, service worker, network isolation | Missing |
 | Desktop runtime | Capacitor Android wrapper | Tauri/Electron desktop and localhost-only Ollama bridge | Missing |
