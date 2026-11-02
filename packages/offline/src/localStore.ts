@@ -3,8 +3,6 @@ import type { BrowserPackVerification } from './browserPackVerifier';
 
 const DB_NAME='afg-ai-offline-learning';
 const DB_VERSION=1;
-const STORE_NAMES=['packs','lessons_local','lesson_progress','quiz_attempts','offline_sessions'] as const;
-type StoreName=typeof STORE_NAMES[number];
 type PackRecord={key:string;id:string;version:string;manifest:PackManifest;model:Blob;installedAt:string};
 type LessonRecord={key:string;packKey:string;lessonId:string;language:string;content:string;sha256:string};
 export type LessonProgress={packKey:string;lessonId:string;status:'not_started'|'in_progress'|'completed';score:number|null;updatedAt:string};
@@ -40,6 +38,9 @@ export async function installVerifiedPack(
 ):Promise<void>{
   const manifest=verification.manifest;
   if(modelBytes.byteLength!==manifest.model.size_bytes)throw new Error('Model size changed after verification.');
+  const modelDigest=await crypto.subtle.digest('SHA-256',modelBytes);
+  const modelHash=Array.from(new Uint8Array(modelDigest),byte=>byte.toString(16).padStart(2,'0')).join('');
+  if(modelHash.toLowerCase()!==manifest.model.sha256.toLowerCase() || modelHash.toLowerCase()!==verification.modelSha256.toLowerCase())throw new Error('Model hash changed after verification.');
   const expected=new Map(manifest.lessons.map(item=>[item.file,item.sha256.toLowerCase()]));
   const lessonRecords:LessonRecord[]=[];
   for(const [file,lesson] of Object.entries(lessonFiles)){
@@ -89,14 +90,18 @@ export async function uninstallLocalPack(packId:string,version:string,deleteProg
   const key=packKey(packId,version);
   const db=await openDb();
   try{
+    const readTx=db.transaction(deleteProgress?['lessons_local','lesson_progress']:['lessons_local'],'readonly');
+    const lessonRows=await requestValue(readTx.objectStore('lessons_local').getAll() as IDBRequest<LessonRecord[]>);
+    const progressRows=deleteProgress
+      ? await requestValue(readTx.objectStore('lesson_progress').getAll() as IDBRequest<Array<LessonProgress & {key:string}>>)
+      : [];
+    await transactionDone(readTx);
     const tx=db.transaction(deleteProgress?['packs','lessons_local','lesson_progress']:['packs','lessons_local'],'readwrite');
     tx.objectStore('packs').delete(key);
     const lessons=tx.objectStore('lessons_local');
-    const lessonRows=await requestValue(lessons.getAll() as IDBRequest<LessonRecord[]>);
     for(const row of lessonRows)if(row.packKey===key)lessons.delete(row.key);
     if(deleteProgress){
       const progress=tx.objectStore('lesson_progress');
-      const progressRows=await requestValue(progress.getAll() as IDBRequest<Array<LessonProgress & {key:string}>>);
       for(const row of progressRows)if(row.packKey===key)progress.delete(row.key);
     }
     await transactionDone(tx);
