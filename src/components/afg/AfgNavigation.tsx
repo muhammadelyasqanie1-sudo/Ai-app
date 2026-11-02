@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare, Wrench, User, History, Image as ImageIcon, Settings, FolderOpen } from 'lucide-react';
+import { MessageSquare, Wrench, User, History, Image as ImageIcon, Settings, FolderOpen, Terminal, BookOpen } from 'lucide-react';
 import type { TabType, Language } from '../../types/afg';
 
 interface AfgNavigationProps { currentTab: TabType; onChangeTab: (tab: TabType) => void; language: Language; }
@@ -11,6 +11,8 @@ export const AfgNavigation: React.FC<AfgNavigationProps> = ({ currentTab, onChan
     { key:'tools', id:'tools' as TabType, label:dari?'ابزارها':'Tools', icon:Wrench },
     { key:'image', id:'image-gen' as TabType, label:dari?'استودیوی تصویر':'Image Studio', icon:ImageIcon },
     { key:'files', id:'tools' as TabType, label:dari?'فایل‌ها':'Files', icon:FolderOpen },
+    { key:'terminal', id:'terminal' as TabType, label:dari?'ترمینل':'Terminal', icon:Terminal },
+    { key:'offline', id:'offline-learning' as TabType, label:dari?'آموزش آفلاین':'Offline Learning', icon:BookOpen },
     { key:'history', id:'history' as TabType, label:dari?'تاریخچه':'History', icon:History },
     { key:'settings', id:'settings' as TabType, label:dari?'تنظیمات':'Settings', icon:Settings },
     { key:'profile', id:'settings' as TabType, label:dari?'پروفایل':'Profile', icon:User },
