@@ -16,6 +16,8 @@ import { handleTerminalApi } from './terminal.ts';
 
 type ApiRequest = IncomingMessage & { originalUrl?: string };
 
+const localIpRateCounters = new Map<string, { count: number; resetAt: number }>();
+
 function corsHeaders(req: IncomingMessage) {
   const origin = req.headers.origin;
   const configured = (process.env.APP_ORIGIN || '').split(',').map((value) => value.trim()).filter(Boolean);
@@ -33,6 +35,9 @@ function sendJson(res: ServerResponse, status: number, body: unknown, requestId:
 
 async function enforceAdminConfiguredRateLimits(req: IncomingMessage, res: ServerResponse, pathname: string, requestId: string): Promise<boolean> {
   if (!pool || !pathname.startsWith('/api/') || ['/api/health','/api/ready'].includes(pathname)) return false;
+  // Guest requests have no authenticated identity or subscription policy. Avoid
+  // querying session tables for them so public chat remains available during DB setup.
+  if (!/(?:^|;)\\s*afg_session=/.test(req.headers.cookie || '')) return false;
   let account: Awaited<ReturnType<typeof authenticateRequest>> = null;
   try { account = await authenticateRequest(req); } catch {
     sendJson(res,503,{error:'Authentication checks are temporarily unavailable.'},requestId);
@@ -139,8 +144,21 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
         return;
       }
     } catch {
-      sendJson(res,503,{error:'Network rate limiting is temporarily unavailable.'},requestId);
-      return;
+      // Keep guest chat usable while optional database rate-limit tables are being
+      // initialized. Apply a conservative per-process fallback instead of failing closed.
+      const now = Date.now();
+      const previous = localIpRateCounters.get(ipKey);
+      if (!previous || previous.resetAt <= now) {
+        localIpRateCounters.set(ipKey, { count: 1, resetAt: now + 60_000 });
+      } else {
+        previous.count += 1;
+        if (previous.count > 120) {
+          res.setHeader('Retry-After', '60');
+          sendJson(res,429,{error:'Too many requests from this network. Please retry shortly.',scope:'ip'},requestId);
+          return;
+        }
+      }
+      console.warn('API_IP_RATE_LIMIT_DB_UNAVAILABLE');
     }
   }
 
