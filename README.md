@@ -4,7 +4,7 @@
 
 AFG AI is an Android-friendly and web-based AI assistant. The current repository contains a React/Vite client, an Express API, PostgreSQL persistence, a server-side provider gateway, and a Capacitor Android wrapper.
 
-> **Project status:** Active development. Core chat and provider discovery are implemented, but authenticated conversation persistence is not yet connected to the chat UI. Read [the Phase 1 gap analysis](docs/GAP_ANALYSIS_PHASE1.md) and [delivery plan](docs/DELIVERY_PLAN.md) before treating any capability as production-ready.
+> **Project status:** Active development. Signed-in chat now attempts to persist user/assistant messages through the authenticated conversation API, and History loads server conversations. This integration has not been runtime-verified and still has known recovery, idempotency, legacy-history migration and localization gaps. Read [the Phase 1 gap analysis](docs/GAP_ANALYSIS_PHASE1.md) and [delivery plan](docs/DELIVERY_PLAN.md) before treating any capability as production-ready.
 
 ## Repository layout
 
