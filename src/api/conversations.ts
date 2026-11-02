@@ -67,11 +67,25 @@ export async function handleConversationsApi(req: IncomingMessage, res: ServerRe
     reply(res,201,{conversation:result.rows[0]}); return true;
   }
 
-  const match = pathname.match(/^\/api\/conversations\/([0-9a-f-]{36})(?:\/(messages))?$/i);
+  const match = pathname.match(/^\/api\/conversations\/([0-9a-f-]{36})(?:\/(messages)(?:\/([0-9a-f-]{36}))?)?$/i);
   if (!match) { reply(res,404,{error:'Conversation route not found.'}); return true; }
-  const [,conversationId,subresource] = match;
+  const [,conversationId,subresource,messageId] = match;
   const owned = await pool.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2 LIMIT 1',[conversationId,user.id]);
   if (!owned.rows.length) { reply(res,404,{error:'Conversation not found.'}); return true; }
+
+  if (subresource === 'messages' && messageId && req.method === 'DELETE') {
+    const deleted = await pool.query(
+      `DELETE FROM messages m USING conversations c
+        WHERE m.id=$1 AND m.conversation_id=c.id AND c.id=$2 AND c.user_id=$3
+          AND m.role IN ('user','assistant')
+        RETURNING m.id`,
+      [messageId,conversationId,user.id],
+    );
+    if (!deleted.rows.length) { reply(res,404,{error:'Message not found.'}); return true; }
+    await pool.query('UPDATE conversations SET updated_at=now() WHERE id=$1 AND user_id=$2',[conversationId,user.id]);
+    reply(res,200,{deleted:true,id:messageId}); return true;
+  }
+  if (messageId) { reply(res,405,{error:'Method not allowed.'}); return true; }
 
   if (subresource === 'messages' && req.method === 'GET') {
     const result = await pool.query(
