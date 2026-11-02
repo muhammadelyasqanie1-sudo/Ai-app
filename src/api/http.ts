@@ -109,8 +109,10 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
   // Cookie-authenticated state changes must pass the double-submit CSRF check.
   const unsafeMethod = !['GET','HEAD','OPTIONS'].includes(req.method || 'GET');
   const hasSessionCookie = /(?:^|;)\s*afg_session=/.test(req.headers.cookie || '');
-  const browserOrigin = typeof req.headers.origin === 'string';
-  if (unsafeMethod && (hasSessionCookie || browserOrigin) && !verifyCsrf(req)) {
+  // CSRF protection is required for ambient cookie-authenticated requests.
+  // An Origin header alone must not block guest chat: guests have no session cookie
+  // and therefore no authenticated browser state for an attacker to exploit.
+  if (unsafeMethod && hasSessionCookie && !verifyCsrf(req)) {
     sendJson(res, 403, { error: 'CSRF validation failed.' }, requestId);
     return;
   }
