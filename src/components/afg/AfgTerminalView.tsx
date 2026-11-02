@@ -113,7 +113,7 @@ export function AfgTerminalView({ language }: { language: Language }) {
     catch (cause:any) {setError(cause?.message || 'Token revocation failed.');}
   }
 
-  const filteredEntries=useMemo(()=>entries.filter(item=>!search || (item.command+' '+item.request_id).toLowerCase().includes(search.toLowerCase())),[entries,search]);
+  const filteredEntries=useMemo(()=>entries.filter(item=>!search || (item.command+' '+item.output_text+' '+item.request_id).toLowerCase().includes(search.toLowerCase())),[entries,search]);
   const copy=async(value:string)=>{try{await navigator.clipboard.writeText(value);}catch{setError(dari?'کپی انجام نشد.':'Clipboard access unavailable.');}};
   const text=dari?{
     title:'ترمینل AFG',desc:'فرمان‌های داخلی فقط‌خواندنی؛ اجرای شِل خاموش است.',
