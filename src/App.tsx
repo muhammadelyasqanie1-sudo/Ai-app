@@ -250,7 +250,7 @@ export default function App() {
     return token ? { 'X-CSRF-Token': decodeURIComponent(token) } : {};
   };
 
-  const ensureServerConversation = async (title: string): Promise<string> => {
+  const ensureServerConversation = async (title: string, seedMessages: AfgMessage[] = []): Promise<string> => {
     if (serverConversationRef.current) return serverConversationRef.current;
     const response = await apiFetch('/api/conversations', {
       method: 'POST',
@@ -261,6 +261,11 @@ export default function App() {
     if (!payload.conversation?.id) throw new Error('Conversation creation returned no ID.');
     serverConversationRef.current = payload.conversation.id;
     setCurrentSessionId(payload.conversation.id);
+    for (const message of seedMessages) {
+      if ((message.role === 'user' || message.role === 'assistant') && message.content.trim()) {
+        await persistServerMessage(payload.conversation.id, message.role, message.content, message.isError ? 'failed' : 'complete');
+      }
+    }
     return payload.conversation.id;
   };
 
@@ -353,7 +358,7 @@ export default function App() {
     let userMessagePersisted = false;
     if (user.email) {
       try {
-        persistedConversationId = await ensureServerConversation(text);
+        persistedConversationId = await ensureServerConversation(text, baseMessages);
         await persistServerMessage(persistedConversationId, 'user', text);
         userMessagePersisted = true;
       } catch {
