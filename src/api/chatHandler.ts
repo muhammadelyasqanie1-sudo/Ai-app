@@ -9,7 +9,7 @@ import { pool } from './database.ts';
 import { ChatRequestSchema } from '../../packages/shared/src/schemas';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
-const chatRequestSchema = ChatRequestSchema;;
+const chatRequestSchema = ChatRequestSchema;
 
 // Per-process load shedding; identity-based/distributed rate limits require authenticated users.
 let activeChatRequests = 0;
