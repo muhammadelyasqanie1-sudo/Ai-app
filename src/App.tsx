@@ -14,6 +14,7 @@ import { AfgToolsCenter } from './components/afg/AfgToolsCenter';
 import { AfgHistoryView } from './components/afg/AfgHistoryView';
 import { AfgSettingsView } from './components/afg/AfgSettingsView';
 import { AfgAdminPanel } from './components/afg/AfgAdminPanel';
+import { AfgTerminalView } from './components/afg/AfgTerminalView';
 import { AfgSideMenu } from './components/afg/AfgSideMenu';
 import { AfgLanguageModal } from './components/afg/AfgLanguageModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
@@ -637,6 +638,12 @@ export default function App() {
 
         {currentTab === 'tools' && (
           <AfgToolsCenter language={language} capabilities={capabilitySnapshot.capabilities} onRunTool={(prompt, options) => { setCurrentTab('chat'); void handleSendMessage(prompt, [], messages, options); }} />
+        )}
+
+        {currentTab === 'terminal' && <AfgTerminalView language={language} />}
+
+        {currentTab === 'offline-learning' && (
+          <section className="mx-auto max-w-4xl p-6"><h1 className="text-2xl font-bold">{language === 'dari' ? 'آموزش آفلاین' : 'Offline Learning'}</h1><p className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">{language === 'dari' ? 'این قابلیت هنوز آماده نیست؛ مدل محلی، بسته‌های امضاشده و ذخیره‌سازی آفلاین پیاده‌سازی نشده‌اند. هیچ درخواست شما به‌طور پنهانی به ابر فرستاده نمی‌شود.' : 'This feature is not available yet. The local model runtime, signed packs and offline storage are not implemented. Requests are never silently sent to the cloud.'}</p></section>
         )}
 
         {currentTab === 'history' && (
