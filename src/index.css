@@ -319,7 +319,7 @@ html[dir="rtl"] .afg-drawer-root.is-closing .afg-drawer-panel { animation:none;t
 .afg-intro-crosshair {position:absolute;color:rgba(104,235,247,.7);font-size:1.1rem;animation:intro-blink 2s infinite}
 .crosshair-one {left:15%;bottom:22%}.crosshair-two {right:16%;top:13%;animation-delay:.8s}
 .afg-intro-particles {position:absolute;inset:0;pointer-events:none}
-.afg-intro-particles i {position:absolute;left:calc((var(--particle-index)*41 + 7)% 97 * 1%);top:calc((var(--particle-index)*67 + 9)% 91 * 1%);width:2px;height:2px;border-radius:50%;background:#a4faff;box-shadow:0 0 8px #55f5f2;opacity:.45;animation:intro-particle 4s ease-in-out infinite;animation-delay:calc(var(--particle-index)*-.21s)}
+.afg-intro-particles i {position:absolute;width:2px;height:2px;border-radius:50%;background:#a4faff;box-shadow:0 0 8px #55f5f2;opacity:.45;animation:intro-particle 4s ease-in-out infinite;animation-delay:calc(var(--particle-index)*-.21s)}
 .afg-intro-copy {z-index:2;text-align:center;margin-top:-.5rem;animation:intro-copy-in 1.2s .35s both}
 .afg-intro-eyebrow {display:flex;align-items:center;justify-content:center;gap:.7rem;margin:0 0 .7rem;color:#83dbe8;font-size:.58rem;letter-spacing:.2em;font-weight:800}
 .afg-intro-eyebrow span {width:22px;height:1px;background:linear-gradient(90deg,transparent,#55f5f2)}
