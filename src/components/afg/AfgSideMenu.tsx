@@ -1,16 +1,8 @@
-import React from 'react';
-import { 
-  X, 
-  Home, 
-  MessageSquare, 
-  Image as ImageIcon, 
-  Code2, 
-  Wrench, 
-  Settings, 
-  LogOut, 
-  Crown,
-  History,
-  ShieldAlert
+import React, { useState } from 'react';
+import {
+  X, Home, MessageSquare, Image as ImageIcon, Wrench, Settings,
+  History, ShieldAlert, Video, Terminal, BookOpen, FolderOpen,
+  ChevronDown, Sparkles, UserRound, Compass
 } from 'lucide-react';
 import { AfgBrainLogo } from './AfgBrainLogo';
 import type { TabType, Language, UserProfile } from '../../types/afg';
@@ -21,108 +13,132 @@ interface AfgSideMenuProps {
   onClose: () => void;
   currentTab: TabType;
   onChangeTab: (tab: TabType) => void;
+  onNewChat: () => void;
   language: Language;
   user: UserProfile;
 }
 
 export const AfgSideMenu: React.FC<AfgSideMenuProps> = ({
-  isOpen,
-  onClose,
-  currentTab,
-  onChangeTab,
-  language,
-  user,
+  isOpen, onClose, currentTab, onChangeTab, onNewChat, language, user,
 }) => {
+  const [toolsExpanded, setToolsExpanded] = useState(true);
   if (!isOpen) return null;
 
+  const dari = language === 'dari';
   const t = translations[language];
+  const select = (tab: TabType) => { onChangeTab(tab); onClose(); };
+  const itemClass = (active: boolean) =>
+    `group flex min-h-11 w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-start text-sm font-medium transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 ${
+      active
+        ? 'border border-cyan-400/25 bg-cyan-400/10 text-cyan-200 shadow-[inset_0_0_18px_rgba(34,211,238,.06)]'
+        : 'border border-transparent text-slate-300 hover:border-white/5 hover:bg-white/[0.06] hover:text-white'
+    }`;
 
-  const menuItems = [
-    { id: 'home' as TabType, label: t.navHome, icon: Home },
-    { id: 'chat' as TabType, label: t.navChat, icon: MessageSquare },
-    { id: 'image-gen' as TabType, label: t.navImage, icon: ImageIcon },
-    { id: 'tools' as TabType, label: t.navTools, icon: Wrench },
+  const mainItems = [
+    { id: 'home' as TabType, label: dari ? 'نمای کلی' : 'Overview', icon: Home },
     { id: 'history' as TabType, label: t.navHistory, icon: History },
-    { id: 'settings' as TabType, label: t.navSettings, icon: Settings },
-    { id: 'admin' as TabType, label: t.navAdmin, icon: ShieldAlert },
+  ];
+  const toolItems = [
+    { id: 'image-gen' as TabType, label: t.navImage, icon: ImageIcon },
+    { id: 'video-gen' as TabType, label: dari ? 'ابزارهای ویدیو' : 'Video tools', icon: Video },
+    { id: 'tools' as TabType, label: t.navTools, icon: Wrench },
+    { id: 'terminal' as TabType, label: dari ? 'ترمینل' : 'Terminal', icon: Terminal },
+    { id: 'offline-learning' as TabType, label: dari ? 'آموزش آفلاین' : 'Offline learning', icon: BookOpen },
   ];
 
-  const handleSelect = (id: TabType) => {
-    onChangeTab(id);
-    onClose();
+  const renderItem = (item: { id: TabType; label: string; icon: React.ElementType }) => {
+    const Icon = item.icon;
+    return (
+      <button key={item.id} type="button" onClick={() => select(item.id)}
+        aria-current={currentTab === item.id ? 'page' : undefined}
+        className={itemClass(currentTab === item.id)}>
+        <Icon aria-hidden="true" size={18} className={currentTab === item.id ? 'text-cyan-300' : 'text-slate-400 group-hover:text-cyan-200'} />
+        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+        {currentTab === item.id && <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_#67e8f9]" />}
+      </button>
+    );
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex animate-in fade-in duration-200">
-      {/* Backdrop */}
-      <div 
-        onClick={onClose}
-        className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
-      />
-
-      {/* Drawer Container (Right side in RTL, Left side in LTR) */}
-      <div 
-        className={`relative z-10 w-72 sm:w-80 h-full bg-[#081129] border-cyan-900/40 p-5 flex flex-col justify-between shadow-2xl ${
-          language === 'dari' ? 'mr-auto border-l' : 'ml-auto border-r'
-        }`}
-      >
-        <div>
-          {/* Top Header with Close Button */}
-          <div className="flex items-center justify-between pb-4 border-b border-cyan-950">
-            <div className="flex items-center gap-2">
+    <div className="afg-drawer-root" data-open="true">
+      <button type="button" aria-label={dari ? 'بستن منو' : 'Close navigation'}
+        className="afg-drawer-backdrop" onClick={onClose} />
+      <aside role="dialog" aria-modal="true" aria-label={dari ? 'منوی پیمایش' : 'Navigation menu'}
+        dir={dari ? 'rtl' : 'ltr'} className="afg-drawer-panel">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-5">
+            <div className="flex items-center gap-3">
               <AfgBrainLogo size="sm" showBadge={false} />
-              <span className="text-lg font-black text-white">
-                {t.brandName}
-              </span>
+              <div className="min-w-0">
+                <div className="text-base font-extrabold tracking-tight text-white">{t.brandName}</div>
+                <div className="text-[10px] font-medium tracking-[.16em] text-cyan-300/70">INTELLIGENCE, CONNECTED</div>
+              </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
-            >
-              <X className="w-5 h-5" />
+            <button type="button" onClick={onClose} aria-label={dari ? 'بستن' : 'Close menu'}
+              className="rounded-xl border border-white/10 p-2 text-slate-400 transition hover:bg-white/10 hover:text-white">
+              <X size={18} />
             </button>
           </div>
 
-          {/* User Profile Card (Screenshot 4) */}
-          <div className="mt-4 p-3 rounded-2xl bg-cyan-950/30 border border-cyan-800/30 flex items-center gap-3">
-            <div className="min-w-0">
-              <h4 className="text-xs font-bold text-white truncate">
-                {language === 'dari' ? user.name : user.nameEn}
-              </h4>
-              <p className="text-[10px] text-cyan-300">
-                {language === 'dari' ? 'حساب مهمان • رایگان' : user.tier}
-              </p>
+          <div className="mx-4 mt-4 flex items-center gap-3 rounded-2xl border border-cyan-400/15 bg-gradient-to-br from-cyan-400/[0.10] to-indigo-500/[0.08] p-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-200">
+              <UserRound size={19} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-bold text-white">{dari ? user.name : user.nameEn}</div>
+              <div className="truncate text-xs text-slate-400">{user.email || (dari ? 'حساب مهمان' : 'Guest account')}</div>
+            </div>
+            <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-1 text-[10px] font-semibold text-cyan-200">
+              {user.tier || (dari ? 'رایگان' : 'Free')}
+            </span>
+          </div>
+
+          <div className="px-4 pt-5">
+            <button type="button" onClick={() => { onNewChat(); onClose(); }}
+              className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-500 px-4 py-3 text-sm font-extrabold text-slate-950 shadow-[0_8px_28px_rgba(6,182,212,.18)] transition duration-200 hover:brightness-110 active:scale-[.98]">
+              <Sparkles size={17} />{dari ? 'گفت‌وگوی جدید' : 'New chat'}
+            </button>
+          </div>
+
+          <nav aria-label={dari ? 'پیمایش' : 'Navigation'} className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 pt-5">
+            <div className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[.18em] text-slate-500">{dari ? 'اصلی' : 'Main'}</div>
+            <div className="space-y-1">{mainItems.map(renderItem)}</div>
+
+            <div className="mb-2 mt-6 flex items-center justify-between">
+              <span className="px-3 text-[10px] font-bold uppercase tracking-[.18em] text-slate-500">{dari ? 'ابزارها' : 'Tools'}</span>
+              <button type="button" onClick={() => setToolsExpanded(v => !v)}
+                aria-expanded={toolsExpanded} aria-controls="afg-drawer-tools"
+                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white">
+                <ChevronDown size={16} className={`transition-transform duration-200 ${toolsExpanded ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+            <div id="afg-drawer-tools" className={`grid transition-[grid-template-rows,opacity] duration-200 ${toolsExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+              <div className="min-h-0 overflow-hidden">
+                <div className="space-y-1">{toolItems.map(renderItem)}
+                  <button type="button" onClick={() => select('tools')} title={dari ? 'مرکز ابزارها و فایل‌ها' : 'Open tools and file workspace'}
+                    className={itemClass(false)}>
+                    <FolderOpen size={18} className="text-slate-400" />
+                    <span className="min-w-0 flex-1 truncate">{dari ? 'فایل‌ها و اسناد' : 'Files & documents'}</span>
+                    <span className="text-[9px] text-slate-500">{dari ? 'مرکز ابزارها' : 'Tools center'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-2 mt-6 px-3 text-[10px] font-bold uppercase tracking-[.18em] text-slate-500">{dari ? 'حساب' : 'Account'}</div>
+            <div className="space-y-1">
+              {renderItem({ id: 'settings', label: t.navSettings, icon: Settings })}
+              {renderItem({ id: 'admin', label: t.navAdmin, icon: ShieldAlert })}
+            </div>
+          </nav>
+
+          <div className="border-t border-white/[0.08] px-5 py-4">
+            <div className="flex items-center justify-between text-[11px] text-slate-500">
+              <span>AFG AI</span><span>One AI. Many capabilities.</span>
             </div>
           </div>
-
-          {/* Navigation Items */}
-          <div className="mt-5 space-y-1">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = currentTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => handleSelect(item.id)}
-                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-                    isActive
-                      ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 shadow-[0_0_15px_rgba(0,229,255,0.2)]'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/50'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </div>
         </div>
-
-        <div className="pt-4 border-t border-cyan-950 text-xs leading-6 text-amber-200">
-          {language === 'dari' ? 'ورود و خروج تا پیاده‌سازی احراز هویت غیرفعال است.' : 'Sign-in and sign-out are unavailable until authentication is implemented.'}
-        </div>
-
-      </div>
+      </aside>
     </div>
   );
 };
