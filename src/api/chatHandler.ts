@@ -18,6 +18,7 @@ const MAX_CONCURRENT_CHAT_REQUESTS = 4;
 async function enforceSelectedModelRateLimit(
   providerId: string,
   modelId: string,
+  req: IncomingMessage,
   requestId: string,
   res: ServerResponse,
   userId: string | null,
@@ -45,7 +46,7 @@ async function enforceSelectedModelRateLimit(
       console.warn('AI_CHAT_RATE_LIMITED', JSON.stringify({
         requestId, providerId, modelId, userId, scope: 'model', windowSeconds,
       }));
-      sendJson({ headers: {} } as IncomingMessage, res, 429, {
+      sendJson(req, res, 429, {
         error: 'This model is temporarily rate limited. Please retry later.',
         errorCode: 'model_rate_limited',
         retryable: true,
@@ -279,7 +280,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     const prepared = await prepareVerifiedChat({ model, messages: upstreamMessages, signal: abortController.signal, noFallback: body.no_fallback === true, onModelSelected: (_providerId, selectedModelId) => { if (activeModelId !== selectedModelId) { activeModelId = selectedModelId; if (res.headersSent && !res.writableEnded) res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: selectedModelId })}\n\n`); } } });
     const { providerId, modelId, stream } = prepared;
     activeModelId = modelId;
-    if (await enforceSelectedModelRateLimit(providerId, modelId, id, res, requestUserId)) return;
+    if (await enforceSelectedModelRateLimit(providerId, modelId, req, id, res, requestUserId)) return;
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
