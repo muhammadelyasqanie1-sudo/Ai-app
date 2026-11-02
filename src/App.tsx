@@ -493,6 +493,8 @@ export default function App() {
     if (index < 0 || !editedText.trim()) return;
     const original = messages[index];
     const context = messages.slice(0, index);
+    serverConversationRef.current = null;
+    setCurrentSessionId(`chat-${Date.now()}`);
     setMessages(context);
     void handleSendMessage(editedText.trim(), original.attachments || [], context);
   };
@@ -521,6 +523,8 @@ export default function App() {
     if (userIndex < 0) return;
     const userMessage = messages[userIndex];
     const context = messages.slice(0, userIndex);
+    serverConversationRef.current = null;
+    setCurrentSessionId(`chat-${Date.now()}`);
     setMessages(context);
     void handleSendMessage(userMessage.content, userMessage.attachments || [], context);
   };
