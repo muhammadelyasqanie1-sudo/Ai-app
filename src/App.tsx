@@ -69,6 +69,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const activeChatAbortRef = useRef<AbortController | null>(null);
   const serverConversationRef = useRef<string | null>(null);
+  const wasAuthenticatedRef = useRef(false);
   const localeChangedThisSession = useRef(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [modelOptions, setModelOptions] = useState<AfgModelOption[]>([]);
@@ -227,9 +228,16 @@ export default function App() {
         .then((response) => response.ok ? response.json() : null)
         .then((data) => {
           if (data?.authenticated && data.user) {
+            wasAuthenticatedRef.current = true;
             setUser({ name: data.user.displayName || 'User', nameEn: data.user.displayName || 'User', email: data.user.email || '', avatar: '', isPremium: false, tier: 'Free' });
             fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const saved=prefs?.preferences; if(saved?.appearance&&['light','dark','neon','system'].includes(saved.appearance))setTheme(saved.appearance); if((saved?.locale||saved?.language)&&['dari','english'].includes(saved.locale||saved.language)){if(localeChangedThisSession.current){const chosen=localStorage.getItem('afg_language')==='english'?'english':'dari';const csrf=document.cookie.split('; ').find((item)=>item.startsWith('afg_csrf='))?.slice('afg_csrf='.length)||'';void fetch(API_BASE_URL+'/api/account/locale',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(csrf)},body:JSON.stringify({locale:chosen})}).catch(()=>console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));}else{setLanguage(saved.locale==='english'||saved.language==='english'?'english':'dari');setHasSelectedLanguage(true);localStorage.setItem('afg_language',saved.locale==='english'||saved.language==='english'?'english':'dari');}} document.documentElement.style.fontSize=String(saved?.font_size||14)+'px'; const accentMap:Record<string,string>={cyan:'#00e5ff',blue:'#3b82f6',violet:'#8b5cf6',emerald:'#10b981',rose:'#f43f5e'}; document.documentElement.style.setProperty('--accent-cyan',accentMap[saved?.accent_color]||accentMap.cyan); document.documentElement.dataset.afgDensity=saved?.density||'comfortable'; document.documentElement.dataset.afgChatWidth=saved?.chat_width||'comfortable'; document.documentElement.classList.toggle('afg-reduce-motion',saved?.animations_enabled===false); localStorage.setItem('afg_voice_enabled',String(saved?.voice_enabled!==false)); window.dispatchEvent(new Event('afg-voice-preference-change')); if(saved?.auto_select_model===false){setSelectedModel('');return;} const model=saved?.default_model; if(typeof model==='string'&&model)setSelectedModel(model); }).catch(() => {});
           } else {
+            if (wasAuthenticatedRef.current) {
+              wasAuthenticatedRef.current = false;
+              serverConversationRef.current = null;
+              setMessages([]);
+              setCurrentSessionId(`chat-${Date.now()}`);
+            }
             setUser(DEFAULT_USER);
             localStorage.removeItem('afg_voice_enabled');
             window.dispatchEvent(new Event('afg-voice-preference-change'));
