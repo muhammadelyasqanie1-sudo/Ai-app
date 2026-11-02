@@ -8,10 +8,12 @@ const CAPABILITIES: CapabilityFlags = {
 };
 
 function config() {
-  const baseUrl = process.env.OPENAI_COMPAT_BASE_URL?.trim().replace(/\/+$/, '');
-  const apiKey = process.env.OPENAI_COMPAT_API_KEY?.trim();
-  const id = process.env.OPENAI_COMPAT_PROVIDER_ID?.trim() || 'openai-compatible';
-  const displayName = process.env.OPENAI_COMPAT_DISPLAY_NAME?.trim() || 'OpenAI-compatible provider';
+  const geminiKey = process.env.GEMINI_API_KEY?.trim();
+  const baseUrl = (process.env.OPENAI_COMPAT_BASE_URL?.trim() ||
+    (geminiKey ? 'https://generativelanguage.googleapis.com/v1beta/openai' : '')).replace(/\/+$/, '');
+  const apiKey = process.env.OPENAI_COMPAT_API_KEY?.trim() || geminiKey;
+  const id = process.env.OPENAI_COMPAT_PROVIDER_ID?.trim() || (geminiKey ? 'gemini-openai-compatible' : 'openai-compatible');
+  const displayName = process.env.OPENAI_COMPAT_DISPLAY_NAME?.trim() || (geminiKey ? 'Google Gemini' : 'OpenAI-compatible provider');
   return { baseUrl, apiKey, id, displayName };
 }
 
@@ -50,7 +52,10 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
           headers: { Authorization: 'Bearer ' + current.apiKey, Accept: 'application/json' },
           signal: AbortSignal.timeout(12_000),
         });
-        if (!response.ok) throw new ProviderAdapterError('Provider model discovery failed.', 502, 'model_catalog_failed');
+        if (!response.ok) {
+          console.error('AI_PROVIDER_MODEL_DISCOVERY_FAILED', JSON.stringify({ provider: current.id, status: response.status }));
+          throw new ProviderAdapterError('Provider model discovery failed.', response.status >= 400 && response.status < 500 ? response.status : 502, 'model_catalog_failed');
+        }
         const payload = await response.json() as { data?: OpenAIModel[] };
         if (!Array.isArray(payload.data)) throw new ProviderAdapterError('Provider returned an invalid model catalog.', 502, 'invalid_model_catalog');
         return payload.data.filter((model) => typeof model.id === 'string' && /^[a-zA-Z0-9@][a-zA-Z0-9._:/-]{0,299}$/.test(model.id))
@@ -66,6 +71,7 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
           }));
       } catch (error) {
         if (error instanceof ProviderAdapterError) throw error;
+        console.error('AI_PROVIDER_MODEL_DISCOVERY_ERROR', JSON.stringify({ provider: current.id, error: error instanceof Error ? error.message : 'unknown_error' }));
         throw new ProviderAdapterError('Could not reach the OpenAI-compatible provider.', 502, 'provider_unreachable');
       }
     },
@@ -83,13 +89,17 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
           body: JSON.stringify({ model: modelId, messages: [{ role: 'user', content: 'Reply with OK.' }], max_tokens: 1, stream: false }),
           signal: AbortSignal.timeout(12_000),
         });
-        if (!response.ok) return { healthy: false, checkedAt, message: 'Provider not reachable.' };
+        if (!response.ok) {
+          console.warn('AI_PROVIDER_HEALTH_CHECK_FAILED', JSON.stringify({ provider: current.id, model: modelId, status: response.status }));
+          return { healthy: false, checkedAt, message: 'Provider not reachable.' };
+        }
         const payload = await response.json() as { choices?: Array<{ message?: { content?: unknown } }>; error?: unknown };
         const content = payload.choices?.[0]?.message?.content;
         return typeof content === 'string' && content.length > 0
           ? { healthy: true, checkedAt }
           : { healthy: false, checkedAt, message: 'Provider not reachable.' };
-      } catch {
+      } catch (error) {
+        console.error('AI_PROVIDER_HEALTH_CHECK_ERROR', JSON.stringify({ provider: current.id, model: modelId, error: error instanceof Error ? error.message : 'unknown_error' }));
         return { healthy: false, checkedAt, message: 'Provider not reachable.' };
       }
     },
@@ -107,10 +117,12 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
           body: JSON.stringify({ model: input.model, messages: input.messages, stream: true }),
           signal: input.signal ? AbortSignal.any([AbortSignal.timeout(90_000), input.signal]) : AbortSignal.timeout(90_000),
         });
-      } catch {
+      } catch (error) {
+        console.error('AI_PROVIDER_CHAT_CONNECTION_ERROR', JSON.stringify({ provider: current.id, model: input.model, error: error instanceof Error ? error.message : 'unknown_error' }));
         throw new ProviderAdapterError('Could not contact the OpenAI-compatible provider.', 502, 'provider_unreachable');
       }
       if (!response.ok || !response.body) {
+        console.error('AI_PROVIDER_CHAT_REJECTED', JSON.stringify({ provider: current.id, model: input.model, status: response.status }));
         throw new ProviderAdapterError('The OpenAI-compatible provider rejected the chat request.', response.status >= 400 && response.status < 500 ? response.status : 502, 'provider_request_rejected');
       }
 
