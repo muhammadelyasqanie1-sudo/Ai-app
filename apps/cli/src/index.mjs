@@ -15,7 +15,10 @@ Usage:
   afg models list
   afg conv list
   afg files list
-  afg term <command>       (disabled unless an isolated sandbox is deployed)
+  afg terminal sessions
+  afg terminal history [session-id]
+  afg terminal close <session-id>
+  afg term <safe afg command> (native read-only commands only)
   afg --help
   afg version
 
@@ -95,6 +98,10 @@ async function nativeCommand(config, command) {
   const sessionId = await getSession(config);
   return request(config, `/api/terminal/sessions/${sessionId}/commands`, { method: 'POST', body: JSON.stringify({ command }) });
 }
+function printCommandResult(result) {
+  const { data, requestId } = result;
+  stdout.write((data.output || '') + `\\nRequest ID: ${data.requestId || requestId}\\n`);
+}
 
 async function main() {
   const args = process.argv.slice(2);
@@ -131,10 +138,35 @@ async function main() {
     stdout.write((data.output || '') + `\nRequest ID: ${data.requestId || requestId}\n`); return;
   }
   if (group === 'files' && action === 'list') {
-    const { data, requestId } = await nativeCommand(config, 'afg files list');
-    stdout.write((data.output || '') + `\nRequest ID: ${data.requestId || requestId}\n`); return;
+    printCommandResult(await nativeCommand(config, 'afg files list')); return;
   }
-  if (group === 'term') return exit(4, 'Terminal shell execution is disabled. No shell is available on the application server.');
+  if (group === 'terminal' && action === 'sessions') {
+    const { data } = await request(config, '/api/terminal/sessions');
+    const sessions = data.sessions || [];
+    stdout.write(sessions.length ? sessions.map(item => `${item.id}  ${item.surface}  last active ${item.last_active_at}`).join('\\n') + '\\n' : 'No active Terminal sessions.\\n');
+    return;
+  }
+  if (group === 'terminal' && action === 'history') {
+    const sessionId = args[2] || await getSession(config);
+    if (!/^[0-9a-f-]{36}$/i.test(sessionId)) return exit(1, 'Invalid session ID.');
+    const { data } = await request(config, `/api/terminal/sessions/${sessionId}/history`);
+    const rows = data.history || [];
+    stdout.write(rows.length ? rows.map(item => `[${item.created_at}] ${item.command}\\n${item.output_text || ''}\\nexit ${item.exit_code} · ${item.duration_ms}ms · ${item.request_id}`).join('\\n\\n') + '\\n' : 'No command history for this session.\\n');
+    return;
+  }
+  if (group === 'terminal' && action === 'close') {
+    const sessionId = args[2];
+    if (!sessionId || !/^[0-9a-f-]{36}$/i.test(sessionId)) return exit(1, 'Usage: afg terminal close <session-id>');
+    await request(config, `/api/terminal/sessions/${sessionId}`, { method: 'DELETE' });
+    stdout.write('Terminal session closed.\\n'); return;
+  }
+  if (group === 'term') {
+    const requested = args.slice(1);
+    const safeCommands = new Set(['help','version','models list','conv list','files list']);
+    const safe = requested.join(' ');
+    if (!safeCommands.has(safe)) return exit(4, 'Only safe native commands are available: help, version, models list, conv list, files list. Shell execution is disabled.');
+    printCommandResult(await nativeCommand(config, `afg ${safe}`)); return;
+  }
   if (group === 'chat' || group === 'image' || group === 'admin' || group === 'offline' || group === 'token') {
     return exit(1, `This command is not implemented in this CLI release: afg ${args.join(' ')}. Run afg --help for supported commands.`);
   }
