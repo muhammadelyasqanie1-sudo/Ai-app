@@ -45,6 +45,7 @@ BEGIN
     RAISE EXCEPTION 'terminal_audit is append-only';
   END IF;
   IF NEW.command IS DISTINCT FROM OLD.command
+     OR NEW.output_text IS DISTINCT FROM OLD.output_text
      OR NEW.exit_code IS DISTINCT FROM OLD.exit_code
      OR NEW.duration_ms IS DISTINCT FROM OLD.duration_ms
      OR NEW.request_id IS DISTINCT FROM OLD.request_id
