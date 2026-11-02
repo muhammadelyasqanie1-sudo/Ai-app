@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "tsx server.ts",
+    "cli": "node apps/cli/src/index.mjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "android:sync": "cap sync android",
