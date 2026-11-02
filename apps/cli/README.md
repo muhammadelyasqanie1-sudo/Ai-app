@@ -17,6 +17,8 @@ npm run cli -- whoami
 npm run cli -- models list
 npm run cli -- conv list
 npm run cli -- files list
+npm run cli -- terminal sessions
+npm run cli -- terminal history
 npm run cli -- logout
 ```
 
@@ -42,9 +44,13 @@ Configuration is written to `~/.afg/config.toml`; directory permissions are set 
 - `afg models list`
 - `afg conv list`
 - `afg files list`
+- `afg terminal sessions`
+- `afg terminal history [session-id]`
+- `afg terminal close <session-id>`
+- `afg term help|version|models list|conv list|files list` (strict safe-command allowlist; no shell)
 - `afg help`, `afg --help`, `afg version`
 
-The following are intentionally unavailable and return an honest unsupported-command message: chat, image generation, file upload/download, conversation mutation/export/search, model health/show, admin commands, offline pack management and shell execution. No arbitrary shell command is run on the application server.
+The following remain unavailable and return an honest unsupported-command message: chat, image generation, file upload/download, conversation mutation/export/search, model health/show, admin commands, offline pack management and shell execution. `afg term` accepts only the documented native read-only command allowlist; it never invokes a shell. No arbitrary shell command is run on the application server.
 
 ## Exit codes
 
