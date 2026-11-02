@@ -54,7 +54,9 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
     return true;
   }
   if (pathname === '/api/account/preferences' && req.method === 'GET') {
-    const result = await pool.query("SELECT p.*, COALESCE(s.locale,u.preferred_language,'dari') AS locale FROM users u LEFT JOIN user_preferences p ON p.user_id=u.id LEFT JOIN user_settings s ON s.user_id=u.id WHERE u.id=$1", [user.id]);
+    await pool.query("INSERT INTO user_settings(user_id,locale) SELECT id,COALESCE(preferred_language,'dari') FROM users WHERE id=$1 ON CONFLICT(user_id) DO NOTHING", [user.id]);
+    await pool.query("INSERT INTO user_preferences(user_id,language,default_language) SELECT id,COALESCE(preferred_language,'dari'),COALESCE(preferred_language,'dari') FROM users WHERE id=$1 ON CONFLICT(user_id) DO NOTHING", [user.id]);
+    const result = await pool.query("SELECT p.*, s.locale FROM user_preferences p LEFT JOIN user_settings s ON s.user_id=p.user_id WHERE p.user_id=$1", [user.id]);
     reply(res, 200, { preferences: result.rows[0] || null }); return true;
   }
   if (pathname === '/api/account/preferences' && req.method === 'PATCH') {
