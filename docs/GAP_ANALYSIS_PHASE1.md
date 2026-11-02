@@ -102,6 +102,20 @@ Highest leverage is to make the existing core path honest and enforceable before
 
 This task begins with items 1–3 as focused backend hardening. Items 4–5 remain the next implementation milestone if not completed in this change. No unsupported provider feature will be enabled to make the interface appear fuller.
 
+
+## 5. Changes made during this task
+
+Committed to `main` after the source review:
+- Removed the generic API middleware's model limiter that trusted the client-controlled `X-AFG-Model` header.
+- Moved model-specific rate enforcement into the chat stream's asynchronous gateway model-selection callback. The policy key is now built from the actual provider/model selected by the gateway, including fallback candidates; each candidate is counted at most once per request. If the database-backed limiter is unavailable, the chat fails closed for that model-selection attempt. If no database is configured, model-specific distributed limiting is unavailable and only the existing process-level concurrency guard remains.
+- Added a feature-specific structured chat success event and retained structured stream failure/empty-response events. The completion/failure logs now identify the actual selected fallback model rather than always reporting the originally prepared model.
+- Added the outer request ID to conversation API JSON responses when the shared HTTP boundary supplies it.
+- Removed the obsolete client-supplied model-limit header from the chat UI.
+- Added the missing root `README.md` with local setup, migration, provider, environment, Android and operational guidance.
+- Expanded `.env.example` with the OAuth, email and research variables used by the inspected code, and corrected its database migration instructions.
+
+**These are focused backend/documentation improvements, not a complete Phase 1 delivery.** The signed-in chat flow still does not create/restore server conversations or persist user/assistant messages, and History remains localStorage-backed. Those are the highest-priority remaining implementation tasks.
+
 ## 4. Verification boundary
 
 This is source inspection, not runtime proof. No tests, type-check, lint, build, database migration, provider smoke test, manual UI verification or deployment were run. Provider availability, deployed environment values, live database schema and current production behavior remain unverified.
