@@ -29,15 +29,6 @@ export function AfgTerminalView({ language }: { language: Language }) {
   };
   const postHeaders = () => ({ 'X-CSRF-Token': csrf(), 'Content-Type':'application/json' });
 
-  const loadSessions = useCallback(async () => {
-    const response = await apiFetch('/api/terminal/sessions');
-    const data = await response.json();
-    const active = (data.sessions || []) as Session[];
-    setSessions(active);
-    if (!session && active[0]) setSession(active[0].id);
-    if (session && !active.some(item=>item.id===session)) setSession(active[0]?.id || '');
-  },[session]);
-
   const loadAudit = useCallback(async (id:string) => {
     if (!id) return;
     const response = await apiFetch('/api/terminal/sessions/'+id+'/history');
