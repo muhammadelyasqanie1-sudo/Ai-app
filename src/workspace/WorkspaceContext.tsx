@@ -4,16 +4,20 @@
  */
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import { DEFAULT_MODEL, SEED_CHATS, SEED_PROJECTS } from './data';
+import { DEFAULT_MODEL, INITIAL_CHAT_ID, SEED_CHATS, SEED_PROJECTS } from './data';
 import { sendChatMessage } from './api';
-import type { Chat, Message, Project, SidebarTab, View } from './types';
+import type { Chat, Direction, Message, Project, SidebarTab, View } from './types';
 import { uid } from './utils';
 
 const NEW_CHAT_TITLE = 'New Code chat';
 
 interface WorkspaceState {
+  /** Mobile drawer. */
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
+  /** Desktop collapse. */
+  collapsed: boolean;
+  toggleCollapsed: () => void;
   tab: SidebarTab;
   setTab: (tab: SidebarTab) => void;
   view: View;
@@ -29,6 +33,9 @@ interface WorkspaceState {
   sendMessage: (text: string) => Promise<void>;
   isReplying: boolean;
   model: string;
+  setModel: (id: string) => void;
+  dir: Direction;
+  setDir: (dir: Direction) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceState | null>(null);
@@ -39,17 +46,27 @@ function createEmptyChat(): Chat {
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState<SidebarTab>('chats');
   const [view, setView] = useState<View>('chat');
   const [search, setSearch] = useState('');
-  const [chats, setChats] = useState<Chat[]>(() => [createEmptyChat(), ...SEED_CHATS]);
-  const [activeChatId, setActiveChatId] = useState<string>(() => chats[0]?.id ?? '');
+  const [chats, setChats] = useState<Chat[]>(SEED_CHATS);
+  const [activeChatId, setActiveChatId] = useState<string>(INITIAL_CHAT_ID);
   const [isReplying, setIsReplying] = useState(false);
-  // MODEL INJECTION POINT: make this selectable and persist it.
-  const [model] = useState(DEFAULT_MODEL);
+  // MODEL INJECTION POINT: persist the selected model.
+  const [model, setModel] = useState(DEFAULT_MODEL);
   const [projects] = useState<Project[]>(SEED_PROJECTS);
+  const [dir, setDirState] = useState<Direction>(() => (document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'));
 
   const activeChat = chats.find((c) => c.id === activeChatId) ?? chats[0];
+
+  const setDir = useCallback((next: Direction) => {
+    document.documentElement.dir = next;
+    document.documentElement.lang = next === 'rtl' ? 'fa' : 'en';
+    setDirState(next);
+  }, []);
+
+  const toggleCollapsed = useCallback(() => setCollapsed((v) => !v), []);
 
   const filteredChats = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -130,6 +147,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const value: WorkspaceState = {
     sidebarOpen,
     setSidebarOpen,
+    collapsed,
+    toggleCollapsed,
     tab,
     setTab,
     view,
@@ -145,6 +164,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     sendMessage,
     isReplying,
     model,
+    setModel,
+    dir,
+    setDir,
   };
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

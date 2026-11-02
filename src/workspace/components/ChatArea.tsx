@@ -1,39 +1,20 @@
 /**
- * Message list + empty state.
- * The tiny fenced-code renderer below keeps this file dependency-free. For full
- * markdown, math and syntax highlighting, swap it for the existing
- * src/components/MarkdownRenderer.tsx.
+ * Message list + empty state + floating input.
+ * On load (and whenever you switch chats) messages fade up one after another.
  */
 
 import { useEffect, useRef } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Sparkles } from 'lucide-react';
 import { useWorkspace } from '../WorkspaceContext';
 import { SUGGESTIONS } from '../data';
-import InputBox from './InputBox';
+import MessageBubble, { ThinkingBubble } from './MessageBubble';
+import BottomInput from './BottomInput';
 
-/** Split text on ``` fences into plain and code parts. */
-function MessageContent({ text }: { text: string }) {
-  const parts = text.split(/```(?:\w+)?\n?/);
-  return (
-    <div className="space-y-3">
-      {parts.map((part, i) =>
-        i % 2 === 1 ? (
-          <pre
-            key={i}
-            dir="ltr"
-            className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3 font-mono text-[13px] leading-relaxed text-slate-800"
-          >
-            <code>{part.trimEnd()}</code>
-          </pre>
-        ) : part.trim() ? (
-          <p key={i} dir="auto" className="whitespace-pre-wrap leading-relaxed">
-            {part.trim()}
-          </p>
-        ) : null,
-      )}
-    </div>
-  );
-}
+const listVariants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
+};
 
 export default function ChatArea() {
   const { activeChat, sendMessage, isReplying } = useWorkspace();
@@ -41,69 +22,70 @@ export default function ChatArea() {
 
   // Keep the newest message in view.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' });
+    endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
   }, [activeChat.messages.length, isReplying]);
 
   const empty = activeChat.messages.length === 0;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl px-4 py-6">
+        {/* Bottom padding keeps the last message clear of the floating input */}
+        <div className="mx-auto w-full max-w-3xl px-4 pb-36 pt-6">
           {empty ? (
-            <div className="ws-fade-in flex flex-col items-center pt-[12vh] text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-700 text-white">
+            <motion.div
+              key={`empty-${activeChat.id}`}
+              variants={listVariants}
+              initial="hidden"
+              animate="show"
+              className="flex flex-col items-center pt-[12vh] text-center"
+            >
+              <motion.div
+                variants={{ hidden: { opacity: 0, scale: 0.9 }, show: { opacity: 1, scale: 1 } }}
+                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-b from-[#3b82f6] to-brand text-white shadow-sm"
+              >
                 <Sparkles size={22} />
-              </div>
-              <h2 className="mt-5 text-xl font-semibold tracking-tight">What are we building?</h2>
-              <p className="mt-1 text-sm text-slate-500">Ask about code, errors, or your project.</p>
+              </motion.div>
+              <motion.h2
+                variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
+                className="mt-5 text-xl font-semibold tracking-tight"
+              >
+                What are we building?
+              </motion.h2>
+              <motion.p
+                variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
+                className="mt-1 text-sm text-gray-500"
+              >
+                Ask about code, errors, or your app.
+              </motion.p>
               <div className="mt-6 flex flex-wrap justify-center gap-2">
                 {SUGGESTIONS.map((s) => (
-                  <button
+                  <motion.button
                     key={s}
+                    variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
+                    whileHover={{ scale: 1.02, boxShadow: '0 6px 16px -8px rgba(37, 99, 235, 0.45)' }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => void sendMessage(s)}
-                    className="rounded-full border border-slate-200 px-3.5 py-1.5 text-sm text-slate-600 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800"
+                    className="rounded-full border border-line bg-white px-3.5 py-1.5 text-sm text-gray-600 transition-colors hover:border-blue-300 hover:text-blue-800"
                   >
                     {s}
-                  </button>
+                  </motion.button>
                 ))}
               </div>
-            </div>
+            </motion.div>
           ) : (
-            <ul className="space-y-6">
+            <motion.ul key={activeChat.id} variants={listVariants} initial="hidden" animate="show" className="space-y-5">
               {activeChat.messages.map((m) => (
-                <li key={m.id} className={`ws-fade-in flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  {m.role === 'user' ? (
-                    <div className="max-w-[85%] rounded-2xl bg-slate-100 px-4 py-2.5 text-sm" dir="auto">
-                      <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
-                    </div>
-                  ) : (
-                    <div className="flex max-w-full gap-3 text-sm">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-700 text-white">
-                        <Sparkles size={14} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <MessageContent text={m.content} />
-                      </div>
-                    </div>
-                  )}
-                </li>
+                <MessageBubble key={m.id} message={m} />
               ))}
-              {isReplying && (
-                <li className="flex items-center gap-1.5 ps-10 text-slate-400" aria-live="polite">
-                  <span className="sr-only">Assistant is typing</span>
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:150ms]" />
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:300ms]" />
-                </li>
-              )}
-            </ul>
+              <AnimatePresence>{isReplying && <ThinkingBubble key="thinking" />}</AnimatePresence>
+            </motion.ul>
           )}
           <div ref={endRef} />
         </div>
       </div>
 
-      <InputBox />
+      <BottomInput />
     </div>
   );
 }
