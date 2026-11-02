@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   X, Home, MessageSquare, Image as ImageIcon, Wrench, Settings,
   History, ShieldAlert, Video, Terminal, BookOpen, FolderOpen,
@@ -22,7 +22,16 @@ export const AfgSideMenu: React.FC<AfgSideMenuProps> = ({
   isOpen, onClose, currentTab, onChangeTab, onNewChat, language, user,
 }) => {
   const [toolsExpanded, setToolsExpanded] = useState(true);
-  if (!isOpen) return null;
+  const [isMounted, setIsMounted] = useState(isOpen);
+  const [isClosing, setIsClosing] = useState(false);
+  useEffect(() => {
+    if (isOpen) { setIsMounted(true); setIsClosing(false); return; }
+    if (!isMounted) return;
+    setIsClosing(true);
+    const timer = window.setTimeout(() => { setIsMounted(false); setIsClosing(false); }, 230);
+    return () => window.clearTimeout(timer);
+  }, [isOpen, isMounted]);
+  if (!isMounted) return null;
 
   const dari = language === 'dari';
   const t = translations[language];
@@ -60,7 +69,7 @@ export const AfgSideMenu: React.FC<AfgSideMenuProps> = ({
   };
 
   return (
-    <div className="afg-drawer-root" data-open="true">
+    <div className={'afg-drawer-root' + (isClosing ? ' is-closing' : '')} data-open={!isClosing}>
       <button type="button" aria-label={dari ? 'بستن منو' : 'Close navigation'}
         className="afg-drawer-backdrop" onClick={onClose} />
       <aside role="dialog" aria-modal="true" aria-label={dari ? 'منوی پیمایش' : 'Navigation menu'}
