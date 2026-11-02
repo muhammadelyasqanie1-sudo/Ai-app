@@ -14,6 +14,9 @@ AFG AI is an Android-friendly and web-based AI assistant. The current repository
 - `database/migrations/` — ordered PostgreSQL migrations (the clean-install source of truth).
 - `database/schema.sql` — legacy bootstrap/reference schema; new installations should use migrations.
 - `docs/` — architecture, security, reliability, acceptance criteria and delivery/reporting rules.
+- [Terminal status and command reference](docs/TERMINAL.md) — Phase 1 read-only Terminal API.
+- [Offline Learning status](docs/OFFLINE.md) — current disabled state and implementation prerequisites.
+- [Terminal + Offline gap analysis](docs/TERMINAL_OFFLINE_GAP_ANALYSIS.md) — what exists and what remains.
 - `.github/workflows/android-apk.yml` — manually triggered debug APK build.
 
 There is currently no checked-in Render Blueprint, Dockerfile or general deployment manifest. Configure the production API and static client using the hosting provider's dashboard and the instructions below.
@@ -73,6 +76,9 @@ See [.env.example](.env.example) for the complete variable list. Main groups:
 | `AFG_ADMIN_BOOTSTRAP_TOKEN` | One-time initial admin bootstrap secret |
 | `TAVILY_API_KEY` | Optional research search integration |
 | `AFG_UPLOAD_QUARANTINE_DIR` | Private upload quarantine path; upload processing remains disabled until the full pipeline exists |
+| `TERMINAL_EXEC_ENABLED`, `TERMINAL_SANDBOX`, `TERMINAL_ALLOWLIST`, `TERMINAL_TIMEOUT_SECONDS`, `TERMINAL_MAX_OUTPUT_BYTES` | Terminal execution controls; shell execution is not implemented and must remain disabled |
+| `CLI_TOKEN_TTL_DAYS`, `CLI_RATE_LIMIT_PER_HOUR` | CLI token lifetime and reserved per-token rate limit setting; dedicated limit is not yet wired |
+| `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_PULL_ON_INSTALL`, `PACK_SIGNING_PUBKEY`, `PACK_MIRROR_URL`, `OFFLINE_SYNC_DEFAULT` | Reserved Offline Learning configuration; no local runtime or signed pack service is implemented yet |
 | `AFG_UNKNOWN_CONTEXT_BUDGET` | Conservative context budget for models without context metadata |
 | `VITE_API_BASE_URL` | Optional public API base for a separately hosted native APK; never put secrets here |
 
