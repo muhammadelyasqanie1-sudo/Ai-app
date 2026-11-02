@@ -303,7 +303,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       }
       if (!emittedContent) {
         console.warn('AI_CHAT_EMPTY_RESPONSE', JSON.stringify({
-          requestId: id, providerId: prepared.providerId, modelId: prepared.modelId,
+          requestId: id, selectedModel: activeModelId,
           userId: requestUserId, latencyMs: Date.now() - startedAt,
         }));
         res.write(`data: ${JSON.stringify({ type: 'error', error: 'The AI provider returned an empty response. Please retry.', retryable: true, requestId: id })}\n\n`);
@@ -311,7 +311,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       console.info('AI_CHAT_COMPLETED', JSON.stringify({
-        requestId: id, providerId: prepared.providerId, modelId: prepared.modelId,
+        requestId: id, selectedModel: activeModelId || (prepared.providerId + '::' + prepared.modelId),
         userId: requestUserId, outcome: 'success', latencyMs: Date.now() - startedAt,
       }));
       res.write(`data: ${JSON.stringify({ type: 'done', requestId: id })}\n\n`);
@@ -322,8 +322,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       const streamRetryable = !['invalid_request','content_policy','auth'].includes(streamErrorCode);
       console.error('AI_PROVIDER_STREAM_FAILED', JSON.stringify({
         requestId: id,
-        provider: prepared.providerId,
-        model: prepared.modelId,
+        provider: activeModelId.split('::')[0] || prepared.providerId,
+        model: activeModelId.includes('::') ? activeModelId.slice(activeModelId.indexOf('::') + 2) : prepared.modelId,
         code: streamErrorCode,
         providerCode: error instanceof ProviderAdapterError ? error.code : 'unexpected_stream_error',
         userId: requestUserId,
