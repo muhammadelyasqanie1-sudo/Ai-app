@@ -518,7 +518,7 @@ export default function App() {
 
   const handleDeleteMessage = async (messageId: string) => {
     const conversationId = serverConversationRef.current;
-    if (user.email && conversationId) {
+    if (user.email && conversationId && /^[0-9a-f-]{36}$/i.test(messageId)) {
       try {
         await apiFetch('/api/conversations/' + encodeURIComponent(conversationId) + '/messages/' + encodeURIComponent(messageId), {
           method: 'DELETE',
