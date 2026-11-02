@@ -31,9 +31,9 @@ Audited against the current main tree and source files. Code inspection only; no
 
 ## Production gaps
 
-1. The standalone `afg` CLI does not exist yet; this API is not a complete CLI.
-2. Token hourly throttling is not wired; existing global/IP/user limits are the only current protection.
-3. Terminal xterm UX, tabs, search, completion and audit drawer are absent.
+1. A Node.js CLI exists for login, logout, whoami, models list, conv list and files list; it is not a compiled single binary, has no OS keyring, and does not implement the full command matrix.
+2. Per-token hourly rate buckets are implemented in code but require migration `0005_cli_token_rate_limits.sql` to be applied.
+3. Terminal UI has sessions, persisted scrollback, search, arrow-key command history and token controls; xterm.js, multi-tab terminal emulation, tab completion and a dedicated audit drawer remain absent.
 4. Shell execution must remain off. Setting `TERMINAL_EXEC_ENABLED=true` does not enable it safely.
-5. Offline Learning is not implemented: no Ollama, WebLLM/WASM, signed packs, lessons or offline progress.
-6. Migration is not applied and new routes/UI are not runtime verified.
+5. Offline foundations now include signed manifest verification, local IndexedDB pack/lesson/progress/quiz/session storage and a conservative educational pre-filter; no catalog, downloads, model runtime, curated pack, tutor screen or Ollama integration exists.
+6. Migrations `0004`–`0007` are not applied; new routes, CLI and browser storage modules are not runtime verified.
