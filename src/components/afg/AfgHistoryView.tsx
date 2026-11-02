@@ -39,7 +39,7 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
   const t = translations[language];
   const [searchQuery, setSearchQuery] = useState('');
   const [sessions, setSessions] = useState<AfgChatSession[]>(() => {
-    try { const saved = JSON.parse(localStorage.getItem('afg_sessions') || '[]'); return Array.isArray(saved) ? saved : []; }
+    try { const saved = JSON.parse(localStorage.getItem('afg_sessions') || '[]'); return Array.isArray(saved) ? saved.filter((item: any) => typeof item?.id === 'string' && item.id.startsWith('chat-')) : []; }
     catch { return []; }
   });
   const [loading, setLoading] = useState(false);
@@ -47,7 +47,12 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
 
   useEffect(() => {
     if (!isAuthenticated) {
-      try { const saved = JSON.parse(localStorage.getItem('afg_sessions') || '[]'); setSessions(Array.isArray(saved) ? saved : []); }
+      try {
+        const saved = JSON.parse(localStorage.getItem('afg_sessions') || '[]');
+        const guestSessions = Array.isArray(saved) ? saved.filter((item: any) => typeof item?.id === 'string' && item.id.startsWith('chat-')) : [];
+        setSessions(guestSessions);
+        localStorage.setItem('afg_sessions', JSON.stringify(guestSessions));
+      }
       catch { setSessions([]); }
       return;
     }
