@@ -3,7 +3,6 @@
 import { useWorkspace } from '../WorkspaceContext';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import BottomNav from './BottomNav';
 import ChatArea from './ChatArea';
 import ToolsMenu from './ToolsMenu';
 import TerminalView from './TerminalView';
@@ -22,8 +21,7 @@ export default function Layout() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Header />
-        {/* pb-16 leaves room for the fixed bottom nav on mobile */}
-        <main className="flex min-h-0 flex-1 flex-col pb-16 lg:pb-0">
+        <main className="flex min-h-0 flex-1 flex-col">
           {view === 'chat' && <ChatArea />}
           {view === 'tools' && <ToolsMenu />}
           {view === 'terminal' && <TerminalView />}
@@ -35,7 +33,6 @@ export default function Layout() {
         </main>
       </div>
 
-      <BottomNav />
     </div>
   );
 }
