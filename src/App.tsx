@@ -187,6 +187,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (user.email) return;
     try {
       const stored = JSON.parse(localStorage.getItem('afg_sessions') || '[]');
       const sessions = Array.isArray(stored) ? stored : [];
@@ -208,7 +209,7 @@ export default function App() {
       };
       localStorage.setItem('afg_sessions', JSON.stringify([session, ...sessions.filter((item: any) => item?.id !== currentSessionId)].slice(0, 200)));
     } catch { console.error('AFG_AI_LOCAL_HISTORY_SAVE_FAILED'); }
-  }, [messages, currentSessionId]);
+  }, [messages, currentSessionId, user.email]);
 
   const handleSelectModel = (model: string) => {
     setSelectedModel(model);
