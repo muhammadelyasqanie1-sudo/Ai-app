@@ -9,9 +9,9 @@ export const translations = {
     online: 'آنلاین',
     
     // Header & User
-    greeting: 'سلام، سید فیروز!',
+    greeting: 'سلام!',
     welcomeBack: 'به AFG AI خوش آمدید',
-    premiumUser: 'کاربر ویژه Pro++',
+    premiumUser: 'کاربر رایگان',
     askAnythingPlaceholder: 'سوال خود را بنویسید...',
     
     // Navigation
@@ -28,7 +28,7 @@ export const translations = {
     
     // Chat Screen
     chatTitle: 'دستیار هوشمند AFG AI',
-    chatSubtitle: 'پاسخ‌گویی به تمام سوالات شما به زبان فارسی، پشتو و انگلیسی',
+    chatSubtitle: 'پاسخ‌گویی به پرسش‌های شما به زبان دری و انگلیسی',
     chatPlaceholder: 'پرسشت را بنویس...',
     send: 'ارسال',
     recording: 'در حال ضبط...',
@@ -149,9 +149,9 @@ export const translations = {
     online: 'Online',
     
     // Header & User
-    greeting: 'Hello, Syed Firuz!',
+    greeting: 'Hello!',
     welcomeBack: 'Welcome back to AFG AI',
-    premiumUser: 'Pro++ Premium User',
+    premiumUser: 'Free User',
     askAnythingPlaceholder: 'Ask anything...',
     
     // Navigation
@@ -168,7 +168,7 @@ export const translations = {
     
     // Chat Screen
     chatTitle: 'AFG AI Assistant',
-    chatSubtitle: 'Answering all your questions in Dari, Pashto, and English',
+    chatSubtitle: 'Answering your questions in Dari and English',
     chatPlaceholder: 'Type a message...',
     send: 'Send',
     recording: 'Recording...',
