@@ -516,7 +516,19 @@ export default function App() {
     setMessages(messages.slice(0, index + 1));
   };
 
-  const handleDeleteMessage = (messageId: string) => {
+  const handleDeleteMessage = async (messageId: string) => {
+    const conversationId = serverConversationRef.current;
+    if (user.email && conversationId) {
+      try {
+        await apiFetch('/api/conversations/' + encodeURIComponent(conversationId) + '/messages/' + encodeURIComponent(messageId), {
+          method: 'DELETE',
+          headers: getCsrfHeaders(),
+        });
+      } catch {
+        console.warn('AFG_CONVERSATION_MESSAGE_DELETE_FAILED');
+        return;
+      }
+    }
     setMessages((previous) => previous.filter((message) => message.id !== messageId));
   };
 
