@@ -21,12 +21,12 @@ type RatePolicy = { id:string; scope_type:string; scope_key:string; requests:num
 type RequestRow = { request_id:string; method:string; route:string; status_code:number; duration_ms:number; classification:string; created_at:string };
 type Overview = { usage:any[]; requests:any; users:any; storage:any };
 const API = ((import.meta as any).env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
-const NAV: {id:Tab;label:string;icon:any}[] = [
-  {id:'overview',label:'Overview',icon:LayoutDashboard},{id:'users',label:'Users',icon:Users},
-  {id:'providers',label:'Providers',icon:Network},{id:'models',label:'Models & Routing',icon:Cpu},
-  {id:'usage',label:'Usage & Errors',icon:Activity},{id:'limits',label:'Rate Limits',icon:Gauge},
-  {id:'health',label:'Storage & Health',icon:HardDrive},{id:'flags',label:'Flags & Announcements',icon:Flag},
-  {id:'audit',label:'Audit Log',icon:ClipboardList},{id:'security',label:'Security Events',icon:ShieldAlert},
+const NAV: {id:Tab;labelEn:string;labelFa:string;icon:any}[] = [
+  {id:'overview',labelEn:'Overview',labelFa:'نمای کلی',icon:LayoutDashboard},{id:'users',labelEn:'Users',labelFa:'کاربران',icon:Users},
+  {id:'providers',labelEn:'Providers',labelFa:'ارائه‌دهندگان',icon:Network},{id:'models',labelEn:'Models & Routing',labelFa:'مدل‌ها و مسیریابی',icon:Cpu},
+  {id:'usage',labelEn:'Usage & Errors',labelFa:'مصرف و خطاها',icon:Activity},{id:'limits',labelEn:'Rate Limits',labelFa:'محدودیت درخواست',icon:Gauge},
+  {id:'health',labelEn:'Storage & Health',labelFa:'ذخیره‌سازی و سلامت',icon:HardDrive},{id:'flags',labelEn:'Flags & Announcements',labelFa:'امکانات و اطلاعیه‌ها',icon:Flag},
+  {id:'audit',labelEn:'Audit Log',labelFa:'گزارش رویدادها',icon:ClipboardList},{id:'security',labelEn:'Security Events',labelFa:'رویدادهای امنیتی',icon:ShieldAlert},
 ];
 const CAPABILITIES = ['text','streaming','vision','imageGen','imageEdit','ocr','tts','stt','tools','jsonMode'];
 
@@ -208,7 +208,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     {error&&<div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>}
     {notice&&<div role="status" className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-300">{notice}</div>}
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
-      {NAV.map(item=>{const Icon=item.icon;return <button key={item.id} onClick={()=>setTab(item.id)} className={`flex min-h-11 items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition ${tab===item.id?'border-cyan-400/60 bg-cyan-400/10 text-cyan-200':'border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-600'}`}><Icon className="h-4 w-4 shrink-0"/>{item.label}</button>;})}
+      {NAV.map(item=>{const Icon=item.icon;return <button key={item.id} onClick={()=>setTab(item.id)} className={`flex min-h-11 items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition ${tab===item.id?'border-cyan-400/60 bg-cyan-400/10 text-cyan-200':'border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-600'}`}><Icon className="h-4 w-4 shrink-0"/>{dari ? item.labelFa : item.labelEn}</button>;})}
     </div>
     {loading&&<div className="h-1 overflow-hidden rounded-full bg-slate-800"><div className="h-full w-1/3 animate-pulse rounded-full bg-cyan-400"/></div>}
 
