@@ -262,8 +262,8 @@ html[dir="rtl"] .afg-drawer-panel {
   animation-name:afg-drawer-in-rtl;
 }
 .afg-drawer-root.is-closing .afg-drawer-backdrop { opacity:0; }
-.afg-drawer-root.is-closing .afg-drawer-panel { transform:translate3d(-100%,0,0); }
-html[dir="rtl"] .afg-drawer-root.is-closing .afg-drawer-panel { transform:translate3d(100%,0,0); }
+.afg-drawer-root.is-closing .afg-drawer-panel { animation:none;transform:translate3d(-100%,0,0); }
+html[dir="rtl"] .afg-drawer-root.is-closing .afg-drawer-panel { animation:none;transform:translate3d(100%,0,0); }
 @keyframes afg-backdrop-in { from {opacity:0} to {opacity:1} }
 @keyframes afg-drawer-in-ltr { from {opacity:.75;transform:translate3d(-100%,0,0)} to {opacity:1;transform:translate3d(0,0,0)} }
 @keyframes afg-drawer-in-rtl { from {opacity:.75;transform:translate3d(100%,0,0)} to {opacity:1;transform:translate3d(0,0,0)} }
