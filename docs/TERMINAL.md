@@ -36,7 +36,7 @@ The only currently grantable scope is `terminal.read`. Admin scopes and `termina
 - `GET /api/terminal/sessions/:id/history` returns the caller's audit history.
 - Every submitted command is written to `terminal_audit` with request ID, exit code and duration.
 
-Migration: `database/migrations/0004_terminal_foundation.sql`. Apply migrations only after a database backup and an explicit operator decision.
+Migrations: `database/migrations/0004_terminal_foundation.sql`, `0005_cli_token_rate_limits.sql`, and `0006_terminal_audit_output.sql`. Apply migrations only after a database backup and an explicit operator decision.
 
 ## Configuration and disabled execution
 
@@ -46,4 +46,4 @@ Migration: `database/migrations/0004_terminal_foundation.sql`. Apply migrations 
 
 ## Remaining Phase 1 work
 
-A Node.js companion CLI now exists at `apps/cli` and supports `login`, `logout`, `whoami`, `models list`, `conv list`, and `files list`. Run it with `node apps/cli/src/index.mjs --help` (or `npm run cli -- --help` from the repository root). `login` accepts a scoped token through hidden interactive input and stores it in `~/.afg/config.toml` with mode 0600. OS keyring integration and a compiled single-file binary are not implemented. CLI chat streaming, file upload/download, image generation, admin commands, web xterm-style UI, session tabs, scrollback search, keyboard history/completion and full audit drawer are not implemented. A per-token hourly request bucket is now enforced by migration `0005_cli_token_rate_limits.sql`; every CLI HTTP request counts toward that quota. This remains a partial CLI, not the complete command matrix in the product specification.
+A Node.js companion CLI now exists at `apps/cli` and supports `login`, `logout`, `whoami`, `models list`, `conv list`, and `files list`. Run it with `node apps/cli/src/index.mjs --help` (or `npm run cli -- --help` from the repository root). Supported commands: `afg login --url https://your-host`, `afg logout`, `afg whoami`, `afg models list`, `afg conv list`, `afg files list`, `afg version`, `afg help`. `login` accepts a scoped token through hidden interactive input and stores it in `~/.afg/config.toml` with mode 0600. OS keyring integration and a compiled single-file binary are not implemented. CLI chat streaming, file upload/download, image generation, admin commands, web xterm-style UI, session tabs, scrollback search, keyboard history/completion and full audit drawer are not implemented. A per-token hourly request bucket is now enforced by migration `0005_cli_token_rate_limits.sql`; every CLI HTTP request counts toward that quota. This remains a partial CLI, not the complete command matrix in the product specification.
