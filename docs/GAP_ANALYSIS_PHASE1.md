@@ -40,9 +40,9 @@
 - CSRF is checked for state-changing conversation requests.
 
 **Missing / incomplete**
-- `AfgHistoryView.tsx` still loads, mutates and persists `afg_sessions` exclusively in browser localStorage. It never calls the conversation API.
-- `App.tsx` keeps the active chat in React state and localStorage only; it does not create or restore a server conversation.
-- User and assistant messages are not written to the messages table by the streaming chat flow. Refresh/device change loses authenticated chat history.
+- `AfgHistoryView.tsx` now loads signed-in conversation lists and messages through the owner-scoped API; guest History continues to use browser localStorage.
+- `App.tsx` now creates a server conversation for signed-in chat and attempts to persist the user message before generation and the assistant result after completion/failure. New branch/retry/edit flows create a separate conversation and preserve the supplied context where possible.
+- Persistence is best-effort: if a message write fails, chat continues and the UI does not yet show a persistent-history warning or queue a reliable resync. Message writes are not idempotent or transactional. A failed user-message write can leave the generated answer only in local UI state/localStorage.
 - Conversation API responses do not consistently carry the request ID, despite the outer HTTP router having one.
 - Conversation append performs message insert and conversation timestamp update as separate queries, not one transaction.
 - Message append endpoint is not idempotent; a retry can create duplicates.
@@ -96,9 +96,9 @@ Highest leverage is to make the existing core path honest and enforceable before
 1. Enforce model-specific rate limits against the **actual server-selected provider/model**, never a client header.
 2. Emit explicit structured chat success/failure observability with request ID, actual provider/model, safe user ID and duration.
 3. Make conversation API responses consistently correlate with the outer request ID.
-4. Connect the signed-in chat/History UI to owner-scoped conversation persistence, with guest behavior clearly separated and unsent prompts preserved on failure.
-5. Make message writes idempotent and atomic, and handle partial/failed generation records without duplicating messages.
-6. Add root README and update the delivery plan with verified gaps.
+4. Harden the newly connected signed-in chat/History persistence path: visible save-state/error recovery, idempotent message writes, atomic message/timestamp updates, and database synchronization for edit/delete.
+5. Migrate or explicitly offer import of legacy local sessions; preserve unsent prompts and drafts across auth/network failures.
+6. Complete the EN/Dari UI audit and verify all Phase 1 acceptance criteria when verification is authorized.
 
 This task begins with items 1–3 as focused backend hardening. Items 4–5 remain the next implementation milestone if not completed in this change. No unsupported provider feature will be enabled to make the interface appear fuller.
 
@@ -114,7 +114,7 @@ Committed to `main` after the source review:
 - Added the missing root `README.md` with local setup, migration, provider, environment, Android and operational guidance.
 - Expanded `.env.example` with the OAuth, email and research variables used by the inspected code, and corrected its database migration instructions.
 
-**These are focused backend/documentation improvements, not a complete Phase 1 delivery.** The signed-in chat flow still does not create/restore server conversations or persist user/assistant messages, and History remains localStorage-backed. Those are the highest-priority remaining implementation tasks.
+**These are focused improvements, not a complete Phase 1 delivery.** Signed-in chat and History now call the conversation API, but this path has not been runtime-verified; writes are best-effort and non-idempotent; migration state is unknown; and message edit/delete operations are not synchronized to the database. Legacy local sessions are not migrated to server conversations. These are the highest-priority remaining implementation tasks.
 
 ## 5. Verification boundary
 
