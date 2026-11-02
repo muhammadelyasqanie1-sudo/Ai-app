@@ -111,11 +111,12 @@ Committed to `main` after the source review:
 - Added a feature-specific structured chat success event and retained structured stream failure/empty-response events. The completion/failure logs now identify the actual selected fallback model rather than always reporting the originally prepared model.
 - Added the outer request ID to conversation API JSON responses when the shared HTTP boundary supplies it.
 - Made message insertion and conversation timestamp updates atomic in one database transaction.
+- Added an owner-scoped message DELETE route; History-loaded server messages use it, while current in-session client-generated message IDs are still local-only.
 - Removed the obsolete client-supplied model-limit header from the chat UI.
 - Added the missing root `README.md` with local setup, migration, provider, environment, Android and operational guidance.
 - Expanded `.env.example` with the OAuth, email and research variables used by the inspected code, and corrected its database migration instructions.
 
-**These are focused improvements, not a complete Phase 1 delivery.** Signed-in chat and History now call the conversation API, but this path has not been runtime-verified; writes are best-effort and non-idempotent; migration state is unknown; and message edit/delete operations are not synchronized to the database. Legacy local sessions are not migrated to server conversations. These are the highest-priority remaining implementation tasks.
+**These are focused improvements, not a complete Phase 1 delivery.** Signed-in chat and History now call the conversation API, but this path has not been runtime-verified; writes are best-effort and non-idempotent; migration state is unknown; and edit creates a new branch; deletion is persisted for messages loaded from the server (UUID IDs), but messages generated in the current session still use client IDs and are only removed locally. Legacy local sessions are not migrated to server conversations. These are the highest-priority remaining implementation tasks.
 
 ## 5. Verification boundary
 
