@@ -5,7 +5,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AfgHeader } from './components/afg/AfgHeader';
-import { AfgNavigation } from './components/afg/AfgNavigation';
 import { AfgHomeView } from './components/afg/AfgHomeView';
 import { AfgChatView } from './components/afg/AfgChatView';
 import { AfgImageGenView } from './components/afg/AfgImageGenView';
@@ -64,7 +63,7 @@ export default function App() {
     return (saved === 'dark' || saved === 'light' || saved === 'neon' || saved === 'system') ? saved : 'system';
   });
 
-  const [currentTab, setCurrentTab] = useState<TabType>('home');
+  const [currentTab, setCurrentTab] = useState<TabType>('chat');
   const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
   const [messages, setMessages] = useState<AfgMessage[]>(INITIAL_MESSAGES);
   const [currentSessionId, setCurrentSessionId] = useState(() => `chat-${Date.now()}`);
@@ -582,17 +581,11 @@ export default function App() {
         onToggleTheme={handleToggleTheme}
         onOpenSettings={() => setCurrentTab('settings')}
         onOpenMenu={() => setIsSideMenuOpen(true)}
-      />
-
-      {/* AFG AI Navigation (Mobile bottom bar + desktop bar) */}
-      <AfgNavigation
-        currentTab={currentTab}
-        onChangeTab={setCurrentTab}
-        language={language}
+        onNewChat={handleNewChat}
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 w-full pb-24 md:pb-8 pt-2 md:ms-60">
+      <main className="min-h-0 flex-1 w-full overflow-y-auto pb-4 pt-2 md:ms-0">
         <ErrorBoundary>
         {currentTab === 'home' && (
           <AfgHomeView
