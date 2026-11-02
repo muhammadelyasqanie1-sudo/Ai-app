@@ -6,7 +6,7 @@ const SECRET_PATTERNS: Array<[RegExp,string]> = [
   [/(\\b)(xox[baprs]-[A-Za-z0-9-]{10,})/g, '$1[REDACTED_SLACK_TOKEN]'],
   [/((?:api[_-]?key|client[_-]?secret|secret|password|passwd|token|authorization|access[_-]?key|private[_-]?key|refresh[_-]?token|session[_-]?id)\\s*[:=]\\s*)(["']?)[^\\s"',;}]+/gi, '$1[REDACTED]'],
   [/((?:OPENAI|ANTHROPIC|GOOGLE|GEMINI|CLOUDFLARE|RESEND|TAVILY|AFG|DATABASE)_[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|URL)\\s*=\\s*)(["']?)[^\\s"',;}]+/gi, '$1[REDACTED]'],
-  [/(postgres(?:ql)?:\\/\\/[^:\s/@]+):([^@\\s/]+)(@)/gi, '$1:[REDACTED]$3'],
+  [/(postgres(?:ql)?:\\/\\/[^:\\s/@]+):([^@\\s/]+)(@)/gi, '$1:[REDACTED]$3'],
 ];
 
 const SECRET_KEYS = /(?:api.?key|secret|password|passwd|token|authorization|credential|private.?key|cookie|session.?id|database.?url|connection.?string)/i;
