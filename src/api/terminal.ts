@@ -30,7 +30,7 @@ async function authenticateTerminal(req: IncomingMessage): Promise<Auth | null> 
     const limit = Math.max(10,Math.min(1000,Number.parseInt(process.env.CLI_RATE_LIMIT_PER_HOUR || '120',10) || 120));
     const bucket = await pool.query(
       `INSERT INTO cli_token_rate_limits(token_id,bucket_start,request_count)
-       VALUES($1,date_trunc('hour',now()),1)
+       VALUES($1,date_trunc('hour',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC',1)
        ON CONFLICT(token_id,bucket_start) DO UPDATE
          SET request_count=cli_token_rate_limits.request_count+1
          WHERE cli_token_rate_limits.request_count < $2
