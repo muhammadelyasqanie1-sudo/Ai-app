@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS cli_tokens (
   token_hash text NOT NULL UNIQUE,
   token_prefix text NOT NULL,
   name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 80),
-  scopes text[] NOT NULL DEFAULT ARRAY['chat','terminal.read'],
+  scopes text[] NOT NULL DEFAULT ARRAY['terminal.read'],
   created_at timestamptz NOT NULL DEFAULT now(),
   expires_at timestamptz NOT NULL,
   last_used_at timestamptz,
