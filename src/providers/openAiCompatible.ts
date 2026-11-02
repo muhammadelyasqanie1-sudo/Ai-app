@@ -102,9 +102,8 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
           console.warn('AI_PROVIDER_HEALTH_CHECK_FAILED', JSON.stringify({ provider: current.id, model: modelId, status: response.status }));
           return { healthy: false, checkedAt, message: 'Provider not reachable.' };
         }
-        const payload = await response.json() as { choices?: Array<{ message?: { content?: unknown } }>; error?: unknown };
-        const content = payload.choices?.[0]?.message?.content;
-        return typeof content === 'string' && content.length > 0
+        const payload = await response.json() as { id?: string; object?: string; error?: unknown };
+        return response.ok && typeof payload.id === 'string' && !payload.error
           ? { healthy: true, checkedAt }
           : { healthy: false, checkedAt, message: 'Provider not reachable.' };
       } catch (error) {
