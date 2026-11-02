@@ -136,9 +136,17 @@ export async function hashPassword(password: string): Promise<string> {
 
 export async function verifyPassword(password: string, encoded: string): Promise<boolean> {
   try {
-    // Argon2id is the current password format. The library performs a
-    // constant-time verification of the encoded hash.
-    if (encoded.startsWith('$argon2id
+    if (encoded.startsWith('$argon2id$')) return await argon2.verify(encoded, password);
+    if (encoded.startsWith('$2')) return await bcrypt.compare(password, encoded);
+    const [algorithm, saltHex, hashHex] = encoded.split(':');
+    if (algorithm !== 'scrypt' || !saltHex || !hashHex || !/^[a-f0-9]{32}$/.test(saltHex) || !/^[a-f0-9]{128}$/.test(hashHex)) return false;
+    const expected = Buffer.from(hashHex, 'hex');
+    const actual = await scrypt(password, Buffer.from(saltHex, 'hex'), expected.length) as Buffer;
+    return actual.length === expected.length && timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
+}
 
 export async function revokeUserSessions(userId: string): Promise<void> {
   if (!pool) return;
@@ -453,7 +461,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         sendAuthJson(res, 401, { error: 'Email or password is incorrect.' });
         return true;
       }
-      if (typeof row.password_hash === 'string' && !row.password_hash.startsWith('$argon2id
+      if (typeof row.password_hash === 'string' && !row.password_hash.startsWith('$argon2id$')) {
         await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [await hashPassword(password), row.id]);
       }
       await createSession(row.id, res);
@@ -1749,10 +1757,4 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
 
   sendAuthJson(res, 404, { error: 'Authentication route not found.' });
   return true;
-}
-);
-  if (algorithm !== 'scrypt' || !saltHex || !hashHex || !/^[a-f0-9]{32}$/.test(saltHex) || !/^[a-f0-9]{128}$/.test(hashHex)) return false;
-  const expected = Buffer.from(hashHex, 'hex');
-  const actual = await scrypt(password, Buffer.from(saltHex, 'hex'), expected.length) as Buffer;
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
