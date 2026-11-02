@@ -6,6 +6,8 @@ const DB_VERSION=1;
 type PackRecord={key:string;id:string;version:string;manifest:PackManifest;model:Blob;installedAt:string};
 type LessonRecord={key:string;packKey:string;lessonId:string;language:string;content:string;sha256:string};
 export type LessonProgress={packKey:string;lessonId:string;status:'not_started'|'in_progress'|'completed';score:number|null;updatedAt:string};
+export type QuizAttempt={id:string;packKey:string;lessonId:string;score:number;answers:unknown;createdAt:string};
+export type OfflineSession={id:string;packKey:string;subject:string;startedAt:string;endedAt?:string};
 
 function openDb():Promise<IDBDatabase>{
   if(typeof indexedDB==='undefined') return Promise.reject(new Error('IndexedDB is not available in this runtime.'));
@@ -46,6 +48,7 @@ export async function installVerifiedPack(
   for(const [file,lesson] of Object.entries(lessonFiles)){
     const expectedHash=expected.get(file);
     if(!expectedHash)throw new Error('Lesson file is not declared in the signed manifest.');
+    if(!manifest.languages.includes(lesson.language as any))throw new Error('Lesson language is not declared in the signed manifest.');
     const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(lesson.content));
     const actual=Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('');
     if(actual!==expectedHash)throw new Error('Lesson SHA-256 does not match the signed manifest.');
@@ -86,23 +89,42 @@ export async function listLessonProgress(packKeyValue?:string):Promise<LessonPro
   finally{db.close();}
 }
 
+export async function saveQuizAttempt(attempt:QuizAttempt):Promise<void>{
+  const db=await openDb();
+  try{const tx=db.transaction('quiz_attempts','readwrite');tx.objectStore('quiz_attempts').put(attempt);await transactionDone(tx);}
+  finally{db.close();}
+}
+
+export async function saveOfflineSession(session:OfflineSession):Promise<void>{
+  const db=await openDb();
+  try{const tx=db.transaction('offline_sessions','readwrite');tx.objectStore('offline_sessions').put(session);await transactionDone(tx);}
+  finally{db.close();}
+}
+
 export async function uninstallLocalPack(packId:string,version:string,deleteProgress=true):Promise<void>{
   const key=packKey(packId,version);
   const db=await openDb();
   try{
-    const readTx=db.transaction(deleteProgress?['lessons_local','lesson_progress']:['lessons_local'],'readonly');
+    const stores=deleteProgress?['lessons_local','lesson_progress','quiz_attempts','offline_sessions']:['lessons_local'];
+    const readTx=db.transaction(stores,'readonly');
     const lessonRows=await requestValue(readTx.objectStore('lessons_local').getAll() as IDBRequest<LessonRecord[]>);
     const progressRows=deleteProgress
       ? await requestValue(readTx.objectStore('lesson_progress').getAll() as IDBRequest<Array<LessonProgress & {key:string}>>)
       : [];
+    const quizRows=deleteProgress?await requestValue(readTx.objectStore('quiz_attempts').getAll() as IDBRequest<QuizAttempt[]>):[];
+    const sessionRows=deleteProgress?await requestValue(readTx.objectStore('offline_sessions').getAll() as IDBRequest<OfflineSession[]>):[];
     await transactionDone(readTx);
-    const tx=db.transaction(deleteProgress?['packs','lessons_local','lesson_progress']:['packs','lessons_local'],'readwrite');
+    const tx=db.transaction(deleteProgress?['packs','lessons_local','lesson_progress','quiz_attempts','offline_sessions']:['packs','lessons_local'],'readwrite');
     tx.objectStore('packs').delete(key);
     const lessons=tx.objectStore('lessons_local');
     for(const row of lessonRows)if(row.packKey===key)lessons.delete(row.key);
     if(deleteProgress){
       const progress=tx.objectStore('lesson_progress');
       for(const row of progressRows)if(row.packKey===key)progress.delete(row.key);
+      const quizzes=tx.objectStore('quiz_attempts');
+      for(const row of quizRows)if(row.packKey===key)quizzes.delete(row.id);
+      const sessions=tx.objectStore('offline_sessions');
+      for(const row of sessionRows)if(row.packKey===key)sessions.delete(row.id);
     }
     await transactionDone(tx);
   }finally{db.close();}
