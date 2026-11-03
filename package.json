@@ -14,7 +14,8 @@
     "android:sync": "cap sync android",
     "db:migrate": "tsx scripts/migrate.ts",
     "i18n:check": "tsx scripts/check-i18n.ts",
-    "prebuild": "npm run i18n:check"
+    "prebuild": "npm run i18n:check",
+    "test:offline-sha": "tsx scripts/test-offline-sha.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
