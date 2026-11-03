@@ -89,6 +89,15 @@ public class AFGOfflineModelsPlugin extends Plugin {
         Integer threads = call.getInt("threads");
         File model = new File(path);
         if (!model.isFile() || !model.getName().toLowerCase(Locale.ROOT).endsWith(".gguf")) { call.reject("A downloaded GGUF model file is required."); return; }
+        android.app.ActivityManager activityManager = (android.app.ActivityManager) getContext().getSystemService(android.content.Context.ACTIVITY_SERVICE);
+        if (activityManager == null) { call.reject("Android could not verify available RAM for this model."); return; }
+        android.app.ActivityManager.MemoryInfo memoryInfo = new android.app.ActivityManager.MemoryInfo();
+        activityManager.getMemoryInfo(memoryInfo);
+        long estimatedRequiredBytes = (long) (model.length() * 1.35d + 0.8d * 1024d * 1024d * 1024d);
+        if (memoryInfo.lowMemory || memoryInfo.availMem < estimatedRequiredBytes) {
+            call.reject("Not enough currently available RAM to safely load this GGUF model. Close other apps or choose a smaller quantization.");
+            return;
+        }
         final String modelPath = model.getAbsolutePath();
         final String nativeLibraryDirectory = getContext().getApplicationInfo().nativeLibraryDir;
         final int requestedContext = contextSize == null ? 2048 : contextSize;
