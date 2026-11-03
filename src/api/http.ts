@@ -7,7 +7,7 @@ import { getCapabilitySnapshot, getImageStudioSnapshot, getFileAssistantSnapshot
 import { authenticateRequest, handleAuthApi, verifyCsrf } from './auth.ts';
 import { createHash } from 'crypto';
 import { handleAdminApi } from './adminHandler.ts';
-import { handleConnectionsApi } from './connections.ts';
+import { handleConnectionsApi, handleUserIntegrationApi } from './connections.ts';
 import { handleResearchApi } from './research.ts';
 import { handleVoiceApi } from './voice.ts';
 import { handleProductivityApi } from './productivity.ts';
@@ -175,6 +175,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
   try {
     if (await enforceAdminConfiguredRateLimits(req, res, pathname, requestId)) return;
     if (await handleAuthApi(req, res, pathname)) return;
+    if (await handleUserIntegrationApi(req, res, pathname)) return;
     if (await handleAccountApi(req, res, pathname)) return;
     if (await handleConversationsApi(req, res, pathname)) return;
     if (await handleTerminalApi(req, res, pathname, requestId)) return;
