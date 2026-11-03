@@ -1,4 +1,4 @@
-import { getCoreUi } from './localeUi';
+import { getCoreUi, getMoreCoreUi } from './localeUi';
 import type { Language } from '../types/afg';
 
 const baseTranslations = {
@@ -286,6 +286,7 @@ const baseTranslations = {
 const localized = (language: Language) => ({
   ...baseTranslations.english,
   ...getCoreUi(language),
+  ...getMoreCoreUi(language),
 }) as typeof baseTranslations.english;
 
 export const translations = {
