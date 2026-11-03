@@ -12,7 +12,7 @@ function requiredAdminPermission(method: string, pathname: string): string | nul
     'GET /api/admin/subscriptions': 'subscriptions:read',
     'PATCH /api/admin/subscriptions': 'subscriptions:manage',
     'GET /api/admin/users': 'users:read',
-    'PATCH /api/admin/users': 'users:manage',
+    'PATCH /api/admin/users': 'users:read',
     'GET /api/admin/overview': 'dashboard:read',
     'GET /api/admin/requests': 'usage:read',
     'GET /api/admin/audit': 'audit:read',
@@ -168,6 +168,12 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           (status !== undefined && !['active','suspended'].includes(status)) ||
           (role === undefined && status === undefined)) {
         sendAuthJson(res, 400, { error: 'Provide a user ID and a valid role or status.' }); return true;
+      }
+      if (role !== undefined && !rootRole && permissions['users:manage'] !== true) {
+        sendAuthJson(res, 403, { error: 'Your staff role cannot change account roles.' }); return true;
+      }
+      if (status !== undefined && !rootRole && permissions[status === 'suspended' ? 'users:suspend' : 'users:manage'] !== true) {
+        sendAuthJson(res, 403, { error: 'Your staff role cannot change this account status.' }); return true;
       }
       if (targetId === user.id && (role === 'user' || status === 'suspended')) {
         sendAuthJson(res, 400, { error: 'You cannot revoke your own administrator access or suspend your own account.' }); return true;
