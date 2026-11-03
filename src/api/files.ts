@@ -11,6 +11,8 @@ const MIME_BY_EXTENSION: Record<string,string> = {
   '.gif':'image/gif','.webp':'image/webp','.txt':'text/plain','.csv':'text/csv',
 };
 const MAX_ENCODED_BYTES = Math.ceil(MAX_UPLOAD_BYTES * 4 / 3) + 128_000;
+const MAX_FILES_PER_USER = 100;
+const MAX_USER_STORAGE_BYTES = 100 * 1024 * 1024;
 
 function reply(res:ServerResponse,status:number,body:Record<string,unknown>) {
   sendAuthJson(res,status,body);
@@ -48,7 +50,7 @@ export async function handleFilesApi(req:IncomingMessage,res:ServerResponse,path
     let body:Record<string,unknown>;
     try { body=await readJsonBody(req,MAX_ENCODED_BYTES); }
     catch { reply(res,413,{error:'Upload payload is too large or invalid.'}); return true; }
-    const name=typeof body.name==='string'?body.name.trim().slice(0,240):'';
+    const name=typeof body.name==='string'?body.name.replace(/[\\u0000-\\u001f\\u007f]/g,'').trim().slice(0,240):'';
     const encoded=typeof body.dataBase64==='string'?body.dataBase64:'';
     const extension=path.extname(name).toLowerCase();
     if (!name || name.includes('/') || name.includes('\\') || name==='.' || name==='..' ||
@@ -61,6 +63,10 @@ export async function handleFilesApi(req:IncomingMessage,res:ServerResponse,path
     }
     const bytes=Buffer.from(encoded,'base64');
     if (bytes.length!==estimatedBytes) { reply(res,400,{error:'The uploaded file encoding is invalid.'}); return true; }
+    const quota=await pool.query('SELECT count(*)::int AS count,COALESCE(sum(size_bytes),0)::bigint AS total FROM files WHERE user_id=$1',[user.id]);
+    if (Number(quota.rows[0]?.count||0)>=MAX_FILES_PER_USER || Number(quota.rows[0]?.total||0)+bytes.length>MAX_USER_STORAGE_BYTES) {
+      reply(res,413,{error:'Your private file library quota is full (100 files or 100 MB). Delete an existing file before uploading more.'}); return true;
+    }
     let quarantined;
     try { quarantined=await quarantineUpload({bytes,originalName:name}); }
     catch(error) {
