@@ -50,7 +50,7 @@ export async function handleFilesApi(req:IncomingMessage,res:ServerResponse,path
     let body:Record<string,unknown>;
     try { body=await readJsonBody(req,MAX_ENCODED_BYTES); }
     catch { reply(res,413,{error:'Upload payload is too large or invalid.'}); return true; }
-    const name=typeof body.name==='string'?body.name.replace(/[\\u0000-\\u001f\\u007f]/g,'').trim().slice(0,240):'';
+    const name=typeof body.name==='string'?body.name.replace(/[\u0000-\u001f\u007f]/g,'').trim().slice(0,240):'';
     const encoded=typeof body.dataBase64==='string'?body.dataBase64:'';
     const extension=path.extname(name).toLowerCase();
     if (!name || name.includes('/') || name.includes('\\') || name==='.' || name==='..' ||
