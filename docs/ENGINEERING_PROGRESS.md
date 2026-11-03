@@ -48,3 +48,32 @@
 ### Next action
 
 - Inspect admin authorization and role enforcement in the server API, then address the highest-risk backend permission gap without enabling unsafe terminal execution or changing production data.
+
+
+## Milestone 2 — One-time administrator bootstrap race protection
+
+**Status:** IMPLEMENTED BUT NOT VERIFIED
+
+### Completed
+
+- Serialized first-administrator bootstrap requests with a PostgreSQL transaction-scoped advisory lock.
+- Moved the active-administrator check and account promotion/creation into the same transaction.
+- Existing active accounts can be promoted using the configured bootstrap token; inactive/deleted accounts are not silently reactivated.
+- The bootstrap session is created only after the database transaction commits.
+
+### Files changed
+
+- `src/api/auth.ts`
+
+### Verification
+
+- Source-level inspection confirms the lock, transaction, active-admin check, inactive-account guard, commit/rollback and post-commit session creation.
+- No live concurrency test, database query, test suite, type-check, build or deployment was run.
+
+### Problem discovered and fixed
+
+- The original check-then-insert bootstrap flow was not atomic. Two simultaneous valid requests could both observe no active administrator and create/promote separate administrators. A transaction-scoped advisory lock now serializes this first-admin operation.
+
+### Next action
+
+- Continue backend security review: inspect administrator mutations for last-admin lockout and ensure sensitive user/role changes have consistent transactional audit records.
