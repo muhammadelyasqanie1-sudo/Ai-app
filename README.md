@@ -91,7 +91,7 @@ Cloudflare credentials are obtained from the Cloudflare dashboard/API Tokens wit
 - The gateway registers Cloudflare Workers AI, an optional OpenAI-compatible adapter, GPT-OSS proxy, and BeatAPI when `BEATAPI_API_KEY` is configured.
 - A model is selectable only after live catalog discovery and a recent successful health check, and when the model is enabled and advertises streaming text capability.
 - The gateway can fall back to another verified text model unless the request disables fallback.
-- BeatAPI uses its OpenAI-compatible `/v1/chat/completions` text endpoint and `/v1/models` catalog. BeatAPI health verification is catalog-only so routine model discovery never sends a billable generation probe.
+- BeatAPI uses its OpenAI-compatible `/v1/chat/completions` text endpoint and `/v1/models` catalog. BeatAPI health verification is catalog-only so routine model discovery never sends a billable generation probe. The `glm-5.3-flash-free` ID is the recommended no-top-up text model; the adapter respects `Retry-After` and retries transient 429/500/503 responses once. See [the BeatAPI setup and model guide](docs/integrations/BEATAPI.md).
 - Authenticated read-only integration routes expose `/api/beatapi/status`, `/api/beatapi/models`, `/api/beatapi/workflows`, `/api/beatapi/capabilities/search`, and `/api/beatapi/capabilities/inspect`. No capability-run route is exposed by this integration yet.
 - A configured provider key alone is not evidence that a model or optional capability works.
 - The currently implemented Cloudflare and OpenAI-compatible adapters declare chat/streaming only. Do not assume image, vision, OCR, voice, tools or video support from these adapters.
