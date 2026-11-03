@@ -7,14 +7,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AfgHeader } from './components/afg/AfgHeader';
 import { AfgHomeView } from './components/afg/AfgHomeView';
 import { AfgChatView } from './components/afg/AfgChatView';
-import { AfgImageGenView } from './components/afg/AfgImageGenView';
-import { AfgVideoGenView } from './components/afg/AfgVideoGenView';
-import { AfgToolsCenter } from './components/afg/AfgToolsCenter';
-import { AfgHistoryView } from './components/afg/AfgHistoryView';
-import { AfgSettingsView } from './components/afg/AfgSettingsView';
-import { AfgAdminPanel } from './components/afg/AfgAdminPanel';
-import { AfgTerminalView } from './components/afg/AfgTerminalView';
-import { AfgOfflineView } from './components/afg/AfgOfflineView';
 import { AfgSideMenu } from './components/afg/AfgSideMenu';
 import { AfgLanguageModal } from './components/afg/AfgLanguageModal';
 import { AfgCinematicIntro } from './components/afg/AfgCinematicIntro';
@@ -26,6 +18,14 @@ import { apiFetch } from './lib/apiClient';
 const LazyAfgOfflineHubView = React.lazy(() =>
   import('./components/afg/AfgOfflineHubView').then((module) => ({ default: module.AfgOfflineHubView })),
 );
+const LazyAfgImageGenView = React.lazy(() => import('./components/afg/AfgImageGenView').then((module) => ({ default: module.AfgImageGenView })));
+const LazyAfgVideoGenView = React.lazy(() => import('./components/afg/AfgVideoGenView').then((module) => ({ default: module.AfgVideoGenView })));
+const LazyAfgToolsCenter = React.lazy(() => import('./components/afg/AfgToolsCenter').then((module) => ({ default: module.AfgToolsCenter })));
+const LazyAfgHistoryView = React.lazy(() => import('./components/afg/AfgHistoryView').then((module) => ({ default: module.AfgHistoryView })));
+const LazyAfgSettingsView = React.lazy(() => import('./components/afg/AfgSettingsView').then((module) => ({ default: module.AfgSettingsView })));
+const LazyAfgAdminPanel = React.lazy(() => import('./components/afg/AfgAdminPanel').then((module) => ({ default: module.AfgAdminPanel })));
+const LazyAfgTerminalView = React.lazy(() => import('./components/afg/AfgTerminalView').then((module) => ({ default: module.AfgTerminalView })));
+const LazyAfgOfflineView = React.lazy(() => import('./components/afg/AfgOfflineView').then((module) => ({ default: module.AfgOfflineView })));
 
 import type { 
   Language, 
@@ -593,6 +593,13 @@ export default function App() {
       {/* Main Content Area */}
       <main className="min-h-0 flex-1 w-full overflow-y-auto pb-4 pt-2 md:ms-0">
         <ErrorBoundary>
+        <React.Suspense
+          fallback={
+            <div className="mx-auto flex min-h-[40vh] items-center justify-center text-sm text-slate-500" role="status" aria-live="polite">
+              {language === 'dari' ? 'در حال بارگذاری...' : 'Loading...'}
+            </div>
+          }
+        >
         {currentTab === 'home' && (
           <AfgHomeView
             language={language}
@@ -625,42 +632,34 @@ export default function App() {
         )}
 
         {currentTab === 'image-gen' && (
-          <AfgImageGenView
+          <LazyAfgImageGenView
             language={language}
           />
         )}
 
         {currentTab === 'video-gen' && (
-          <AfgVideoGenView
+          <LazyAfgVideoGenView
             language={language}
           />
         )}
 
         {currentTab === 'tools' && (
-          <AfgToolsCenter language={language} capabilities={capabilitySnapshot.capabilities} onRunTool={(prompt, options) => { setCurrentTab('chat'); void handleSendMessage(prompt, [], messages, options); }} />
+          <LazyAfgToolsCenter language={language} capabilities={capabilitySnapshot.capabilities} onRunTool={(prompt, options) => { setCurrentTab('chat'); void handleSendMessage(prompt, [], messages, options); }} />
         )}
 
-        {currentTab === 'terminal' && <AfgTerminalView language={language} />}
+        {currentTab === 'terminal' && <LazyAfgTerminalView language={language} />}
 
-        {currentTab === 'offline-learning' && <AfgOfflineView language={language} />}
+        {currentTab === 'offline-learning' && <LazyAfgOfflineView language={language} />}
 
         {(currentTab === 'offline-ai-hub' || currentTab === 'offline-chat' || currentTab === 'offline-models') && (
-          <React.Suspense
-            fallback={
-              <div className="mx-auto flex min-h-[40vh] items-center justify-center text-sm text-slate-500" role="status" aria-live="polite">
-                {language === 'dari' ? 'در حال بارگذاری...' : 'Loading...'}
-              </div>
-            }
-          >
-            <LazyAfgOfflineHubView
-              language={language}
-              initialView={currentTab === 'offline-models' ? 'models' : 'chat'}
-            />
-          </React.Suspense>
+          <LazyAfgOfflineHubView
+            language={language}
+            initialView={currentTab === 'offline-models' ? 'models' : 'chat'}
+          />
         )}
 
         {currentTab === 'history' && (
-          <AfgHistoryView
+          <LazyAfgHistoryView
             language={language}
             onSelectChat={handleSelectHistoryChat}
             onNewChat={handleNewChat}
@@ -671,7 +670,7 @@ export default function App() {
 
 
         {currentTab === 'settings' && (
-          <AfgSettingsView
+          <LazyAfgSettingsView
             language={language}
             theme={theme}
             user={user}
@@ -683,8 +682,9 @@ export default function App() {
         )}
 
         {currentTab === 'admin' && (
-          <AfgAdminPanel language={language} />
+          <LazyAfgAdminPanel language={language} />
         )}
+        </React.Suspense>
         </ErrorBoundary>
       </main>
 
