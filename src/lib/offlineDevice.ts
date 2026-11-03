@@ -59,7 +59,7 @@ export async function scanOfflineDevice(): Promise<OfflineDeviceProfile> {
   let gpuName: string | null = null;
   let gpuMaxBufferBytes: number | null = null;
   try {
-    const gpu = (navigator as Navigator & { gpu?: { requestAdapter: () => Promise<any> } }).gpu;
+    const gpu = (navigator as unknown as { gpu?: { requestAdapter: () => Promise<any> } }).gpu;
     const adapter = await gpu?.requestAdapter();
     if (adapter) {
       gpuAvailable = true;
