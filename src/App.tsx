@@ -580,6 +580,7 @@ export default function App() {
         onOpenSettings={() => setCurrentTab('settings')}
         onOpenMenu={() => setIsSideMenuOpen(true)}
         onNewChat={handleNewChat}
+        onOpenModels={() => setCurrentTab('offline-models')}
       />
 
       {/* Main Content Area */}
@@ -636,7 +637,9 @@ export default function App() {
 
         {currentTab === 'offline-learning' && <AfgOfflineView language={language} />}
 
-        {currentTab === 'offline-ai-hub' && <AfgOfflineHubView language={language} />}
+        {currentTab === 'offline-ai-hub' && <AfgOfflineHubView language={language} initialView="chat" />}
+        {currentTab === 'offline-chat' && <AfgOfflineHubView language={language} initialView="chat" />}
+        {currentTab === 'offline-models' && <AfgOfflineHubView language={language} initialView="models" />}
 
         {currentTab === 'history' && (
           <AfgHistoryView
