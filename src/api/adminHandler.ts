@@ -435,6 +435,104 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       return true;
     }
 
+    if(req.method==='GET' && pathname==='/api/admin/usage'){
+      const query=new URL(req.url||'/','http://localhost').searchParams;
+      const values:unknown[]=[];const where:string[]=[];
+      const add=(column:string,value:string|null)=>{if(value){values.push(value);where.push(`${column}=${values.length}`);}};
+      const from=query.get('from'),to=query.get('to');
+      if(from){values.push(from);where.push(`created_at >= ${values.length}::timestamptz`);}
+      if(to){values.push(to);where.push(`created_at <= ${values.length}::timestamptz`);}
+      add('user_id',query.get('user'));add('provider_key',query.get('provider'));add('model_key',query.get('model'));
+      const clause=where.length?'WHERE '+where.join(' AND '):'';
+      const [rows,summary]=await Promise.all([
+        pool.query(`SELECT id,user_id,provider_key,model_key,request_id,tokens_in,tokens_out,cost_usd,latency_ms,status,created_at
+          FROM usage_records ${clause} ORDER BY created_at DESC LIMIT 500`,values),
+        pool.query(`SELECT COALESCE(sum(tokens_in),0)::bigint AS input_tokens,COALESCE(sum(tokens_out),0)::bigint AS output_tokens,
+          COALESCE(sum(cost_usd),0)::numeric(18,6) AS cost_usd,COALESCE(avg(latency_ms),0)::numeric(12,2) AS avg_latency_ms,
+          count(*)::int AS requests,count(*) FILTER(WHERE status<>'success')::int AS errors
+          FROM usage_records ${clause}`,values),
+      ]);
+      sendAuthJson(res,200,{records:rows.rows,summary:summary.rows[0]});return true;
+    }
+
+    if(req.method==='GET' && pathname==='/api/admin/errors'){
+      const query=new URL(req.url||'/','http://localhost').searchParams;
+      const values:unknown[]=[];const where:string[]=[];
+      const add=(column:string,value:string|null)=>{if(value){values.push(value);where.push(`${column}=${values.length}`);}};
+      if(query.get('from')){values.push(query.get('from'));where.push(`created_at >= ${values.length}::timestamptz`);}
+      if(query.get('to')){values.push(query.get('to'));where.push(`created_at <= ${values.length}::timestamptz`);}
+      add('error_class',query.get('class'));add('model_id',query.get('model'));
+      const clause=where.length?'WHERE '+where.join(' AND '):'';
+      const result=await pool.query(`SELECT id,request_id,user_id,provider_key,model_id,error_code,error_class,message_redacted,metadata_json,created_at
+        FROM error_logs ${clause} ORDER BY created_at DESC LIMIT 1000`,values);
+      sendAuthJson(res,200,{errors:result.rows});return true;
+    }
+
+    if(req.method==='GET' && pathname==='/api/admin/errors/export'){
+      const query=new URL(req.url||'/','http://localhost').searchParams;
+      const from=query.get('from'),to=query.get('to');
+      const result=await pool.query(`SELECT request_id,error_code,error_class,message_redacted,metadata_json,created_at
+        FROM error_logs WHERE ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)
+          AND ($2::timestamptz IS NULL OR created_at <= $2::timestamptz)
+        ORDER BY created_at DESC LIMIT 5000`,[from,to]);
+      const csvCell=(value:unknown)=>'"'+String(value??'').replace(/"/g,'""').replace(/[\\r\\n]+/g,' ').slice(0,2000)+'"';
+      const header=['request_id','error_code','error_class','message_redacted','metadata_json','created_at'];
+      const lines=[header.join(','),...result.rows.map((row)=>header.map((key)=>csvCell(key==='metadata_json'?JSON.stringify(row[key]):row[key])).join(','))];
+      res.statusCode=200;res.setHeader('Content-Type','text/csv; charset=utf-8');res.setHeader('Content-Disposition','attachment; filename="afg-ai-errors.csv"');res.setHeader('Cache-Control','no-store');res.end(lines.join('\\n'));return true;
+    }
+
+    if(req.method==='GET' && pathname==='/api/admin/config'){
+      const result=await pool.query('SELECT key,value_json,updated_at FROM system_config ORDER BY key');
+      sendAuthJson(res,200,{config:result.rows});return true;
+    }
+
+    if(req.method==='PUT' && pathname.startsWith('/api/admin/config/')){
+      const key=decodeURIComponent(pathname.slice('/api/admin/config/'.length));
+      if(!/^[a-z][a-z0-9_.-]{1,79}$/.test(key)){sendAuthJson(res,400,{error:'Invalid configuration key.'});return true;}
+      const body=await readJsonBody(req,12000);
+      const value=body.value;
+      if(value===undefined || JSON.stringify(value).length>10000){sendAuthJson(res,400,{error:'Provide a JSON configuration value up to 10 KB.'});return true;}
+      const before=await pool.query('SELECT value_json FROM system_config WHERE key=$1',[key]);
+      await pool.query(`INSERT INTO system_config(key,value_json,updated_at) VALUES($1,$2::jsonb,now())
+        ON CONFLICT(key) DO UPDATE SET value_json=EXCLUDED.value_json,updated_at=now()`,[key,JSON.stringify(value)]);
+      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+        [user.id,user.role,'config.update','config',key,before.rows[0]?JSON.stringify(before.rows[0].value_json):null,JSON.stringify(value),JSON.stringify({key})]);
+      sendAuthJson(res,200,{key,value});return true;
+    }
+
+    if(req.method==='GET' && pathname==='/api/admin/sessions'){
+      const result=await pool.query(`SELECT s.id,s.user_id,u.email,u.display_name,s.created_at,s.last_seen_at,s.expires_at,s.ip,s.user_agent
+        FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.revoked_at IS NULL AND s.expires_at>now()
+        ORDER BY s.last_seen_at DESC LIMIT 500`);
+      sendAuthJson(res,200,{sessions:result.rows});return true;
+    }
+
+    const revokeSession=pathname.match(/^\\/api\\/admin\\/sessions\\/([0-9a-f-]{36})$/i);
+    if(req.method==='DELETE' && revokeSession){
+      const result=await pool.query('UPDATE sessions SET revoked_at=now() WHERE id=$1 AND revoked_at IS NULL RETURNING id,user_id',[revokeSession[1]]);
+      if(!result.rows[0]){sendAuthJson(res,404,{error:'Active session not found.'});return true;}
+      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
+        [user.id,user.role,'session.revoke','session',revokeSession[1],JSON.stringify({targetUserId:result.rows[0].user_id})]);
+      sendAuthJson(res,200,{revoked:true,sessionId:revokeSession[1]});return true;
+    }
+
+    if(req.method==='GET' && pathname==='/api/admin/announcements'){
+      const result=await pool.query('SELECT id,title,body,enabled,starts_at,expires_at,created_at,updated_at FROM announcements ORDER BY created_at DESC LIMIT 200');
+      sendAuthJson(res,200,{announcements:result.rows});return true;
+    }
+
+    if(req.method==='POST' && pathname==='/api/admin/announcements'){
+      const body=await readJsonBody(req,12000);
+      const title=typeof body.title==='string'?body.title.trim().slice(0,120):'';
+      const message=typeof body.body==='string'?body.body.trim().slice(0,2000):'';
+      if(!title||!message){sendAuthJson(res,400,{error:'Announcement title and body are required.'});return true;}
+      const created=await pool.query(`INSERT INTO announcements(title,body,created_by) VALUES($1,$2,$3)
+        RETURNING id,title,body,enabled,starts_at,expires_at,created_at`,[title,message,user.id]);
+      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
+        [user.id,user.role,'announcement.create','announcement',created.rows[0].id,JSON.stringify({title})]);
+      sendAuthJson(res,201,{announcement:created.rows[0]});return true;
+    }
+
     if (req.method === 'GET' && pathname === '/api/admin/system-health') {
       const started = Date.now();
       await pool.query('SELECT 1');
