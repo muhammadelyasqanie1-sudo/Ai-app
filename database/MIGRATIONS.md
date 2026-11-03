@@ -20,6 +20,6 @@ Locale persistence is introduced by `0003_user_locale_settings.sql`. It creates 
 
 Migration `0010_private_file_quarantine.sql` adds owner-scoped metadata for private uploads. Apply it with the normal migration runner before using `/api/files`.
 
-Set `AFG_UPLOAD_QUARANTINE_DIR` to an **absolute path on a private persistent disk** (for example, `/var/data/afg-uploads` on a Render disk mounted at `/var/data`). Do not use the repository, `public/`, or `dist/` directories. The directory is created with restrictive permissions by the upload service.
+Set `AFG_UPLOAD_QUARANTINE_DIR` to an **absolute path on a private persistent disk** (for example, `/var/data/afg-uploads` on a Render disk mounted at `/var/data`). Do not use the repository, `public/`, or `dist/` directories. The directory is created with restrictive permissions by the upload service. The service rejects symlink targets, the filesystem root, and paths inside the application directory; the status endpoint validates the configured directory before enabling uploads.
 
 Uploads are signature-checked and stored under generated filenames, then marked `quarantined`. The current product does not include malware scanning or safe document extraction, so files cannot be downloaded, parsed, or sent to AI yet. Keep chat file attachments disabled until a scanner and approved-file delivery pipeline are implemented.
