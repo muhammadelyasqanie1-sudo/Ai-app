@@ -102,21 +102,23 @@ export async function searchHuggingFaceGGUF(options: {
   query?: string;
   format?: 'gguf' | 'all';
   page?: number;
+  limit?: number;
   sort?: 'downloads' | 'likes' | 'lastModified';
   direction?: 'asc' | 'desc';
   signal?: AbortSignal;
 } = {}): Promise<{ items: HuggingFaceModel[]; page: number; hasMore: boolean }> {
   const page = Math.max(0, options.page || 0);
+  const limit = Math.max(10, Math.min(100, Math.floor(options.limit || PAGE_SIZE)));
   const query = (options.query || '').trim();
   const format = options.format || 'gguf';
-  const cacheKey = [format, query.toLowerCase(), page, options.sort || 'downloads', options.direction || 'desc'].join(':');
+  const cacheKey = [format, query.toLowerCase(), limit, page, options.sort || 'downloads', options.direction || 'desc'].join(':');
   const cached = safeRead<{ items: HuggingFaceModel[]; page: number; hasMore: boolean }>(cacheKey);
   if (cached) return cached;
 
   const params = new URLSearchParams({
     ...(format === 'gguf' ? { filter: 'gguf' } : {}),
-    limit: String(PAGE_SIZE),
-    offset: String(page * PAGE_SIZE),
+    limit: String(limit),
+    offset: String(page * limit),
     sort: options.sort || 'downloads',
     direction: options.direction === 'asc' ? '1' : '-1',
     full: 'true',
@@ -137,9 +139,41 @@ export async function searchHuggingFaceGGUF(options: {
     private: item.private === true,
     gated: item.gated === true || typeof item.gated === 'string' ? item.gated as boolean | string : false,
   })).filter(item => item.id && !item.private && (format === 'gguf' || !item.pipeline_tag || ['text-generation','text2text-generation','conversational','fill-mask','feature-extraction'].includes(item.pipeline_tag)));
-  const result = { items, page, hasMore: raw.length === PAGE_SIZE };
+  const result = { items, page, hasMore: raw.length === limit };
   safeWrite(cacheKey, result);
   return result;
+}
+
+export type FetchGgufModelsOptions = {
+  search?: string;
+  limit?: number;
+  cursor?: string | null;
+  signal?: AbortSignal;
+};
+
+export type FetchGgufModelsResult = {
+  models: HuggingFaceModel[];
+  nextCursor: string | null;
+};
+
+/** Cursor-based facade for the Hugging Face GGUF catalog. The cursor is the next API offset. */
+export async function fetchGgufModels(options: FetchGgufModelsOptions = {}): Promise<FetchGgufModelsResult> {
+  const limit = Math.max(10, Math.min(100, Math.floor(options.limit || 30)));
+  const offset = options.cursor ? Number(options.cursor) : 0;
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset % limit !== 0) {
+    throw new Error('Invalid Hugging Face catalog cursor.');
+  }
+  const page = await searchHuggingFaceGGUF({
+    query: options.search || '',
+    format: 'gguf',
+    page: offset / limit,
+    limit,
+    signal: options.signal,
+  });
+  return {
+    models: page.items,
+    nextCursor: page.hasMore ? String(offset + limit) : null,
+  };
 }
 
 export async function getHuggingFaceRepository(repoId: string, signal?: AbortSignal, revision = 'main'): Promise<HuggingFaceRepository> {
@@ -167,6 +201,26 @@ export async function getHuggingFaceRepository(repoId: string, signal?: AbortSig
   const result = { id: repoId, revision, files: normalized, totalBytes: normalized.reduce((sum, file) => sum + (file.size || 0), 0), ggufFiles };
   safeWrite(cacheKey, result);
   return result;
+}
+
+export type HuggingFaceModelFile = {
+  path: string;
+  size: number | null;
+  downloadUrl: string;
+  quantization: string | null;
+  sha256: string | null;
+};
+
+/** Fetches the real GGUF file list and source-reported sizes for a repository. */
+export async function fetchModelFiles(repoId: string, revision = 'main', signal?: AbortSignal): Promise<HuggingFaceModelFile[]> {
+  const repository = await getHuggingFaceRepository(repoId, signal, revision);
+  return repository.ggufFiles.map(file => ({
+    path: file.path,
+    size: file.size,
+    downloadUrl: 'https://huggingface.co/' + repoId + '/resolve/' + encodeURIComponent(revision) + '/' + file.path.split('/').map(encodeURIComponent).join('/'),
+    quantization: file.quantization,
+    sha256: file.sha256,
+  }));
 }
 
 export function formatModelCategory(tags: string[], pipeline: string | null, modelId = ''): string[] {
