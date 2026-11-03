@@ -59,7 +59,7 @@ export function createOpenAICompatibleAdapter(override?: OpenAICompatibleProvide
     async validateConfig(): Promise<ConfigStatus> {
       const current = readConfig();
       if (!current.baseUrl || !validAuth(current) || !validBaseUrl(current.baseUrl)) {
-        return { valid: false, message: 'Set a valid HTTPS OPENAI_COMPAT_BASE_URL and server-side OPENAI_COMPAT_API_KEY.' };
+        return { valid: false, message: 'Set a valid HTTPS base URL and valid authentication configuration.' };
       }
       return { valid: true };
     },
