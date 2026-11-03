@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownToLine, Cpu, HardDrive, MessageSquare, Search, ShieldCheck, Sparkles, WifiOff } from 'lucide-react';
 import type { Language } from '../../types/afg';
+import { searchHuggingFaceGGUF, getHuggingFaceRepository, type HuggingFaceModel, type HuggingFaceRepository } from '../../lib/huggingFaceOfflineCatalog';
 import { assessOfflineModelFit, scanOfflineDevice, type OfflineDeviceProfile, type ModelFit } from '../../lib/offlineDevice';
 
 type CatalogModel = {
@@ -38,6 +39,14 @@ function getHuggingFaceRepo(model: CatalogModel): string | null {
 export function AfgOfflineHubView({ language }: { language: Language }) {
   const dari = language === 'dari';
   const [models, setModels] = useState<CatalogModel[]>([]);
+  const [hfModels, setHfModels] = useState<HuggingFaceModel[]>([]);
+  const [hfPage, setHfPage] = useState(0);
+  const [hfHasMore, setHfHasMore] = useState(false);
+  const [hfBusy, setHfBusy] = useState(false);
+  const [hfError, setHfError] = useState('');
+  const [hfSelected, setHfSelected] = useState('');
+  const [hfRepository, setHfRepository] = useState<HuggingFaceRepository | null>(null);
+  const [hfQuantization, setHfQuantization] = useState('');
   const [device, setDevice] = useState<OfflineDeviceProfile | null>(null);
   const [deviceScanBusy, setDeviceScanBusy] = useState(true);
   const [modelFilter, setModelFilter] = useState<'all' | ModelFit>('all');
@@ -119,6 +128,35 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
     localStorage.setItem(INSTALLED_KEY, JSON.stringify(installed));
   }, [installed]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setHfBusy(true); setHfError('');
+      void searchHuggingFaceGGUF({ query, page: 0, sort: 'downloads', direction: 'desc', signal: controller.signal })
+        .then(result => { setHfModels(result.items); setHfPage(0); setHfHasMore(result.hasMore); })
+        .catch(error => { if (!controller.signal.aborted) setHfError(error instanceof Error ? error.message : 'Catalog unavailable'); })
+        .finally(() => { if (!controller.signal.aborted) setHfBusy(false); });
+    }, 350);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [query]);
+
+  useEffect(() => {
+    if (!hfSelected) { setHfRepository(null); setHfQuantization(''); return; }
+    const controller = new AbortController(); setHfRepository(null);
+    void getHuggingFaceRepository(hfSelected, controller.signal)
+      .then(repository => { setHfRepository(repository); setHfQuantization(repository.ggufFiles[0]?.name || ''); })
+      .catch(error => { if (!controller.signal.aborted) setHfError(error instanceof Error ? error.message : 'Repository metadata unavailable'); });
+    return () => controller.abort();
+  }, [hfSelected]);
+
+  const loadMoreHf = async () => {
+    if (hfBusy || !hfHasMore) return;
+    setHfBusy(true); setHfError('');
+    try { const nextPage = hfPage + 1; const result = await searchHuggingFaceGGUF({ query, page: nextPage });
+      setHfModels(previous => [...previous, ...result.items.filter(item => !previous.some(old => old.id === item.id))]);
+      setHfPage(nextPage); setHfHasMore(result.hasMore);
+    } catch (error) { setHfError(error instanceof Error ? error.message : 'Catalog unavailable'); } finally { setHfBusy(false); }
+  };
   const selected = useMemo(() => models.find(model => model.model_id === selectedId) || null, [models, selectedId]);
   const filtered = useMemo(() => models.filter(model => {
     if (!model.model_id.toLowerCase().includes(query.toLowerCase())) return false;
@@ -268,5 +306,17 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
         </div>
       </section>
     </div>
+
+    <section className="space-y-4 rounded-2xl border p-4 sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-extrabold">{dari ? 'کتابخانه جهانی مدل‌های GGUF' : 'Global GGUF Model Library'}</h2><p className="mt-1 text-xs opacity-65">{dari ? 'جست‌وجوی زنده در Hugging Face با صفحه‌بندی' : 'Live Hugging Face discovery with pagination'}</p></div><span className="text-xs opacity-60">{hfModels.length} {dari ? 'نتیجه' : 'results'}</span></div>
+      <div className="flex items-center gap-2 rounded-xl border px-3"><Search size={17}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={dari ? 'جست‌وجو؛ مثلاً Spark-X2.6' : 'Search models — e.g. Spark-X2.6'} className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none"/></div>
+      {hfError && <p className="rounded-lg bg-amber-500/10 p-3 text-xs">{hfError}</p>}{hfBusy && <p className="text-xs opacity-60">{dari ? 'در حال دریافت…' : 'Loading…'}</p>}
+      <div className="grid gap-2 sm:grid-cols-2">{hfModels.map(model => <button key={model.id} type="button" onClick={() => setHfSelected(model.id)} className={'rounded-xl border p-3 text-start ' + (hfSelected === model.id ? 'border-cyan-400 bg-cyan-400/10' : '')}><div className="break-all text-sm font-semibold">{model.id}</div><div className="mt-2 flex gap-3 text-[11px] opacity-65"><span>↓ {model.downloads.toLocaleString()}</span><span>♥ {model.likes.toLocaleString()}</span><span>{model.pipeline_tag || 'General'}</span></div></button>)}</div>
+      {!hfModels.length && !hfBusy && <p className="py-4 text-center text-sm opacity-60">{dari ? 'مدلی پیدا نشد.' : 'No models found.'}</p>}
+      {hfHasMore && <button type="button" disabled={hfBusy} onClick={() => void loadMoreHf()} className="w-full rounded-xl border px-4 py-2 text-sm">{dari ? 'مدل‌های بیشتر' : 'Load more'}</button>}
+      {hfSelected && <div className="space-y-3 rounded-xl bg-slate-500/5 p-3"><div className="flex flex-wrap justify-between gap-2"><strong className="break-all text-sm">{hfSelected}</strong><span className="text-xs">{hfRepository ? formatBytes(hfRepository.totalBytes) : '…'}</span></div>
+        {hfRepository && <><label className="block text-xs font-semibold">{dari ? 'انتخاب فایل و Quantization' : 'Select GGUF file / quantization'}<select value={hfQuantization} onChange={event => setHfQuantization(event.target.value)} className="mt-2 w-full rounded-lg border bg-transparent p-2">{hfRepository.ggufFiles.map(file => <option key={file.name} value={file.name}>{file.name} · {formatBytes(file.size)}{file.quantization ? ' · ' + file.quantization : ''}</option>)}</select></label><p className="text-xs text-amber-700">{dari ? 'این بخش کاتالوگ و مشخصات واقعی را نشان می‌دهد. فایل GGUF هنوز از طریق موتور WebLLM قابل اجرا نیست؛ نصب‌کننده و Runtime بومی llama.cpp مرحله بعدی است.' : 'This is live catalog and file metadata only. GGUF cannot run in WebLLM; a native llama.cpp runtime and verified installer are still required.'}</p><a className="inline-flex rounded-lg border px-3 py-2 text-xs" href={'https://huggingface.co/' + hfSelected} target="_blank" rel="noreferrer">{dari ? 'بازکردن در Hugging Face' : 'Open on Hugging Face'}</a></>}
+      </div>}
+    </section>
   </section>;
 }
