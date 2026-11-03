@@ -30,7 +30,7 @@ interface AfgChatInputCapsuleProps {
   speechToTextAvailable?: boolean;
   fileUploadEnabled?: boolean;
   isLoading?: boolean;
-  onStop?: () => void;
+  onStop: () => void;
   thinkingLevel?: 'minimal' | 'standard' | 'deep';
   planMode?: boolean;
   permissionLevel?: 'ask' | 'guided' | 'full';
@@ -374,7 +374,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
         {/* Big Gradient Send Pill Button ("ارسال" / "Send") - The Signature Feature in Screenshot 1 */}
         <button
           type="button"
-          onClick={isLoading ? (onStop || (() => {})) : handleSend}
+          onClick={isLoading ? onStop : handleSend}
           disabled={!isLoading && (disabled || (!inputText.trim() && attachments.length === 0))}
           className={`flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-full font-bold text-sm sm:text-base shrink-0 transition-all ${
             isLoading ? 'bg-rose-500/20 text-rose-200 border border-rose-400/40' : !inputText.trim() && attachments.length === 0
@@ -391,6 +391,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
       </div>
 
       {/* Transparent Character & Token Counter (fulfills user request #8) */}
+      {!fileUploadEnabled && <p className="px-4 mt-1 text-[10px] text-slate-500">{language === 'dari' ? 'بارگذاری فایل تا زمان فعال‌سازی ذخیره‌سازی سرور غیرفعال است.' : 'File uploads are unavailable until server storage is enabled.'}</p>}
       <div className="flex items-center justify-between px-4 mt-1.5 text-[11px] text-slate-400">
         <div className="flex items-center gap-2">
           <span>{charCount} chars</span>
