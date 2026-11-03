@@ -57,7 +57,7 @@ async function downloadGGUFAndroid(options: Parameters<typeof downloadGGUF>[0]):
   }
   const abort = () => { void AFGOfflineModels.cancelDownload({ downloadId }); };
   options.signal?.addEventListener('abort', abort, { once: true });
-  let lastBytes = 0;
+  let lastBytes: number | null = null;
   let lastSampleAt = Date.now();
   if (options.signal?.aborted) abort();
   try {
@@ -68,7 +68,7 @@ async function downloadGGUFAndroid(options: Parameters<typeof downloadGGUF>[0]):
       const totalBytes = state.expectedBytes;
       const now = Date.now();
       const elapsedSeconds = Math.max(0.001, (now - lastSampleAt) / 1000);
-      const speedBytesPerSecond = Math.max(0, (state.downloadedBytes - lastBytes) / elapsedSeconds);
+      const speedBytesPerSecond = lastBytes === null ? 0 : Math.max(0, (state.downloadedBytes - lastBytes) / elapsedSeconds);
       options.onProgress?.({
         downloadedBytes: state.downloadedBytes,
         totalBytes,
