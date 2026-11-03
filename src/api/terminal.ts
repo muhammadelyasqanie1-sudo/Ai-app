@@ -55,6 +55,16 @@ async function runNativeCommand(command: string, userId: string): Promise<{ outp
   if (parts[0] !== 'afg') return { output: 'Only read-only afg-native commands are available. Shell execution is disabled.', exitCode: 4 };
   const args = parts.slice(1);
   if (args.length === 1 && args[0] === 'version') return { output: 'AFG AI CLI API v1 (server command surface)', exitCode: 0 };
+  if (args.join(' ') === 'status') {
+    await pool!.query('SELECT 1 AS ready');
+    return { output: ['AFG AI API: responding', 'PostgreSQL: connected', 'Account scope: enforced', 'Shell execution: disabled', 'Terminal workspace: browser-isolated'].join('\\n'), exitCode: 0 };
+  }
+  if (args.join(' ') === 'account') {
+    const result = await pool!.query('SELECT display_name,role,status FROM users WHERE id=$1 LIMIT 1',[userId]);
+    const account = result.rows[0];
+    if (!account) return { output: 'Account profile not found.', exitCode: 1 };
+    return { output: ['Name: ' + String(account.display_name || 'AFG AI user').replace(/[\\r\\n]/g,' ').slice(0,100), 'Role: ' + account.role, 'Status: ' + account.status].join('\\n'), exitCode: 0 };
+  }
   if (args.join(' ') === 'models list') {
     const result = await pool!.query(`SELECT provider_key,model_key,display_name,enabled,last_health_ok FROM model_catalog ORDER BY provider_key,display_name LIMIT 100`);
     return { output: result.rows.length ? result.rows.map((r:any)=>`${r.provider_key}::${r.model_key}  ${r.display_name}  ${r.enabled && r.last_health_ok ? 'verified' : 'unavailable'}`).join('\n') : 'No models are currently registered.', exitCode: 0 };
@@ -67,7 +77,7 @@ async function runNativeCommand(command: string, userId: string): Promise<{ outp
     const result = await pool!.query(`SELECT id,kind,mime,size_bytes,created_at FROM files WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50`,[userId]);
     return { output: result.rows.length ? result.rows.map((r:any)=>`${r.id}  ${r.kind}  ${r.mime || 'unknown'}  ${r.size_bytes} bytes`).join('\n') : 'No uploaded files found.', exitCode: 0 };
   }
-  if (args[0] === 'help' || args.length === 0) return { output: 'Read-only commands: afg version | afg models list | afg conv list | afg files list. Shell execution is disabled.', exitCode: 0 };
+  if (args[0] === 'help' || args.length === 0) return { output: 'AFG AI account commands: afg version | afg status | afg account | afg models list | afg conv list | afg files list. Shell execution is disabled.', exitCode: 0 };
   return { output: 'Unsupported command. Run afg help.', exitCode: 1 };
 }
 
