@@ -99,7 +99,8 @@ async function testIntegration(slug: string, credentials: Record<string,string>,
     if (!credentials.bot_token) throw new Error('Add the Telegram Bot Token first.');
     const result = await jsonFetch('https://api.telegram.org/bot'+encodeURIComponent(credentials.bot_token)+'/getMe',{method:'GET'},secrets);
     if (!result.ok || !result.result?.id) throw new Error('Telegram getMe did not verify the bot.');
-    return {message:'Telegram bot verified.',username:result.result.username||null,webhookConfigured:Boolean(config.webhook_url)};
+    const webhook = await jsonFetch('https://api.telegram.org/bot'+encodeURIComponent(credentials.bot_token)+'/getWebhookInfo',{method:'GET'},secrets);
+    return {message:'Telegram bot verified.',username:result.result.username||null,webhookConfigured:Boolean(webhook.result?.url),webhookPendingUpdates:Number(webhook.result?.pending_update_count||0)};
   }
   if (slug === 'web-search') {
     const provider = String(config.provider||'tavily');
@@ -183,7 +184,7 @@ export async function handleConnectionsApi(req: IncomingMessage,res: ServerRespo
       const credentials=await getCredentials(row.rows[0].id);
       try {
         const result=await testIntegration(slug,credentials,row.rows[0].config_json||{});
-        await pool.query(`UPDATE integrations SET status='active',enabled=true,last_checked_at=now(),last_check_ok=true,last_error=NULL,updated_at=now() WHERE id=$1`,[row.rows[0].id]);
+        await pool.query(`UPDATE integrations SET status='active',enabled=true,config_json=config_json||$2::jsonb,last_checked_at=now(),last_check_ok=true,last_error=NULL,updated_at=now() WHERE id=$1`,[row.rows[0].id,JSON.stringify({last_test:result})]);
         await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',[admin.id,'integration.health.success','integration',slug,JSON.stringify({username:result.username||null})]);
         sendAuthJson(res,200,{ok:true,result});return true;
       } catch(error) {
