@@ -172,6 +172,7 @@ export async function getHuggingFaceRepository(repoId: string, signal?: AbortSig
 export function formatModelCategory(tags: string[], pipeline: string | null, modelId = ''): string[] {
   const source = [modelId, pipeline || '', ...tags].join(' ').toLowerCase().replace(/[-_/.:]+/g, ' ');
   const categories: string[] = [];
+  if (/\b(education|educational|learning|teaching|tutor)\b/.test(source)) categories.push('learning');
   if (/\b(code|coding|programming|developer|software|debug|javascript|typescript|python|java|rust|sql)\b/.test(source)) categories.push('coding');
   if (/\b(english|grammar|vocabulary|translation|language learning|ielts|toefl|esl)\b/.test(source)) categories.push('english', 'learning');
   if (/\b(robot|robotics|ros|autonomous|navigation|actuator|kinematics|slam)\b/.test(source)) categories.push('robotics', 'learning');
