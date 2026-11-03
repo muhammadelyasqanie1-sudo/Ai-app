@@ -1,15 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Search, ChevronRight, ArrowLeft, Globe, Palette, MessageSquare, Brain, Code2, Shield,
-  Cpu, Smartphone, Mic, Github, Send, Server, Network, KeyRound, Router, Settings2,
+  Cpu, Smartphone, Mic, FileText, Github, Send, Server, Network, KeyRound, Router, Settings2,
   CheckCircle2, AlertCircle, LockKeyhole, ExternalLink
 } from 'lucide-react';
 import type { Language, Theme, UserProfile } from '../../types/afg';
 import { AfgAccountSettings } from './AfgAccountSettings';
 import { AfgAdminPanel } from './AfgAdminPanel';
+import { AfgFileLibrary } from './AfgFileLibrary';
 
 type Context = 'user' | 'admin';
-type SettingId = 'language'|'appearance'|'chat'|'memory'|'coding'|'privacy'|'models'|'local'|'voice'|'github'|'telegram'|'ftp'|'mcp'|'byok'|'router';
+type SettingId = 'language'|'appearance'|'chat'|'memory'|'coding'|'privacy'|'files'|'models'|'local'|'voice'|'github'|'telegram'|'ftp'|'mcp'|'byok'|'router';
 type Item = { id: SettingId; group: string; title: string; subtitle: string; icon: React.ElementType; keywords: string[] };
 type Status = 'active'|'ready'|'setup'|'disabled'|'unknown';
 
@@ -32,6 +33,7 @@ const ITEMS: Item[] = [
   {id:'memory',group:'Personalize',title:'Memory',subtitle:'Review and manage saved memory items.',icon:Brain,keywords:['remember','saved memory']},
   {id:'coding',group:'Personalize',title:'Coding',subtitle:'Coding workspace and execution preferences.',icon:Code2,keywords:['agent','terminal','programming','sandbox']},
   {id:'privacy',group:'Personalize',title:'Privacy & security',subtitle:'Account security, sessions and personal data.',icon:Shield,keywords:['lock','biometric','screenshots','delete account']},
+  {id:'files',group:'Your Assistant',title:'Files & workspace',subtitle:'Private file library, upload and quarantine status.',icon:FileText,keywords:['upload','pdf','documents','workspace','storage']},
   {id:'models',group:'Your Assistant',title:'Models & providers',subtitle:'Verified models, default selection and availability.',icon:Cpu,keywords:['ai','model','provider','fallback']},
   {id:'local',group:'Your Assistant',title:'Local models',subtitle:'On-device models and offline mode availability.',icon:Smartphone,keywords:['offline','ollama','webllm','download']},
   {id:'voice',group:'Your Assistant',title:'Voice & speech',subtitle:'Speech recognition and text-to-speech capabilities.',icon:Mic,keywords:['microphone','tts','stt']},
@@ -208,6 +210,7 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
       <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
         <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><selected.icon className="h-5 w-5"/></span><div className="min-w-0 flex-1"><h2 className="font-black text-white">{selected.title}</h2><p className="text-xs text-slate-400">{selected.subtitle}</p></div>{['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(page)&&statusBadge(page)}</div>
       </div>
+      {page==='files' && <AfgFileLibrary language={language}/>}
       {(['appearance','language','chat','memory','coding','privacy'] as SettingId[]).includes(page) && <>
         <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-3">
           <p className="text-sm font-semibold text-cyan-100">{page==='language'?t.language:page==='appearance'?'Appearance':page==='chat'?'Chat preferences':page==='memory'?'Personal memory':page==='coding'?'Coding workspace':'Privacy & security'}</p>
