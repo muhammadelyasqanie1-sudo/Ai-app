@@ -23,6 +23,7 @@ import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { ErrorBoundary } from './components/afg/AfgDesignSystem';
 import { applyDocumentLocale } from './utils/i18n';
 import { apiFetch } from './lib/apiClient';
+import { getSavedLanguage, saveLanguage, saveTheme, fromLanguageCode } from './lib/appPreferences';
 
 import type { 
   Language, 
@@ -51,13 +52,9 @@ const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL || '').replace
 
 export default function App() {
   // App State
-  const [language, setLanguage] = useState<Language>(() => {
-    const saved = localStorage.getItem('afg_language');
-    return saved === 'english' ? 'english' : 'dari';
-  });
+  const [language, setLanguage] = useState<Language>(() => fromLanguageCode(localStorage.getItem('afg_language')) || 'dari');
   const [hasSelectedLanguage, setHasSelectedLanguage] = useState(() => {
-    const saved = localStorage.getItem('afg_language');
-    return saved === 'dari' || saved === 'english';
+    return fromLanguageCode(localStorage.getItem('afg_language')) !== null;
   });
   const [isIntroVisible, setIsIntroVisible] = useState(() => {
     const saved = localStorage.getItem('afg_language');
@@ -103,11 +100,22 @@ export default function App() {
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
 
+  useEffect(() => {
+    let active = true;
+    void getSavedLanguage().then((saved) => {
+      if (!active || !saved) return;
+      setLanguage(saved);
+      setHasSelectedLanguage(true);
+      setIsIntroVisible(true);
+    });
+    return () => { active = false; };
+  }, []);
+
   // Sync RTL and Dark Mode with DOM
   useEffect(() => {
     if (!hasSelectedLanguage) return;
     applyDocumentLocale(language);
-    localStorage.setItem('afg_language', language);
+    void saveLanguage(language);
   }, [language, hasSelectedLanguage]);
 
   useEffect(() => {
@@ -119,7 +127,7 @@ export default function App() {
       document.documentElement.classList.toggle('neon', resolved === 'neon');
     };
     applyTheme();
-    localStorage.setItem('afg_theme', theme);
+    void saveTheme(theme);
     if (theme === 'system') media.addEventListener('change', applyTheme);
     return () => media.removeEventListener('change', applyTheme);
   }, [theme]);
@@ -318,7 +326,7 @@ export default function App() {
     setLanguage(nextLanguage);
     setHasSelectedLanguage(true);
     setIsIntroVisible(true);
-    localStorage.setItem('afg_language', nextLanguage);
+    void saveLanguage(nextLanguage);
     applyDocumentLocale(nextLanguage);
     fetch(API_BASE_URL + '/api/auth/me', { credentials: 'include' }).then((response) => response.ok ? response.json() : null).then((authData) => {
       if (!authData?.authenticated) return;
