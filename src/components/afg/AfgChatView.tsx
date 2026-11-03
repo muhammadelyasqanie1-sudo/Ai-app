@@ -289,6 +289,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
 
                 {/* Main Bubble */}
                 <div
+                  data-afg-message="true"
                   className={`rounded-2xl px-4 py-3 text-sm sm:text-base leading-relaxed shadow-lg ${
                     isUser
                       ? 'bg-gradient-to-r from-sky-600 to-cyan-600 text-white rounded-tr-none'
@@ -435,5 +436,3 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
     </div>
   );
 };
-
-.afg-chat-search-hit{outline:2px solid rgba(13,242,255,.85);outline-offset:5px;box-shadow:0 0 28px rgba(13,242,255,.18);border-radius:16px;transition:outline-color .2s ease}
