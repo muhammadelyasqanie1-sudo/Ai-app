@@ -193,6 +193,14 @@ async function verifyModel(provider: ChatProviderAdapter, model: ModelDescriptor
   return { ...model, verifiedAt: health.healthy ? health.checkedAt : null };
 }
 
+export async function recordModelHealthResult(providerId:string,modelId:string,healthy:boolean,checkedAt=new Date().toISOString()):Promise<void>{
+  healthCache.set(`${providerId}:${modelId}`,{healthy,checkedAt});
+  if(!pool)return;
+  await pool.query(`UPDATE model_catalog SET last_health_ok=$3,verified_at=CASE WHEN $3 THEN $4::timestamptz ELSE NULL END,
+    health_checked_at=$4::timestamptz,updated_at=now() WHERE provider_key=$1 AND model_key=$2`,
+    [providerId,modelId,healthy,checkedAt]);
+}
+
 async function applyCapabilityOverrides(providerId: string, models: ModelDescriptor[]): Promise<ModelDescriptor[]> {
   if (!pool || !models.length) return models;
   let result;
