@@ -221,6 +221,10 @@ async function verifyModel(provider: ChatProviderAdapter, model: ModelDescriptor
   return { ...model, verifiedAt: health.healthy ? health.checkedAt : null };
 }
 
+export function invalidateProviderHealth(providerId:string):void{
+  for(const key of healthCache.keys())if(key.startsWith(providerId+':'))healthCache.delete(key);
+}
+
 export async function recordModelHealthResult(providerId:string,modelId:string,healthy:boolean,checkedAt=new Date().toISOString()):Promise<void>{
   healthCache.set(`${providerId}:${modelId}`,{healthy,checkedAt});
   if(!pool)return;
