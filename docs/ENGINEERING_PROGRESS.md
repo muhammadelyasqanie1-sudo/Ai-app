@@ -341,3 +341,14 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 - Added `docs/PLATFORM_SUPPORT_MATRIX.md` to distinguish verified CI evidence from partial implementation and unsupported platform targets.
 - Explicitly records Android debug APK build evidence, Web/PWA limitations, WebLLM versus GGUF runtime boundaries, read-only terminal scope, provider scope, database/Supabase state, and current language coverage.
 - No unsupported iOS, Windows, macOS, Linux, live Supabase, or Render capability is represented as complete.
+
+
+## Live CI result — PWA brand icon PR #11
+
+**PR:** https://github.com/muhammadelyasqanie1-sudo/Ai-app/pull/11
+
+- TypeScript validation: passed.
+- Offline SHA-256 regression tests: passed.
+- Locale validation: passed.
+- Production web build: passed.
+- This validates compilation and asset inclusion only. Browser install prompts, icon rendering on different launchers, and iOS home-screen behavior remain unverified.
