@@ -5,6 +5,7 @@ import { searchHuggingFaceGGUF, getHuggingFaceRepository, formatModelCategory, t
 import { assessOfflineModelFit, scanOfflineDevice, type OfflineDeviceProfile, type ModelFit } from '../../lib/offlineDevice';
 import { downloadGGUF, listOfflineDownloads, pauseGGUFDownload, removeOfflineModel, usesNativeOfflineDownloads, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
 import { clearOfflineChatMessages, loadOfflineChatMessages, saveOfflineChatMessages, type OfflineChatMessage } from '../../lib/offlineChatStorage';
+import { generateNativeLlamaResponse, getNativeLlamaRuntimeInfo, loadNativeLlamaModel, unloadNativeLlamaModel } from '../../lib/offlineLlamaRuntime';
 
 type CatalogModel = {
   model_id: string;
@@ -64,6 +65,9 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState('');
   const [runtime, setRuntime] = useState<RuntimeState>('checking');
+  const [webGpuAvailable, setWebGpuAvailable] = useState(false);
+  const [nativeRuntimeAvailable, setNativeRuntimeAvailable] = useState(false);
+  const [activeOfflineModelLabel, setActiveOfflineModelLabel] = useState('');
   const [runtimeMessage, setRuntimeMessage] = useState('');
   const [storage, setStorage] = useState<{ usage?: number; quota?: number }>({});
   const [modelSizes, setModelSizes] = useState<Record<string, number | null>>({});
@@ -80,9 +84,10 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const [lowPowerMode, setLowPowerMode] = useState(false);
   const [thermalWarning, setThermalWarning] = useState(false);
   const engineRef = useRef<any>(null);
+  const engineModelIdRef = useRef('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => () => { const engine = engineRef.current; engineRef.current = null; if (engine) void engine.unload().catch(() => undefined); }, []);
+  useEffect(() => () => { const engine = engineRef.current; engineRef.current = null; engineModelIdRef.current = ''; if (engine) void engine.unload().catch(() => undefined); }, []);
 
   const copy = dari ? {
     title: 'مرکز هوش مصنوعی آفلاین', subtitle: 'مدل را یک‌بار دانلود کن و در همین دستگاه، بدون اینترنت از آن استفاده کن.',
@@ -150,7 +155,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     setMessagesModelId('');
     setMessages([]);
     void loadOfflineChatMessages(selectedId).then(history => { if (active) { setMessages(history); setMessagesModelId(selectedId); } }).catch(() => { if (active) setMessagesModelId(selectedId); });
-    if (engineRef.current) { const engine = engineRef.current; engineRef.current = null; void engine.unload().catch(() => undefined); }
+    if (engineRef.current && engineModelIdRef.current !== selectedId) { const engine = engineRef.current; engineRef.current = null; engineModelIdRef.current = ''; setActiveOfflineModelLabel(''); void engine.unload().catch(() => undefined); }
     return () => { active = false; };
   }, [selectedId]);
 
