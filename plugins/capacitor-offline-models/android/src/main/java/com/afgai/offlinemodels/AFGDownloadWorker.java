@@ -33,6 +33,7 @@ public final class AFGDownloadWorker extends Worker {
     private static final String CHANNEL = "afg-ai-model-downloads";
     private static final int NOTIFICATION_ID = 7341;
     private final int downloadId;
+    private volatile HttpURLConnection activeConnection;
 
     public AFGDownloadWorker(Context context, WorkerParameters parameters) {
         super(context, parameters);
@@ -59,6 +60,7 @@ public final class AFGDownloadWorker extends Worker {
                 offset = 0L;
             }
             connection = (HttpURLConnection) new URL(meta.getString("url")).openConnection();
+            activeConnection = connection;
             connection.setConnectTimeout(20000);
             connection.setReadTimeout(30000);
             connection.setInstanceFollowRedirects(true);
@@ -150,7 +152,15 @@ public final class AFGDownloadWorker extends Worker {
             return Result.retry();
         } finally {
             if (connection != null) connection.disconnect();
+            activeConnection = null;
         }
+    }
+
+    @Override
+    public void onStopped() {
+        HttpURLConnection connection = activeConnection;
+        if (connection != null) connection.disconnect();
+        super.onStopped();
     }
 
     private Result verifyAndInstall(JSONObject meta, File part, File destination) throws Exception {
