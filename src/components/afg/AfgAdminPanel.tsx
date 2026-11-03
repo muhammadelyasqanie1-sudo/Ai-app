@@ -70,6 +70,10 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [manualModelId,setManualModelId] = useState('');
   const [manualModelName,setManualModelName] = useState('');
   const [manualContext,setManualContext] = useState('');
+  const [modelSearch,setModelSearch] = useState('');
+  const [modelProviderFilter,setModelProviderFilter] = useState('all');
+  const [modelStatusFilter,setModelStatusFilter] = useState('all');
+  const [modelPage,setModelPage] = useState(0);
   const [users,setUsers] = useState<UserRow[]>([]);
   const [overview,setOverview] = useState<Overview|null>(null);
   const [requests,setRequests] = useState<RequestRow[]>([]);
@@ -241,7 +245,8 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   };
 
   const deleteModel=async(model:ModelRow)=>{
-    if(!window.confirm(`Delete model ${model.id} from ${model.providerId}? This cannot be undone.`))return;
+    const confirmation=window.prompt(`To permanently remove this model from the catalogue, type its exact ID: ${model.id}`);
+    if(confirmation!==model.id){setError('Model ID confirmation did not match. No deletion was performed.');return;}
     try{await api('/api/admin/models',{method:'DELETE',body:JSON.stringify({providerId:model.providerId,modelId:model.id})});setNotice('Model deleted from catalogue.');await loadAdminData();}
     catch(err){setError(err instanceof Error?err.message:'Model deletion failed.');}
   };
@@ -342,6 +347,21 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const userPageSize=50;
   const userPageCount=Math.max(1,Math.ceil(filteredUsers.length/userPageSize));
   const pageUsers=filteredUsers.slice(userPage*userPageSize,(userPage+1)*userPageSize);
+  const filteredModels=useMemo(()=>models.filter(m=>{
+    const query=modelSearch.trim().toLowerCase();
+    const textMatch=!query||[m.id,m.displayName,m.providerId].some(value=>String(value||'').toLowerCase().includes(query));
+    const providerMatch=modelProviderFilter==='all'||m.providerId===modelProviderFilter;
+    const statusMatch=modelStatusFilter==='all'||
+      (modelStatusFilter==='verified'&&Boolean(m.verifiedAt)&&m.lastHealthOk!==false)||
+      (modelStatusFilter==='unverified'&&!m.verifiedAt)||
+      (modelStatusFilter==='enabled'&&m.enabled)||
+      (modelStatusFilter==='disabled'&&!m.enabled);
+    return textMatch&&providerMatch&&statusMatch;
+  }).sort((a,b)=>a.providerId.localeCompare(b.providerId)||a.displayName.localeCompare(b.displayName)),
+    [models,modelSearch,modelProviderFilter,modelStatusFilter]);
+  const modelPageSize=50;
+  const modelPageCount=Math.max(1,Math.ceil(filteredModels.length/modelPageSize));
+  const pageModels=filteredModels.slice(modelPage*modelPageSize,(modelPage+1)*modelPageSize);
   const panel='rounded-2xl border border-slate-800 bg-slate-950/75 p-4 sm:p-5 shadow-lg shadow-black/10';
   const field='w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400';
   const primary='rounded-xl bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-300 disabled:opacity-40';
@@ -483,7 +503,11 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
         </div><button className={primary+' mt-3'} disabled={!manualProviderId||!manualModelId.trim()} onClick={()=>void addManualModel()}>Register model</button>
       </div>
       <div className={panel}><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">Model catalogue</h2><p className="text-xs text-slate-500">Only models with a recent successful health check can be selected by users.</p></div><button className={primary} onClick={()=>void discoverModels()}>Refresh verified inventory</button></div>
-      <div className="space-y-3">{models.map(m=><div key={m.providerId+':'+m.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
+      <div className="mb-3 grid gap-2 sm:grid-cols-3"><input className={field} value={modelSearch} onChange={e=>{setModelSearch(e.target.value);setModelPage(0);}} placeholder="Search provider or model ID"/>
+        <select className={field} value={modelProviderFilter} onChange={e=>{setModelProviderFilter(e.target.value);setModelPage(0);}}><option value="all">All providers</option>{providers.map(p=><option key={p.id} value={p.id}>{p.displayName}</option>)}</select>
+        <select className={field} value={modelStatusFilter} onChange={e=>{setModelStatusFilter(e.target.value);setModelPage(0);}}><option value="all">All model states</option><option value="verified">Verified</option><option value="unverified">Unverified</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select>
+      </div>
+      <div className="space-y-3">{pageModels.map(m=><div key={m.providerId+':'+m.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
         <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold text-white">{m.displayName}</p><p className="text-[10px] text-slate-500">{m.providerId} · {m.id} · {fmt(m.contextWindow)} context</p></div><div className="flex flex-wrap gap-2">
           <span className={m.verifiedAt?'text-emerald-300':'text-amber-300'}>{m.verifiedAt?'Verified':'Unverified'}</span>
           <button className={m.enabled?primary:secondary} onClick={()=>void patchModel(m,{enabled:!m.enabled})}>{m.enabled?'Enabled':'Disabled'}</button>
@@ -492,7 +516,9 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
         </div></div>
         <div className="mt-3 flex flex-wrap gap-2">{CAPABILITIES.map(cap=><label key={cap} className="flex items-center gap-1 rounded-lg border border-slate-800 px-2 py-1 text-[10px] text-slate-300"><input type="checkbox" checked={Boolean(m.capabilities?.[cap])} onChange={e=>{const next={...m.capabilities,[cap]:e.target.checked};void patchModel(m,{capabilities:Object.keys(next).filter(k=>next[k])});}}/>{cap}</label>)}</div>
         <p className="mt-2 text-[10px] text-slate-500">{m.verifiedAt?'Health verified '+date(m.verifiedAt):'Not currently verified'} · {m.lastHealthOk?'Last probe successful':'Last probe not successful'}</p>
-      </div>)}</div>{!models.length&&<p className="text-sm text-slate-500">No registered models.</p>}</div>
+      </div>)}</div>{!filteredModels.length&&<p className="text-sm text-slate-500">No models match the current filters.</p>}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400"><span>{fmt(filteredModels.length)} models · Page {modelPage+1} of {modelPageCount}</span><div className="flex gap-2"><button className={secondary} disabled={modelPage===0} onClick={()=>setModelPage(v=>Math.max(0,v-1))}>Previous</button><button className={secondary} disabled={modelPage+1>=modelPageCount} onClick={()=>setModelPage(v=>Math.min(modelPageCount-1,v+1))}>Next</button></div></div>
+      </div>
       <div className={panel}><h2 className="font-bold text-white">Default routing / fallback order</h2><p className="my-2 text-xs text-slate-500">One providerId::modelId per line. First healthy eligible model is preferred.</p><select className={field+' mb-3'} value={fallbackCapability} onChange={e=>setFallbackCapability(e.target.value)}>{['text','vision','imageGen','tts','stt'].map(x=><option key={x}>{x}</option>)}</select><textarea className={field+' font-mono'} rows={5} value={fallbackText} onChange={e=>setFallbackText(e.target.value)}/><button className={primary+' mt-3 flex items-center gap-2'} onClick={()=>void saveFallback()}><Save className="h-4 w-4"/>Save routing order</button></div>
     </div>}
 
