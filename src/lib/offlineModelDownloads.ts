@@ -42,13 +42,22 @@ function mapNativeDownload(item: Awaited<ReturnType<typeof AFGOfflineModels.getD
 async function downloadGGUFAndroid(options: Parameters<typeof downloadGGUF>[0]): Promise<OfflineDownloadState> {
   const revision = options.revision || 'main';
   const url = 'https://huggingface.co/' + options.repoId + '/resolve/' + encodeURIComponent(revision) + '/' + options.fileName.split('/').map(encodeURIComponent).join('/');
-  const started = await AFGOfflineModels.startDownload({ url, repoId: options.repoId, revision, fileName: options.fileName, expectedBytes: options.expectedBytes, expectedSha256: options.expectedSha256 });
-  const abort = () => { void AFGOfflineModels.cancelDownload({ downloadId: started.downloadId }); };
+  const existing = (await AFGOfflineModels.listDownloads()).downloads.find(item => item.id === options.repoId + '/' + options.fileName);
+  let downloadId: number;
+  if (existing && (existing.status === 'downloading' || existing.status === 'paused' || existing.status === 'installed')) {
+    downloadId = existing.downloadId;
+    if (existing.status === 'installed') return mapNativeDownload(existing);
+  } else {
+    if (existing) await AFGOfflineModels.deleteModel({ downloadId: existing.downloadId }).catch(() => undefined);
+    const started = await AFGOfflineModels.startDownload({ url, repoId: options.repoId, revision, fileName: options.fileName, expectedBytes: options.expectedBytes, expectedSha256: options.expectedSha256 });
+    downloadId = started.downloadId;
+  }
+  const abort = () => { void AFGOfflineModels.cancelDownload({ downloadId }); };
   options.signal?.addEventListener('abort', abort, { once: true });
   try {
     while (true) {
       if (options.signal?.aborted) throw new Error('Android model download was cancelled.');
-      const native = await AFGOfflineModels.getDownloadStatus({ downloadId: started.downloadId });
+      const native = await AFGOfflineModels.getDownloadStatus({ downloadId });
       const state = mapNativeDownload(native);
       const totalBytes = state.expectedBytes;
       options.onProgress?.({ downloadedBytes: state.downloadedBytes, totalBytes, percent: totalBytes ? Math.min(100, Math.floor(state.downloadedBytes / totalBytes * 100)) : null, status: state.status });
