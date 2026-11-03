@@ -66,6 +66,7 @@ export async function recordAuthSecurityEvent(req: IncomingMessage, userId: stri
 }
 
 export async function recordSecurityNotification(userId: string, eventType: string, title: string, body: string) {
+  if (!pool) return;
   try {
     const result = await pool.query(
       "SELECT u.email, u.preferred_language, COALESCE((p.notifications_json->>'inApp')::boolean,true) AS in_app, COALESCE((p.notifications_json->>'email')::boolean,false) AS email_enabled, COALESCE((p.notifications_json->>'securityAlerts')::boolean,true) AS security_enabled FROM users u LEFT JOIN user_preferences p ON p.user_id=u.id WHERE u.id=$1",
@@ -383,7 +384,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
   }
 
   if (pathname === '/api/auth/verify-email/resend' && req.method === 'POST') {
-    if (isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
+    if (await isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
     try {
       const parsed=parseAuthInput(AUTH_INPUT.email,await readJsonBody(req));if(!parsed){sendAuthJson(res,400,{error:'Enter a valid email address.'});return true;} const email=parsed.email.toLowerCase();
       const found=await pool.query("SELECT id FROM users WHERE lower(email)=$1 AND email_verified=false AND status='active' LIMIT 1",[email]);
