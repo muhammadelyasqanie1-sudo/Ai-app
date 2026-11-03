@@ -358,3 +358,9 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 
 - Source-level review confirms the manifest and document point to the same icon path.
 - Browser installability, Android home-screen icon rendering and iOS Safari behavior remain unverified pending CI/device testing.
+
+
+### Icon compatibility refinement
+
+- The SVG uses a full-bleed background to better support maskable icon cropping.
+- Removed the Apple touch icon reference because iOS Safari's home-screen icon expectations are PNG-oriented; no unsupported iOS icon behavior is claimed.
