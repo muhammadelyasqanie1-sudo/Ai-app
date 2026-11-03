@@ -1,4 +1,5 @@
 -- AFG AI admin roles, operational telemetry, and announcement storage.
+ALTER TABLE system_config ADD COLUMN IF NOT EXISTS updated_by uuid REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS health_checked_at timestamptz;
 INSERT INTO roles(name,permissions_json) VALUES
  ('superadmin','{"*":true,"provider_keys:manage":true,"users:delete":true}'::jsonb)
