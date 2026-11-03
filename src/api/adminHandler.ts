@@ -26,7 +26,7 @@ function isPublicRoutableAddress(address:string):boolean{
 }
 
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf, verifyUserPassword, requestAdminPasswordReset } from './auth.ts';
-import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors, refreshDatabaseProviderAdapters, recordModelHealthResult } from '../services/providerGateway.ts';
+import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors, refreshDatabaseProviderAdapters, recordModelHealthResult, invalidateProviderHealth } from '../services/providerGateway.ts';
 import { encryptProviderSecret, providerKeyHint } from '../security/providerVault.ts';
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
 
@@ -206,6 +206,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
             JSON.stringify({keyHint:hint,status:'active'}),JSON.stringify({alias})]);
         await client.query('COMMIT');
       }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+      invalidateProviderHealth(providerSlug);
       await refreshDatabaseProviderAdapters(true);
       sendAuthJson(res,200,{providerId:providerSlug,alias,keyHint:hint,status:'active'});return true;
     }
