@@ -348,9 +348,7 @@ export async function downloadGGUF(options: {
 }
 
 export function pauseGGUFDownload(id: string): void {
-  if (isAndroidNative()) return; // Android DownloadManager retries/resumes interrupted transfers in the background.
-  const task = activeTasks.get(id);
-  if (task) { task.paused = true; task.controller.abort('paused by user'); }
+  void pauseOfflineDownload(id);
 }
 
 export async function removeOfflineModel(id: string): Promise<void> {
