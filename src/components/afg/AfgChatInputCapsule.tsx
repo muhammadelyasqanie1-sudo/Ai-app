@@ -54,7 +54,18 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   permissionLevel = 'guided',
 }) => {
   const t = translations[language];
-  const [inputText, setInputText] = useState('');
+  // Keep an unsent draft on this device so navigation, reloads or a temporary
+  // network interruption do not silently erase what the user was writing.
+  const [inputText, setInputText] = useState(() => {
+    try { return (localStorage.getItem('afg_chat_draft_v1') || '').slice(0, 20_000); }
+    catch { return ''; }
+  });
+  useEffect(() => {
+    try {
+      if (inputText.trim()) localStorage.setItem('afg_chat_draft_v1', inputText.slice(0, 20_000));
+      else localStorage.removeItem('afg_chat_draft_v1');
+    } catch { /* Draft persistence is best-effort when device storage is unavailable. */ }
+  }, [inputText]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [voiceEnabled,setVoiceEnabled]=useState(()=>localStorage.getItem('afg_voice_enabled')!=='false');
