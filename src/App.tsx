@@ -68,7 +68,7 @@ const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL || '').replace
 
 export default function App() {
   // App State
-  const [language, setLanguage] = useState<Language>(() => detectDeviceLanguage());
+  const [language, setLanguage] = useState<Language>(() => { const saved = localStorage.getItem('afg_language'); const supported: Language[] = ['dari','english','pashto','persian','arabic','urdu','turkish','russian','french','spanish','german','chinese','hindi','bengali','indonesian','portuguese','japanese','korean']; return supported.includes(saved as Language) ? saved as Language : detectDeviceLanguage(); });
   // Language is detected from the device/browser; no manual language gate on startup.
   const [hasSelectedLanguage, setHasSelectedLanguage] = useState(true);
   // Show the full-screen cinematic motion intro on every fresh app launch.
