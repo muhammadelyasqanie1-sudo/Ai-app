@@ -523,10 +523,17 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/audit') {
-      const result = await pool.query(`SELECT a.id,a.actor_user_id,u.email AS actor_email,a.action,
-        a.target_type,a.target_id,a.metadata,a.created_at FROM audit_logs a
-        LEFT JOIN users u ON u.id=a.actor_user_id ORDER BY a.id DESC LIMIT 250`);
-      sendAuthJson(res, 200, { events: result.rows }); return true;
+      const query=new URL(req.url||'/','http://localhost').searchParams;
+      const values:unknown[]=[];const where:string[]=[];
+      if(query.get('from')){values.push(query.get('from'));where.push(`a.created_at >= ${values.length}::timestamptz`);}
+      if(query.get('to')){values.push(query.get('to'));where.push(`a.created_at <= ${values.length}::timestamptz`);}
+      if(query.get('actor')){values.push(query.get('actor'));where.push(`(u.email ILIKE ${values.length} OR a.actor_user_id::text=${values.length})`);}
+      const clause=where.length?'WHERE '+where.join(' AND '):'';
+      const result = await pool.query(`SELECT a.id,a.actor_user_id,u.email AS actor_email,a.actor_role,a.action,
+        a.target_type,a.target_id,a.before_json,a.after_json,a.metadata,a.ip,a.user_agent,a.created_at
+        FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_user_id ${clause}
+        ORDER BY a.id DESC LIMIT 500`,values);
+      sendAuthJson(res,200,{events:result.rows});return true;
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/security-events') {
