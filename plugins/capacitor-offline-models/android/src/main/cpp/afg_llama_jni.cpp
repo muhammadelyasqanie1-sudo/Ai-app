@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <android/log.h>
 #include <llama.h>
+#include <ggml-backend.h>
 #include <json.hpp>
 
 #include <algorithm>
@@ -39,7 +40,7 @@ static void unload_locked() {
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeLoadModel(
-    JNIEnv * env, jobject, jstring jpath, jint context_size, jint threads) {
+    JNIEnv * env, jobject, jstring jpath, jstring jnative_lib_dir, jint context_size, jint threads) {
     std::lock_guard<std::mutex> lock(g_mutex);
     unload_locked();
     g_last_error.clear();
@@ -47,6 +48,8 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeLoadModel(
     if (path.empty()) { g_last_error = "Model file path is empty."; return JNI_FALSE; }
 
     llama_backend_init();
+    const std::string native_lib_dir = from_jstring(env, jnative_lib_dir);
+    if (!native_lib_dir.empty()) ggml_backend_load_all_from_path(native_lib_dir.c_str());
     g_backend_initialized = true;
 
     llama_model_params model_params = llama_model_default_params();
