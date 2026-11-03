@@ -161,7 +161,7 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerate(
 
         llama_memory_clear(llama_get_memory(g_context), true);
         llama_batch prompt_batch = llama_batch_get_one(tokens.data(), token_count);
-        if (llama_decode(g_context, prompt_batch) != 0) {
+        if (llama_decode(g_context, prompt_batch) < 0) {
             g_last_error = "llama.cpp failed while processing the prompt.";
             return nullptr;
         }
@@ -187,7 +187,7 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerate(
             if (piece_size > 0) output.append(piece, static_cast<size_t>(piece_size));
 
             llama_batch next_batch = llama_batch_get_one(&best, 1);
-            if (llama_decode(g_context, next_batch) != 0) break;
+            if (llama_decode(g_context, next_batch) < 0) break;
         }
         return env->NewStringUTF(output.c_str());
     } catch (const std::exception & error) {
