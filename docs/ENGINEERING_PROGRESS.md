@@ -291,3 +291,30 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 
 - Locale, web-check and Android debug APK workflows were in progress at the time of this update.
 - No Android runtime execution or device test has been performed.
+
+
+## Milestone 12 — Supabase PostgreSQL TLS defaults
+
+**Status:** IMPLEMENTED BUT NOT VERIFIED
+
+### Problem found
+
+- The PostgreSQL pool enabled TLS only when `DATABASE_SSL=require` was explicitly set. A valid Supabase connection string could therefore be configured without TLS if the environment variable was omitted.
+
+### Changes
+
+- The database module now detects Supabase PostgreSQL hostnames ending in `.supabase.co` or `.supabase.com` and enables TLS by default when `DATABASE_SSL` is unset.
+- Explicit `DATABASE_SSL=require` continues to enable TLS for any provider.
+- Certificate validation remains enabled by default; `DATABASE_SSL_REJECT_UNAUTHORIZED=false` is still an explicit opt-out and is not recommended.
+- `.env.example` now clarifies that `DATABASE_URL` must be a PostgreSQL connection string, not a Supabase anon/publishable API key.
+
+### Files changed
+
+- `src/api/database.ts`
+- `.env.example`
+
+### Verification
+
+- Source-level review confirms Supabase hostname detection and the TLS decision.
+- No Supabase credential is available in this code-editing session; live TLS negotiation and `SELECT 1` remain unverified.
+- No migration or production database operation was performed.
