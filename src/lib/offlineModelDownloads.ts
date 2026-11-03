@@ -157,7 +157,17 @@ export async function listOfflineDownloads(): Promise<OfflineDownloadState[]> {
     request.onerror = () => reject(request.error);
   });
   db.close();
-  return result.sort((a, b) => b.updatedAt - a.updatedAt);
+  const recovered: OfflineDownloadState[] = [];
+  for (const item of result) {
+    if (item.status === 'downloading' && !activeTasks.has(item.id)) {
+      const paused = { ...item, status: 'paused' as const, updatedAt: Date.now() };
+      await saveTask(paused);
+      recovered.push(paused);
+    } else {
+      recovered.push(item);
+    }
+  }
+  return recovered.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export async function getOfflineDownload(id: string): Promise<OfflineDownloadState | null> {
