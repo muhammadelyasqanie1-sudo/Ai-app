@@ -132,12 +132,18 @@ export async function getHuggingFaceRepository(repoId: string, signal?: AbortSig
   if (cached) return cached;
 
   const files = await request<Array<Record<string, unknown>>>(API + '/models/' + encodeURIComponent(repoId).replace('%2F', '/') + '/tree/' + encodeURIComponent(revision) + '?recursive=true&expand=true', signal);
-  const normalized: HuggingFaceFile[] = files.filter(file => file.type !== 'directory').map(file => ({
-    path: String(file.path || ''),
-    size: typeof file.size === 'number' ? file.size : typeof (file.lfs as Record<string, unknown> | undefined)?.size === 'number' ? Number((file.lfs as Record<string, unknown>).size) : null,
-    lfs: file.lfs && typeof file.lfs === 'object' ? file.lfs as HuggingFaceFile['lfs'] : undefined,
-    type: typeof file.type === 'string' ? file.type : undefined,
-  }));
+  const normalized: HuggingFaceFile[] = files.filter(file => file.type !== 'directory').map(file => {
+    const lfs = file.lfs && typeof file.lfs === 'object' ? file.lfs as HuggingFaceFile['lfs'] : undefined;
+    const lfsSize = typeof lfs?.size === 'number' && lfs.size > 0 ? lfs.size : null;
+    const blobSize = typeof file.size === 'number' && file.size > 0 ? file.size : null;
+    return {
+      path: String(file.path || ''),
+      // LFS size is authoritative for large GGUF blobs; fall back to the tree entry size.
+      size: lfsSize ?? blobSize,
+      lfs,
+      type: typeof file.type === 'string' ? file.type : undefined,
+    };
+  });
   const ggufFiles = normalized.filter(file => file.path.toLowerCase().endsWith('.gguf')).map(file => {
     const name = file.path.split('/').pop() || file.path;
     const match = name.match(/(?:^|[-_.])(Q[0-9]+(?:_[KMS]_[MS]|_[0-9]+)?|IQ[0-9]+_[A-Z0-9_]+|F16|F32)(?:[-_.]|$)/i);
