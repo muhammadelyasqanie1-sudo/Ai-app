@@ -46,7 +46,7 @@ export async function refreshDatabaseProviderAdapters(force = false): Promise<vo
           pk.key_encrypted,pk.status AS key_status,p.config_json
         FROM providers p
         LEFT JOIN provider_keys pk ON pk.provider_id=p.id AND pk.alias='default' AND pk.status='active'
-        WHERE p.source='custom' OR p.kind IN ('deepseek','openai','google','openrouter','anthropic','ollama')
+        WHERE p.source='custom' OR p.kind IN ('openai_compat','anthropic','ollama')
         ORDER BY p.slug`);
     const next: ChatProviderAdapter[] = [];
     for (const row of result.rows) {
@@ -56,7 +56,7 @@ export async function refreshDatabaseProviderAdapters(force = false): Promise<vo
         continue;
       }
       if (!row.key_encrypted || !row.base_url) continue;
-      if (!['custom','deepseek','openai','google','openrouter','anthropic'].includes(String(row.kind))) continue;
+      if (!['custom','openai_compat','anthropic'].includes(String(row.kind))) continue;
       try {
         const apiKey = decryptProviderSecret(String(row.key_encrypted));
         const baseUrl = String(row.base_url);
