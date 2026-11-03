@@ -150,7 +150,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const body=await readJsonBody(req,8000);
       const parsed=customProviderInput.safeParse(body);
       if(!parsed.success||!safeCustomProviderUrl(parsed.data.baseUrl)){
-        sendAuthJson(res,400,{error:'Provide a valid slug, display name, and public HTTPS OpenAI-compatible API base URL.'});return true;
+        sendAuthJson(res,400,{error:'Provide a valid slug, display name, and public HTTPS provider API base URL.'});return true;
       }
       const {slug,displayName,baseUrl}=parsed.data;
       const protocol=parsed.data.protocol||'openai-compatible';
