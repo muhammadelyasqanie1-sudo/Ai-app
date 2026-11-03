@@ -736,8 +736,9 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         [title, message],
       );
       await pool.query(
-        'INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
-        [user.id,'notification.product_update_broadcast','notification','product.update',JSON.stringify({title,recipientCount:delivered.rowCount||0})],
+        'INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+        [user.id,user.role,'notification.product_update_broadcast','notification','product.update',null,
+          JSON.stringify({title,recipientCount:delivered.rowCount||0}),JSON.stringify({title,recipientCount:delivered.rowCount||0})],
       );
       sendAuthJson(res, 200, { sent: true, recipientCount: delivered.rowCount || 0 });
       return true;
@@ -812,12 +813,16 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       await refreshDatabaseProviderAdapters(true);
       const adapter=getProviderAdapter(providerId);
       if(!adapter||!modelId){sendAuthJson(res,400,{error:'Provide a configured provider and model ID.'});return true;}
+      const beforeHealth=await pool.query('SELECT enabled,verified_at,last_health_ok,health_checked_at FROM model_catalog WHERE provider_key=$1 AND model_key=$2 LIMIT 1',[providerId,modelId]);
       const started=Date.now();
       let healthy=false,checkedAt=new Date().toISOString();
       try{const result=await adapter.healthCheck(modelId);healthy=result.healthy;checkedAt=result.checkedAt;}catch{healthy=false;}
       await recordModelHealthResult(providerId,modelId,healthy,checkedAt);
-      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
-        [user.id,user.role,'model.health_check','model',providerId+':'+modelId,JSON.stringify({healthy,latencyMs:Date.now()-started})]);
+      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+        [user.id,user.role,'model.health_check','model',providerId+':'+modelId,
+          beforeHealth.rows[0]?JSON.stringify(beforeHealth.rows[0]):null,
+          JSON.stringify({lastHealthOk:healthy,verifiedAt:healthy?checkedAt:null,healthCheckedAt:checkedAt}),
+          JSON.stringify({healthy,latencyMs:Date.now()-started})]);
       sendAuthJson(res,healthy?200:502,{providerId,modelId,healthy,verifiedAt:healthy?checkedAt:null,latencyMs:Date.now()-started});return true;
     }
 
