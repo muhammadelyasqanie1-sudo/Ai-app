@@ -121,6 +121,7 @@ export function createOpenAICompatibleAdapter(override?: OpenAICompatibleProvide
         const response = await fetch(current.baseUrl + '/models/' + encodeURIComponent(modelId), {
           method: 'GET',
           headers: requestHeaders(current, 'application/json'),
+          redirect: 'error',
           signal: AbortSignal.timeout(Math.min(timeout(current), 12000)),
         });
         if (!response.ok) {
