@@ -119,3 +119,16 @@ export async function clearOfflineMetrics(): Promise<void> {
   });
   db.close();
 }
+
+export async function downloadOfflineMetricsReport(): Promise<void> {
+  const blob = await exportOfflineMetrics();
+  const url = URL.createObjectURL(blob);
+  try {
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'afg-ai-offline-metrics-' + new Date().toISOString().slice(0, 10) + '.json';
+    anchor.click();
+  } finally {
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+}
