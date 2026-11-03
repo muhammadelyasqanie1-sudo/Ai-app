@@ -9,7 +9,7 @@ import { getIntlLocale } from '../../utils/i18n';
 
 interface AfgAdminPanelProps { language: Language; }
 type Tab = 'overview'|'users'|'providers'|'models'|'usage'|'limits'|'health'|'flags'|'audit'|'security';
-type ProviderRow = { id:string; displayName:string; enabled:boolean; configured:boolean; configMessage?:string|null };
+type ProviderRow = { id:string; displayName:string; enabled:boolean; configured:boolean; kind?:string; base_url?:string|null; keyHint?:string|null; keyStatus?:string|null; last_health_at?:string|null; last_health_ok?:boolean|null; source?:string };
 type ModelRow = {
   id:string; providerId:string; displayName:string; description?:string; contextWindow:number;
   enabled:boolean; verifiedAt:string|null; capabilities:Record<string,boolean>;
@@ -50,6 +50,8 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const fmt = (value:any) => value == null ? '—' : new Intl.NumberFormat(locale).format(Number(value));
   const date = (value:any) => value ? new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)) : (dari ? 'هرگز' : 'Never');
   const [authenticated,setAuthenticated] = useState(false);
+  const [adminRole,setAdminRole] = useState<'admin'|'superadmin'|null>(null);
+  const isSuperadmin = adminRole === 'superadmin';
   const [tab,setTab] = useState<Tab>('overview');
   const [email,setEmail] = useState('');
   const [password,setPassword] = useState('');
@@ -57,6 +59,10 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [displayName,setDisplayName] = useState('AFG AI Administrator');
   const [showBootstrap,setShowBootstrap] = useState(false);
   const [providers,setProviders] = useState<ProviderRow[]>([]);
+  const [providerSecrets,setProviderSecrets] = useState<Record<string,string>>({});
+  const [customSlug,setCustomSlug] = useState('');
+  const [customName,setCustomName] = useState('');
+  const [customBaseUrl,setCustomBaseUrl] = useState('');
   const [models,setModels] = useState<ModelRow[]>([]);
   const [users,setUsers] = useState<UserRow[]>([]);
   const [overview,setOverview] = useState<Overview|null>(null);
@@ -106,7 +112,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     catch(err){setError(err instanceof Error?err.message:'Health check failed.');}
   },[]);
   useEffect(()=>{
-    api('/api/auth/me').then((data)=>{if(data.authenticated&&data.user?.role==='admin') void loadAdminData();}).catch(()=>{});
+    api('/api/auth/me').then((data)=>{if(data.authenticated&&['admin','superadmin'].includes(data.user?.role)){setAdminRole(data.user.role);void loadAdminData();}}).catch(()=>{});
   },[loadAdminData]);
   useEffect(()=>{
     const row=fallbacks.find((item)=>item.capability===fallbackCapability);
@@ -120,13 +126,15 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       await api(bootstrap?'/api/auth/bootstrap-admin':'/api/auth/login',{method:'POST',body:JSON.stringify(bootstrap?
         {email,password,displayName,bootstrapToken}:{email,password})});
       setBootstrapToken('');
+      const session=await api('/api/auth/me');
+      if(session.user?.role==='admin'||session.user?.role==='superadmin')setAdminRole(session.user.role);
       if(await loadAdminData()) setNotice('Administrator session established.');
     }catch(err){setError(err instanceof Error?err.message:'Authentication failed.');}
     finally{setLoading(false);}
   };
   const signOut=async()=>{
     try{await api('/api/auth/logout',{method:'POST',body:'{}'});}catch{}
-    setAuthenticated(false);setProviders([]);setModels([]);setUsers([]);
+    setAuthenticated(false);setAdminRole(null);setProviders([]);setModels([]);setUsers([]);
   };
   const patchUser=async(user:UserRow,patch:Record<string,string>)=>{
     setError('');
@@ -146,7 +154,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const testProvider=async(provider:ProviderRow)=>{
     setError('');setNotice('Testing provider connection…');
     try{
-      const result=await api('/api/admin/providers/test',{method:'POST',body:JSON.stringify({providerId:provider.id})});
+      const result=await api('/api/admin/providers/'+encodeURIComponent(provider.id)+'/test',{method:'POST',body:'{}'});
       setNotice(`${provider.displayName}: connected · ${result.discoveredModels} models · ${result.latencyMs} ms`);
       await loadAdminData();
     }catch(err){setNotice('');setError(err instanceof Error?err.message:'Provider test failed.');}
@@ -157,6 +165,36 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     catch(err){setError(err instanceof Error?err.message:'Model discovery failed.');}
     finally{setLoading(false);}
   };
+  const discoverProvider=async(provider:ProviderRow)=>{
+    setError('');setNotice(`Discovering models from ${provider.displayName}…`);
+    try{const result=await api('/api/admin/providers/'+encodeURIComponent(provider.id)+'/discover-models',{method:'POST',body:'{}'});
+      setNotice(`${provider.displayName}: discovered ${result.discovered} models. All new entries are disabled pending review.`);await loadAdminData();}
+    catch(err){setNotice('');setError(err instanceof Error?err.message:'Provider model discovery failed.');}
+  };
+  const saveProviderKey=async(provider:ProviderRow,rotate=false)=>{
+    const apiKey=(providerSecrets[provider.id]||'').trim();if(!apiKey){setError('Enter the provider API key first.');return;}
+    if(!isSuperadmin){setError('Only superadmin can manage provider keys.');return;}
+    try{const route='/api/admin/providers/'+encodeURIComponent(provider.id)+'/keys'+(rotate?'/rotate':'');
+      await api(route,{method:rotate?'POST':'PUT',body:JSON.stringify({apiKey,alias:'default'})});
+      setProviderSecrets(current=>({...current,[provider.id]:''}));setNotice(`${provider.displayName} key securely saved.`);await loadAdminData();}
+    catch(err){setError(err instanceof Error?err.message:'Provider key could not be saved.');}
+  };
+  const createCustomProvider=async()=>{
+    try{const result=await api('/api/admin/providers/custom',{method:'POST',body:JSON.stringify({slug:customSlug,displayName:customName,baseUrl:customBaseUrl,protocol:'openai-compatible'})});
+      setCustomSlug('');setCustomName('');setCustomBaseUrl('');setNotice(`Custom provider ${result.provider.slug} created. Add a key from the provider card.`);await loadAdminData();}
+    catch(err){setError(err instanceof Error?err.message:'Custom provider could not be created.');}
+  };
+  const testModel=async(model:ModelRow)=>{
+    try{const result=await api('/api/admin/models/test',{method:'POST',body:JSON.stringify({providerId:model.providerId,modelId:model.id})});
+      setNotice(result.healthy?`${model.id}: verified successfully.`:`${model.id}: health check failed.`);await loadAdminData();}
+    catch(err){setError(err instanceof Error?err.message:'Model health check failed.');}
+  };
+  const deleteModel=async(model:ModelRow)=>{
+    if(!window.confirm(`Delete model ${model.id} from ${model.providerId}? This cannot be undone.`))return;
+    try{await api('/api/admin/models',{method:'DELETE',body:JSON.stringify({providerId:model.providerId,modelId:model.id})});setNotice('Model deleted from catalogue.');await loadAdminData();}
+    catch(err){setError(err instanceof Error?err.message:'Model deletion failed.');}
+  };
+
   const saveFallback=async()=>{
     try{await api('/api/admin/fallbacks',{method:'PATCH',body:JSON.stringify({capability:fallbackCapability,orderedModels:fallbackText.split('\n').map(x=>x.trim()).filter(Boolean)})});await loadAdminData();setNotice('Default routing order saved.');}
     catch(err){setError(err instanceof Error?err.message:'Routing update failed.');}
@@ -232,8 +270,34 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="text-slate-500"><tr>{['User','Role','Status','Last activity','Requests 30d','Actions'].map(x=><th key={x} className="border-b border-slate-800 px-3 py-3">{x}</th>)}</tr></thead><tbody>{filteredUsers.map(u=><tr key={u.id} className="border-b border-slate-900"><td className="px-3 py-3"><p className="font-semibold text-white">{u.display_name||u.email||'Unnamed user'}</p><p className="mt-1 text-[10px] text-slate-500">{u.email} · {u.id.slice(0,8)}</p></td><td className="px-3 py-3 text-slate-300">{u.role}</td><td className="px-3 py-3"><span className={u.status==='active'?'text-emerald-300':'text-amber-300'}>{u.status}</span></td><td className="px-3 py-3 text-slate-400">{date(u.last_seen_at)}</td><td className="px-3 py-3 text-slate-300">{fmt(u.requests_30d)}</td><td className="px-3 py-3"><div className="flex gap-2"><button className={secondary} onClick={()=>void patchUser(u,{status:u.status==='active'?'suspended':'active'})}>{u.status==='active'?'Suspend':'Reactivate'}</button><button className={secondary} onClick={()=>void patchUser(u,{role:u.role==='admin'?'user':'admin'})}>{u.role==='admin'?'Demote':'Make admin'}</button></div></td></tr>)}</tbody></table>{!filteredUsers.length&&<p className="py-8 text-center text-sm text-slate-500">No users found.</p>}</div>
     </div>}
 
-    {tab==='providers'&&<div className={panel}><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">Provider control</h2><p className="text-xs text-slate-500">Only credential presence is shown. Secret values are never returned.</p></div><button className={primary+' flex items-center gap-2'} onClick={()=>void discoverModels()}><Play className="h-4 w-4"/>Discover models</button></div>
-      <div className="grid gap-3 md:grid-cols-2">{providers.map(p=><div key={p.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-bold text-white">{p.displayName}</h3><p className="mt-1 text-xs text-slate-500">{p.id}</p></div><span className={p.configured?'text-emerald-300':'text-amber-300'}>{p.configured?'Configured':'Missing credentials'}</span></div><div className="mt-4 flex flex-wrap gap-2"><button className={secondary+' flex items-center gap-2'} onClick={()=>void testProvider(p)}><Play className="h-3.5 w-3.5"/>Test connection</button><button className={secondary+' flex items-center gap-2'} onClick={()=>void api('/api/admin/providers',{method:'PATCH',body:JSON.stringify({providerId:p.id,enabled:!p.enabled})}).then(loadAdminData).catch(e=>setError(e.message))}><Power className="h-3.5 w-3.5"/>{p.enabled?'Disable':'Enable'}</button></div></div>)}</div>
+    {tab==='providers'&&<div className="space-y-4">
+      <div className={panel}><h2 className="text-lg font-bold text-white">Add custom provider</h2>
+        <p className="mb-3 text-xs text-slate-500">Register any OpenAI-compatible API endpoint. It starts disabled; configure its key, test it, discover models, then enable it.</p>
+        <div className="grid gap-2 md:grid-cols-3">
+          <input className={field} value={customSlug} onChange={e=>setCustomSlug(e.target.value)} placeholder="provider-slug (e.g. my-ai)"/>
+          <input className={field} value={customName} onChange={e=>setCustomName(e.target.value)} placeholder="Display name"/>
+          <input className={field} value={customBaseUrl} onChange={e=>setCustomBaseUrl(e.target.value)} placeholder="https://api.example.com/v1"/>
+        </div>
+        <button className={primary+' mt-3'} disabled={!customSlug.trim()||!customName.trim()||!customBaseUrl.trim()} onClick={()=>void createCustomProvider()}>Register custom provider</button>
+      </div>
+      <div className={panel}>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">Provider control</h2><p className="text-xs text-slate-500">Provider keys stay encrypted on the server. They are never returned to this page.</p></div></div>
+        <div className="grid gap-3 md:grid-cols-2">{providers.map(p=><div key={p.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="flex items-start justify-between gap-3"><div><h3 className="font-bold text-white">{p.displayName}</h3><p className="mt-1 text-xs text-slate-500">{p.id} · {p.kind||'provider'}</p></div>
+            <span className={p.last_health_ok===true?'text-emerald-300':p.last_health_ok===false?'text-red-300':p.configured?'text-cyan-300':'text-amber-300'}>{p.last_health_ok===true?'Healthy':p.last_health_ok===false?'Health error':p.configured?'Configured':'Missing credentials'}</span></div>
+          <p className="mt-2 text-[11px] text-slate-500">Last health check: {date(p.last_health_at)} {p.keyStatus?'· Key '+p.keyStatus:''} {isSuperadmin&&p.keyHint?'· key …'+p.keyHint:''}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button className={secondary+' flex items-center gap-2'} onClick={()=>void testProvider(p)}><Play className="h-3.5 w-3.5"/>Test connection</button>
+            <button className={secondary+' flex items-center gap-2'} onClick={()=>void discoverProvider(p)}><RefreshCw className="h-3.5 w-3.5"/>Discover models</button>
+            <button className={secondary+' flex items-center gap-2'} onClick={()=>void api('/api/admin/providers',{method:'PATCH',body:JSON.stringify({providerId:p.id,enabled:!p.enabled})}).then(loadAdminData).catch(e=>setError(e.message))}><Power className="h-3.5 w-3.5"/>{p.enabled?'Disable':'Enable'}</button>
+          </div>
+          {isSuperadmin&&p.kind!=='cloudflare'&&p.kind!=='ollama'&&<div className="mt-3 rounded-lg border border-slate-800 bg-slate-950 p-3">
+            <label className="mb-2 block text-[11px] text-slate-400">Provider API key · saved value is never displayed</label>
+            <input className={field} type="password" autoComplete="new-password" value={providerSecrets[p.id]||''} onChange={e=>setProviderSecrets(current=>({...current,[p.id]:e.target.value}))} placeholder="Paste new API key"/>
+            <div className="mt-2 flex gap-2"><button className={secondary} onClick={()=>void saveProviderKey(p,false)}>Save key</button><button className={secondary} onClick={()=>void saveProviderKey(p,true)}>Rotate key</button></div>
+          </div>}
+        </div>)}</div>
+      </div>
     </div>}
 
     {tab==='models'&&<div className="space-y-4"><div className={panel}><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">Model catalogue</h2><p className="text-xs text-slate-500">Toggle availability and capability overrides per discovered model.</p></div><button className={primary} onClick={()=>void discoverModels()}>Discover / refresh</button></div>
