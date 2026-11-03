@@ -86,6 +86,18 @@ const copy = {
   }
 };
 
+const LANGUAGE_OPTIONS: Array<{id:Language;label:string;native:string}> = [
+  {id:'english',label:'English',native:'English'},{id:'dari',label:'Dari',native:'دری'},
+  {id:'pashto',label:'Pashto',native:'پښتو'},{id:'persian',label:'Persian',native:'فارسی'},
+  {id:'arabic',label:'Arabic',native:'العربية'},{id:'urdu',label:'Urdu',native:'اردو'},
+  {id:'turkish',label:'Turkish',native:'Türkçe'},{id:'russian',label:'Russian',native:'Русский'},
+  {id:'french',label:'French',native:'Français'},{id:'spanish',label:'Spanish',native:'Español'},
+  {id:'german',label:'German',native:'Deutsch'},{id:'chinese',label:'Chinese (Simplified)',native:'简体中文'},
+  {id:'hindi',label:'Hindi',native:'हिन्दी'},{id:'bengali',label:'Bengali',native:'বাংলা'},
+  {id:'indonesian',label:'Indonesian',native:'Bahasa Indonesia'},{id:'portuguese',label:'Portuguese',native:'Português'},
+  {id:'japanese',label:'Japanese',native:'日本語'},{id:'korean',label:'Korean',native:'한국어'},
+];
+
 interface Props {
   language: Language; theme: Theme; user: UserProfile;
   onSetLanguage: (language: Language) => void; onToggleTheme: () => void;
@@ -216,6 +228,14 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
           <p className="text-sm font-semibold text-cyan-100">{page==='language'?t.language:page==='appearance'?'Appearance':page==='chat'?'Chat preferences':page==='memory'?'Personal memory':page==='coding'?'Coding workspace':'Privacy & security'}</p>
           <p className="mt-1 text-xs leading-5 text-slate-400">{page==='language'?t.languageHelp:page==='memory'?'Manage memory consent, saved items and memory availability in the account controls below.':page==='privacy'?'Manage account security, active sessions, export and account deletion below.':page==='coding'?'Terminal and code execution stay unavailable until an administrator enables a verified sandbox.':page==='chat'?'Configure response style, length, creativity, default language and model preferences below.':'These controls are stored in your account when signed in; guest changes remain local to this device.'}</p>
         </div>
+        {page==='language' && <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 space-y-3">
+          <label className="block text-sm font-semibold text-white">Application language
+            <select value={language} onChange={e=>onSetLanguage(e.target.value as Language)} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-white">
+              {LANGUAGE_OPTIONS.map(option=><option key={option.id} value={option.id}>{option.native} — {option.label}</option>)}
+            </select>
+          </label>
+          <p className="text-xs leading-5 text-slate-400">Date, number and regional formatting follow the selected language. Complete native translations are being rolled out; languages without a reviewed translation currently use English interface text.</p>
+        </div>}
         <AfgAccountSettings language={language} theme={theme} onTheme={onSetTheme} onLanguage={onSetLanguage}/>
       </>}
       {page==='models'&&<div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 space-y-3">
