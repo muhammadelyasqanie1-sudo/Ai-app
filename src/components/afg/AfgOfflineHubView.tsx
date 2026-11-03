@@ -463,7 +463,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
         <div className="min-w-0 flex-1">
           <div className="font-semibold">{copy.runtime}</div>
           <p className="mt-1 text-sm leading-6 opacity-80">{runtimeMessage || copy.unsupported}</p>
-          <a href="https://github.com/muhammadelyasqanie1-sudo/Ai-app/releases/latest" target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full bg-slate-900 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-500 dark:bg-amber-200 dark:text-slate-950 dark:hover:bg-amber-100">
+          <a href="https://github.com/muhammadelyasqanie1-sudo/Ai-app/actions/runs/41334557953" target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full bg-slate-900 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-500 dark:bg-amber-200 dark:text-slate-950 dark:hover:bg-amber-100">
             {dari ? 'دریافت APK برای هوش مصنوعی آفلاین بومی' : 'Download APK for Native Offline AI'}
           </a>
         </div>
