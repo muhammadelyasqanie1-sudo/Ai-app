@@ -1,0 +1,10 @@
+{
+  "name": "AFG AI",
+  "short_name": "AFG AI",
+  "description": "AFG AI offline-capable assistant",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#060b18",
+  "theme_color": "#060b18",
+  "orientation": "portrait-primary"
+}
