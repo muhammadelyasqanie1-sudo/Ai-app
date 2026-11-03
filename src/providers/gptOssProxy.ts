@@ -10,7 +10,7 @@ const CHAT_CAPABILITIES: CapabilityFlags = {
 
 function config() {
   return {
-    baseUrl: (process.env.GPTOSS_BASE_URL?.trim() || '').replace(/\\/+$/, ''),
+    baseUrl: (process.env.GPTOSS_BASE_URL?.trim() || '').replace(/\/+$/, ''),
     apiKey: process.env.GPTOSS_API_KEY?.trim() || '',
     providerId: process.env.GPTOSS_PROVIDER_ID?.trim() || 'gpt-oss-proxy',
     displayName: process.env.GPTOSS_DISPLAY_NAME?.trim() || 'GPT-OSS Proxy',
@@ -127,7 +127,7 @@ export const gptOssProxy: ChatProviderAdapter = {
     const decoder = new TextDecoder();
     let buffer = '';
     const consumeEvent = (eventText: string): string | null => {
-      const dataLine = eventText.split(/\\r?\\n/).find((line) => line.startsWith('data:'));
+      const dataLine = eventText.split(/\r?\n/).find((line) => line.startsWith('data:'));
       if (!dataLine) return null;
       const data = dataLine.slice(5).trim();
       if (!data || data === '[DONE]') return null;
@@ -143,7 +143,7 @@ export const gptOssProxy: ChatProviderAdapter = {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split(/\\r?\\n\\r?\\n/);
+        const events = buffer.split(/\r?\n\r?\n/);
         buffer = events.pop() || '';
         for (const eventText of events) {
           const content = consumeEvent(eventText);
