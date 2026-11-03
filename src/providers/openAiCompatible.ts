@@ -35,8 +35,7 @@ function validBaseUrl(value: string): boolean {
   } catch { return false; }
 }
 
-export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
-  const initial = config();
+const initial = config();
   return {
     id: initial.id,
     key: initial.id,
@@ -45,7 +44,7 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
     async validateConfig(): Promise<ConfigStatus> {
       const current = config();
       if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
-        return { valid: false, message: 'Set a valid HTTPS OPENAI_COMPAT_BASE_URL and server-side OPENAI_COMPAT_API_KEY.' };
+        return { valid: false, message: 'Set a valid HTTPS provider base URL and its server-side API key.' };
       }
       return { valid: true };
     },
