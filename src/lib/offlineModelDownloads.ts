@@ -12,6 +12,7 @@ export type OfflineDownloadState = {
   expectedSha256: string | null;
   computedSha256?: string | null;
   hashVerified?: boolean;
+  localPath?: string | null;
   status: 'paused' | 'downloading' | 'installed' | 'error';
   updatedAt: number;
   error?: string;
@@ -34,7 +35,7 @@ function mapNativeDownload(item: Awaited<ReturnType<typeof AFGOfflineModels.getD
     id: item.id, repoId: item.repoId, fileName: item.fileName, revision: item.revision,
     url: 'https://huggingface.co/' + item.repoId + '/resolve/' + item.revision + '/' + item.fileName,
     expectedBytes: item.expectedBytes, downloadedBytes: item.downloadedBytes, expectedSha256: item.expectedSha256,
-    computedSha256: item.computedSha256, hashVerified: item.hashVerified, status: item.status,
+    computedSha256: item.computedSha256, hashVerified: item.hashVerified, localPath: item.localPath, status: item.status,
     updatedAt: Date.now(), error: item.error,
   };
 }
