@@ -27,6 +27,19 @@ import java.util.UUID;
 public class AFGOfflineModelsPlugin extends Plugin {
     private static final String PREFS = "afg_ai_offline_downloads";
     private static final String PREFIX = "download_";
+    private static final boolean NATIVE_RUNTIME_AVAILABLE;
+
+    static {
+        boolean loaded;
+        try { System.loadLibrary("afg_llama_jni"); loaded = true; }
+        catch (UnsatisfiedLinkError error) { loaded = false; android.util.Log.e("AFGOfflineModels", "llama.cpp native library unavailable", error); }
+        NATIVE_RUNTIME_AVAILABLE = loaded;
+    }
+
+    private native boolean nativeLoadModel(String path, int contextSize, int threads);
+    private native String nativeGenerate(String messagesJson, int maxTokens);
+    private native void nativeUnloadModel();
+    private native String nativeGetLastError();
 
     private DownloadManager manager() {
         return (DownloadManager) getContext().getSystemService(Context.DOWNLOAD_SERVICE);
@@ -146,6 +159,49 @@ public class AFGOfflineModelsPlugin extends Plugin {
         }
     }
 
+    @PluginMethod
+    public void getRuntimeInfo(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("available", NATIVE_RUNTIME_AVAILABLE);
+        result.put("engine", NATIVE_RUNTIME_AVAILABLE ? "llama.cpp" : "unavailable");
+        result.put("abi", Build.SUPPORTED_ABIS != null && Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "unknown");
+        result.put("backend", "CPU");
+        if (!NATIVE_RUNTIME_AVAILABLE) result.put("reason", "The arm64 llama.cpp native library was not included in this build.");
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void loadModel(PluginCall call) {
+        if (!NATIVE_RUNTIME_AVAILABLE) { call.reject("The Android llama.cpp runtime is not available in this APK."); return; }
+        String path = call.getString("path", "");
+        Integer contextSize = call.getInt("contextSize");
+        Integer threads = call.getInt("threads");
+        File model = new File(path);
+        if (!model.isFile() || !model.getName().toLowerCase(Locale.ROOT).endsWith(".gguf")) { call.reject("A downloaded GGUF model file is required."); return; }
+        try {
+            boolean loaded = nativeLoadModel(model.getAbsolutePath(), contextSize == null ? 2048 : contextSize, threads == null ? 4 : threads);
+            if (!loaded) { call.reject(nativeGetLastError()); return; }
+            JSObject result = new JSObject(); result.put("loaded", true); result.put("path", model.getAbsolutePath()); result.put("sizeBytes", model.length()); call.resolve(result);
+        } catch (Exception error) { call.reject("Unable to load the local GGUF model.", error); }
+    }
+
+    @PluginMethod
+    public void generate(PluginCall call) {
+        if (!NATIVE_RUNTIME_AVAILABLE) { call.reject("The Android llama.cpp runtime is not available in this APK."); return; }
+        String messages = call.getString("messages", "[]");
+        Integer maxTokens = call.getInt("maxTokens");
+        try {
+            String response = nativeGenerate(messages, maxTokens == null ? 256 : maxTokens);
+            if (response == null) { call.reject(nativeGetLastError()); return; }
+            JSObject result = new JSObject(); result.put("text", response); call.resolve(result);
+        } catch (Exception error) { call.reject("Local GGUF inference failed.", error); }
+    }
+
+    @PluginMethod
+    public void unloadModel(PluginCall call) {
+        if (NATIVE_RUNTIME_AVAILABLE) nativeUnloadModel();
+        JSObject result = new JSObject(); result.put("unloaded", true); call.resolve(result);
+    }
     @PluginMethod
     public void startDownload(PluginCall call) {
         try {
