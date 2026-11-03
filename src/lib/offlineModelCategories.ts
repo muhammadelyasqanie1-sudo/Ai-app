@@ -12,7 +12,7 @@ export const OFFLINE_MODEL_CATEGORIES = [
 export type OfflineModelCategory = typeof OFFLINE_MODEL_CATEGORIES[number];
 
 const RULES: Array<{ category: OfflineModelCategory; pattern: RegExp }> = [
-  { category: 'learning', pattern: /\\b(education|educational|learning|teaching|tutor)\\b/i },
+  { category: 'learning', pattern: /\b(education|educational|learning|teaching|tutor)\b/i },
   { category: 'coding', pattern: /\b(code|coding|programming|developer|software|repository|debug|javascript|typescript|python|java|rust|sql)\b/i },
   { category: 'english', pattern: /\b(english|grammar|vocabulary|translation|language learning|ielts|toefl|esl)\b/i },
   { category: 'robotics', pattern: /\b(robot|robotics|ros|autonomous|navigation|actuator|kinematics|slam)\b/i },
