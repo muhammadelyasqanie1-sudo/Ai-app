@@ -6,6 +6,7 @@ import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors } 
 const ALLOWED_FALLBACK_CAPABILITIES = new Set(['text', 'vision', 'imageGen', 'tts', 'stt']);
 
 function requiredAdminPermission(method: string, pathname: string): string | null {
+  if (pathname.startsWith('/api/admin/staff/')) return 'staff:manage';
   if (method === 'POST' && pathname.startsWith('/api/admin/providers/')) return 'providers:manage';
   const route = method + ' ' + pathname;
   const permissions: Record<string, string> = {
@@ -143,6 +144,56 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           [user.id,'subscription.plan.assign','user',targetId,JSON.stringify({planKey,subscriptionId:created.rows[0].id,source:'admin_manual'})]);
         await client.query('COMMIT');
         sendAuthJson(res, 200, { subscription: {...created.rows[0],planKey} }); return true;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+
+    if (req.method === 'GET' && pathname === '/api/admin/staff/roles') {
+      const result = await pool.query('SELECT name,permissions_json,created_at FROM roles ORDER BY name');
+      sendAuthJson(res, 200, { roles: result.rows });
+      return true;
+    }
+
+    if (req.method === 'PATCH' && pathname === '/api/admin/staff/roles') {
+      const body = await readJsonBody(req, 12000);
+      const role = typeof body.role === 'string' ? body.role : '';
+      const permissionsValue = body.permissions;
+      const allowedPermissions = new Set([
+        'providers:read','providers:manage','models:read','models:manage','routing:read','routing:manage',
+        'users:read','users:manage','users:suspend','audit:read','security:read','security:manage',
+        'dashboard:read','usage:read','system:read','settings:read','settings:manage',
+        'subscriptions:read','subscriptions:manage','notifications:broadcast',
+      ]);
+      if (!/^[a-z][a-z0-9_]{1,47}$/.test(role) || ['user','admin','super_admin'].includes(role) ||
+          !permissionsValue || typeof permissionsValue !== 'object' || Array.isArray(permissionsValue) ||
+          Object.entries(permissionsValue).length > allowedPermissions.size ||
+          Object.entries(permissionsValue).some(([key,value]) => !allowedPermissions.has(key) || typeof value !== 'boolean')) {
+        sendAuthJson(res, 400, { error: 'Invalid staff role or permission map.' });
+        return true;
+      }
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const result = await client.query(
+          'UPDATE roles SET permissions_json=$2::jsonb WHERE name=$1 RETURNING name,permissions_json',
+          [role,JSON.stringify(permissionsValue)],
+        );
+        if (!result.rows[0]) {
+          await client.query('ROLLBACK');
+          sendAuthJson(res, 404, { error: 'Staff role not found.' });
+          return true;
+        }
+        await client.query(
+          'INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+          [user.id,'staff.role.permissions.update','role',role,JSON.stringify({permissions:permissionsValue})],
+        );
+        await client.query('COMMIT');
+        sendAuthJson(res, 200, { role: result.rows[0] });
+        return true;
       } catch (error) {
         await client.query('ROLLBACK');
         throw error;
