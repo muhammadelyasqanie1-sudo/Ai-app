@@ -5,10 +5,12 @@ type OpenAIModel = {
   id?: string; name?: string; description?: string; context_length?: number; context_window?: number;
   max_output_tokens?: number; top_provider?: { max_completion_tokens?: number };
   pricing?: { prompt?: string|number; completion?: string|number };
+  family_label?: string; endpoints?: string[]; input_usd_per_million?: number; output_usd_per_million?: number;
+  capabilities?: string[];
   architecture?: { input_modalities?: string[]; output_modalities?: string[] };
   supported_parameters?: string[];
 };
-type OpenAIModelsPage = { data?: OpenAIModel[]; has_more?: boolean; last_id?: string };
+type OpenAIModelsPage = { data?: OpenAIModel[] | { data?: OpenAIModel[] }; has_more?: boolean; last_id?: string };
 const CAPABILITIES: CapabilityFlags = {
   text: true, streaming: true, vision: false, imageGen: false, imageEdit: false, ocr: false,
   tts: false, stt: false, tools: false, jsonMode: false,
@@ -35,6 +37,7 @@ export interface OpenAICompatibleAdapterOptions {
   displayName: string;
   baseUrl: string;
   apiKey: string;
+  catalogOnlyHealthCheck?: boolean;
 }
 
 export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterOptions): ChatProviderAdapter {
@@ -80,10 +83,11 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
             throw new ProviderAdapterError('Provider model discovery failed.', response.status >= 400 && response.status < 500 ? response.status : 502, 'model_catalog_failed');
           }
           const payload = await response.json() as OpenAIModelsPage;
-          if (!Array.isArray(payload.data)) throw new ProviderAdapterError('Provider returned an invalid model catalog.', 502, 'invalid_model_catalog');
-          all.push(...payload.data);
+          const pageModels = Array.isArray(payload.data) ? payload.data : (payload.data && Array.isArray(payload.data.data) ? payload.data.data : null);
+          if (!pageModels) throw new ProviderAdapterError('Provider returned an invalid model catalog.', 502, 'invalid_model_catalog');
+          all.push(...pageModels);
           if (payload.has_more !== true) break;
-          const next = payload.last_id || payload.data[payload.data.length - 1]?.id;
+          const next = payload.last_id || pageModels[pageModels.length - 1]?.id;
           if (!next || next === after) throw new ProviderAdapterError('Provider pagination did not advance.', 502, 'model_pagination_invalid');
           after = next;
         }
@@ -97,22 +101,27 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
           const parameters = model.supported_parameters || [];
           const promptPrice = Number(model.pricing?.prompt);
           const completionPrice = Number(model.pricing?.completion);
+          const beatApiInputPrice = Number(model.input_usd_per_million);
+          const beatApiOutputPrice = Number(model.output_usd_per_million);
+          const labels = model.capabilities || [];
+          const inputHasImage = inputModalities.includes('image') || labels.some((value) => /vision|image/i.test(value));
+          const outputHasImage = outputModalities.includes('image') || labels.some((value) => /image.?generation/i.test(value));
           return {
             id: model.id as string,
             providerId: current.id,
-            displayName: model.name || model.id as string,
+            displayName: model.name || model.family_label || model.id as string,
             description: model.description || 'Model discovered from the configured provider catalog.',
             contextWindow: Number.isFinite(model.context_window) ? Number(model.context_window) : (Number.isFinite(model.context_length) ? Number(model.context_length) : 0),
             maxOutput: Number(model.max_output_tokens || model.top_provider?.max_completion_tokens || 0) || undefined,
             pricing: {
-              inputPerMillion: Number.isFinite(promptPrice) ? promptPrice * 1_000_000 : null,
-              outputPerMillion: Number.isFinite(completionPrice) ? completionPrice * 1_000_000 : null,
+              inputPerMillion: Number.isFinite(beatApiInputPrice) ? beatApiInputPrice : (Number.isFinite(promptPrice) ? promptPrice * 1_000_000 : null),
+              outputPerMillion: Number.isFinite(beatApiOutputPrice) ? beatApiOutputPrice : (Number.isFinite(completionPrice) ? completionPrice * 1_000_000 : null),
               currency: 'USD',
             },
             capabilities: {
               text: true, streaming: true,
-              vision: inputModalities.includes('image'),
-              imageGen: outputModalities.includes('image'),
+              vision: inputHasImage,
+              imageGen: outputHasImage,
               imageEdit: false, ocr: false, tts: outputModalities.includes('audio'),
               stt: inputModalities.includes('audio'), tools: parameters.includes('tools'),
               jsonMode: parameters.includes('response_format') || parameters.includes('structured_outputs'),
@@ -134,8 +143,21 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
         return { healthy: false, checkedAt, message: 'Provider not reachable.' };
       }
       try {
-        // Prove actual inference access with a one-token probe; a models-list
-        // endpoint alone does not prove that the selected model can generate.
+        // Some gateways charge for even a one-token generation. For those providers,
+        // verify only authenticated catalog access and model visibility.
+        if (options?.catalogOnlyHealthCheck) {
+          const response = await fetch(current.baseUrl + '/models', {
+            headers: { Authorization: 'Bearer ' + current.apiKey, Accept: 'application/json' },
+            signal: AbortSignal.timeout(15_000), redirect: 'error',
+          });
+          if (!response.ok) return { healthy: false, checkedAt, message: 'Provider catalog check failed.' };
+          const payload = await response.json() as OpenAIModelsPage;
+          const rows = Array.isArray(payload.data) ? payload.data : (payload.data && Array.isArray(payload.data.data) ? payload.data.data : []);
+          return rows.some((model) => model.id === modelId)
+            ? { healthy: true, checkedAt }
+            : { healthy: false, checkedAt, message: 'Model is not present in the provider catalog.' };
+        }
+        // Prove actual inference access with a one-token probe for ordinary providers.
         const response = await fetch(current.baseUrl + '/chat/completions', {
           method: 'POST',
           headers: { Authorization: 'Bearer ' + current.apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
