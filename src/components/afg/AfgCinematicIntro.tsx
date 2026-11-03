@@ -73,7 +73,6 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
 
     let width = 0;
     let height = 0;
-    let frame = 0;
     let raf = 0;
     let lastArc = 0;
     let arcTarget = 0;
@@ -172,7 +171,6 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
       }
 
       if (!reduced) angle += 0.0019;
-      frame++;
       if (!reduced) raf = window.requestAnimationFrame(draw);
     };
 
