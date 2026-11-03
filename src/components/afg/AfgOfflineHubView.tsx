@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownToLine, Cpu, HardDrive, MessageSquare, Search, ShieldCheck, Sparkles, WifiOff } from 'lucide-react';
 import type { Language } from '../../types/afg';
-import { searchHuggingFaceGGUF, getHuggingFaceRepository, type HuggingFaceModel, type HuggingFaceRepository } from '../../lib/huggingFaceOfflineCatalog';
+import { searchHuggingFaceGGUF, getHuggingFaceRepository, formatModelCategory, type HuggingFaceModel, type HuggingFaceRepository } from '../../lib/huggingFaceOfflineCatalog';
 import { assessOfflineModelFit, scanOfflineDevice, type OfflineDeviceProfile, type ModelFit } from '../../lib/offlineDevice';
 import { downloadGGUF, listOfflineDownloads, pauseGGUFDownload, removeOfflineModel, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
 
@@ -41,6 +41,8 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
   const dari = language === 'dari';
   const [models, setModels] = useState<CatalogModel[]>([]);
   const [hfModels, setHfModels] = useState<HuggingFaceModel[]>([]);
+  const [sparkModels, setSparkModels] = useState<HuggingFaceModel[]>([]);
+  const [hfCategories, setHfCategories] = useState<string[]>([]);
   const [hfPage, setHfPage] = useState(0);
   const [hfHasMore, setHfHasMore] = useState(false);
   const [hfBusy, setHfBusy] = useState(false);
@@ -132,6 +134,15 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
     localStorage.setItem(INSTALLED_KEY, JSON.stringify(installed));
   }, [installed]);
 
+  useEffect(() => { void listOfflineDownloads().then(setGgufTasks).catch(() => undefined); }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void searchHuggingFaceGGUF({ query: 'Spark-X2.6', page: 0, sort: 'downloads', direction: 'desc', signal: controller.signal })
+      .then(result => setSparkModels(result.items))
+      .catch(() => { if (!controller.signal.aborted) setSparkModels([]); });
+    return () => controller.abort();
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
@@ -329,7 +340,9 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-extrabold">{dari ? 'کتابخانه جهانی مدل‌های GGUF' : 'Global GGUF Model Library'}</h2><p className="mt-1 text-xs opacity-65">{dari ? 'جست‌وجوی زنده در Hugging Face با صفحه‌بندی' : 'Live Hugging Face discovery with pagination'}</p></div><span className="text-xs opacity-60">{hfModels.length} {dari ? 'نتیجه' : 'results'}</span></div>
       <div className="flex items-center gap-2 rounded-xl border px-3"><Search size={17}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={dari ? 'جست‌وجو؛ مثلاً Spark-X2.6' : 'Search models — e.g. Spark-X2.6'} className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none"/></div>
       {hfError && <p className="rounded-lg bg-amber-500/10 p-3 text-xs">{hfError}</p>}{hfBusy && <p className="text-xs opacity-60">{dari ? 'در حال دریافت…' : 'Loading…'}</p>}
-      <div className="grid gap-2 sm:grid-cols-2">{hfModels.map(model => <button key={model.id} type="button" onClick={() => setHfSelected(model.id)} className={'rounded-xl border p-3 text-start ' + (hfSelected === model.id ? 'border-cyan-400 bg-cyan-400/10' : '')}><div className="break-all text-sm font-semibold">{model.id}</div><div className="mt-2 flex gap-3 text-[11px] opacity-65"><span>↓ {model.downloads.toLocaleString()}</span><span>♥ {model.likes.toLocaleString()}</span><span>{model.pipeline_tag || 'General'}</span></div></button>)}</div>
+      <section className="space-y-3 rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-3"><div><h3 className="font-bold">{dari ? 'پیشنهاد ویژه: Spark X2.6' : 'Featured: Spark X2.6'}</h3><p className="mt-1 text-xs opacity-65">{dari ? 'نتایج زنده از Hugging Face' : 'Live results from Hugging Face'}</p></div><div className="grid gap-2 sm:grid-cols-2">{sparkModels.map(model => <button key={model.id} type="button" onClick={() => setHfSelected(model.id)} className={'rounded-xl border p-3 text-start ' + (hfSelected === model.id ? 'border-cyan-400 bg-cyan-400/10' : '')}><div className="break-all text-sm font-semibold">{model.id}</div><div className="mt-1 text-[11px] opacity-60">↓ {model.downloads.toLocaleString()} · ♥ {model.likes.toLocaleString()}</div></button>)}</div>{!sparkModels.length && <p className="text-xs opacity-60">{dari ? 'در حال دریافت نتایج Spark…' : 'Loading Spark results…'}</p>}</section>
+      <div className="flex flex-wrap gap-1.5"><button type="button" onClick={() => setHfCategories([])} className={'rounded-full border px-3 py-1.5 text-[11px] ' + (!hfCategories.length ? 'border-cyan-400 bg-cyan-400/10' : 'opacity-65')}>{dari ? 'همه مدل‌ها' : 'All Models'}</button>{['coding','learning','general','creative','science'].map(category => <button key={category} type="button" onClick={() => setHfCategories(previous => previous.includes(category) ? previous.filter(item => item !== category) : [...previous, category])} className={'rounded-full border px-3 py-1.5 text-[11px] ' + (hfCategories.includes(category) ? 'border-cyan-400 bg-cyan-400/10' : 'opacity-65')}>{category}</button>)}</div>
+      <div className="grid gap-2 sm:grid-cols-2">{hfModels.filter(model => !hfCategories.length || hfCategories.some(category => formatModelCategory(model.tags, model.pipeline_tag).includes(category) || (category === 'science' && model.tags.some(tag => /science|physics|chemistry|biology/i.test(tag))))).map(model => <button key={model.id} type="button" onClick={() => setHfSelected(model.id)} className={'rounded-xl border p-3 text-start ' + (hfSelected === model.id ? 'border-cyan-400 bg-cyan-400/10' : '')}><div className="break-all text-sm font-semibold">{model.id}</div><div className="mt-2 flex gap-3 text-[11px] opacity-65"><span>↓ {model.downloads.toLocaleString()}</span><span>♥ {model.likes.toLocaleString()}</span><span>{model.pipeline_tag || 'General'}</span></div></button>)}</div>
       {!hfModels.length && !hfBusy && <p className="py-4 text-center text-sm opacity-60">{dari ? 'مدلی پیدا نشد.' : 'No models found.'}</p>}
       {hfHasMore && <button type="button" disabled={hfBusy} onClick={() => void loadMoreHf()} className="w-full rounded-xl border px-4 py-2 text-sm">{dari ? 'مدل‌های بیشتر' : 'Load more'}</button>}
       {hfSelected && <div className="space-y-3 rounded-xl bg-slate-500/5 p-3"><div className="flex flex-wrap justify-between gap-2"><strong className="break-all text-sm">{hfSelected}</strong><span className="text-xs">{hfRepository ? formatBytes(hfRepository.totalBytes) : '…'}</span></div>
