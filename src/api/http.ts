@@ -175,7 +175,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
   try {
     if (req.method === 'GET' && pathname === '/api/features/status') {
       if (!pool) {
-        sendJson(res, 200, { verified: false, featureFlags: {}, integrations: {} }, requestId);
+        sendJson(res, 200, { verified: false, featureFlags: {}, integrations: {}, githubOAuthConfigured: false }, requestId);
         return;
       }
       try {
@@ -188,9 +188,9 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
           String(row.slug),
           { active: row.enabled === true && row.status === 'active' && row.last_check_ok === true, status: String(row.status || 'unconfigured') },
         ]));
-        sendJson(res, 200, { verified: true, featureFlags, integrations }, requestId);
+        sendJson(res, 200, { verified: true, featureFlags, integrations, githubOAuthConfigured: Boolean(process.env.GITHUB_OAUTH_CLIENT_ID && process.env.GITHUB_OAUTH_CLIENT_SECRET && (process.env.APP_ORIGIN || '').split(',')[0].trim().startsWith('https://')) }, requestId);
       } catch {
-        sendJson(res, 503, { verified: false, featureFlags: {}, integrations: {}, error: 'Feature status is not available until the database schema is ready.' }, requestId);
+        sendJson(res, 503, { verified: false, featureFlags: {}, integrations: {}, githubOAuthConfigured: false, error: 'Feature status is not available until the database schema is ready.' }, requestId);
       }
       return;
     }
