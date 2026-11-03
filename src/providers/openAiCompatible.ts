@@ -40,7 +40,7 @@ export interface OpenAICompatibleAdapterOptions {
 export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterOptions): ChatProviderAdapter {
   const currentConfig = () => options ? {
     id: options.id, displayName: options.displayName,
-    baseUrl: options.baseUrl.replace(/\\/+$/, ''), apiKey: options.apiKey,
+    baseUrl: options.baseUrl.replace(/\/+$/, ''), apiKey: options.apiKey,
   } : config();
   const initial = currentConfig();
   return {
