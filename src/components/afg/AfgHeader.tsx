@@ -108,7 +108,13 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
             )}
           </button>
 
-          <div className="relative"><button type="button" onClick={() => setModelsMenuOpen(value => !value)} aria-label={language === 'dari' ? 'گزینه‌های بیشتر' : 'More options'} aria-expanded={modelsMenuOpen} className="rounded-xl border border-slate-700/40 bg-slate-800/60 p-2 text-slate-300 transition hover:bg-slate-700/70 hover:text-white"><MoreVertical className="h-4 w-4" /></button>{modelsMenuOpen && <div className="absolute end-0 top-12 z-50 min-w-40 rounded-xl border border-cyan-900/40 bg-[#081326] p-1 shadow-2xl"><button type="button" onClick={() => { setModelsMenuOpen(false); onOpenModels?.(); }} className="w-full rounded-lg px-3 py-2.5 text-start text-sm font-semibold text-cyan-100 hover:bg-cyan-500/15">{language === 'dari' ? 'مدل‌ها' : 'Models'}</button></div>}</div>
+          <div className="relative">
+            <button type="button" onClick={() => setModelsMenuOpen(value => !value)} aria-label={language === 'dari' ? 'گزینه‌های بیشتر' : 'More options'} aria-expanded={modelsMenuOpen} aria-haspopup="menu" className="grid h-11 w-11 place-items-center rounded-full border border-slate-700/40 bg-slate-800/60 text-slate-300 transition hover:bg-slate-700/70 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400"><MoreVertical className="h-5 w-5" /></button>
+            {modelsMenuOpen && <div role="menu" className="absolute end-0 top-12 z-[100] min-w-48 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#101d32]">
+              <button type="button" role="menuitem" onClick={() => { setModelsMenuOpen(false); onOpenModels?.(); }} className="flex min-h-11 w-full items-center rounded-xl px-3 text-start text-sm font-semibold text-slate-800 transition hover:bg-cyan-500/10 dark:text-cyan-100">{language === 'dari' ? 'کتابخانه مدل‌ها' : 'Model library'}</button>
+              <button type="button" role="menuitem" onClick={() => { setModelsMenuOpen(false); onOpenSettings(); }} className="flex min-h-11 w-full items-center rounded-xl px-3 text-start text-sm font-semibold text-slate-800 transition hover:bg-cyan-500/10 dark:text-cyan-100">{language === 'dari' ? 'تنظیمات' : 'Settings'}</button>
+            </div>}
+          </div>
 
         </div>
 
