@@ -27,7 +27,7 @@ async function request(path: string, init: RequestInit = {}) {
 }
 
 const ITEMS: Item[] = [
-  {id:'language',group:'Personalize',title:'App language',subtitle:'Choose the language used across AFG AI.',icon:Globe,keywords:['locale','dari','english','persian','pashto','ترجمه']},
+  {id:'language',group:'Personalize',title:'App language',subtitle:'Choose the language used across AFG AI.',icon:Globe,keywords:['locale','dari','english','persian','pashto','arabic','urdu','turkish','russian','french','spanish','german','chinese','hindi','bengali','indonesian','portuguese','japanese','korean','ترجمه']},
   {id:'appearance',group:'Personalize',title:'Appearance',subtitle:'Theme, accent color, density and typography.',icon:Palette,keywords:['light','dark','system','neon','color']},
   {id:'chat',group:'Personalize',title:'Chat settings',subtitle:'Response preferences, chat width and startup behavior.',icon:MessageSquare,keywords:['instructions','prompt','images','startup']},
   {id:'memory',group:'Personalize',title:'Memory',subtitle:'Review and manage saved memory items.',icon:Brain,keywords:['remember','saved memory']},
@@ -62,7 +62,7 @@ const copy = {
     local:'Offline model runtime', voice:'Voice capabilities', feature:'Feature availability',
     notAvailable:'Not available until the backend reports it as enabled.',
     statusError:'Could not verify backend status. Treat this feature as unavailable.',
-    language:'Language preference', languageHelp:'The app currently supports English and Dari globally. Persian and Pashto are not yet fully translated across the app.',
+    language:'Language preference', languageHelp:'18 language and regional locales are selectable. Full interface translations are being rolled out; unreviewed languages currently fall back to English UI text.',
     adminGate:'Admin access is verified by the server; this view does not grant admin privileges.',
   },
   fa: {
@@ -81,7 +81,7 @@ const copy = {
     local:'اجرای مدل آفلاین', voice:'قابلیت‌های صوتی', feature:'دسترسی قابلیت',
     notAvailable:'تا زمانی که سرور فعال بودن آن را تأیید نکند، در دسترس نیست.',
     statusError:'بررسی وضعیت سرور ناموفق بود؛ این قابلیت غیرفعال فرض می‌شود.',
-    language:'ترجیحات زبان', languageHelp:'در حال حاضر زبان‌های دری و انگلیسی به‌صورت سراسری پشتیبانی می‌شوند. ترجمه کامل فارسی و پشتو هنوز آماده نیست.',
+    language:'ترجیحات زبان', languageHelp:'۱۸ زبان و منطقه قابل انتخاب است. ترجمه کامل رابط کاربری به‌تدریج تکمیل می‌شود و زبان‌های ترجمه‌نشده فعلاً متن انگلیسی نمایش می‌دهند.',
     adminGate:'دسترسی مدیر توسط سرور بررسی می‌شود؛ این صفحه امتیاز مدیر ایجاد نمی‌کند.',
   }
 };
