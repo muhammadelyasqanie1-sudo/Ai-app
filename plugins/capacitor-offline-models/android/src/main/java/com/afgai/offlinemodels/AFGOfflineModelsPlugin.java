@@ -177,10 +177,17 @@ public class AFGOfflineModelsPlugin extends Plugin {
         String path = call.getString("path", "");
         Integer contextSize = call.getInt("contextSize");
         Integer threads = call.getInt("threads");
-        File model = new File(path);
-        if (!model.isFile() || !model.getName().toLowerCase(Locale.ROOT).endsWith(".gguf")) { call.reject("A downloaded GGUF model file is required."); return; }
         try {
-            boolean loaded = nativeLoadModel(model.getAbsolutePath(), getContext().getApplicationInfo().nativeLibraryDir, contextSize == null ? 2048 : contextSize, threads == null ? 4 : threads);
+            File model = new File(path);
+            File modelRoot = modelDirectory();
+            String rootPath = modelRoot.getCanonicalPath() + File.separator;
+            String modelPath = model.getCanonicalPath();
+            if (!modelPath.startsWith(rootPath) || !model.isFile() || model.length() <= 0 ||
+                !model.getName().toLowerCase(Locale.ROOT).endsWith(".gguf")) {
+                call.reject("A non-empty GGUF model inside AFG AI's private model directory is required.");
+                return;
+            }
+            boolean loaded = nativeLoadModel(modelPath, getContext().getApplicationInfo().nativeLibraryDir, contextSize == null ? 2048 : contextSize, threads == null ? 4 : threads);
             if (!loaded) { call.reject(nativeGetLastError()); return; }
             JSObject result = new JSObject(); result.put("loaded", true); result.put("path", model.getAbsolutePath()); result.put("sizeBytes", model.length()); call.resolve(result);
         } catch (Exception error) { call.reject("Unable to load the local GGUF model.", error); }
