@@ -279,7 +279,7 @@ export default function App() {
     setCurrentSessionId(payload.conversation.id);
     for (const message of seedMessages) {
       if ((message.role === 'user' || message.role === 'assistant') && message.content.trim()) {
-        await persistServerMessage(payload.conversation.id, message.role, message.content, message.isError ? 'failed' : 'complete');
+        await persistServerMessage(payload.conversation.id, message.role, message.content, message.isError ? 'failed' : 'complete', message.id);
       }
     }
     return payload.conversation.id;
@@ -290,11 +290,15 @@ export default function App() {
     role: 'user' | 'assistant',
     content: string,
     status: 'complete' | 'failed' = 'complete',
+    messageId?: string,
   ) => {
+    const clientMessageId = messageId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(messageId)
+      ? messageId
+      : crypto.randomUUID();
     await apiFetch('/api/conversations/' + encodeURIComponent(conversationId) + '/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getCsrfHeaders() },
-      body: JSON.stringify({ role, content: content.slice(0, 50_000), model: selectedModel || null, status }),
+      body: JSON.stringify({ role, content: content.slice(0, 50_000), model: selectedModel || null, status, clientMessageId }),
     });
   };
 
@@ -349,7 +353,7 @@ export default function App() {
     const modelToUse = selectedModel || 'auto';
 
     const userMessage: AfgMessage = {
-      id: `usr-${Date.now()}`,
+      id: crypto.randomUUID(),
       role: 'user',
       content: text,
       attachments: attachments.length > 0 ? attachments : undefined,
@@ -363,7 +367,7 @@ export default function App() {
     if (user.email) {
       try {
         persistedConversationId = await ensureServerConversation(text, baseMessages);
-        await persistServerMessage(persistedConversationId, 'user', text);
+        await persistServerMessage(persistedConversationId, 'user', text, 'complete', userMessage.id);
         userMessagePersisted = true;
       } catch {
         console.warn('AFG_CONVERSATION_USER_MESSAGE_SAVE_FAILED');
@@ -372,7 +376,7 @@ export default function App() {
     const abortController = new AbortController();
     activeChatAbortRef.current = abortController;
 
-    const assistantId = `ast-${Date.now()}`;
+    const assistantId = crypto.randomUUID();
     const initialAssistantMessage: AfgMessage = {
       id: assistantId,
       role: 'assistant',
@@ -464,7 +468,7 @@ export default function App() {
         }).catch(() => console.warn('AFG_PRODUCTIVITY_SAVE_UNAVAILABLE'));
       }
       if (persistedConversationId && userMessagePersisted && fullContent.trim()) {
-        try { await persistServerMessage(persistedConversationId, 'assistant', fullContent); }
+        try { await persistServerMessage(persistedConversationId, 'assistant', fullContent, 'complete', assistantId); }
         catch { console.warn('AFG_CONVERSATION_ASSISTANT_MESSAGE_SAVE_FAILED'); }
       }
       setMessages((previous) => previous.map((message) => message.id === assistantId ? { ...message, isStreaming: false } : message));
@@ -482,7 +486,7 @@ export default function App() {
           m.id === assistantId ? { ...m, content: failedContent, isStreaming: false, isError: true, retryable: true } : m
         ));
         if (persistedConversationId && userMessagePersisted) {
-          try { await persistServerMessage(persistedConversationId, 'assistant', failedContent, 'failed'); }
+          try { await persistServerMessage(persistedConversationId, 'assistant', failedContent, 'failed', assistantId); }
           catch { console.warn('AFG_CONVERSATION_FAILED_MESSAGE_SAVE_FAILED'); }
         }
       }
