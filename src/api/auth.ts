@@ -489,11 +489,6 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         sendAuthJson(res, 403, { error: 'Admin bootstrap is not authorized or is not configured.' });
         return true;
       }
-      const existingAdmins = await pool.query("SELECT 1 FROM users WHERE role = 'admin' AND status = 'active' LIMIT 1");
-      if (existingAdmins.rows.length) {
-        sendAuthJson(res, 409, { error: 'An active administrator already exists. Bootstrap is permanently closed.' });
-        return true;
-      }
       const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
       const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 100) : 'AFG AI Administrator';
       const password = typeof body.password === 'string' ? body.password : '';
@@ -502,12 +497,49 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         return true;
       }
       const passwordHash = await hashPassword(password);
-      const created = await pool.query(
-        "INSERT INTO users (email, display_name, password_hash, role, email_verified) VALUES ($1, $2, $3, 'admin', true) ON CONFLICT (email) DO UPDATE SET display_name = EXCLUDED.display_name, password_hash = EXCLUDED.password_hash, role = 'admin', status = 'active', email_verified = true, updated_at = now() RETURNING id",
-        [email, displayName, passwordHash],
-      );
-      await createSession(created.rows[0].id, res);
-      await recordAuthSecurityEvent(req,created.rows[0].id,'auth.admin_bootstrap','warning');
+      const client = await pool.connect();
+      let adminUserId = '';
+      try {
+        await client.query('BEGIN');
+        // Serialize first-admin creation so concurrent requests cannot create multiple administrators.
+        await client.query("SELECT pg_advisory_xact_lock(hashtext('afg-ai:admin-bootstrap'))");
+        const existingAdmins = await client.query("SELECT 1 FROM users WHERE role = 'admin' AND status = 'active' LIMIT 1");
+        if (existingAdmins.rows.length) {
+          await client.query('ROLLBACK');
+          sendAuthJson(res, 409, { error: 'An active administrator already exists. Bootstrap is permanently closed.' });
+          return true;
+        }
+        const existingUser = await client.query(
+          'SELECT id,status FROM users WHERE lower(email)=lower($1) LIMIT 1 FOR UPDATE',
+          [email],
+        );
+        if (existingUser.rows[0] && existingUser.rows[0].status !== 'active') {
+          await client.query('ROLLBACK');
+          sendAuthJson(res, 409, { error: 'The selected account is not active. Use a different email or restore the account through an authorized process.' });
+          return true;
+        }
+        if (existingUser.rows[0]) {
+          const promoted = await client.query(
+            "UPDATE users SET display_name=$2,password_hash=$3,role='admin',email_verified=true,updated_at=now() WHERE id=$1 RETURNING id",
+            [existingUser.rows[0].id,displayName,passwordHash],
+          );
+          adminUserId = promoted.rows[0].id;
+        } else {
+          const created = await client.query(
+            "INSERT INTO users (email,display_name,password_hash,role,email_verified) VALUES ($1,$2,$3,'admin',true) RETURNING id",
+            [email,displayName,passwordHash],
+          );
+          adminUserId = created.rows[0].id;
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+      await createSession(adminUserId, res);
+      await recordAuthSecurityEvent(req,adminUserId,'auth.admin_bootstrap','warning');
       sendAuthJson(res, 201, { authenticated: true, bootstrapped: true });
     } catch {
       sendAuthJson(res, 400, { error: 'Could not complete administrator bootstrap.' });
