@@ -1,4 +1,4 @@
-export type Language = 'dari' | 'english';
+export type Language = 'dari' | 'english' | 'pashto' | 'persian' | 'arabic' | 'urdu' | 'turkish' | 'russian' | 'french' | 'spanish' | 'german' | 'chinese' | 'hindi' | 'bengali' | 'indonesian' | 'portuguese' | 'japanese' | 'korean';
 export type Theme = 'dark' | 'light' | 'neon' | 'system';
 
 export type TabType = 
