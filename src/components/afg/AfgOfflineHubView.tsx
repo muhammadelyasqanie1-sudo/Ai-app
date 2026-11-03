@@ -234,7 +234,11 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     } catch (error) { setHfError(error instanceof Error ? error.message : 'GGUF download failed.'); }
     finally { setGgufBusyId(''); setGgufTasks(await listOfflineDownloads().catch(() => [])); }
   };
-  const removeGguf = async (id: string) => { await removeOfflineModel(id); setGgufTasks(await listOfflineDownloads()); };
+  const removeGguf = async (id: string) => {
+    if (selectedId === id && engineRef.current) { const engine = engineRef.current; engineRef.current = null; engineModelIdRef.current = ''; setActiveOfflineModelLabel(''); await engine.unload().catch(() => undefined); }
+    await removeOfflineModel(id);
+    setGgufTasks(await listOfflineDownloads());
+  };
   const pauseSelectedGguf = (id: string) => pauseGGUFDownload(id);
   const loadMoreHf = async () => {
     if (hfBusy || !hfHasMore) return;
