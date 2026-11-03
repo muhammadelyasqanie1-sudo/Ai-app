@@ -15,7 +15,7 @@ app.disable('x-powered-by');
 const PORT = process.env.PORT || 3000;
 const production = process.env.NODE_ENV === 'production';
 const canonicalOrigin = (process.env.APP_ORIGIN || '').split(',')[0].trim().replace(/\/+$/, '');
-const connectSources = new Set(["'self'", 'https://accounts.google.com']);
+const connectSources = new Set(["'self'", 'https://accounts.google.com', 'https://huggingface.co']);
 for (const candidate of [process.env.VITE_API_BASE_URL || '']) {
   try { connectSources.add(new URL(candidate).origin); } catch { /* ignore invalid optional origins */ }
 }
