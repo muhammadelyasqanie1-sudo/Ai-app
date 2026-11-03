@@ -317,7 +317,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       let encrypted: string;
       try {
         encrypted = encryptProviderConfig({
-          baseUrl: baseUrl.toString().replace(/\\/+$/, ''),
+          baseUrl: baseUrl.toString().replace(/\/+$/, ''),
           apiKey,
           authHeaderName,
           defaultHeaders,
