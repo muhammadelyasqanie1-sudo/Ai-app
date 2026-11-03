@@ -20,8 +20,7 @@ import {
   Code2,
   FolderSearch,
   Globe,
-  FilePlus2,
-  SlidersHorizontal
+  FilePlus2
 } from 'lucide-react';
 import { AfgBrainLogo } from './AfgBrainLogo';
 import { AfgChatInputCapsule } from './AfgChatInputCapsule';
@@ -436,3 +435,5 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
     </div>
   );
 };
+
+.afg-chat-search-hit{outline:2px solid rgba(13,242,255,.85);outline-offset:5px;box-shadow:0 0 28px rgba(13,242,255,.18);border-radius:16px;transition:outline-color .2s ease}
