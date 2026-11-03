@@ -338,7 +338,16 @@ export async function getVerifiedProviderCatalog(): Promise<ProviderCatalog> {
   }
 }
 
+async function isFeatureFlagEnabled(key:string, fallback=false):Promise<boolean>{
+  if(!pool)return fallback;
+  try{
+    const result=await pool.query('SELECT enabled FROM feature_flags WHERE flag_key=$1 LIMIT 1',[key]);
+    return result.rows[0]?Boolean(result.rows[0].enabled):fallback;
+  }catch{return false;}
+}
+
 export async function getImageStudioSnapshot() {
+  if(!(await isFeatureFlagEnabled('image_generation_enabled',false)))return {available:false,providers:[],message:'Image generation is disabled by the administrator.'};
   const descriptors = await getVerifiedModelDescriptors();
   const providers = descriptors.filter((model) =>
     isRecentAndHealthy(model) && model.capabilities.imageGen &&
@@ -377,17 +386,23 @@ export async function getFileAssistantSnapshot() {
 export async function getCapabilitySnapshot() {
   const descriptors = await getVerifiedModelDescriptors();
   const selectable = descriptors.filter(isRecentAndHealthy);
+  const [chatEnabled,researchEnabled,voiceEnabled,imageGenerationEnabled] = await Promise.all([
+    isFeatureFlagEnabled('chat',true),
+    isFeatureFlagEnabled('web_research_enabled',false),
+    isFeatureFlagEnabled('voice_enabled',false),
+    isFeatureFlagEnabled('image_generation_enabled',false),
+  ]);
   const capabilities: Record<AfgCapability, boolean> = {
-    chat: selectable.some((model) => model.capabilities.text && model.capabilities.streaming),
+    chat: chatEnabled && selectable.some((model) => model.capabilities.text && model.capabilities.streaming),
     vision: selectable.some((model) => model.capabilities.vision && Boolean(getProviderAdapter(model.providerId)?.analyzeImage)),
     ocr: selectable.some((model) => model.capabilities.ocr && Boolean(getProviderAdapter(model.providerId)?.analyzeImage)),
     'image-edit': selectable.some((model) => model.capabilities.imageEdit && Boolean(getProviderAdapter(model.providerId)?.editImage)),
-    'image-generation': selectable.some((model) => model.capabilities.imageGen && Boolean(getProviderAdapter(model.providerId)?.generateImage)),
+    'image-generation': imageGenerationEnabled && selectable.some((model) => model.capabilities.imageGen && Boolean(getProviderAdapter(model.providerId)?.generateImage)),
     'video-generation': false,
     'file-processing': false,
-    'speech-to-text': selectable.some((model) => model.capabilities.stt && Boolean(getProviderAdapter(model.providerId)?.transcribe)),
-    'text-to-speech': selectable.some((model) => model.capabilities.tts && Boolean(getProviderAdapter(model.providerId)?.synthesize)),
-    research: Boolean(process.env.TAVILY_API_KEY),
+    'speech-to-text': voiceEnabled && selectable.some((model) => model.capabilities.stt && Boolean(getProviderAdapter(model.providerId)?.transcribe)),
+    'text-to-speech': voiceEnabled && selectable.some((model) => model.capabilities.tts && Boolean(getProviderAdapter(model.providerId)?.synthesize)),
+    research: researchEnabled && Boolean(process.env.TAVILY_API_KEY),
   };
 
   return {
