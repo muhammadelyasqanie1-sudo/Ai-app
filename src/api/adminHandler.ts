@@ -808,12 +808,23 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       await refreshDatabaseProviderAdapters(true);
       const providers = await Promise.all(getProviderRegistry().map(async (provider) => {
         const adapter = getProviderAdapter(provider.id); const before = Date.now();
+        let configured=false,catalogReachable=false,modelCount=0,latencyMs:number|null=null;
         try {
           const config = await adapter?.validateConfig();
-          if (!config?.valid) return { id: provider.id, configured: false, healthy: false, latencyMs: null, modelCount: 0 };
-          const models = await adapter!.listModels();
-          return { id: provider.id, configured: true, healthy: models.length>0, modelCount: models.length, latencyMs: Date.now()-before };
-        } catch { return { id: provider.id, configured: true, healthy: false, latencyMs: Date.now()-before, modelCount: 0 }; }
+          configured=Boolean(config?.valid);
+          if(configured&&adapter){
+            const models=await adapter.listModels();
+            catalogReachable=true;modelCount=models.length;latencyMs=Date.now()-before;
+          }
+        }catch{latencyMs=Date.now()-before;}
+        const status=await pool.query(`SELECT last_health_at,last_health_ok FROM providers WHERE slug=$1 LIMIT 1`,[provider.id]).catch(()=>({rows:[] as any[]}));
+        const fallback=await pool.query(`SELECT max(health_checked_at) AS last_health_at,
+          bool_or(last_health_ok=true AND verified_at>now()-interval '24 hours' AND enabled=true) AS last_health_ok
+          FROM model_catalog WHERE provider_key=$1`,[provider.id]).catch(()=>({rows:[] as any[]}));
+        const lastHealthAt=status.rows[0]?.last_health_at||fallback.rows[0]?.last_health_at||null;
+        const lastHealthOk=status.rows[0]?.last_health_ok??fallback.rows[0]?.last_health_ok??null;
+        return {id:provider.id,configured,catalogReachable,healthy:lastHealthOk===true,
+          lastHealthAt,lastHealthOk,modelCount,latencyMs};
       }));
       const migration=await pool.query('SELECT version,applied_at FROM schema_migrations ORDER BY applied_at DESC LIMIT 1').catch(()=>({rows:[] as any[]}));
       sendAuthJson(res, 200, {
