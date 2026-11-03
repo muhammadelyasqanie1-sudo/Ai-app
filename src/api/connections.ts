@@ -138,8 +138,12 @@ export async function handleConnectionsApi(req: IncomingMessage,res: ServerRespo
         for(const [key,value] of entries) await client.query(`INSERT INTO integration_credentials(integration_id,credential_key,credential_value_encrypted)
           VALUES($1,$2,$3) ON CONFLICT(integration_id,credential_key) DO UPDATE SET credential_value_encrypted=EXCLUDED.credential_value_encrypted,updated_at=now()`,
           [integration.rows[0].id,key,encryptSecret(value)]);
-        if (body.config && typeof body.config==='object'&&!Array.isArray(body.config)) await client.query('UPDATE integrations SET config_json=config_json||$2::jsonb,enabled=false,status=CASE WHEN status='active' THEN 'error' ELSE 'unconfigured' END,last_check_ok=NULL,last_error=NULL,updated_at=now() WHERE id=$1',[integration.rows[0].id,JSON.stringify(body.config)]);
-        else await client.query('UPDATE integrations SET enabled=false,status=CASE WHEN status='active' THEN 'error' ELSE 'unconfigured' END,last_check_ok=NULL,last_error=NULL,updated_at=now() WHERE id=$1',[integration.rows[0].id]);
+        if (body.config && typeof body.config==='object'&&!Array.isArray(body.config)) await client.query(`UPDATE integrations SET config_json=config_json||$2::jsonb,enabled=false,status=CASE WHEN status='active' THEN 'error' ELSE 'unconfigured' END,last_check_ok=NULL,last_error=NULL,updated_at=now() WHERE id=$1`,[integration.rows[0].id,JSON.stringify(body.config)]);
+        else await client.query(`UPDATE integrations SET enabled=false,status=CASE WHEN status='active' THEN 'error' ELSE 'unconfigured' END,last_check_ok=NULL,last_error=NULL,updated_at=now() WHERE id=$1`,[integration.rows[0].id]);
+        if(slug==='ftp-sftp'&&body.config&&typeof body.config.host==='string'&&typeof body.config.username==='string') {
+          await client.query(`INSERT INTO ftp_workspaces(user_id,integration_id,host,port,protocol,remote_path,local_path_alias)
+            VALUES($1,$2,$3,$4,$5,$6,$7)`,[admin.id,integration.rows[0].id,body.config.host,Number(body.config.port||22),body.config.protocol==='ftp'?'ftp':'sftp',String(body.config.remote_path||'/').slice(0,500),String(body.config.local_path_alias||'workspace').slice(0,100)]);
+        }
         await client.query('COMMIT');
       } catch(error){await client.query('ROLLBACK');throw error;} finally{client.release();}
       await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',[admin.id,'integration.credentials.save','integration',slug,JSON.stringify({credentialKeys:entries.map(([key])=>key)})]);
@@ -148,7 +152,7 @@ export async function handleConnectionsApi(req: IncomingMessage,res: ServerRespo
     if (req.method==='POST' && pathname==='/api/admin/connections/config') {
       const body=await readJsonBody(req,8000); const slug=String(body.slug||'');
       if(!/^[a-z0-9-]{2,64}$/.test(slug)||!body.config||typeof body.config!=='object'||Array.isArray(body.config)){sendAuthJson(res,400,{error:'Invalid connection settings.'});return true;}
-      await pool.query('UPDATE integrations SET config_json=config_json||$2::jsonb,enabled=false,status=CASE WHEN status='active' THEN 'error' ELSE status END,last_check_ok=NULL,updated_at=now() WHERE slug=$1',[slug,JSON.stringify(body.config)]);
+      await pool.query(`UPDATE integrations SET config_json=config_json||$2::jsonb,enabled=false,status=CASE WHEN status='active' THEN 'error' ELSE status END,last_check_ok=NULL,updated_at=now() WHERE slug=$1`,[slug,JSON.stringify(body.config)]);
       sendAuthJson(res,200,{saved:true,requiresHealthCheck:true});return true;
     }
     if (req.method==='POST' && pathname==='/api/admin/connections/test') {
