@@ -8,7 +8,7 @@ import type { Language } from '../../types/afg';
 import { getIntlLocale } from '../../utils/i18n';
 
 interface AfgAdminPanelProps { language: Language; }
-type Tab = 'overview'|'users'|'providers'|'models'|'usage'|'limits'|'health'|'flags'|'audit'|'security';
+type Tab = 'overview'|'users'|'providers'|'models'|'usage'|'errors'|'limits'|'health'|'config'|'flags'|'audit'|'security';
 type ProviderRow = { id:string; displayName:string; enabled:boolean; configured:boolean; kind?:string; base_url?:string|null; keyHint?:string|null; keyStatus?:string|null; last_health_at?:string|null; last_health_ok?:boolean|null; source?:string };
 type ModelRow = {
   id:string; providerId:string; displayName:string; description?:string; contextWindow:number;
@@ -24,8 +24,8 @@ const API = ((import.meta as any).env?.VITE_API_BASE_URL || '').replace(/\/$/, '
 const NAV: {id:Tab;labelEn:string;labelFa:string;icon:any}[] = [
   {id:'overview',labelEn:'Overview',labelFa:'نمای کلی',icon:LayoutDashboard},{id:'users',labelEn:'Users',labelFa:'کاربران',icon:Users},
   {id:'providers',labelEn:'Providers',labelFa:'ارائه‌دهندگان',icon:Network},{id:'models',labelEn:'Models & Routing',labelFa:'مدل‌ها و مسیریابی',icon:Cpu},
-  {id:'usage',labelEn:'Usage & Errors',labelFa:'مصرف و خطاها',icon:Activity},{id:'limits',labelEn:'Rate Limits',labelFa:'محدودیت درخواست',icon:Gauge},
-  {id:'health',labelEn:'Storage & Health',labelFa:'ذخیره‌سازی و سلامت',icon:HardDrive},{id:'flags',labelEn:'Flags & Announcements',labelFa:'امکانات و اطلاعیه‌ها',icon:Flag},
+  {id:'usage',labelEn:'Usage',labelFa:'مصرف',icon:Activity},{id:'errors',labelEn:'Errors',labelFa:'خطاها',icon:AlertTriangle},{id:'limits',labelEn:'Rate Limits',labelFa:'محدودیت درخواست',icon:Gauge},
+  {id:'health',labelEn:'Storage & Health',labelFa:'ذخیره‌سازی و سلامت',icon:HardDrive},{id:'config',labelEn:'Configuration',labelFa:'تنظیمات سیستم',icon:Gauge},{id:'flags',labelEn:'Flags & Announcements',labelFa:'امکانات و اطلاعیه‌ها',icon:Flag},
   {id:'audit',labelEn:'Audit Log',labelFa:'گزارش رویدادها',icon:ClipboardList},{id:'security',labelEn:'Security Events',labelFa:'رویدادهای امنیتی',icon:ShieldAlert},
 ];
 const CAPABILITIES = ['text','streaming','vision','imageGen','imageEdit','ocr','tts','stt','tools','jsonMode'];
@@ -71,6 +71,15 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [users,setUsers] = useState<UserRow[]>([]);
   const [overview,setOverview] = useState<Overview|null>(null);
   const [requests,setRequests] = useState<RequestRow[]>([]);
+  const [usageRecords,setUsageRecords] = useState<any[]>([]);
+  const [usageSummary,setUsageSummary] = useState<any|null>(null);
+  const [errorRows,setErrorRows] = useState<any[]>([]);
+  const [sessions,setSessions] = useState<any[]>([]);
+  const [systemConfig,setSystemConfig] = useState<any[]>([]);
+  const [announcements,setAnnouncements] = useState<any[]>([]);
+  const [configKey,setConfigKey] = useState('daily_cost_threshold_usd');
+  const [configValue,setConfigValue] = useState('25');
+  const [selectedUser,setSelectedUser] = useState<any|null>(null);
   const [security,setSecurity] = useState<any[]>([]);
   const [audit,setAudit] = useState<any[]>([]);
   const [policies,setPolicies] = useState<RatePolicy[]>([]);
@@ -97,13 +106,17 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     try {
       const paths = ['/api/admin/providers','/api/admin/models','/api/admin/fallbacks','/api/admin/users',
         '/api/admin/overview','/api/admin/requests','/api/admin/security-events','/api/admin/audit',
-        '/api/admin/rate-limits','/api/admin/feature-flags'];
+        '/api/admin/rate-limits','/api/admin/feature-flags','/api/admin/usage','/api/admin/errors',
+        '/api/admin/sessions','/api/admin/config','/api/admin/announcements'];
       const values = await Promise.all(paths.map((path)=>api(path)));
       setProviders(values[0].providers||[]); setModels(values[1].models||[]);
       setFallbacks(values[2].fallbacks||[]); setUsers(values[3].users||[]);
       setOverview(values[4]); setRequests(values[5].requests||[]);
       setSecurity(values[6].events||[]); setAudit(values[7].events||[]);
       setPolicies(values[8].policies||[]); setFlags(values[9].flags||[]);
+      setUsageRecords(values[10].records||[]);setUsageSummary(values[10].summary||null);
+      setErrorRows(values[11].errors||[]);setSessions(values[12].sessions||[]);
+      setSystemConfig(values[13].config||[]);setAnnouncements(values[14].announcements||[]);
       setAuthenticated(true); return true;
     } catch(err) {
       setError(err instanceof Error?err.message:'Could not load admin dashboard.');
@@ -205,6 +218,32 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     catch(err){setError(err instanceof Error?err.message:'Model deletion failed.');}
   };
 
+  const openUserProfile=async(user:UserRow)=>{
+    try{const result=await api('/api/admin/users/'+encodeURIComponent(user.id));setSelectedUser(result.user||null);}
+    catch(err){setError(err instanceof Error?err.message:'Could not load user profile.');}
+  };
+  const confirmUserChange=async(user:UserRow,patch:Record<string,string>)=>{
+    const identity=user.email||user.display_name||user.id;
+    const entered=window.prompt(`Confirm this sensitive change by typing exactly: ${identity}`);
+    if(entered!==identity){setError('Confirmation did not match. No change was made.');return;}
+    await patchUser(user,patch);
+  };
+  const revokeSession=async(session:any)=>{
+    if(!window.confirm('Revoke this active session? The device will need to sign in again.'))return;
+    try{await api('/api/admin/sessions/'+encodeURIComponent(session.id),{method:'DELETE'});setNotice('Session revoked.');await loadAdminData();}
+    catch(err){setError(err instanceof Error?err.message:'Session could not be revoked.');}
+  };
+  const saveSystemConfig=async()=>{
+    let parsed:any;
+    try{parsed=JSON.parse(configValue);}catch{parsed=configValue;}
+    try{await api('/api/admin/config/'+encodeURIComponent(configKey),{method:'PUT',body:JSON.stringify({value:parsed})});
+      setNotice('System configuration saved.');await loadAdminData();}
+    catch(err){setError(err instanceof Error?err.message:'Configuration update failed.');}
+  };
+  const exportErrors=()=>{
+    const url=API+'/api/admin/errors/export';
+    window.open(url,'_blank','noopener,noreferrer');
+  };
   const saveFallback=async()=>{
     try{await api('/api/admin/fallbacks',{method:'PATCH',body:JSON.stringify({capability:fallbackCapability,orderedModels:fallbackText.split('\n').map(x=>x.trim()).filter(Boolean)})});await loadAdminData();setNotice('Default routing order saved.');}
     catch(err){setError(err instanceof Error?err.message:'Routing update failed.');}
