@@ -291,3 +291,21 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 
 - Locale, web-check and Android debug APK workflows were in progress at the time of this update.
 - No Android runtime execution or device test has been performed.
+
+
+## Live CI result — GGUF runtime messaging PR #9
+
+**PR:** https://github.com/muhammadelyasqanie1-sudo/Ai-app/pull/9
+
+- TypeScript validation: passed.
+- Offline SHA-256 regression tests: passed.
+- Locale validation: passed.
+- Production web build: passed.
+- Android debug APK build: passed, including dependency install, web build, Capacitor project generation, plugin sync, and `assembleDebug`.
+- GitHub Actions uploaded artifact `afg-ai-offline-hub-debug-apk` (35,188,274 bytes; created 2026-11-03; not expired at time of check).
+- This is build evidence for PR #9's source, not for current main. It does not prove physical-device installation, native model loading, or successful inference.
+
+## Live CI status — Supabase TLS PR #10
+
+- Locale, web-check and Android workflows were queued/in progress while the new database TLS regression test was added.
+- The new test script is wired into the web-check workflow; its result is pending.
