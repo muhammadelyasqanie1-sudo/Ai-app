@@ -29,8 +29,8 @@ export async function verifyBrowserPack(input:{
     const publicKeyBytes=decodeBase64(input.trustedPublicKeyBase64);
     const signature=decodeBase64(input.signatureBase64);
     if(publicKeyBytes.byteLength!==32 || signature.byteLength!==64) return {ok:false,reason:'Ed25519 public key or signature has an invalid length.'};
-    const key=await crypto.subtle.importKey('raw',publicKeyBytes,{name:'Ed25519'},false,['verify']);
-    const signatureValid=await crypto.subtle.verify({name:'Ed25519'},key,signature,input.manifestBytes);
+    const key=await crypto.subtle.importKey('raw',publicKeyBytes.buffer as ArrayBuffer,{name:'Ed25519'},false,['verify']);
+    const signatureValid=await crypto.subtle.verify({name:'Ed25519'},key,signature.buffer as ArrayBuffer,input.manifestBytes);
     if(!signatureValid) return {ok:false,reason:'Pack signature verification failed.'};
     const digest=await crypto.subtle.digest('SHA-256',input.modelBytes);
     const modelSha256=Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('');
