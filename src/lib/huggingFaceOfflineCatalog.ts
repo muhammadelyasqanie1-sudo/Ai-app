@@ -64,6 +64,7 @@ export async function searchHuggingFaceGGUF(options: {
   const params = new URLSearchParams({
     filter: 'gguf',
     limit: String(PAGE_SIZE),
+    offset: String(page * PAGE_SIZE),
     sort: options.sort || 'downloads',
     direction: options.direction === 'asc' ? '1' : '-1',
     full: 'true',
