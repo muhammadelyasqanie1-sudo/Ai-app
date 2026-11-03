@@ -29,6 +29,28 @@ WHERE legacy.provider_key='cloudflare-workers-ai'
                   WHERE canonical.provider_key='cloudflare' AND canonical.model_key=legacy.model_key)
 ON CONFLICT(provider_key,model_key) DO NOTHING;
 
+-- Preserve the previously configured Workers AI state when switching to the canonical slug.
+UPDATE providers canonical
+SET enabled = canonical.enabled OR legacy.enabled,
+    last_health_at = CASE
+      WHEN legacy.last_health_at IS NOT NULL AND (canonical.last_health_at IS NULL OR legacy.last_health_at > canonical.last_health_at)
+        THEN legacy.last_health_at ELSE canonical.last_health_at END,
+    last_health_ok = CASE
+      WHEN legacy.last_health_at IS NOT NULL AND (canonical.last_health_at IS NULL OR legacy.last_health_at > canonical.last_health_at)
+        THEN legacy.last_health_ok ELSE canonical.last_health_ok END,
+    updated_at = now()
+FROM providers legacy
+WHERE canonical.slug = 'cloudflare'
+  AND legacy.slug = 'cloudflare-workers-ai';
+
+-- Also preserve the legacy provider-config toggle if the old provider row is absent.
+UPDATE providers canonical
+SET enabled = canonical.enabled OR EXISTS (
+  SELECT 1 FROM provider_configs legacy
+  WHERE legacy.provider_key = 'cloudflare-workers-ai' AND legacy.enabled = true
+), updated_at = now()
+WHERE canonical.slug = 'cloudflare';
+
 INSERT INTO provider_configs(provider_key,display_name,enabled)
 SELECT 'cloudflare',display_name,enabled
 FROM provider_configs WHERE provider_key='cloudflare-workers-ai'
