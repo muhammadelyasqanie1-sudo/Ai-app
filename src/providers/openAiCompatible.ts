@@ -74,6 +74,7 @@ export function createOpenAICompatibleAdapter(override?: OpenAICompatibleProvide
       try {
         const response = await fetch(current.baseUrl + '/models', {
           headers: requestHeaders(current, 'application/json'),
+          redirect: 'error',
           signal: AbortSignal.timeout(Math.min(timeout(current), 12000)),
         });
         if (!response.ok) {
@@ -146,6 +147,7 @@ export function createOpenAICompatibleAdapter(override?: OpenAICompatibleProvide
         response = await fetch(current.baseUrl + '/chat/completions', {
           method: 'POST',
           headers: { ...requestHeaders(current, 'text/event-stream'), 'Content-Type': 'application/json' },
+          redirect: 'error',
           body: JSON.stringify({ model: input.model, messages: input.messages, stream: true }),
           signal: input.signal ? AbortSignal.any([AbortSignal.timeout(timeout(current)), input.signal]) : AbortSignal.timeout(90_000),
         });
