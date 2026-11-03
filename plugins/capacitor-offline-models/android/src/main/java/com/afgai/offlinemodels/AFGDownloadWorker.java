@@ -124,6 +124,7 @@ public final class AFGDownloadWorker extends Worker {
                 int read;
                 while ((read = input.read(buffer)) != -1) {
                     if (isStopped()) {
+                        output.getFD().sync();
                         AFGDownloadStore.update(getApplicationContext(), downloadId, "status", "paused");
                         AFGDownloadStore.update(getApplicationContext(), downloadId, "downloadedBytes", downloaded);
                         return Result.failure();
@@ -144,6 +145,7 @@ public final class AFGDownloadWorker extends Worker {
             return verifyAndInstall(meta, part, destination);
         } catch (Exception error) {
             if (isStopped()) {
+                syncPartialFile(part);
                 AFGDownloadStore.update(getApplicationContext(), downloadId, "status", "paused");
                 return Result.failure();
             }
@@ -182,6 +184,12 @@ public final class AFGDownloadWorker extends Worker {
         AFGDownloadStore.update(getApplicationContext(), downloadId, "error", "");
         setForegroundAsync(foreground("Model download complete", 100));
         return Result.success(new Data.Builder().putString("localPath", destination.getAbsolutePath()).putString("sha256", computed).build());
+    }
+
+    private void syncPartialFile(File file) {
+        try (java.io.RandomAccessFile handle = new java.io.RandomAccessFile(file, "rw")) {
+            handle.getFD().sync();
+        } catch (Exception ignored) { }
     }
 
     private String sha256(File file) throws Exception {
