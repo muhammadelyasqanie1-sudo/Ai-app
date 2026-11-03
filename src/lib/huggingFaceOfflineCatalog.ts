@@ -20,7 +20,7 @@ export type HuggingFaceRepository = {
   id: string;
   files: HuggingFaceFile[];
   totalBytes: number;
-  ggufFiles: Array<{ name: string; size: number | null; quantization: string | null; sha256: string | null }>;
+  ggufFiles: Array<{ name: string; path: string; size: number | null; quantization: string | null; sha256: string | null }>;
 };
 
 const API = 'https://huggingface.co/api';
@@ -103,7 +103,7 @@ export async function getHuggingFaceRepository(repoId: string, signal?: AbortSig
     const name = file.path.split('/').pop() || file.path;
     const match = name.match(/(?:^|[-_.])(Q[0-9]+(?:_[KMS]_[MS]|_[0-9]+)?|IQ[0-9]+_[A-Z0-9_]+|F16|F32)(?:[-_.]|$)/i);
     const sha = file.lfs?.sha256 || (file.lfs?.oid?.startsWith('sha256:') ? file.lfs.oid.slice(7) : null);
-    return { name, size: file.size, quantization: match?.[1]?.toUpperCase() || null, sha256: sha };
+    return { name, path: file.path, size: file.size, quantization: match?.[1]?.toUpperCase() || null, sha256: sha };
   });
   const result = { id: repoId, files: normalized, totalBytes: normalized.reduce((sum, file) => sum + (file.size || 0), 0), ggufFiles };
   safeWrite(cacheKey, result);
