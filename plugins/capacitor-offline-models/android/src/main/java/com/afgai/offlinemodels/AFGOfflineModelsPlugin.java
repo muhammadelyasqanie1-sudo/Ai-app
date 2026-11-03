@@ -34,7 +34,6 @@ public class AFGOfflineModelsPlugin extends Plugin {
     }
 
     private native boolean nativeLoadModel(String path, String nativeLibraryDirectory, int contextSize, int threads);
-    private native String nativeGenerate(String messagesJson, int maxTokens);
     private native String nativeGenerateStream(String messagesJson, int maxTokens, Object callback);
     private native void nativeCancelGeneration();
     private native void nativeResetGeneration();
@@ -100,13 +99,21 @@ public class AFGOfflineModelsPlugin extends Plugin {
     @PluginMethod
     public void generate(PluginCall call) {
         if (!NATIVE_RUNTIME_AVAILABLE) { call.reject("The Android llama.cpp runtime is not available in this APK."); return; }
-        String messages = call.getString("messages", "[]");
-        Integer maxTokens = call.getInt("maxTokens");
-        try {
-            String response = nativeGenerate(messages, maxTokens == null ? 256 : maxTokens);
-            if (response == null) { call.reject(nativeGetLastError()); return; }
-            JSObject result = new JSObject(); result.put("text", response); call.resolve(result);
-        } catch (Exception error) { call.reject("Local GGUF inference failed.", error); }
+        final String messages = call.getString("messages", "[]");
+        final Integer maxTokens = call.getInt("maxTokens");
+        INFERENCE_EXECUTOR.execute(() -> {
+            try {
+                nativeResetGeneration();
+                String response = nativeGenerateStream(messages, maxTokens == null ? 256 : maxTokens, null);
+                if (response == null) { call.reject(nativeGetLastError()); return; }
+                JSObject result = new JSObject();
+                result.put("text", response);
+                result.put("cancelled", false);
+                call.resolve(result);
+            } catch (Exception error) {
+                call.reject("Local GGUF inference failed.", error);
+            }
+        });
     }
 
     @PluginMethod
