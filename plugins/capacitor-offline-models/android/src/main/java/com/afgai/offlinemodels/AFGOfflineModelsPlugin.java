@@ -198,6 +198,10 @@ public class AFGOfflineModelsPlugin extends Plugin {
         if (!NATIVE_RUNTIME_AVAILABLE) { call.reject("The Android llama.cpp runtime is not available in this APK."); return; }
         String messages = call.getString("messages", "[]");
         Integer maxTokens = call.getInt("maxTokens");
+        if (messages == null || messages.length() > 1_000_000) {
+            call.reject("The local inference prompt exceeds the 1 MB input limit.");
+            return;
+        }
         try {
             String response = nativeGenerate(messages, maxTokens == null ? 256 : maxTokens);
             if (response == null) { call.reject(nativeGetLastError()); return; }
