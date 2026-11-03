@@ -203,3 +203,31 @@
 ### Next action
 
 - Inspect and strengthen the next highest-priority backend reliability issue, then update the platform verification evidence and continue toward model routing/offline runtime gaps.
+
+
+## Live CI result — Model routing safety PR #6
+
+**PR:** https://github.com/muhammadelyasqanie1-sudo/Ai-app/pull/6
+
+**Status:** COMPLETE AND VERIFIED for the repository CI jobs listed below.
+
+- `validate-locales`: passed.
+- Locale dictionary validation: passed.
+- Production web build: passed.
+- `web-checks`: passed.
+- TypeScript validation (`npm run lint`): passed.
+- Offline SHA-256 regression tests (`npm run test:offline-sha`): passed.
+- Production web build: passed.
+
+Build output note: the production bundle reports a 6,116.37 kB JavaScript library chunk (2,189.96 kB gzip). This is a performance optimization target; build succeeded, but the chunk remains large.
+
+## Live CI result — Terminal token audit PR #7
+
+**PR:** https://github.com/muhammadelyasqanie1-sudo/Ai-app/pull/7
+
+- Both locale and web-check jobs were queued/in progress at the time of this update.
+- No success/failure claim is made until GitHub reports completed checks.
+
+### Next action
+
+- Continue security review and inspect the large client bundle's import graph. Recheck PR #7 CI before considering integration. No PR has been merged and no Render deployment has been triggered.
