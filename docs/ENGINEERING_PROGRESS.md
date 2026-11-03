@@ -256,3 +256,21 @@ Build output note: the production bundle reports a 6,116.37 kB JavaScript librar
 ### Next action
 
 - Continue reducing initial client bundle weight and review cross-platform runtime capability gating. Keep all deployment and production-data changes untouched.
+
+
+## Live CI result — Terminal token audit PR #7
+
+- `validate-locales`: passed.
+- Locale dictionary validation: passed.
+- Production web build: passed.
+- `web-checks`: passed.
+- TypeScript validation: passed.
+- Offline SHA-256 regression tests: passed.
+- Production web build: passed.
+
+PR #7 remains open and unmerged. No deployment or production database operation was performed.
+
+## Live CI status — Offline Hub lazy-load PR #8
+
+- Locale and web-check workflows were queued at the time of this update.
+- Bundle-size comparison and production build result are pending.
