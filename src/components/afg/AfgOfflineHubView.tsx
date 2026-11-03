@@ -258,11 +258,28 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       void recordOfflineMetric({ name: 'download_completed', modelId: hfSelected, bytes: downloaded.downloadedBytes, durationMs: Date.now() - startedAt }).catch(() => undefined);
       setGgufTasks(await listOfflineDownloads());
     } catch (error) {
-      const checksumFailure = error instanceof Error && /sha-?256|checksum|integrity/i.test(error.message);
-      void recordOfflineMetric({ name: checksumFailure ? 'checksum_failed' : 'download_failed', modelId: hfSelected, durationMs: Date.now() - startedAt }).catch(() => undefined);
-      void recordOfflineDiagnostic({ code: checksumFailure ? 'checksum_error' : 'download_error', modelId: hfSelected }).catch(() => undefined);
-      setHfError(error instanceof Error ? error.message : 'GGUF download failed.');
+      const intentionallyPaused = error instanceof DOMException && error.name === 'AbortError';
+      if (!intentionallyPaused) {
+        const checksumFailure = error instanceof Error && /sha-?256|checksum|integrity/i.test(error.message);
+        void recordOfflineMetric({ name: checksumFailure ? 'checksum_failed' : 'download_failed', modelId: hfSelected, durationMs: Date.now() - startedAt }).catch(() => undefined);
+        void recordOfflineDiagnostic({ code: checksumFailure ? 'checksum_error' : 'download_error', modelId: hfSelected }).catch(() => undefined);
+        setHfError(error instanceof Error ? error.message : 'GGUF download failed.');
+      }
     } finally { setGgufBusyId(''); setGgufTasks(await listOfflineDownloads().catch(() => [])); }
+  };
+  const resumeGguf = async (task: OfflineDownloadState) => {
+    setGgufBusyId(task.id);
+    setHfError('');
+    try {
+      await resumeOfflineDownload(task.id, progress => setGgufProgress(previous => ({ ...previous, [task.id]: progress })));
+      setGgufTasks(await listOfflineDownloads());
+    } catch (error) {
+      const intentionallyPaused = error instanceof DOMException && error.name === 'AbortError';
+      if (!intentionallyPaused) setHfError(error instanceof Error ? error.message : 'Resume failed.');
+    } finally {
+      setGgufBusyId('');
+      setGgufTasks(await listOfflineDownloads().catch(() => []));
+    }
   };
   const removeGguf = async (id: string) => {
     if (selectedId === id && engineRef.current) { const engine = engineRef.current; engineRef.current = null; engineModelIdRef.current = ''; setActiveOfflineModelLabel(''); await engine.unload().catch(() => undefined); }
@@ -503,7 +520,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       <div className="flex items-center justify-between gap-2"><h2 className="font-bold">{dari ? 'فایل‌های GGUF دانلودشده' : 'Downloaded GGUF files'}</h2><span className="text-xs opacity-60">{ggufTasks.filter(task => task.status === 'installed').length}</span></div>
       {!ggufTasks.length && <p className="text-xs opacity-60">{dari ? 'هنوز فایل GGUF دانلود نشده است.' : 'No GGUF files downloaded yet.'}</p>}
       {ggufTasks.some(task => task.status === 'installed') && <p className="rounded-lg bg-amber-500/10 p-2.5 text-xs text-amber-700">{dari ? 'فایل‌ها در دستگاه ذخیره شده‌اند؛ برای اجرای آن‌ها هنوز موتور GGUF (llama.cpp) باید اضافه شود.' : 'These files are stored locally. They cannot be used for inference until the GGUF runtime (llama.cpp) is integrated.'}</p>}
-      {ggufTasks.map(task => <div key={task.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-500/5 p-3"><div className="min-w-0 flex-1"><div className="break-all text-xs font-semibold">{task.repoId} / {task.fileName}</div><div className="mt-1 text-[11px] opacity-60">{formatBytes(task.downloadedBytes)} · {task.status === 'installed' ? (dari ? 'دانلودشده' : 'Downloaded') : task.status}{task.status === 'installed' ? (task.hashVerified ? (dari ? ' · هش تأیید شد' : ' · hash verified') : (dari ? ' · هش محاسبه شد؛ منبع تأیید ندارد' : ' · hash calculated; source not verified')) : ''}{task.error ? ' · ' + task.error : ''}</div></div><div className="flex gap-2">{task.status !== 'installed' && task.status !== 'downloading' && <button type="button" disabled={!!ggufBusyId} onClick={() => { void resumeOfflineDownload(task.id).then(() => listOfflineDownloads()).then(setGgufTasks).catch(error => setHfError(error instanceof Error ? error.message : 'Resume failed')); pendingGgufPathRef.current = task.fileName; setHfSelected(task.repoId); }} className="rounded-lg border px-2 py-1 text-xs">{dari ? 'ادامه' : 'Resume'}</button>}{task.status === 'installed' && nativeRuntimeAvailable && task.localPath && <button type="button" disabled={busy} onClick={() => void loadNativeGgufModel(task)} className="rounded-lg bg-cyan-500 px-2.5 py-1.5 text-xs font-bold text-slate-950 disabled:opacity-40">{dari ? 'اجرا' : 'Load model'}</button>}{task.status === 'installed' && usesNativeOfflineDownloads() && !nativeRuntimeAvailable && <span className="text-[10px] text-amber-700">{dari ? 'موتور اجرا در این نسخه موجود نیست' : 'Native runtime unavailable in this build'}</span>}<button type="button" onClick={() => void removeGguf(task.id)} className="rounded-lg border px-2 py-1 text-xs">{dari ? 'حذف' : 'Delete'}</button></div></div>)}
+      {ggufTasks.map(task => <div key={task.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-500/5 p-3"><div className="min-w-0 flex-1"><div className="break-all text-xs font-semibold">{task.repoId} / {task.fileName}</div><div className="mt-1 text-[11px] opacity-60">{formatBytes(task.downloadedBytes)} · {task.status === 'installed' ? (dari ? 'دانلودشده' : 'Downloaded') : task.status}{task.status === 'installed' ? (task.hashVerified ? (dari ? ' · هش تأیید شد' : ' · hash verified') : (dari ? ' · هش محاسبه شد؛ منبع تأیید ندارد' : ' · hash calculated; source not verified')) : ''}{task.error ? ' · ' + task.error : ''}</div></div><div className="flex gap-2">{task.status !== 'installed' && task.status !== 'downloading' && <button type="button" disabled={!!ggufBusyId} onClick={() => void resumeGguf(task)} className="rounded-lg border px-2 py-1 text-xs">{dari ? 'ادامه' : 'Resume'}</button>}{task.status === 'installed' && nativeRuntimeAvailable && task.localPath && <button type="button" disabled={busy} onClick={() => void loadNativeGgufModel(task)} className="rounded-lg bg-cyan-500 px-2.5 py-1.5 text-xs font-bold text-slate-950 disabled:opacity-40">{dari ? 'اجرا' : 'Load model'}</button>}{task.status === 'installed' && usesNativeOfflineDownloads() && !nativeRuntimeAvailable && <span className="text-[10px] text-amber-700">{dari ? 'موتور اجرا در این نسخه موجود نیست' : 'Native runtime unavailable in this build'}</span>}<button type="button" onClick={() => void removeGguf(task.id)} className="rounded-lg border px-2 py-1 text-xs">{dari ? 'حذف' : 'Delete'}</button></div></div>)}
     </section>}
   </section>;
 }
