@@ -22,12 +22,6 @@ export type OfflineDeviceProfile = {
 type NativeDeviceInfo = Partial<Pick<OfflineDeviceProfile,
   'deviceLabel' | 'osLabel' | 'architecture' | 'cpuCores' | 'memoryGiB' | 'storageFreeBytes'>>;
 
-declare global {
-  interface Window {
-    AFGDeviceInfo?: { getInfo?: () => Promise<NativeDeviceInfo> };
-  }
-}
-
 function browserName(ua: string): string {
   if (/Edg\//.test(ua)) return 'Edge';
   if (/Firefox\//.test(ua)) return 'Firefox';
@@ -78,8 +72,8 @@ export async function scanOfflineDevice(): Promise<OfflineDeviceProfile> {
   let native: NativeDeviceInfo = {};
   let nativeInfoAvailable = false;
   try {
-    if (window.AFGDeviceInfo?.getInfo) {
-      native = await window.AFGDeviceInfo.getInfo();
+    if (Capacitor.isNativePlatform()) {
+      native = await AFGDeviceInfo.getInfo();
       nativeInfoAvailable = true;
     }
   } catch { /* Fall back to privacy-preserving browser estimates. */ }
