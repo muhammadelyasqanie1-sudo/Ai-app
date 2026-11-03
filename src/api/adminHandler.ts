@@ -349,7 +349,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/overview') {
-      const [usage,requests,users,storage] = await Promise.all([
+      const [usage,requests,users,storage,today,latency,requestsByProvider,errorsByClass,providerHealth,unverified,expiredKeys,problemModels,threshold] = await Promise.all([
         pool.query(`SELECT date_trunc('day',created_at) AS day,count(*)::int AS requests,
           COALESCE(sum(input_tokens+output_tokens),0)::bigint AS tokens
           FROM usage_events WHERE created_at>now()-interval '14 days' GROUP BY 1 ORDER BY 1`),
@@ -363,12 +363,56 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           count(*) FILTER (WHERE status='suspended')::int AS suspended FROM users`),
         pool.query(`SELECT pg_database_size(current_database())::bigint AS database_bytes,
           (SELECT count(*)::bigint FROM generated_assets) AS asset_records,
-          (SELECT count(*)::bigint FROM conversations) AS conversations`)
+          (SELECT count(*)::bigint FROM conversations) AS conversations`),
+        pool.query(`SELECT count(*)::int AS ai_requests, count(*) FILTER(WHERE status<>'success')::int AS errors,
+          COALESCE(sum(cost_usd),0)::numeric(18,6) AS cost_usd,
+          COALESCE(sum(tokens_in),0)::bigint AS input_tokens,COALESCE(sum(tokens_out),0)::bigint AS output_tokens,
+          count(DISTINCT user_id) FILTER(WHERE user_id IS NOT NULL)::int AS active_request_users
+          FROM usage_records WHERE created_at>=date_trunc('day',now())`),
+        pool.query(`SELECT COALESCE(avg(latency_ms),0)::numeric(12,2) AS average_ms,
+          COALESCE(percentile_cont(0.50) WITHIN GROUP(ORDER BY latency_ms),0)::numeric(12,2) AS p50,
+          COALESCE(percentile_cont(0.95) WITHIN GROUP(ORDER BY latency_ms),0)::numeric(12,2) AS p95,
+          COALESCE(percentile_cont(0.99) WITHIN GROUP(ORDER BY latency_ms),0)::numeric(12,2) AS p99
+          FROM usage_records WHERE created_at>=now()-interval '24 hours'`),
+        pool.query(`SELECT provider_key,count(*)::int AS requests,COALESCE(sum(cost_usd),0)::numeric(18,6) AS cost_usd
+          FROM usage_records WHERE created_at>=now()-interval '24 hours' GROUP BY provider_key ORDER BY requests DESC`),
+        pool.query(`SELECT error_class,count(*)::int AS errors FROM error_logs
+          WHERE created_at>=now()-interval '24 hours' GROUP BY error_class ORDER BY errors DESC`),
+        pool.query(`SELECT count(*) FILTER(WHERE enabled=true AND last_health_ok=false)::int AS down,
+          count(*) FILTER(WHERE enabled=true AND last_health_ok IS NULL)::int AS unchecked
+          FROM providers`),
+        pool.query(`SELECT count(*)::int AS total FROM model_catalog
+          WHERE enabled=true AND (last_health_ok IS DISTINCT FROM true OR verified_at IS NULL OR verified_at<now()-interval '24 hours')`),
+        pool.query(`SELECT count(*)::int AS total FROM provider_keys WHERE status='expired'`),
+        pool.query(`SELECT model_id,count(*)::int AS errors FROM error_logs WHERE created_at>now()-interval '5 minutes'
+          AND model_id IS NOT NULL GROUP BY model_id HAVING count(*)>10 ORDER BY errors DESC`),
+        pool.query(`SELECT value_json #>> '{}' AS value FROM system_config WHERE key='daily_cost_threshold_usd' LIMIT 1`),
       ]);
-      sendAuthJson(res, 200, {
-        usage: usage.rows, requests: requests.rows[0], users: users.rows[0],
-        storage: { ...storage.rows[0], r2Configured: Boolean(process.env.R2_BUCKET && (process.env.R2_ACCESS_KEY_ID || process.env.CLOUDFLARE_R2_ACCESS_KEY_ID)), kvConfigured: Boolean(process.env.CLOUDFLARE_KV_NAMESPACE_ID || process.env.KV_REST_API_URL) }
-      }); return true;
+      const todayCost=Number(today.rows[0]?.cost_usd||0);
+      const dailyThreshold=Number(threshold.rows[0]?.value||0);
+      const totalRequests=Number(today.rows[0]?.ai_requests||0);
+      const errorCount=Number(today.rows[0]?.errors||0);
+      const errorRate=totalRequests?errorCount/totalRequests*100:0;
+      const alertItems:Array<{kind:string;severity:string;message:string;count?:number}>=[];
+      if(Number(providerHealth.rows[0]?.down||0)>0)alertItems.push({kind:'providers_down',severity:'critical',message:'One or more enabled providers failed their last health check.',count:Number(providerHealth.rows[0].down)});
+      if(Number(unverified.rows[0]?.total||0)>0)alertItems.push({kind:'models_unverified',severity:'warning',message:'Enabled models require a recent successful verification.',count:Number(unverified.rows[0].total)});
+      if(Number(expiredKeys.rows[0]?.total||0)>0)alertItems.push({kind:'keys_expired',severity:'warning',message:'One or more provider keys are marked expired.',count:Number(expiredKeys.rows[0].total)});
+      if(errorRate>5)alertItems.push({kind:'error_rate',severity:'critical',message:'AI request error rate is above 5%.',count:Number(errorRate.toFixed(2))});
+      if(dailyThreshold>0&&todayCost>dailyThreshold)alertItems.push({kind:'daily_cost',severity:'critical',message:'Daily AI cost is above the configured budget threshold.'});
+      for(const row of problemModels.rows)alertItems.push({kind:'problem_model',severity:'critical',message:'Model has more than 10 errors in the last five minutes: '+row.model_id,count:Number(row.errors)});
+      sendAuthJson(res,200,{
+        usage:usage.rows,requests:requests.rows[0],users:users.rows,
+        dashboard:{
+          activeUsersToday:Number(today.rows[0]?.active_request_users||0),aiRequestsToday:totalRequests,
+          errorRatePercent:Number(errorRate.toFixed(2)),todayCostUsd:todayCost,
+          inputTokens:Number(today.rows[0]?.input_tokens||0),outputTokens:Number(today.rows[0]?.output_tokens||0),
+          averageLatencyMs:Number(latency.rows[0]?.average_ms||0),
+          latency:{p50:Number(latency.rows[0]?.p50||0),p95:Number(latency.rows[0]?.p95||0),p99:Number(latency.rows[0]?.p99||0)},
+          requestsByProvider:requestsByProvider.rows,errorsByClass:errorsByClass.rows,
+          dailyCostThresholdUsd:dailyThreshold,alerts:alertItems,
+        },
+        storage:{...storage.rows[0],r2Configured:Boolean(process.env.R2_BUCKET&&(process.env.R2_ACCESS_KEY_ID||process.env.CLOUDFLARE_R2_ACCESS_KEY_ID)),kvConfigured:Boolean(process.env.CLOUDFLARE_KV_NAMESPACE_ID||process.env.KV_REST_API_URL)}
+      });return true;
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/requests') {
