@@ -9,6 +9,8 @@ export type OfflineDeviceProfile = {
   architecture: string;
   cpuCores: number | null;
   memoryGiB: number | null;
+  availableMemoryGiB: number | null;
+  lowMemory: boolean | null;
   storageFreeBytes: number | null;
   storageQuotaBytes: number | null;
   gpuAvailable: boolean;
@@ -20,7 +22,7 @@ export type OfflineDeviceProfile = {
 };
 
 type NativeDeviceInfo = Partial<Pick<OfflineDeviceProfile,
-  'deviceLabel' | 'osLabel' | 'architecture' | 'cpuCores' | 'memoryGiB' | 'storageFreeBytes'>>;
+  'deviceLabel' | 'osLabel' | 'architecture' | 'cpuCores' | 'memoryGiB' | 'availableMemoryGiB' | 'lowMemory' | 'storageFreeBytes'>>;
 
 function browserName(ua: string): string {
   if (/Edg\//.test(ua)) return 'Edge';
@@ -90,6 +92,8 @@ export async function scanOfflineDevice(): Promise<OfflineDeviceProfile> {
     architecture: native.architecture || architectureHint(ua),
     cpuCores: native.cpuCores || cores,
     memoryGiB: native.memoryGiB || (typeof memory === 'number' ? memory : null),
+    availableMemoryGiB: native.availableMemoryGiB || null,
+    lowMemory: typeof native.lowMemory === 'boolean' ? native.lowMemory : null,
     storageFreeBytes: native.storageFreeBytes ?? storageFreeBytes,
     storageQuotaBytes, gpuAvailable, gpuName, gpuMaxBufferBytes,
     webGpuSupported: gpuAvailable, nativeInfoAvailable, notes
