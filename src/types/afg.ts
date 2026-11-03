@@ -8,7 +8,8 @@ export type TabType =
   | 'video-gen' 
   | 'tools' 
   | 'terminal'
-  | 'offline-learning'\n  | 'offline-ai-hub'
+  | 'offline-learning'
+  | 'offline-ai-hub'
   | 'history'
   | 'settings' 
   | 'admin';
