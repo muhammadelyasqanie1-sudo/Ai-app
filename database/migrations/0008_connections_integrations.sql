@@ -77,3 +77,12 @@ INSERT INTO integrations(slug,display_name,icon_name,category,config_json) VALUE
  ('ftp-server','FTP Server','server','storage','{"supported":false,"reason":"A dedicated isolated file-transfer service is required."}'::jsonb),
  ('mcp','MCP Servers','network','mcp','{"sandbox_required":true}'::jsonb)
 ON CONFLICT(slug) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS mcp_server_credentials (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  server_id uuid NOT NULL REFERENCES mcp_servers(id) ON DELETE CASCADE,
+  credential_key varchar(64) NOT NULL,
+  credential_value_encrypted text NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(server_id,credential_key)
+);
