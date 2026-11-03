@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { Terminal as TerminalIcon } from 'lucide-react';
 import { AfgHeader } from './components/afg/AfgHeader';
 import { AfgHomeView } from './components/afg/AfgHomeView';
 import { AfgChatView } from './components/afg/AfgChatView';
@@ -323,7 +324,11 @@ export default function App() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        setIsSideMenuOpen(false);
+        setCurrentTab('terminal');
+      } else if ((e.ctrlKey || e.metaKey) && e.key === '/') {
         e.preventDefault();
         setIsShortcutsOpen(prev => !prev);
       } else if (e.key === 'Escape') {
@@ -696,6 +701,18 @@ export default function App() {
         </ErrorBoundary>
       </main>
 
+      {currentTab !== 'terminal' && (
+        <button
+          type="button"
+          onClick={() => setCurrentTab('terminal')}
+          aria-label={language === 'dari' ? 'باز کردن ترمینل AFG AI' : 'Open AFG AI Terminal'}
+          title={language === 'dari' ? 'ترمینل · Ctrl+Shift+T' : 'Terminal · Ctrl+Shift+T'}
+          className="fixed z-40 bottom-[max(1.1rem,env(safe-area-inset-bottom))] end-4 inline-flex min-h-12 items-center gap-2 rounded-full border border-cyan-300/40 bg-[#07111f]/95 px-4 text-sm font-bold text-cyan-200 shadow-[0_8px_35px_rgba(6,182,212,.28)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-[#0b1b2b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300"
+        >
+          <TerminalIcon size={18} aria-hidden="true" />
+          <span>{language === 'dari' ? 'ترمینل' : 'Terminal'}</span>
+        </button>
+      )}
 
       {/* Slide-over Side Menu Drawer */}
       <AfgSideMenu
