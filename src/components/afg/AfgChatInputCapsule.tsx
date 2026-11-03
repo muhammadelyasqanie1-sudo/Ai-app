@@ -11,7 +11,8 @@ import {
   Link as LinkIcon, 
   X,
   Sparkles,
-  Paperclip
+  Paperclip,
+  Square
 } from 'lucide-react';
 import type { Language, ChatAttachment, AfgModelOption } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
@@ -27,6 +28,12 @@ interface AfgChatInputCapsuleProps {
   onSelectModel: (model: string) => void;
   modelsLoading?: boolean;
   speechToTextAvailable?: boolean;
+  fileUploadEnabled?: boolean;
+  isLoading?: boolean;
+  onStop?: () => void;
+  thinkingLevel?: 'minimal' | 'standard' | 'deep';
+  planMode?: boolean;
+  permissionLevel?: 'ask' | 'guided' | 'full';
 }
 
 export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
@@ -39,6 +46,12 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   onSelectModel,
   modelsLoading = false,
   speechToTextAvailable = false,
+  fileUploadEnabled = false,
+  isLoading = false,
+  onStop,
+  thinkingLevel = 'standard',
+  planMode = false,
+  permissionLevel = 'guided',
 }) => {
   const t = translations[language];
   const [inputText, setInputText] = useState('');
@@ -214,7 +227,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
         onChange={(e) => handleFileUpload(e, 'camera')}
       />
 
-      {/* Attachments are disabled until upload, storage, and model handling exist. */}
+      {/* File selection stays disabled until a verified upload endpoint is configured. */}
       {isMenuOpen && (
         <div ref={menuRef} className="absolute -top-24 right-4 z-50 w-72 rounded-2xl bg-[#091126]/95 border border-amber-500/40 p-4 shadow-xl">
           <p className="text-xs leading-6 text-amber-100">
@@ -264,7 +277,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
 
       {/* Model picker stays with the composer so the active model is always visible. */}
       <div className="flex items-center justify-between gap-2 px-3 py-2 mb-2 rounded-2xl bg-[#08112b]/90 border border-cyan-500/30">
-        <span className="text-xs text-cyan-300 font-semibold">{language === 'dari' ? 'مدل هوش مصنوعی' : 'AI model'}</span>
+        <div className="flex min-w-0 flex-wrap items-center gap-2"><span className="text-xs text-cyan-300 font-semibold">{language === 'dari' ? 'مدل هوش مصنوعی' : 'AI model'}</span>{(planMode || thinkingLevel !== 'standard') && <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-1 text-[9px] font-semibold text-cyan-200">{planMode ? (language === 'dari' ? 'برنامه‌ریزی' : 'Plan mode') : '🧠 ' + thinkingLevel}</span>}<span className="hidden sm:inline rounded-full border border-slate-500/30 px-2 py-1 text-[9px] text-slate-400">{permissionLevel.toUpperCase()}</span></div>
         <select
           value={selectedModel}
           onChange={(event) => onSelectModel(event.target.value)}
@@ -278,7 +291,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
               <optgroup key={providerId} label={providerId}>
                 {modelOptions.filter((model) => model.providerId === providerId).map((model) => (
                   <option key={providerId + ':' + model.id} value={model.providerId + '::' + model.id} disabled={!model.selectable} title={model.selectable ? model.displayName : (model.disabledReason || 'Provider not reachable.')}>
-                    {model.displayName} · {Object.entries(model.capabilities || {}).filter(([, enabled]) => enabled).map(([capability]) => capability).join(', ')}{model.selectable ? '' : ' — ' + (model.disabledReason || 'Provider not reachable.')}
+                    {model.displayName} · {Object.entries(model.capabilities || {}).filter(([, enabled]) => enabled).map(([capability]) => capability === 'vision' ? 'Vision' : capability === 'text' ? 'Text' : capability === 'image' ? 'Image' : capability).slice(0,3).join(' / ')}{model.selectable ? '' : ' — ' + (model.disabledReason || 'Provider not reachable.')}
                   </option>
                 ))}
               </optgroup>
@@ -298,13 +311,14 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
         {/* Big '+' Attachment Button (Left in LTR, Right in RTL or consistent with Screenshot 1) */}
         <button
           type="button"
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
+          onClick={() => { if (fileUploadEnabled) setIsMenuOpen(!isMenuOpen); }}
+          disabled={!fileUploadEnabled}
           className={`w-11 h-11 sm:w-13 sm:h-13 rounded-full flex items-center justify-center shrink-0 transition-all ${
             isMenuOpen
               ? 'bg-gradient-to-tr from-cyan-400 to-sky-300 text-slate-950 rotate-45 shadow-[0_0_20px_#00e5ff]'
-              : 'bg-gradient-to-b from-[#00b4d8] to-[#0077b6] text-white hover:from-[#48cae4] hover:to-[#0096c7] shadow-[0_4px_15px_rgba(0,180,216,0.5)] active:scale-95'
+              : fileUploadEnabled ? 'bg-gradient-to-b from-[#00b4d8] to-[#0077b6] text-white hover:from-[#48cae4] hover:to-[#0096c7] shadow-[0_4px_15px_rgba(0,180,216,0.5)] active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50'
           }`}
-          title={t.attachModalTitle}
+          title={fileUploadEnabled ? t.attachModalTitle : (language === 'dari' ? 'بارگذاری فایل هنوز توسط مدیر فعال نشده است' : 'File uploads are not enabled by the administrator')}
           aria-label="Add Attachment"
         >
           <Plus className="w-6 h-6 stroke-[2.5]" />
@@ -341,7 +355,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
         </button>
 
         {/* Voice Speech-to-Text Button */}
-        <button
+        {voiceAvailable && <button
           type="button"
           onClick={toggleRecording}
           disabled={!voiceAvailable}
@@ -354,24 +368,24 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
           aria-label="Voice input"
         >
           {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-        </button>
+        </button>}
         {voiceRecordingError && <span className="max-w-28 text-[10px] text-rose-300">{voiceRecordingError}</span>}
 
         {/* Big Gradient Send Pill Button ("ارسال" / "Send") - The Signature Feature in Screenshot 1 */}
         <button
           type="button"
-          onClick={handleSend}
-          disabled={disabled || (!inputText.trim() && attachments.length === 0)}
+          onClick={isLoading ? (onStop || (() => {})) : handleSend}
+          disabled={!isLoading && (disabled || (!inputText.trim() && attachments.length === 0))}
           className={`flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-full font-bold text-sm sm:text-base shrink-0 transition-all ${
-            !inputText.trim() && attachments.length === 0
+            isLoading ? 'bg-rose-500/20 text-rose-200 border border-rose-400/40' : !inputText.trim() && attachments.length === 0
               ? 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'
               : 'gradient-btn-cyan hover:scale-103 active:scale-97 cursor-pointer'
           }`}
-          title={t.send}
-          aria-label="Send Message"
+          title={isLoading ? (language === 'dari' ? 'توقف تولید' : 'Stop generation') : t.send}
+          aria-label={isLoading ? 'Stop generation' : 'Send Message'}
         >
-          <Send className={`w-4 h-4 sm:w-5 sm:h-5 ${language === 'dari' ? 'rotate-180' : ''}`} />
-          <span className="font-extrabold tracking-wide">{t.send}</span>
+          {isLoading ? <Square className="w-4 h-4 sm:w-5 sm:h-5 fill-current" /> : <Send className={`w-4 h-4 sm:w-5 sm:h-5 ${language === 'dari' ? 'rotate-180' : ''}`} />}
+          <span className="font-extrabold tracking-wide">{isLoading ? (language === 'dari' ? 'توقف' : 'Stop') : t.send}</span>
         </button>
 
       </div>
