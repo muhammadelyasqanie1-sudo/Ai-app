@@ -23,11 +23,14 @@ import java.security.MessageDigest;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @CapacitorPlugin(name = "AFGOfflineModels")
 public class AFGOfflineModelsPlugin extends Plugin {
     private static final String PREFS = "afg_ai_offline_downloads";
     private static final String PREFIX = "download_";
+    private static final ExecutorService INFERENCE_EXECUTOR = Executors.newSingleThreadExecutor();
     private static final boolean NATIVE_RUNTIME_AVAILABLE;
 
     static {
@@ -39,6 +42,8 @@ public class AFGOfflineModelsPlugin extends Plugin {
 
     private native boolean nativeLoadModel(String path, String nativeLibraryDirectory, int contextSize, int threads);
     private native String nativeGenerate(String messagesJson, int maxTokens);
+    private native String nativeGenerateStream(String messagesJson, int maxTokens, Object callback);
+    private native void nativeCancelGeneration();
     private native void nativeUnloadModel();
     private native String nativeGetLastError();
 
@@ -196,6 +201,47 @@ public class AFGOfflineModelsPlugin extends Plugin {
             if (response == null) { call.reject(nativeGetLastError()); return; }
             JSObject result = new JSObject(); result.put("text", response); call.resolve(result);
         } catch (Exception error) { call.reject("Local GGUF inference failed.", error); }
+    }
+
+    @PluginMethod
+    public void generateStream(PluginCall call) {
+        generationCancelled = false;
+        if (!NATIVE_RUNTIME_AVAILABLE) { call.reject("The Android llama.cpp runtime is not available in this APK."); return; }
+        final String messages = call.getString("messages", "[]");
+        final Integer requestedTokens = call.getInt("maxTokens");
+        INFERENCE_EXECUTOR.execute(() -> {
+            try {
+                String response = nativeGenerateStream(messages, requestedTokens == null ? 256 : requestedTokens, this);
+                if (response == null) {
+                    String error = nativeGetLastError();
+                    call.reject(error == null || error.isEmpty() ? "Local GGUF streaming inference failed." : error);
+                    return;
+                }
+                JSObject result = new JSObject();
+                result.put("text", response);
+                result.put("cancelled", generationCancelled);
+                call.resolve(result);
+            } catch (Exception error) {
+                call.reject("Local GGUF streaming inference failed.", error);
+            }
+        });
+    }
+
+    private volatile boolean generationCancelled = false;
+
+    public void onNativeToken(String token) {
+        JSObject event = new JSObject();
+        event.put("token", token);
+        notifyListeners("generationToken", event);
+    }
+
+    @PluginMethod
+    public void cancelGeneration(PluginCall call) {
+        generationCancelled = true;
+        if (NATIVE_RUNTIME_AVAILABLE) nativeCancelGeneration();
+        JSObject result = new JSObject();
+        result.put("cancelled", true);
+        call.resolve(result);
     }
 
     @PluginMethod
