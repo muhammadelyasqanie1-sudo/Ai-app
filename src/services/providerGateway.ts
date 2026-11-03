@@ -7,6 +7,7 @@ import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescript
 const openAICompatible = createOpenAICompatibleAdapter();
 const builtInProviderRegistry: ChatProviderAdapter[] = [cloudflareWorkersAi, openAICompatible];
 let providerRegistry: ChatProviderAdapter[] = [...builtInProviderRegistry];
+let providerPriorityById = new Map<string, number>(builtInProviderRegistry.map((provider) => [provider.id, 100]));
 let customRegistryLoadedAt = 0;
 
 export async function refreshCustomProviderRegistry(force = false): Promise<void> {
@@ -14,10 +15,12 @@ export async function refreshCustomProviderRegistry(force = false): Promise<void
   if (!force && Date.now() - customRegistryLoadedAt < 30_000) return;
   try {
     const result = await pool.query(
-      'SELECT kind,display_name,config_encrypted,enabled,request_timeout_ms,auth_method FROM providers WHERE is_custom=true ORDER BY priority,display_name',
+      'SELECT kind,display_name,config_encrypted,enabled,request_timeout_ms,auth_method,priority FROM providers WHERE is_custom=true ORDER BY priority,display_name',
     );
     const custom: ChatProviderAdapter[] = [];
+    const priorities = new Map<string, number>(builtInProviderRegistry.map((provider) => [provider.id, 100]));
     for (const row of result.rows) {
+      priorities.set(String(row.kind), Number.isFinite(Number(row.priority)) ? Number(row.priority) : 100);
       if (typeof row.config_encrypted !== 'string' || !row.config_encrypted) continue;
       try {
         const stored = decryptProviderConfig(row.config_encrypted, String(row.kind));
@@ -37,7 +40,9 @@ export async function refreshCustomProviderRegistry(force = false): Promise<void
         console.warn('AI_CUSTOM_PROVIDER_CONFIG_UNAVAILABLE', JSON.stringify({ provider: String(row.kind) }));
       }
     }
-    providerRegistry = [...builtInProviderRegistry, ...custom];
+    providerPriorityById = priorities;
+    providerRegistry = [...builtInProviderRegistry, ...custom].sort((a, b) =>
+      (providerPriorityById.get(a.id) ?? 100) - (providerPriorityById.get(b.id) ?? 100));
     customRegistryLoadedAt = Date.now();
   } catch {
     // The canonical provider table is introduced by a migration; built-in providers remain usable before it is applied.
@@ -48,6 +53,10 @@ const healthCache = new Map<string, { healthy: boolean; checkedAt: string }>();
 
 export function getProviderRegistry(): Array<Pick<ChatProviderAdapter, 'id' | 'key' | 'displayName'>> {
   return providerRegistry.map(({ id, key, displayName }) => ({ id, key, displayName }));
+}
+
+export function getProviderPriority(providerId: string): number {
+  return providerPriorityById.get(providerId) ?? 100;
 }
 
 export function getProviderAdapter(providerId: string): ChatProviderAdapter | undefined {
@@ -273,7 +282,10 @@ export async function selectCheapestModel(capability: keyof CapabilityFlags = 't
         }
       }
       const priced = capable.filter((model) => costById.has(model.providerId + '::' + model.id))
-        .sort((a, b) => (costById.get(a.providerId + '::' + a.id) || 0) - (costById.get(b.providerId + '::' + b.id) || 0));
+        .sort((a, b) => {
+          const costDifference = (costById.get(a.providerId + '::' + a.id) || 0) - (costById.get(b.providerId + '::' + b.id) || 0);
+          return costDifference || getProviderPriority(a.providerId) - getProviderPriority(b.providerId);
+        });
       if (priced.length) return priced[0].providerId + '::' + priced[0].id;
       return chooseFallback() || (capable[0] ? capable[0].providerId + '::' + capable[0].id : null);
     } catch (error) {
