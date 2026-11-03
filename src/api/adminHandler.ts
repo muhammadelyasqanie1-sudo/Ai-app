@@ -503,24 +503,76 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
 
     if (req.method === 'GET' && pathname === '/api/admin/models') {
       const descriptors = await getVerifiedModelDescriptors();
-      const rows = await pool.query(
-        `SELECT provider_key, model_key, enabled, input_cost_per_million, output_cost_per_million, capabilities_override
-           FROM model_catalog`,
-      );
-      const settings = new Map(rows.rows.map((row) => [`${row.provider_key}:${row.model_key}`, row]));
-      sendAuthJson(res, 200, {
-        models: descriptors.map((model) => {
-          const setting = settings.get(`${model.providerId}:${model.id}`);
-          return {
-            ...model,
-            capabilities: setting?.capabilities_override ? Object.fromEntries(Object.keys(model.capabilities).map((key) => [key, setting.capabilities_override.includes(key)])) : model.capabilities,
-            enabled: setting ? Boolean(setting.enabled) : model.enabled,
-            inputCostPerMillion: setting?.input_cost_per_million ?? null,
-            outputCostPerMillion: setting?.output_cost_per_million ?? null,
-          };
-        }),
-      });
-      return true;
+      const rows = await pool.query(`SELECT m.provider_key,m.model_key,m.display_name,m.description,m.enabled,m.context_window,
+          COALESCE(m.capabilities_override,m.capabilities) AS capabilities,m.input_cost_per_million,m.output_cost_per_million,
+          m.verified_at,m.last_health_ok,m.discovered_at
+        FROM model_catalog m ORDER BY m.provider_key,m.display_name`);
+      const descriptorMap = new Map(descriptors.map((model)=>[`${model.providerId}:${model.id}`,model]));
+      sendAuthJson(res,200,{models:rows.rows.map((row)=>{
+        const descriptor=descriptorMap.get(`${row.provider_key}:${row.model_key}`);
+        const caps=Array.isArray(row.capabilities)?row.capabilities:[];
+        return {
+          id:row.model_key,providerId:row.provider_key,displayName:row.display_name,description:row.description||'',
+          contextWindow:Number(row.context_window)||0,enabled:Boolean(row.enabled),
+          verifiedAt:descriptor?.verifiedAt || (row.last_health_ok ? row.verified_at : null),
+          lastHealthOk:Boolean(row.last_health_ok),discoveredAt:row.discovered_at,
+          capabilities:descriptor?.capabilities || Object.fromEntries(['text','streaming','vision','imageGen','imageEdit','ocr','tts','stt','tools','jsonMode'].map((key)=>[key,caps.includes(key)])),
+          inputCostPerMillion:row.input_cost_per_million??null,outputCostPerMillion:row.output_cost_per_million??null,
+        };
+      })});return true;
+    }
+
+    if(req.method==='POST' && pathname==='/api/admin/models/manual'){
+      const body=await readJsonBody(req,8000);
+      const providerId=typeof body.providerId==='string'?body.providerId.trim().toLowerCase():'';
+      const modelId=typeof body.modelId==='string'?body.modelId.trim():'';
+      const displayName=typeof body.displayName==='string'&&body.displayName.trim()?body.displayName.trim().slice(0,160):modelId;
+      const contextWindow=Number(body.contextWindow||0);
+      if(!/^[a-z0-9][a-z0-9-]{1,47}$/.test(providerId)||!modelId||modelId.length>300||
+        !/^[a-zA-Z0-9@][a-zA-Z0-9._:/-]{0,299}$/.test(modelId)||!Number.isInteger(contextWindow)||contextWindow<0||contextWindow>10000000){
+        sendAuthJson(res,400,{error:'Provide a valid provider slug, exact model ID, and context window.'});return true;
+      }
+      const provider=await pool.query('SELECT id FROM providers WHERE slug=$1 LIMIT 1',[providerId]);
+      const legacy=await pool.query('SELECT 1 FROM provider_configs WHERE provider_key=$1 LIMIT 1',[providerId]);
+      if(!provider.rows[0]&&!legacy.rows[0]){sendAuthJson(res,404,{error:'Provider is not registered.'});return true;}
+      const created=await pool.query(`INSERT INTO model_catalog(provider_key,model_key,display_name,description,capabilities,enabled,context_window,verified_at,last_health_ok,discovered_at)
+        VALUES($1,$2,$3,'Manually registered; requires a successful model health check.',ARRAY['text','streaming'],false,$4,NULL,false,now())
+        ON CONFLICT(provider_key,model_key) DO NOTHING RETURNING provider_key,model_key,display_name,enabled`,
+        [providerId,modelId,displayName,contextWindow]);
+      if(!created.rows[0]){sendAuthJson(res,409,{error:'This model is already registered.'});return true;}
+      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
+        [user.id,user.role,'model.manual.create','model',providerId+':'+modelId,JSON.stringify({displayName,contextWindow})]);
+      sendAuthJson(res,201,{model:created.rows[0],enabled:false,verifiedAt:null});return true;
+    }
+
+    if(req.method==='POST' && pathname==='/api/admin/models/test'){
+      const body=await readJsonBody(req,4000);
+      const providerId=typeof body.providerId==='string'?body.providerId:'';
+      const modelId=typeof body.modelId==='string'?body.modelId:'';
+      await refreshDatabaseProviderAdapters(true);
+      const adapter=getProviderAdapter(providerId);
+      if(!adapter||!modelId){sendAuthJson(res,400,{error:'Provide a configured provider and model ID.'});return true;}
+      const started=Date.now();
+      let healthy=false,checkedAt=new Date().toISOString();
+      try{const result=await adapter.healthCheck(modelId);healthy=result.healthy;checkedAt=result.checkedAt;}catch{healthy=false;}
+      await pool.query(`UPDATE model_catalog SET last_health_ok=$3,verified_at=CASE WHEN $3 THEN $4::timestamptz ELSE NULL END,
+          health_checked_at=$4::timestamptz,updated_at=now() WHERE provider_key=$1 AND model_key=$2`,
+        [providerId,modelId,healthy,checkedAt]);
+      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
+        [user.id,user.role,'model.health_check','model',providerId+':'+modelId,JSON.stringify({healthy,latencyMs:Date.now()-started})]);
+      sendAuthJson(res,healthy?200:502,{providerId,modelId,healthy,verifiedAt:healthy?checkedAt:null,latencyMs:Date.now()-started});return true;
+    }
+
+    if(req.method==='DELETE' && pathname==='/api/admin/models'){
+      const body=await readJsonBody(req,4000);
+      const providerId=typeof body.providerId==='string'?body.providerId:'';
+      const modelId=typeof body.modelId==='string'?body.modelId:'';
+      if(!providerId||!modelId){sendAuthJson(res,400,{error:'Provider and model IDs are required.'});return true;}
+      const deleted=await pool.query('DELETE FROM model_catalog WHERE provider_key=$1 AND model_key=$2 RETURNING model_key',[providerId,modelId]);
+      if(!deleted.rows[0]){sendAuthJson(res,404,{error:'Model not found.'});return true;}
+      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
+        [user.id,user.role,'model.delete','model',providerId+':'+modelId,JSON.stringify({})]);
+      sendAuthJson(res,200,{deleted:true,providerId,modelId});return true;
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/fallbacks') {
