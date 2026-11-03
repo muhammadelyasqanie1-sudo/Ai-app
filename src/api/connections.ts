@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { connect as connectSocket } from 'node:net';
+import { connect as connectSocket, isIP } from 'node:net';
+import { lookup } from 'node:dns/promises';
 import { pool } from './database.ts';
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './auth.ts';
 
@@ -45,8 +46,22 @@ async function jsonFetch(url: string, init: RequestInit, secrets: string[]) {
   } finally { clearTimeout(timer); }
 }
 async function tcpProbe(host: string, port: number): Promise<void> {
+  const addresses = await lookup(host,{all:true,verbatim:true});
+  if (!addresses.length) throw new Error('Host did not resolve.');
+  const isPrivate = (address:string) => {
+    if (address.includes(':')) {
+      const value=address.toLowerCase();
+      return value==='::1'||value==='::'||value.startsWith('fc')||value.startsWith('fd')||value.startsWith('fe80:')||value.startsWith('::ffff:127.')||value.startsWith('::ffff:10.');
+    }
+    const parts=address.split('.').map(Number);
+    return parts.length!==4||parts[0]===0||parts[0]===10||parts[0]===127||parts[0]>=224||
+      (parts[0]===169&&parts[1]===254)||(parts[0]===172&&parts[1]>=16&&parts[1]<=31)||(parts[0]===192&&parts[1]===168);
+  };
+  if (addresses.some(item=>isPrivate(item.address))) throw new Error('Private, loopback and link-local FTP/SFTP targets are blocked.');
+  const target=addresses[0].address;
+  if (!isIP(target)) throw new Error('Resolved host address is invalid.');
   await new Promise<void>((resolve,reject) => {
-    const socket = connectSocket({host,port});
+    const socket = connectSocket({host:target,port});
     const timer = setTimeout(() => socket.destroy(new Error('Connection timed out.')),7000);
     socket.once('connect',()=>{clearTimeout(timer);socket.end();resolve();});
     socket.once('error',(error)=>{clearTimeout(timer);reject(new Error(redact(error.message,[])));});
