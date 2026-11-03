@@ -1,3 +1,6 @@
+import { getCoreUi } from './localeUi';
+import type { Language } from '../types/afg';
+
 const baseTranslations = {
   dari: {
     // Brand
@@ -280,15 +283,27 @@ const baseTranslations = {
   }
 };
 
-// Until reviewed native dictionaries are shipped, these locales use English UI text.
+const localized = (language: Language) => ({
+  ...baseTranslations.english,
+  ...getCoreUi(language),
+}) as typeof baseTranslations.english;
+
 export const translations = {
   ...baseTranslations,
-  pashto: baseTranslations.english, persian: baseTranslations.english,
-  arabic: baseTranslations.english, urdu: baseTranslations.english,
-  turkish: baseTranslations.english, russian: baseTranslations.english,
-  french: baseTranslations.english, spanish: baseTranslations.english,
-  german: baseTranslations.english, chinese: baseTranslations.english,
-  hindi: baseTranslations.english, bengali: baseTranslations.english,
-  indonesian: baseTranslations.english, portuguese: baseTranslations.english,
-  japanese: baseTranslations.english, korean: baseTranslations.english,
+  pashto: localized('pashto'),
+  persian: localized('persian'),
+  arabic: localized('arabic'),
+  urdu: localized('urdu'),
+  turkish: localized('turkish'),
+  russian: localized('russian'),
+  french: localized('french'),
+  spanish: localized('spanish'),
+  german: localized('german'),
+  chinese: localized('chinese'),
+  hindi: localized('hindi'),
+  bengali: localized('bengali'),
+  indonesian: localized('indonesian'),
+  portuguese: localized('portuguese'),
+  japanese: localized('japanese'),
+  korean: localized('korean'),
 };
