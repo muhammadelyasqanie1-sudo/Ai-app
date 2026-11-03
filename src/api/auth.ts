@@ -397,7 +397,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
   }
 
   if (pathname === '/api/auth/verify-email' && req.method === 'POST') {
-    if (isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
+    if (await isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
     try {
       const parsed=parseAuthInput(AUTH_INPUT.verify,await readJsonBody(req));if(!parsed){sendAuthJson(res,400,{error:'Enter a valid email and six-digit code.'});return true;} const email=parsed.email.toLowerCase();const code=parsed.code;
       const found=await pool.query("SELECT u.id,c.id AS code_id,c.code_hash,c.attempts FROM users u JOIN email_verification_codes c ON c.user_id=u.id WHERE lower(u.email)=$1 AND c.purpose='verify_email' AND c.consumed_at IS NULL AND c.expires_at>now() ORDER BY c.created_at DESC LIMIT 1",[email]);
@@ -410,7 +410,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
   }
 
   if (pathname === '/api/auth/password-reset/request' && req.method === 'POST') {
-    if (isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
+    if (await isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
     try {
       const parsed=parseAuthInput(AUTH_INPUT.email,await readJsonBody(req));if(!parsed){sendAuthJson(res,400,{error:'Enter a valid email address.'});return true;} const email=parsed.email.toLowerCase();
       const found=await pool.query("SELECT id FROM users WHERE lower(email)=$1 AND status='active' AND email_verified=true LIMIT 1",[email]);
@@ -424,7 +424,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
   }
 
   if (pathname === '/api/auth/password-reset/confirm' && req.method === 'POST') {
-    if (isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
+    if (await isLoginRateLimited(req)) { res.setHeader('Retry-After','900'); sendAuthJson(res,429,{error:'Too many account requests. Try again later.'}); return true; }
     try {
       const parsed=parseAuthInput(AUTH_INPUT.reset,await readJsonBody(req));if(!parsed){sendAuthJson(res,400,{error:'Enter a valid email, six-digit code and password of at least 12 characters.'});return true;} const email=parsed.email.toLowerCase();const code=parsed.code;const next=parsed.newPassword;
       if(next.length<12||next.length>256){sendAuthJson(res,400,{error:'New password must be at least 12 characters.'});return true;}
@@ -437,7 +437,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
   }
 
   if (pathname === '/api/auth/login' && req.method === 'POST') {
-    if (isLoginRateLimited(req)) {
+    if (await isLoginRateLimited(req)) {
       res.setHeader('Retry-After', '900');
       sendAuthJson(res, 429, { error: 'Too many sign-in attempts. Try again later.' });
       return true;
