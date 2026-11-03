@@ -13,10 +13,10 @@ function safeBaseUrl(value:string): boolean {
   catch { return false; }
 }
 export function createAnthropicAdapter(options:AnthropicAdapterOptions):ChatProviderAdapter {
-  const baseUrl=options.baseUrl.replace(/\\/+$/,'');
+  const baseUrl=options.baseUrl.replace(/\/+$/,'');
   const headers={'x-api-key':options.apiKey,'anthropic-version':ANTHROPIC_VERSION,'content-type':'application/json'};
   const toMessages=(messages:ChatRequest['messages'])=>({
-    system:messages.filter(m=>m.role==='system').map(m=>m.content).join('\\n\\n') || undefined,
+    system:messages.filter(m=>m.role==='system').map(m=>m.content).join('\n\n') || undefined,
     messages:messages.filter(m=>m.role!=='system').map(m=>({role:m.role,content:m.content})),
   });
   return {
@@ -75,9 +75,9 @@ export function createAnthropicAdapter(options:AnthropicAdapterOptions):ChatProv
         while(true){
           const {done,value}=await reader.read();if(done)break;
           buffer+=decoder.decode(value,{stream:true});
-          const events=buffer.split(/\\r?\\n\\r?\\n/);buffer=events.pop()||'';
+          const events=buffer.split(/\r?\n\r?\n/);buffer=events.pop()||'';
           for(const eventText of events){
-            const dataLine=eventText.split(/\\r?\\n/).find(line=>line.startsWith('data:'));
+            const dataLine=eventText.split(/\r?\n/).find(line=>line.startsWith('data:'));
             if(!dataLine)continue;
             let payload:any;try{payload=JSON.parse(dataLine.slice(5).trim());}catch{continue;}
             if(payload.type==='error')throw new ProviderAdapterError('Anthropic interrupted the response.',502,'provider_stream_error');
