@@ -1,5 +1,6 @@
 export type HuggingFaceModel = {
   id: string;
+  sha: string | null;
   downloads: number;
   likes: number;
   pipeline_tag: string | null;
@@ -18,6 +19,7 @@ export type HuggingFaceFile = {
 
 export type HuggingFaceRepository = {
   id: string;
+  revision: string;
   files: HuggingFaceFile[];
   totalBytes: number;
   ggufFiles: Array<{ name: string; path: string; size: number | null; quantization: string | null; sha256: string | null }>;
@@ -73,6 +75,7 @@ export async function searchHuggingFaceGGUF(options: {
   const raw = await request<Array<Record<string, unknown>>>(API + '/models?' + params.toString(), options.signal);
   const items = raw.map((item): HuggingFaceModel => ({
     id: String(item.id || ''),
+    sha: typeof item.sha === 'string' ? item.sha : null,
     downloads: Number(item.downloads || 0),
     likes: Number(item.likes || 0),
     pipeline_tag: typeof item.pipeline_tag === 'string' ? item.pipeline_tag : null,
@@ -86,13 +89,13 @@ export async function searchHuggingFaceGGUF(options: {
   return result;
 }
 
-export async function getHuggingFaceRepository(repoId: string, signal?: AbortSignal): Promise<HuggingFaceRepository> {
+export async function getHuggingFaceRepository(repoId: string, signal?: AbortSignal, revision = 'main'): Promise<HuggingFaceRepository> {
   if (!/^[^/]+\/[^/]+$/.test(repoId)) throw new Error('Invalid Hugging Face repository ID.');
-  const cacheKey = 'tree:' + repoId;
+  const cacheKey = 'tree:' + repoId + ':' + revision;
   const cached = safeRead<HuggingFaceRepository>(cacheKey);
   if (cached) return cached;
 
-  const files = await request<Array<Record<string, unknown>>>(API + '/models/' + encodeURIComponent(repoId).replace('%2F', '/') + '/tree/main?recursive=true&expand=true', signal);
+  const files = await request<Array<Record<string, unknown>>>(API + '/models/' + encodeURIComponent(repoId).replace('%2F', '/') + '/tree/' + encodeURIComponent(revision) + '?recursive=true&expand=true', signal);
   const normalized: HuggingFaceFile[] = files.filter(file => file.type !== 'directory').map(file => ({
     path: String(file.path || ''),
     size: typeof file.size === 'number' ? file.size : typeof (file.lfs as Record<string, unknown> | undefined)?.size === 'number' ? Number((file.lfs as Record<string, unknown>).size) : null,
@@ -106,7 +109,7 @@ export async function getHuggingFaceRepository(repoId: string, signal?: AbortSig
     const sha = file.lfs?.sha256 || (oid.startsWith('sha256:') ? oid.slice(7) : /^[a-f0-9]{64}$/i.test(oid) ? oid : null);
     return { name, path: file.path, size: file.size, quantization: match?.[1]?.toUpperCase() || null, sha256: sha };
   });
-  const result = { id: repoId, files: normalized, totalBytes: normalized.reduce((sum, file) => sum + (file.size || 0), 0), ggufFiles };
+  const result = { id: repoId, revision, files: normalized, totalBytes: normalized.reduce((sum, file) => sum + (file.size || 0), 0), ggufFiles };
   safeWrite(cacheKey, result);
   return result;
 }
