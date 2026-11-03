@@ -29,12 +29,8 @@ export async function ensureQuarantineDirectory(): Promise<string> {
   await chmod(directory, 0o700);
   const canonical = await realpath(directory);
   const appRoot = await realpath(process.cwd()).catch(() => path.resolve(process.cwd()));
-  const blockedRoots = [path.join(appRoot, 'public'), path.join(appRoot, 'dist')];
-  for (const blocked of blockedRoots) {
-    const relative = path.relative(blocked, canonical);
-    if (relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative))) {
-      throw new Error('Uploads must be stored outside public and build output directories.');
-    }
+  if (canonical === appRoot || canonical.startsWith(appRoot + path.sep)) {
+    throw new Error('Uploads must be stored outside the application directory.');
   }
   return canonical;
 }
