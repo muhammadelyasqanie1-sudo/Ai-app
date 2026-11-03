@@ -30,7 +30,11 @@ const copy = {
 
 export const AfgAuthGate: React.FC<Props> = ({ language, onContinueGuest, onAuthenticated }) => {
   const t = copy[language];
-  const [mode,setMode] = useState<Mode>('welcome');
+  const [mode,setMode] = useState<Mode>(() => {
+    const requested = sessionStorage.getItem('afg_auth_mode_after_signout');
+    sessionStorage.removeItem('afg_auth_mode_after_signout');
+    return requested === 'register' ? 'register' : 'welcome';
+  });
   const [name,setName] = useState('');
   const [email,setEmail] = useState('');
   const [password,setPassword] = useState('');
