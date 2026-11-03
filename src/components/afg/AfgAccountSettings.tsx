@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {Download,Lock,LogIn,LogOut,Shield,Brain,Monitor,Palette,Globe,Bell,Trash2,Plus,RefreshCw} from 'lucide-react';
+import {Download,Lock,LogIn,LogOut,Shield,Brain,Monitor,Palette,Globe,Bell,Trash2,Plus,RefreshCw,Github} from 'lucide-react';
 import type {Language,Theme} from '../../types/afg';
 import {getIntlLocale,formatLocalizedNumber} from '../../utils/i18n';
 const API=import.meta.env.VITE_API_BASE_URL||'';
