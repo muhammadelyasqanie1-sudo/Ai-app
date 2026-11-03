@@ -86,3 +86,7 @@ CREATE TABLE IF NOT EXISTS mcp_server_credentials (
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(server_id,credential_key)
 );
+
+INSERT INTO integration_rate_limits(integration_id,requests,window_seconds)
+SELECT id,12,60 FROM integrations WHERE slug='web-search'
+ON CONFLICT(integration_id) DO NOTHING;
