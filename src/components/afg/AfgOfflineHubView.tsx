@@ -305,7 +305,6 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       setActiveOfflineModelLabel(modelId);
       setInstalled(previous => previous.includes(modelId) ? previous : [...previous, modelId]);
       setSelectedId(modelId);
-      setMessages([{ role: 'assistant', content: dari ? 'سلام! من مدل آفلاین AFG AI هستم. چطور کمک کنم؟' : 'Hello! I am your local AFG AI model. How can I help?' }]);
       if (navigator.storage?.persist) await navigator.storage.persist().catch(() => false);
       if (navigator.storage?.estimate) {
         const estimate = await navigator.storage.estimate();
