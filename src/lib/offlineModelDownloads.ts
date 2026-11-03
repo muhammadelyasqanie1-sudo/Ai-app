@@ -243,7 +243,7 @@ export async function downloadGGUF(options: {
     }
     if (!response.ok || !response.body) throw new Error('Model download failed (' + response.status + ').');
     const range = response.headers.get('content-range');
-    const rangeMatch = range?.match(/^bytes (\\d+)-\\d+\\/(\\d+|\\*)$/);
+    const rangeMatch = range?.match(/^bytes (\d+)-\d+\/(\d+|\*)$/);
     if (offset && (!rangeMatch || Number(rangeMatch[1]) !== offset)) {
       throw new Error('The model host returned an invalid byte range; the partial download was preserved for retry.');
     }
