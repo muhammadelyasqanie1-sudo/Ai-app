@@ -220,6 +220,20 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
       return;
     }
 
+    if(req.method==='GET' && pathname==='/api/announcements'){
+      if(!pool){sendJson(res,200,{announcements:[]},requestId);return;}
+      try{
+        const result=await pool.query(`SELECT id,title,body,starts_at,expires_at,created_at
+          FROM announcements WHERE enabled=true AND starts_at<=now()
+            AND (expires_at IS NULL OR expires_at>now())
+          ORDER BY created_at DESC LIMIT 5`);
+        sendJson(res,200,{announcements:result.rows},requestId);
+      }catch{
+        sendJson(res,200,{announcements:[]},requestId);
+      }
+      return;
+    }
+
     if (req.method === 'GET' && pathname === '/api/health') {
       sendJson(res, 200, {
         status: 'ok',
