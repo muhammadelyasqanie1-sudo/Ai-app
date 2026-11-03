@@ -12,23 +12,16 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
-import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.security.MessageDigest;
 import java.util.Locale;
-import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import androidx.work.WorkManager;
 
 @CapacitorPlugin(name = "AFGOfflineModels")
 public class AFGOfflineModelsPlugin extends Plugin {
-    private static final String PREFS = "afg_ai_offline_downloads";
-    private static final String PREFIX = "download_";
     private static final ExecutorService INFERENCE_EXECUTOR = Executors.newSingleThreadExecutor();
     private static final boolean NATIVE_RUNTIME_AVAILABLE;
 
@@ -45,42 +38,6 @@ public class AFGOfflineModelsPlugin extends Plugin {
     private native void nativeCancelGeneration();
     private native void nativeUnloadModel();
     private native String nativeGetLastError();
-
-    private DownloadManager manager() {
-        return (DownloadManager) getContext().getSystemService(Context.DOWNLOAD_SERVICE);
-    }
-
-    private File modelDirectory() throws Exception {
-        File downloads = getContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
-        if (downloads == null) throw new Exception("App-specific download storage is unavailable.");
-        File directory = new File(downloads, "afg-ai-models");
-        if (!directory.exists() && !directory.mkdirs()) throw new Exception("Unable to create the private model directory.");
-        return directory;
-    }
-
-    private String key(long id) { return PREFIX + id; }
-
-    private JSONObject metadata(long id) {
-        String raw = getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(key(id), null);
-        if (raw == null) return new JSONObject();
-        try { return new JSONObject(raw); } catch (JSONException ignored) { return new JSONObject(); }
-    }
-
-    private void saveMetadata(long id, JSONObject value) {
-        getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(key(id), value.toString()).apply();
-    }
-
-    private String sha256(File file) throws Exception {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] buffer = new byte[1024 * 1024];
-        try (FileInputStream input = new FileInputStream(file)) {
-            int read;
-            while ((read = input.read(buffer)) != -1) digest.update(buffer, 0, read);
-        }
-        StringBuilder result = new StringBuilder();
-        for (byte value : digest.digest()) result.append(String.format(Locale.ROOT, "%02x", value & 0xff));
-        return result.toString();
-    }
 
     private JSObject queryDownload(long id) throws Exception {
         if (id <= 0 || id > Integer.MAX_VALUE) throw new Exception("Invalid download ID.");
