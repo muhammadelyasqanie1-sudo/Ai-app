@@ -408,16 +408,26 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         sendAuthJson(res, 400, { error: 'A registered provider ID and boolean enabled value are required.' });
         return true;
       }
-      await pool.query(
-        `INSERT INTO provider_configs (provider_key, display_name, enabled)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (provider_key) DO UPDATE SET enabled = EXCLUDED.enabled, display_name = EXCLUDED.display_name, updated_at = now()`,
-        [provider.id, provider.displayName, enabled],
-      );
-      await pool.query(
-        'INSERT INTO audit_logs (actor_user_id, action, target_type, target_id, metadata) VALUES ($1, $2, $3, $4, $5)',
-        [user.id, 'provider.toggle', 'provider', provider.id, JSON.stringify({ enabled })],
-      );
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `INSERT INTO provider_configs (provider_key, display_name, enabled)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (provider_key) DO UPDATE SET enabled = EXCLUDED.enabled, display_name = EXCLUDED.display_name, updated_at = now()`,
+          [provider.id, provider.displayName, enabled],
+        );
+        await client.query(
+          'INSERT INTO audit_logs (actor_user_id, action, target_type, target_id, metadata) VALUES ($1, $2, $3, $4, $5)',
+          [user.id, 'provider.toggle', 'provider', provider.id, JSON.stringify({ enabled })],
+        );
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
       sendAuthJson(res, 200, { providerId, enabled });
       return true;
     }
@@ -445,30 +455,40 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         sendAuthJson(res, 400, { error: 'Model pricing must be a non-negative number or null.' });
         return true;
       }
-      await pool.query(
-        `INSERT INTO model_catalog
-          (provider_key, model_key, display_name, capabilities, capabilities_override, enabled, context_window, input_cost_per_million, output_cost_per_million, verified_at, last_health_ok, updated_at)
-         VALUES ($1, $2, $3, $4, $11, $5, $6, $7, $8, $9, $10, now())
-         ON CONFLICT (provider_key, model_key) DO UPDATE SET
-           display_name = EXCLUDED.display_name,
-           capabilities = EXCLUDED.capabilities,
-           capabilities_override = COALESCE(EXCLUDED.capabilities_override, model_catalog.capabilities_override),
-           enabled = EXCLUDED.enabled,
-           context_window = EXCLUDED.context_window,
-           input_cost_per_million = EXCLUDED.input_cost_per_million,
-           output_cost_per_million = EXCLUDED.output_cost_per_million,
-           verified_at = EXCLUDED.verified_at,
-           last_health_ok = EXCLUDED.last_health_ok,
-           updated_at = now()`,
-        [providerId, modelId, descriptor.displayName,
-          Object.entries(descriptor.capabilities).filter(([, value]) => value).map(([key]) => key),
-          enabled, descriptor.contextWindow, inputCost ?? null, outputCost ?? null,
-          descriptor.verifiedAt, descriptor.verifiedAt !== null, capabilities],
-      );
-      await pool.query(
-        'INSERT INTO audit_logs (actor_user_id, action, target_type, target_id, metadata) VALUES ($1, $2, $3, $4, $5)',
-        [user.id, 'model.update', 'model', `${providerId}:${modelId}`, JSON.stringify({ enabled, inputCostPerMillion: inputCost ?? null, outputCostPerMillion: outputCost ?? null })],
-      );
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `INSERT INTO model_catalog
+            (provider_key, model_key, display_name, capabilities, capabilities_override, enabled, context_window, input_cost_per_million, output_cost_per_million, verified_at, last_health_ok, updated_at)
+           VALUES ($1, $2, $3, $4, $11, $5, $6, $7, $8, $9, $10, now())
+           ON CONFLICT (provider_key, model_key) DO UPDATE SET
+             display_name = EXCLUDED.display_name,
+             capabilities = EXCLUDED.capabilities,
+             capabilities_override = COALESCE(EXCLUDED.capabilities_override, model_catalog.capabilities_override),
+             enabled = EXCLUDED.enabled,
+             context_window = EXCLUDED.context_window,
+             input_cost_per_million = EXCLUDED.input_cost_per_million,
+             output_cost_per_million = EXCLUDED.output_cost_per_million,
+             verified_at = EXCLUDED.verified_at,
+             last_health_ok = EXCLUDED.last_health_ok,
+             updated_at = now()`,
+          [providerId, modelId, descriptor.displayName,
+            Object.entries(descriptor.capabilities).filter(([, value]) => value).map(([key]) => key),
+            enabled, descriptor.contextWindow, inputCost ?? null, outputCost ?? null,
+            descriptor.verifiedAt, descriptor.verifiedAt !== null, capabilities],
+        );
+        await client.query(
+          'INSERT INTO audit_logs (actor_user_id, action, target_type, target_id, metadata) VALUES ($1, $2, $3, $4, $5)',
+          [user.id, 'model.update', 'model', `${providerId}:${modelId}`, JSON.stringify({ enabled, inputCostPerMillion: inputCost ?? null, outputCostPerMillion: outputCost ?? null })],
+        );
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
       sendAuthJson(res, 200, { providerId, modelId, enabled });
       return true;
     }
@@ -494,16 +514,26 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         sendAuthJson(res, 400, { error: 'Fallback entries must be enabled, discovered models with the selected capability. Use providerId::modelId.' });
         return true;
       }
-      await pool.query(
-        `INSERT INTO provider_fallback_chains (capability, ordered_models, updated_by)
-         VALUES ($1, $2::jsonb, $3)
-         ON CONFLICT (capability) DO UPDATE SET ordered_models = EXCLUDED.ordered_models, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-        [capability, JSON.stringify(uniqueModels), user.id],
-      );
-      await pool.query(
-        'INSERT INTO audit_logs (actor_user_id, action, target_type, target_id, metadata) VALUES ($1, $2, $3, $4, $5)',
-        [user.id, 'fallback.update', 'capability', capability, JSON.stringify({ orderedModels: uniqueModels })],
-      );
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `INSERT INTO provider_fallback_chains (capability, ordered_models, updated_by)
+           VALUES ($1, $2::jsonb, $3)
+           ON CONFLICT (capability) DO UPDATE SET ordered_models = EXCLUDED.ordered_models, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+          [capability, JSON.stringify(uniqueModels), user.id],
+        );
+        await client.query(
+          'INSERT INTO audit_logs (actor_user_id, action, target_type, target_id, metadata) VALUES ($1, $2, $3, $4, $5)',
+          [user.id, 'fallback.update', 'capability', capability, JSON.stringify({ orderedModels: uniqueModels })],
+        );
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
       sendAuthJson(res, 200, { capability, orderedModels: uniqueModels });
       return true;
     }
