@@ -136,3 +136,10 @@ The `PATCH /api/admin/users` mutation now serializes with first-admin bootstrap 
 ### Live execution update — provider/model/fallback audit integrity
 
 Provider toggles, model configuration changes and fallback-chain updates now execute with their audit-log inserts in the same PostgreSQL transaction. A failed audit write rolls back the associated mutation. Source-level only; no database tests were run.
+
+
+### Milestones 6–7 — Database success signal and provider configuration clarity
+
+- `src/api/database.ts` now emits `SUCCESS SUPABASE_DATABASE_CONNECTED` only after a real successful `SELECT 1` through the configured pool. It emits once per process. This is source-reviewed but not live-connection verified.
+- `.env.example` no longer advertises implicit Gemini selection; provider setup is explicitly opt-in.
+- No database credentials were introduced, and no migration/deployment was performed.
