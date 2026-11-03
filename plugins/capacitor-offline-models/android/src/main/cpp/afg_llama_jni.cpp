@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <cstring>
+#include <atomic>
 
 #define AFG_TAG "AFG-Llama"
 #define AFG_LOGE(...) __android_log_print(ANDROID_LOG_ERROR, AFG_TAG, __VA_ARGS__)
@@ -16,6 +17,7 @@
 using nlohmann::json;
 
 static std::mutex g_mutex;
+static std::atomic<bool> g_cancel_requested{false};
 static llama_model * g_model = nullptr;
 static llama_context * g_context = nullptr;
 static const llama_vocab * g_vocab = nullptr;
@@ -85,10 +87,17 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeLoadModel(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerate(
-    JNIEnv * env, jobject, jstring jmessages, jint max_tokens) {
+Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerateStream(
+    JNIEnv * env, jobject, jstring jmessages, jint max_tokens, jobject callback) {
     std::lock_guard<std::mutex> lock(g_mutex);
     g_last_error.clear();
+    g_cancel_requested.store(false, std::memory_order_release);
+    if (callback == nullptr) { g_last_error = "A native streaming callback is required."; return nullptr; }
+    jclass callback_class = env->GetObjectClass(callback);
+    if (callback_class == nullptr) { g_last_error = "Unable to resolve the streaming callback."; return nullptr; }
+    jmethodID on_token = env->GetMethodID(callback_class, "onNativeToken", "(Ljava/lang/String;)V");
+    if (on_token == nullptr) { env->DeleteLocalRef(callback_class); g_last_error = "The Java streaming callback method is unavailable."; return nullptr; }
+
     if (!g_model || !g_context || !g_vocab) {
         g_last_error = "No GGUF model is loaded.";
         return nullptr;
@@ -178,6 +187,7 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerate(
         std::string output;
         output.reserve(static_cast<size_t>(limit) * 6);
         for (int32_t step = 0; step < limit; ++step) {
+            if (g_cancel_requested.load(std::memory_order_acquire)) break;
             float * logits = llama_get_logits_ith(g_context, -1);
             if (!logits || vocab_size <= 0) {
                 g_last_error = "llama.cpp did not return generation logits.";
@@ -191,11 +201,26 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerate(
 
             char piece[4096];
             const int32_t piece_size = llama_token_to_piece(g_vocab, best, piece, sizeof(piece), 0, false);
-            if (piece_size > 0) output.append(piece, static_cast<size_t>(piece_size));
+            if (piece_size > 0) {
+                const std::string token_piece(piece, static_cast<size_t>(piece_size));
+                output.append(token_piece);
+                jstring java_piece = env->NewStringUTF(token_piece.c_str());
+                if (java_piece != nullptr) {
+                    env->CallVoidMethod(callback, on_token, java_piece);
+                    env->DeleteLocalRef(java_piece);
+                }
+                if (env->ExceptionCheck()) {
+                    env->ExceptionClear();
+                    g_last_error = "The JavaScript streaming listener failed.";
+                    env->DeleteLocalRef(callback_class);
+                    return nullptr;
+                }
+            }
 
             llama_batch next_batch = llama_batch_get_one(&best, 1);
             if (llama_decode(g_context, next_batch) < 0) break;
         }
+        env->DeleteLocalRef(callback_class);
         return env->NewStringUTF(output.c_str());
     } catch (const std::exception & error) {
         g_last_error = error.what();
@@ -205,6 +230,11 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerate(
         g_last_error = "Unknown native inference error.";
         return nullptr;
     }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeCancelGeneration(JNIEnv *, jobject) {
+    g_cancel_requested.store(true, std::memory_order_release);
 }
 
 extern "C" JNIEXPORT void JNICALL
