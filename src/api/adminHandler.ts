@@ -529,17 +529,60 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         sendAuthJson(res, 400, { error: 'A valid feature flag key and boolean enabled value are required.' }); return true;
       }
       const description = typeof body.description === 'string' ? body.description.trim().slice(0,300) : '';
-      const previousFlag=await pool.query('SELECT flag_key,enabled,description FROM feature_flags WHERE flag_key=$1 LIMIT 1',[body.key]);
+      const requestedKey=body.key as string;
+      const aliases:Record<string,string[]> = {
+        research:['research','web_research_enabled'],
+        web_research_enabled:['research','web_research_enabled'],
+        voice:['voice','voice_enabled'],
+        voice_enabled:['voice','voice_enabled'],
+      };
+      const keysToUpdate=aliases[requestedKey]||[requestedKey];
+      if(body.enabled===true){
+        if(['terminal_exec_enabled','offline_sync_enabled'].includes(requestedKey)){
+          sendAuthJson(res,409,{error:requestedKey==='terminal_exec_enabled'
+            ? 'Shell execution cannot be enabled until a real isolated command sandbox is deployed and verified.'
+            : 'Offline synchronization cannot be enabled until signed pack synchronization is implemented and configured.'});return true;
+        }
+        if(requestedKey==='research'||requestedKey==='web_research_enabled'){
+          if(!process.env.TAVILY_API_KEY){sendAuthJson(res,409,{error:'Configure TAVILY_API_KEY on the server before enabling web research.'});return true;}
+        }
+        if(requestedKey==='voice'||requestedKey==='voice_enabled'){
+          const descriptors=await getVerifiedModelDescriptors();
+          const ready=descriptors.some(model=>model.enabled&&model.verifiedAt&&(
+            (model.capabilities.stt&&Boolean(getProviderAdapter(model.providerId)?.transcribe))||
+            (model.capabilities.tts&&Boolean(getProviderAdapter(model.providerId)?.synthesize))
+          ));
+          if(!ready){sendAuthJson(res,409,{error:'Voice cannot be enabled until a model with a verified transcription or synthesis endpoint is available.'});return true;}
+        }
+        if(requestedKey==='image_generation_enabled'){
+          const descriptors=await getVerifiedModelDescriptors();
+          const ready=descriptors.some(model=>model.enabled&&model.verifiedAt&&model.capabilities.imageGen&&
+            Boolean(getProviderAdapter(model.providerId)?.generateImage)&&Boolean(getProviderAdapter(model.providerId)?.imageGenerationOptions?.(model.id)));
+          if(!ready){sendAuthJson(res,409,{error:'Image generation cannot be enabled until a verified image-generation model and generation adapter are available.'});return true;}
+        }
+        if(requestedKey==='chat'){
+          const descriptors=await getVerifiedModelDescriptors();
+          if(!descriptors.some(model=>model.enabled&&model.verifiedAt&&model.capabilities.text&&model.capabilities.streaming)){
+            sendAuthJson(res,409,{error:'Chat cannot be enabled until at least one verified streaming text model is available.'});return true;
+          }
+        }
+      }
+      const previousFlag=await pool.query('SELECT flag_key,enabled,description FROM feature_flags WHERE flag_key=ANY($1::text[])',[keysToUpdate]);
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const updatedFlag=await client.query(`INSERT INTO feature_flags(flag_key,enabled,description,updated_by) VALUES($1,$2,$3,$4)
-          ON CONFLICT(flag_key) DO UPDATE SET enabled=EXCLUDED.enabled,description=EXCLUDED.description,
-          updated_by=EXCLUDED.updated_by,updated_at=now() RETURNING flag_key,enabled,description`,[body.key,body.enabled,description,user.id]);
+        const updatedRows=[];
+        for(const flagKey of keysToUpdate){
+          const updatedFlag=await client.query(`INSERT INTO feature_flags(flag_key,enabled,description,updated_by) VALUES($1,$2,$3,$4)
+            ON CONFLICT(flag_key) DO UPDATE SET enabled=EXCLUDED.enabled,description=EXCLUDED.description,
+            updated_by=EXCLUDED.updated_by,updated_at=now() RETURNING flag_key,enabled,description`,
+            [flagKey,body.enabled,description,user.id]);
+          updatedRows.push(updatedFlag.rows[0]);
+        }
         await client.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
           [user.id,user.role,'feature_flag.update','feature_flag',body.key,
-            previousFlag.rows[0]?JSON.stringify(previousFlag.rows[0]):null,JSON.stringify(updatedFlag.rows[0]),
-            JSON.stringify({enabled:body.enabled})]);
+            previousFlag.rows.length?JSON.stringify(previousFlag.rows):null,JSON.stringify(updatedRows),
+            JSON.stringify({enabled:body.enabled,aliases:keysToUpdate})]);
         await client.query('COMMIT');
       } catch (error) {
         await client.query('ROLLBACK');
