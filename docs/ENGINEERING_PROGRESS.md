@@ -274,3 +274,20 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 
 - Locale and web-check workflows were queued at the time of this update.
 - Bundle-size comparison and production build result are pending.
+
+
+## Live CI result — Offline Hub lazy-load PR #8
+
+**PR:** https://github.com/muhammadelyasqanie1-sudo/Ai-app/pull/8
+
+- Locale validation: passed.
+- TypeScript validation: passed.
+- Offline SHA-256 regression tests: passed.
+- Production web build: passed.
+- The Offline Hub component is emitted as a separate 72.11 kB (22.85 kB gzip) chunk.
+- The 6,116.37 kB (2,189.96 kB gzip) shared `lib` chunk remains unchanged. Therefore this change isolates the component module but does **not yet prove a reduction in initial vendor payload**. Further bundle analysis/code splitting is required.
+
+## Live CI status — GGUF runtime messaging PR #9
+
+- Locale, web-check and Android debug APK workflows were in progress at the time of this update.
+- No Android runtime execution or device test has been performed.
