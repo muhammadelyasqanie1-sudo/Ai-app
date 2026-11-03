@@ -127,13 +127,17 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       try{
         await client.query('BEGIN');
         for(const model of discovered){
-          await client.query(`INSERT INTO model_catalog(provider_key,model_key,display_name,description,capabilities,enabled,context_window,discovered_at,last_health_ok,verified_at)
-            VALUES($1,$2,$3,$4,$5,false,$6,now(),false,NULL)
+          await client.query(`INSERT INTO model_catalog(provider_key,model_key,display_name,description,capabilities,enabled,context_window,discovered_at,last_health_ok,verified_at,max_output,pricing_json,input_cost_per_million,output_cost_per_million)
+            VALUES($1,$2,$3,$4,$5,false,$6,now(),false,NULL,$7,$8::jsonb,$9,$10)
             ON CONFLICT(provider_key,model_key) DO UPDATE SET display_name=EXCLUDED.display_name,
               description=EXCLUDED.description,capabilities=EXCLUDED.capabilities,context_window=EXCLUDED.context_window,
+              max_output=COALESCE(EXCLUDED.max_output,model_catalog.max_output),
+              pricing_json=COALESCE(EXCLUDED.pricing_json,model_catalog.pricing_json),
+              input_cost_per_million=COALESCE(EXCLUDED.input_cost_per_million,model_catalog.input_cost_per_million),
+              output_cost_per_million=COALESCE(EXCLUDED.output_cost_per_million,model_catalog.output_cost_per_million),
               discovered_at=now(),updated_at=now()`,
             [providerId,model.id,model.displayName,model.description,
-              Object.entries(model.capabilities).filter(([,enabled])=>enabled).map(([name])=>name),model.contextWindow]);
+              Object.entries(model.capabilities).filter(([,enabled])=>enabled).map(([name])=>name),model.contextWindow,model.maxOutput||null,model.pricing?JSON.stringify(model.pricing):null,model.pricing?.inputPerMillion??null,model.pricing?.outputPerMillion??null]);
         }
         await client.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
           [user.id,user.role,'provider.models.discover','provider',providerId,JSON.stringify({discovered:discovered.length})]);
@@ -611,7 +615,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const descriptors = await getVerifiedModelDescriptors();
       const rows = await pool.query(`SELECT m.provider_key,m.model_key,m.display_name,m.description,m.enabled,m.context_window,
           COALESCE(m.capabilities_override,m.capabilities) AS capabilities,m.input_cost_per_million,m.output_cost_per_million,
-          m.verified_at,m.last_health_ok,m.discovered_at
+          m.verified_at,m.last_health_ok,m.discovered_at,m.max_output,m.pricing_json
         FROM model_catalog m ORDER BY m.provider_key,m.display_name`);
       const descriptorMap = new Map(descriptors.map((model)=>[`${model.providerId}:${model.id}`,model]));
       sendAuthJson(res,200,{models:rows.rows.map((row)=>{
@@ -619,7 +623,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         const caps=Array.isArray(row.capabilities)?row.capabilities:[];
         return {
           id:row.model_key,providerId:row.provider_key,displayName:row.display_name,description:row.description||'',
-          contextWindow:Number(row.context_window)||0,enabled:Boolean(row.enabled),
+          contextWindow:Number(row.context_window)||0,maxOutput:row.max_output||null,pricing:row.pricing_json||null,enabled:Boolean(row.enabled),
           verifiedAt:descriptor?.verifiedAt || (row.last_health_ok ? row.verified_at : null),
           lastHealthOk:Boolean(row.last_health_ok),discoveredAt:row.discovered_at,
           capabilities:descriptor?.capabilities || Object.fromEntries(['text','streaming','vision','imageGen','imageEdit','ocr','tts','stt','tools','jsonMode'].map((key)=>[key,caps.includes(key)])),
