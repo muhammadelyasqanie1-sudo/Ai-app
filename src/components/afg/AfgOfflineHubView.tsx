@@ -302,7 +302,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   };
   const selected = useMemo(() => models.find(model => model.model_id === selectedId) || null, [models, selectedId]);
   const getCompatibility = useCallback((model: CatalogModel): ModelFit | 'unknown' => {
-    if (!device || device.memoryGiB === null || device.gpuMaxBufferBytes === null || !device.webGpuSupported) return 'unknown';
+    if (!device || !device.nativeInfoAvailable || device.memoryGiB === null || device.gpuMaxBufferBytes === null || !device.webGpuSupported) return 'unknown';
     return assessOfflineModelFit(model.vram_required_MB || 0, device);
   }, [device]);
   const recommendedModels = useMemo(() => models.filter(model => getCompatibility(model) === 'recommended').slice(0, 5), [models, getCompatibility]);
