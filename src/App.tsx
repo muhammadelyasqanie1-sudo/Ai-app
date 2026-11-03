@@ -80,7 +80,7 @@ export default function App() {
   const localeChangedThisSession = useRef(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [modelOptions, setModelOptions] = useState<AfgModelOption[]>([]);
-  const [selectedModel, setSelectedModel] = useState('');
+  const [selectedModel, setSelectedModel] = useState('auto');
   const [capabilitySnapshot, setCapabilitySnapshot] = useState<AfgCapabilitySnapshot>({
     verified: false,
     models: [],
