@@ -8,6 +8,7 @@ import type { Language, Theme, UserProfile } from '../../types/afg';
 import { AfgAccountSettings } from './AfgAccountSettings';
 import { AfgAdminPanel } from './AfgAdminPanel';
 import { AfgFileLibrary } from './AfgFileLibrary';
+import { getHubUi } from '../../utils/localeUi';
 
 type Context = 'user' | 'admin';
 type SettingId = 'language'|'appearance'|'chat'|'memory'|'coding'|'privacy'|'files'|'models'|'local'|'voice'|'github'|'telegram'|'ftp'|'mcp'|'byok'|'router';
@@ -106,7 +107,9 @@ interface Props {
 
 export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLanguage,onSetTheme,onOpenShortcuts}) => {
   const fa = language === 'dari';
-  const t = fa ? copy.fa : copy.en;
+  const hubUi = getHubUi(language);
+  const t = { ...copy.en, ...(fa ? copy.fa : {}), ...hubUi };
+  const groupLabels = (hubUi.groups || '').split(' · ');
   const [context,setContext] = useState<Context>('user');
   const [query,setQuery] = useState('');
   const [page,setPage] = useState<SettingId|null>(null);
@@ -260,7 +263,7 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
       <button type="button" onClick={()=>void refreshStatus()} className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300">Refresh backend status</button>
     </div> : <div className="space-y-5">
       <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/20 bg-slate-950/70 p-4"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><Settings2 className="h-5 w-5"/></div><div className="min-w-0"><p className="font-bold text-white">{language==='dari'?user.name:user.nameEn}</p><p className="text-xs text-slate-400">{user.email||'Guest account'}</p></div><span className="ml-auto text-[10px] font-bold text-cyan-300">{authenticated?'SIGNED IN':'GUEST'}</span></div>
-      {filtered.length?groups.map((group,index)=>{const rows=filtered.filter(item=>item.group===group);if(!rows.length)return null;return <section key={group} className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/75"><h2 className="px-4 pb-2 pt-4 text-[11px] font-black uppercase tracking-wider text-cyan-300">{fa?t.groups[index]:group}</h2><div className="divide-y divide-slate-800/80">{rows.map(row)}</div></section>}):<p className="rounded-2xl border border-slate-800 p-6 text-center text-sm text-slate-400">{t.noResults}</p>}
+      {filtered.length?groups.map((group,index)=>{const rows=filtered.filter(item=>item.group===group);if(!rows.length)return null;return <section key={group} className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/75"><h2 className="px-4 pb-2 pt-4 text-[11px] font-black uppercase tracking-wider text-cyan-300">{groupLabels[index] || group}</h2><div className="divide-y divide-slate-800/80">{rows.map(row)}</div></section>}):<p className="rounded-2xl border border-slate-800 p-6 text-center text-sm text-slate-400">{t.noResults}</p>}
       <button type="button" onClick={onOpenShortcuts} className="w-full rounded-xl border border-slate-800 px-4 py-3 text-sm text-slate-300">Keyboard shortcuts</button>
     </div>}
     <div className="pb-4 text-center text-[10px] text-slate-600">AFG AI · Settings Hub</div>
