@@ -11,3 +11,11 @@ coverage/
 android/.gradle/
 android/app/build/
 android/build/
+
+# Offline test artifacts
+.vitest/
+
+# Android signing material (never commit private keys)
+*.jks
+*.keystore
+android/app/release-keystore.*
