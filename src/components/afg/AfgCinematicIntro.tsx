@@ -248,42 +248,23 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
         </div>
       </header>
 
-      <div className="afg-boot-scene">
-        <div className="afg-boot-orbit orbit-neural" aria-hidden="true" />
-        <div className="afg-boot-orbit orbit-core" aria-hidden="true" />
-        <div className="afg-boot-orbit orbit-node" aria-hidden="true" />
-        <article className="afg-boot-panel panel-neural">
-          <small>01 / THINK</small><strong>{t.engine}</strong>
-          <span className="afg-boot-panel-value">5,000 <i>●</i></span>
-          <span className="afg-boot-panel-caption">{t.capacity}</span>
-        </article>
-        <article className="afg-boot-panel panel-core">
-          <small>02 / SYSTEM</small><strong>{t.system}</strong>
-          <span className="afg-boot-panel-value">{nodeLabel}</span>
-          <span className="afg-boot-panel-caption">{t.status}</span>
-        </article>
-        <article className="afg-boot-panel panel-node">
-          <small>03 / CONNECT</small><strong>{t.node}</strong>
-          <span className="afg-boot-panel-value amber">{latency === null ? '—' : `${latency} ms`}</span>
-          <span className="afg-boot-panel-caption">{t.latency}</span>
-        </article>
-        <div className="afg-boot-core-label"><i /> AFG / CORE 01</div>
-      </div>
-
-      <section className="afg-boot-copy">
-        <p className="afg-boot-eyebrow"><i />{t.eyebrow}<i /></p>
-        <h1><span>{t.title}</span> <em>{t.accent}</em></h1>
-        <p className="afg-boot-tagline">{t.line}</p>
+      <section className="afg-boot-stage" aria-label="AFG AI intelligence core">
+        <div className="afg-boot-scene">
+          <svg className="afg-boot-circuit" viewBox="0 0 1000 560" preserveAspectRatio="none" aria-hidden="true">
+            <path className="circuit-line" d="M170 145 H320 L420 235 H500 M830 145 H680 L580 235 H500 M170 415 H320 L420 325 H500 M830 415 H680 L580 325 H500"/>
+            <circle cx="170" cy="145" r="5"/><circle cx="830" cy="145" r="5"/><circle cx="170" cy="415" r="5"/><circle cx="830" cy="415" r="5"/>
+          </svg>
+          <article className="afg-boot-panel panel-neural"><small>01 / THINK</small><strong>{t.engine}</strong><span className="afg-boot-panel-value">5,000 <i>●</i></span><span className="afg-boot-panel-caption">{t.capacity}</span></article>
+          <article className="afg-boot-panel panel-create"><small>02 / CREATE</small><strong>{language === 'dari' ? 'آفرینش هوشمند' : 'Create'}</strong><span className="afg-boot-panel-value">GENERATIVE</span><span className="afg-boot-panel-caption">{language === 'dari' ? 'ایده تا نتیجه' : 'Ideas into reality'}</span></article>
+          <div className="afg-boot-central"><div className="afg-boot-central-halo"/><div className="afg-boot-central-ring ring-one"/><div className="afg-boot-central-ring ring-two"/><div className="afg-boot-central-core"><span>AFG</span><b>AI</b></div><div className="afg-boot-core-label"><i/> AFG / CORE 01</div></div>
+          <article className="afg-boot-panel panel-explore"><small>03 / EXPLORE</small><strong>{language === 'dari' ? 'کاوش جهان' : 'Explore'}</strong><span className="afg-boot-panel-value">∞ <i>●</i></span><span className="afg-boot-panel-caption">{language === 'dari' ? 'دانش بدون مرز' : 'Knowledge without limits'}</span></article>
+          <article className="afg-boot-panel panel-live"><small>04 / LIVE</small><strong>{language === 'dari' ? 'هوش زنده' : 'Live Intelligence'}</strong><span className="afg-boot-panel-value">{nodeState === 'online' ? 'ONLINE' : nodeState === 'checking' ? 'SYNCING' : 'LOCAL'}</span><span className="afg-boot-panel-caption">{latency === null ? t.status : latency + ' ms · ' + t.latency}</span></article>
+        </div>
+        <div className="afg-boot-bottom">
+          <section className="afg-boot-copy"><p className="afg-boot-eyebrow"><i/>{t.eyebrow}<i/></p><h1><span>{t.title}</span> <em>{t.accent}</em></h1><p className="afg-boot-tagline">{t.line}</p></section>
+          <footer className="afg-boot-footer"><div className="afg-boot-progress-meta"><span>{t.loading}</span><b>{String(progress).padStart(2,'0')}%</b></div><div className="afg-boot-progress"><i style={{width:progress+'%'}}/></div><div className="afg-boot-footer-row"><span>BUILT FOR WHAT'S NEXT</span><span>AFGHANISTAN · GLOBAL INTELLIGENCE</span></div><button type="button" className="afg-boot-enter" onClick={onComplete} disabled={progress<100}><span>{t.enter}</span><b aria-hidden="true">↗</b></button></footer>
+        </div>
       </section>
-
-      <footer className="afg-boot-footer">
-        <div className="afg-boot-progress-meta"><span>{t.loading}</span><b>{String(progress).padStart(2, '0')}%</b></div>
-        <div className="afg-boot-progress"><i style={{ width: progress + '%' }} /></div>
-        <div className="afg-boot-footer-row"><span>BUILT FOR WHAT'S NEXT</span><span>34.5°N&nbsp; 69.1°E · KABUL NODE</span></div>
-        <button type="button" className="afg-boot-enter" onClick={onComplete} disabled={progress < 100}>
-          <span>{t.enter}</span><b aria-hidden="true">↗</b>
-        </button>
-      </footer>
     </main>
   );
 };
