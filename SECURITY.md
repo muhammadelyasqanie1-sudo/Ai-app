@@ -37,3 +37,8 @@ This document records the security controls present in the application and the r
 ## Operational rule
 
 Never log request bodies, cookies, authorization headers, raw provider credentials, uploaded file contents, or full database connection strings. Never serve quarantined files. Security controls fail closed when their required database or configuration dependency is unavailable.
+
+
+## CLI token audit integrity
+
+Creating or revoking a CLI token and recording the corresponding audit event are performed in the same PostgreSQL transaction. If the audit insert fails, the token mutation is rolled back. CLI bearer tokens are stored as SHA-256 hashes; the raw token is returned only once at creation. Terminal command execution remains disabled; only the documented read-only `afg` command surface is available.
