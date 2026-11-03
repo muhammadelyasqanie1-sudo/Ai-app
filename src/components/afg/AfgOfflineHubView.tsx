@@ -77,6 +77,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const [messagesModelId, setMessagesModelId] = useState('');
   const [prompt, setPrompt] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
+  const [lowPowerMode, setLowPowerMode] = useState(false);
+  const [thermalWarning, setThermalWarning] = useState(false);
   const engineRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -302,17 +304,19 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     const text = prompt.trim();
     if (!text || !engineRef.current || chatBusy) return;
     const next = [...messages, { role: 'user' as const, content: text }];
-    setMessages(next); setPrompt(''); setChatBusy(true);
+    setMessages(next); setPrompt(''); setChatBusy(true); setThermalWarning(false);
+    const thermalTimer = window.setTimeout(() => setThermalWarning(true), 120000);
     try {
       const result = await engineRef.current.chat.completions.create({
         messages: next.map(item => ({ role: item.role, content: item.content })),
         temperature: 0.7,
+        max_tokens: lowPowerMode ? 256 : 512,
       });
       const answer = result.choices?.[0]?.message?.content;
       setMessages(previous => [...previous, { role: 'assistant', content: typeof answer === 'string' ? answer : JSON.stringify(answer || '') }]);
     } catch (error) {
       setMessages(previous => [...previous, { role: 'assistant', content: error instanceof Error ? error.message : copy.failed }]);
-    } finally { setChatBusy(false); }
+    } finally { window.clearTimeout(thermalTimer); setChatBusy(false); setThermalWarning(false); }
   };
 
   const selectedFit = selected && device ? assessOfflineModelFit(selected.vram_required_MB || 0, device) : 'limited';
@@ -381,7 +385,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
 
       {viewMode === "chat" && <section className="flex min-h-[480px] min-w-0 flex-col rounded-2xl border p-4">
         <div className="flex items-center gap-2"><MessageSquare size={18}/><div><h2 className="font-bold">{copy.chat}</h2><p className="text-xs opacity-60">{copy.chatHint}</p></div><button type="button" onClick={() => void clearCurrentOfflineChat()} disabled={!messages.length} className="ms-auto rounded-lg border px-2.5 py-1.5 text-[10px] disabled:opacity-40">{dari ? "پاک‌کردن گفتگو" : "Clear chat"}</button></div>
-        <div className="my-3 rounded-xl bg-emerald-500/5 p-3 text-xs text-emerald-700 dark:text-emerald-300">{copy.privacy}</div>
+        <div className="my-3 rounded-xl bg-emerald-500/5 p-3 text-xs text-emerald-700 dark:text-emerald-300">{copy.privacy}</div><div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3 text-xs"><label className="flex items-center gap-2"><input type="checkbox" checked={lowPowerMode} onChange={event => setLowPowerMode(event.target.checked)} />{dari ? "حالت کم‌مصرف (پاسخ کوتاه‌تر و فشار کمتر)" : "Low-power mode (shorter replies, lower workload)"}</label><span className="opacity-60">{lowPowerMode ? "256" : "512"} max tokens</span></div>{thermalWarning && <p role="status" className="rounded-xl bg-amber-500/10 p-3 text-xs text-amber-700">{dari ? "مدت پردازش طولانی شد؛ برای کاهش گرما و مصرف باتری کمی استراحت بده." : "Long inference is taking over two minutes. Let the device cool down to reduce heat and battery drain."}</p>}
         {engineRef.current && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-cyan-400/25 bg-cyan-400/5 p-3 text-xs"><strong>{dari ? 'حالت آفلاین — مدل:' : 'Offline Mode — Model:'} {selectedId}</strong><button type="button" onClick={() => setViewMode('models')} className="rounded-lg border px-2.5 py-1.5">{dari ? 'تغییر مدل' : 'Change Model'}</button></div>}
         {!engineRef.current && <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center"><Sparkles size={34} className="opacity-40"/><p className="text-sm opacity-60">{installed.length === 0 ? copy.noOfflineModel : copy.choose}</p><button type="button" onClick={() => setViewMode('models')} className="rounded-xl bg-cyan-500 px-4 py-2.5 text-xs font-bold text-slate-950">{dari ? 'انتخاب یا دانلود مدل' : 'Choose or download a model'}</button></div>}
         {engineRef.current && <div className="flex-1 space-y-3 overflow-y-auto py-3">{messages.map((message,index)=><div key={index} className={'max-w-[92%] whitespace-pre-wrap rounded-2xl p-3 text-sm leading-6 ' + (message.role === 'user' ? 'ms-auto bg-cyan-500/10' : 'me-auto bg-slate-500/10')}>{message.content}</div>)}{chatBusy && <div className="text-xs opacity-60">{dari ? 'در حال تولید پاسخ محلی…' : 'Generating locally…'}</div>}<div ref={chatEndRef}/></div>}
