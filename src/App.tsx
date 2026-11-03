@@ -58,6 +58,8 @@ export default function App() {
   });
   const [hasSelectedLanguage, setHasSelectedLanguage] = useState(() => {
     const saved = localStorage.getItem('afg_language');
+    // First-time onboarding always asks for language after the cinematic intro.
+    if (localStorage.getItem('afg_intro_seen') !== 'true') return false;
     return saved === 'dari' || saved === 'english';
   });
   const [isIntroVisible, setIsIntroVisible] = useState(() => localStorage.getItem('afg_intro_seen') !== 'true');
