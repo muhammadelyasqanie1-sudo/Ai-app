@@ -13,7 +13,7 @@ export type OfflineDownloadState = {
   computedSha256?: string | null;
   hashVerified?: boolean;
   localPath?: string | null;
-  status: 'paused' | 'downloading' | 'installed' | 'error';
+  status: 'queued' | 'paused' | 'downloading' | 'installed' | 'error';
   updatedAt: number;
   error?: string;
 };
@@ -45,15 +45,16 @@ async function downloadGGUFAndroid(options: Parameters<typeof downloadGGUF>[0]):
   const url = 'https://huggingface.co/' + options.repoId + '/resolve/' + encodeURIComponent(revision) + '/' + options.fileName.split('/').map(encodeURIComponent).join('/');
   const existing = (await AFGOfflineModels.listDownloads()).downloads.find(item => item.id === options.repoId + '/' + options.fileName);
   let downloadId: number;
-  if (existing && (existing.status === 'downloading' || existing.status === 'paused' || existing.status === 'installed')) {
+  if (existing && (existing.status === 'queued' || existing.status === 'downloading' || existing.status === 'paused' || existing.status === 'installed')) {
     downloadId = existing.downloadId;
     if (existing.status === 'installed') return mapNativeDownload(existing);
+    if (existing.status === 'paused' || existing.status === 'queued') await AFGOfflineModels.resumeDownload({ downloadId });
   } else {
     if (existing) await AFGOfflineModels.deleteModel({ downloadId: existing.downloadId }).catch(() => undefined);
     const started = await AFGOfflineModels.startDownload({ url, repoId: options.repoId, revision, fileName: options.fileName, expectedBytes: options.expectedBytes, expectedSha256: options.expectedSha256 });
     downloadId = started.downloadId;
   }
-  const abort = () => { void AFGOfflineModels.cancelDownload({ downloadId }); };
+  const abort = () => { void AFGOfflineModels.pauseDownload({ downloadId }); };
   options.signal?.addEventListener('abort', abort, { once: true });
   try {
     while (true) {
@@ -67,6 +68,37 @@ async function downloadGGUFAndroid(options: Parameters<typeof downloadGGUF>[0]):
       await new Promise(resolve => window.setTimeout(resolve, 1200));
     }
   } finally { options.signal?.removeEventListener('abort', abort); }
+}
+
+export async function pauseOfflineDownload(id: string): Promise<void> {
+  if (isAndroidNative()) {
+    const item = (await AFGOfflineModels.listDownloads()).downloads.find(download => download.id === id);
+    if (item) await AFGOfflineModels.pauseDownload({ downloadId: item.downloadId });
+    return;
+  }
+  const task = activeTasks.get(id);
+  if (task) {
+    task.paused = true;
+    task.controller.abort(new DOMException('Download paused by user.', 'AbortError'));
+  }
+}
+
+export async function resumeOfflineDownload(id: string): Promise<void> {
+  if (isAndroidNative()) {
+    const item = (await AFGOfflineModels.listDownloads()).downloads.find(download => download.id === id);
+    if (!item) throw new Error('Offline download was not found.');
+    await AFGOfflineModels.resumeDownload({ downloadId: item.downloadId });
+    return;
+  }
+  const task = await getOfflineDownload(id);
+  if (!task || task.status === 'installed') return;
+  await downloadGGUF({
+    repoId: task.repoId,
+    fileName: task.fileName,
+    revision: task.revision,
+    expectedBytes: task.expectedBytes,
+    expectedSha256: task.expectedSha256,
+  });
 }
 
 export const usesNativeOfflineDownloads = isAndroidNative;
