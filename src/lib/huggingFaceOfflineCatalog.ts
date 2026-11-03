@@ -52,6 +52,7 @@ async function request<T>(url: string, signal?: AbortSignal): Promise<T> {
 
 export async function searchHuggingFaceGGUF(options: {
   query?: string;
+  format?: 'gguf' | 'all';
   page?: number;
   sort?: 'downloads' | 'likes' | 'lastModified';
   direction?: 'asc' | 'desc';
@@ -59,12 +60,13 @@ export async function searchHuggingFaceGGUF(options: {
 } = {}): Promise<{ items: HuggingFaceModel[]; page: number; hasMore: boolean }> {
   const page = Math.max(0, options.page || 0);
   const query = (options.query || '').trim();
-  const cacheKey = [query.toLowerCase(), page, options.sort || 'downloads', options.direction || 'desc'].join(':');
+  const format = options.format || 'gguf';
+  const cacheKey = [format, query.toLowerCase(), page, options.sort || 'downloads', options.direction || 'desc'].join(':');
   const cached = safeRead<{ items: HuggingFaceModel[]; page: number; hasMore: boolean }>(cacheKey);
   if (cached) return cached;
 
   const params = new URLSearchParams({
-    filter: 'gguf',
+    ...(format === 'gguf' ? { filter: 'gguf' } : {}),
     limit: String(PAGE_SIZE),
     offset: String(page * PAGE_SIZE),
     sort: options.sort || 'downloads',
@@ -83,7 +85,7 @@ export async function searchHuggingFaceGGUF(options: {
     lastModified: typeof item.lastModified === 'string' ? item.lastModified : null,
     private: item.private === true,
     gated: item.gated === true || typeof item.gated === 'string' ? item.gated as boolean | string : false,
-  })).filter(item => item.id && !item.private);
+  })).filter(item => item.id && !item.private && (format === 'gguf' || !item.pipeline_tag || ['text-generation','text2text-generation','conversational','fill-mask','feature-extraction'].includes(item.pipeline_tag)));
   const result = { items, page, hasMore: raw.length === PAGE_SIZE };
   safeWrite(cacheKey, result);
   return result;
