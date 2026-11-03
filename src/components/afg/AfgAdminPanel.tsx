@@ -13,7 +13,7 @@ type ProviderRow = { id:string; displayName:string; enabled:boolean; configured:
 type ModelRow = {
   id:string; providerId:string; displayName:string; description?:string; contextWindow:number;
   enabled:boolean; verifiedAt:string|null; capabilities:Record<string,boolean>;
-  inputCostPerMillion:number|null; outputCostPerMillion:number|null;
+  inputCostPerMillion:number|null; outputCostPerMillion:number|null; lastHealthOk?:boolean; discoveredAt?:string|null;
 };
 type UserRow = { id:string; email:string|null; display_name:string|null; role:string; status:string; created_at:string; last_seen_at:string|null; requests_30d:number };
 type FallbackRow = { capability:string; ordered_models:string[]|string };
@@ -64,6 +64,10 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [customName,setCustomName] = useState('');
   const [customBaseUrl,setCustomBaseUrl] = useState('');
   const [models,setModels] = useState<ModelRow[]>([]);
+  const [manualProviderId,setManualProviderId] = useState('deepseek');
+  const [manualModelId,setManualModelId] = useState('');
+  const [manualModelName,setManualModelName] = useState('');
+  const [manualContext,setManualContext] = useState('');
   const [users,setUsers] = useState<UserRow[]>([]);
   const [overview,setOverview] = useState<Overview|null>(null);
   const [requests,setRequests] = useState<RequestRow[]>([]);
@@ -189,6 +193,12 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       setNotice(result.healthy?`${model.id}: verified successfully.`:`${model.id}: health check failed.`);await loadAdminData();}
     catch(err){setError(err instanceof Error?err.message:'Model health check failed.');}
   };
+  const addManualModel=async()=>{
+    try{await api('/api/admin/models/manual',{method:'POST',body:JSON.stringify({providerId:manualProviderId,modelId:manualModelId,displayName:manualModelName,contextWindow:manualContext?Number(manualContext):0})});
+      setManualModelId('');setManualModelName('');setManualContext('');setNotice('Model registered as disabled and unverified. Run its health check after configuring the provider.');await loadAdminData();}
+    catch(err){setError(err instanceof Error?err.message:'Manual model registration failed.');}
+  };
+
   const deleteModel=async(model:ModelRow)=>{
     if(!window.confirm(`Delete model ${model.id} from ${model.providerId}? This cannot be undone.`))return;
     try{await api('/api/admin/models',{method:'DELETE',body:JSON.stringify({providerId:model.providerId,modelId:model.id})});setNotice('Model deleted from catalogue.');await loadAdminData();}
@@ -300,8 +310,26 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       </div>
     </div>}
 
-    {tab==='models'&&<div className="space-y-4"><div className={panel}><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">Model catalogue</h2><p className="text-xs text-slate-500">Toggle availability and capability overrides per discovered model.</p></div><button className={primary} onClick={()=>void discoverModels()}>Discover / refresh</button></div>
-      <div className="space-y-3">{models.map(m=><div key={m.providerId+':'+m.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold text-white">{m.displayName}</p><p className="text-[10px] text-slate-500">{m.providerId} · {m.id} · {fmt(m.contextWindow)} context</p></div><button className={m.enabled?primary:secondary} onClick={()=>void patchModel(m,{enabled:!m.enabled})}>{m.enabled?'Enabled':'Disabled'}</button></div><div className="mt-3 flex flex-wrap gap-2">{CAPABILITIES.map(cap=><label key={cap} className="flex items-center gap-1 rounded-lg border border-slate-800 px-2 py-1 text-[10px] text-slate-300"><input type="checkbox" checked={Boolean(m.capabilities?.[cap])} onChange={e=>{const next={...m.capabilities,[cap]:e.target.checked};void patchModel(m,{capabilities:Object.keys(next).filter(k=>next[k])});}}/>{cap}</label>)}</div><p className="mt-2 text-[10px] text-slate-500">{m.verifiedAt?'Health verified '+date(m.verifiedAt):'Not currently verified'}</p></div>)}</div>{!models.length&&<p className="text-sm text-slate-500">No discovered models available.</p>}</div>
+    {tab==='models'&&<div className="space-y-4">
+      <div className={panel}><h2 className="mb-2 text-lg font-bold text-white">Manual model registration</h2><p className="mb-3 text-xs text-slate-500">Use an exact upstream model ID when discovery is unavailable. Manual entries are always disabled and unverified until a real provider inference check succeeds.</p>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <select className={field} value={manualProviderId} onChange={e=>setManualProviderId(e.target.value)}>{providers.map(p=><option key={p.id} value={p.id}>{p.displayName}</option>)}</select>
+          <input className={field} value={manualModelId} onChange={e=>setManualModelId(e.target.value)} placeholder="Exact model ID"/>
+          <input className={field} value={manualModelName} onChange={e=>setManualModelName(e.target.value)} placeholder="Display name (optional)"/>
+          <input className={field} type="number" value={manualContext} onChange={e=>setManualContext(e.target.value)} placeholder="Context window (optional)"/>
+        </div><button className={primary+' mt-3'} disabled={!manualProviderId||!manualModelId.trim()} onClick={()=>void addManualModel()}>Register model</button>
+      </div>
+      <div className={panel}><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">Model catalogue</h2><p className="text-xs text-slate-500">Only models with a recent successful health check can be selected by users.</p></div><button className={primary} onClick={()=>void discoverModels()}>Refresh verified inventory</button></div>
+      <div className="space-y-3">{models.map(m=><div key={m.providerId+':'+m.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold text-white">{m.displayName}</p><p className="text-[10px] text-slate-500">{m.providerId} · {m.id} · {fmt(m.contextWindow)} context</p></div><div className="flex flex-wrap gap-2">
+          <span className={m.verifiedAt?'text-emerald-300':'text-amber-300'}>{m.verifiedAt?'Verified':'Unverified'}</span>
+          <button className={m.enabled?primary:secondary} onClick={()=>void patchModel(m,{enabled:!m.enabled})}>{m.enabled?'Enabled':'Disabled'}</button>
+          <button className={secondary} onClick={()=>void testModel(m)}>Test</button>
+          <button className={secondary} onClick={()=>void deleteModel(m)}>Delete</button>
+        </div></div>
+        <div className="mt-3 flex flex-wrap gap-2">{CAPABILITIES.map(cap=><label key={cap} className="flex items-center gap-1 rounded-lg border border-slate-800 px-2 py-1 text-[10px] text-slate-300"><input type="checkbox" checked={Boolean(m.capabilities?.[cap])} onChange={e=>{const next={...m.capabilities,[cap]:e.target.checked};void patchModel(m,{capabilities:Object.keys(next).filter(k=>next[k])});}}/>{cap}</label>)}</div>
+        <p className="mt-2 text-[10px] text-slate-500">{m.verifiedAt?'Health verified '+date(m.verifiedAt):'Not currently verified'} · {m.lastHealthOk?'Last probe successful':'Last probe not successful'}</p>
+      </div>)}</div>{!models.length&&<p className="text-sm text-slate-500">No registered models.</p>}</div>
       <div className={panel}><h2 className="font-bold text-white">Default routing / fallback order</h2><p className="my-2 text-xs text-slate-500">One providerId::modelId per line. First healthy eligible model is preferred.</p><select className={field+' mb-3'} value={fallbackCapability} onChange={e=>setFallbackCapability(e.target.value)}>{['text','vision','imageGen','tts','stt'].map(x=><option key={x}>{x}</option>)}</select><textarea className={field+' font-mono'} rows={5} value={fallbackText} onChange={e=>setFallbackText(e.target.value)}/><button className={primary+' mt-3 flex items-center gap-2'} onClick={()=>void saveFallback()}><Save className="h-4 w-4"/>Save routing order</button></div>
     </div>}
 
