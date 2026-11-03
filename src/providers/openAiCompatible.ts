@@ -19,7 +19,9 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleOptions =
   const prefix = options.envPrefix || 'OPENAI_COMPAT';
   function config() {
     const geminiKey = prefix === 'OPENAI_COMPAT' ? process.env.GEMINI_API_KEY?.trim() : undefined;
-    const baseUrl = (process.env[`${prefix}_BASE_URL`]?.trim() ||
+    let baseUrl = process.env[`${prefix}_BASE_URL`]?.trim() ||
+      (geminiKey ? 'https://generativelanguage.googleapis.com/v1beta/openai' : '');
+    while (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
       (geminiKey ? 'https://generativelanguage.googleapis.com/v1beta/openai' : '')).replace(/\\/+$/, '');
     const apiKey = process.env[`${prefix}_API_KEY`]?.trim() || geminiKey;
     const id = process.env[`${prefix}_PROVIDER_ID`]?.trim() || (geminiKey ? 'gemini-openai-compatible' : (options.defaultId || 'openai-compatible'));
