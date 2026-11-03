@@ -1,10 +1,8 @@
 package com.afgai.offlinemodels;
 
-import android.app.DownloadManager;
 import android.content.Context;
-import android.database.Cursor;
+import android.content.Intent;
 import android.net.Uri;
-import android.os.Environment;
 import android.os.Build;
 
 import com.getcapacitor.JSArray;
@@ -25,6 +23,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import androidx.work.WorkManager;
 
 @CapacitorPlugin(name = "AFGOfflineModels")
 public class AFGOfflineModelsPlugin extends Plugin {
@@ -84,85 +83,33 @@ public class AFGOfflineModelsPlugin extends Plugin {
     }
 
     private JSObject queryDownload(long id) throws Exception {
-        DownloadManager dm = manager();
-        Cursor cursor = dm.query(new DownloadManager.Query().setFilterById(id));
-        if (cursor == null) throw new Exception("Unable to query Android download status.");
-        try {
-            if (!cursor.moveToFirst()) throw new Exception("Android download record was not found.");
-            int statusIndex = cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS);
-            int downloadedIndex = cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR);
-            int totalIndex = cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES);
-            int reasonIndex = cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON);
-            int uriIndex = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
-            int statusCode = cursor.getInt(statusIndex);
-            long downloaded = cursor.getLong(downloadedIndex);
-            long total = cursor.getLong(totalIndex);
-            int reason = cursor.getInt(reasonIndex);
-            JSONObject meta = metadata(id);
-            String localPath = meta.optString("localPath", "");
-            String expectedSha = meta.optString("expectedSha256", "");
-            String computedSha = meta.optString("computedSha256", "");
-            boolean hashVerified = meta.optBoolean("hashVerified", false);
-            String state;
-            String error = "";
-
-            if (statusCode == DownloadManager.STATUS_SUCCESSFUL) {
-                File file = new File(localPath);
-                if (!file.isFile() || file.length() <= 0) {
-                    state = "error";
-                    error = "Downloaded model file is missing or empty.";
-                } else if (computedSha.isEmpty()) {
-                    computedSha = sha256(file);
-                    hashVerified = !expectedSha.isEmpty() && expectedSha.equalsIgnoreCase(computedSha);
-                    if (!expectedSha.isEmpty() && !hashVerified) {
-                        file.delete();
-                        meta.put("computedSha256", computedSha);
-                        meta.put("hashVerified", false);
-                        meta.put("integrityError", true);
-                        saveMetadata(id, meta);
-                        state = "error";
-                        error = "SHA-256 verification failed. The corrupted model was deleted.";
-                    } else {
-                        meta.put("computedSha256", computedSha);
-                        meta.put("hashVerified", hashVerified);
-                        saveMetadata(id, meta);
-                        state = "installed";
-                    }
-                } else if (!expectedSha.isEmpty() && !expectedSha.equalsIgnoreCase(computedSha)) {
-                    file.delete();
-                    state = "error";
-                    error = "SHA-256 verification failed. The corrupted model was deleted.";
-                } else {
-                    state = "installed";
-                }
-            } else if (statusCode == DownloadManager.STATUS_FAILED) {
-                state = "error";
-                error = "Android DownloadManager failed (reason " + reason + ").";
-            } else if (statusCode == DownloadManager.STATUS_PAUSED) {
-                state = "paused";
-            } else {
-                state = "downloading";
-            }
-
-            JSObject result = new JSObject();
-            result.put("id", meta.optString("id", ""));
-            result.put("downloadId", id);
-            result.put("repoId", meta.optString("repoId", ""));
-            result.put("revision", meta.optString("revision", "main"));
-            result.put("fileName", meta.optString("fileName", ""));
-            result.put("status", state);
-            result.put("downloadedBytes", downloaded);
-            long knownBytes = total > 0 ? total : meta.optLong("expectedBytes", -1);
-            result.put("expectedBytes", knownBytes > 0 ? knownBytes : null);
-            result.put("expectedSha256", expectedSha.isEmpty() ? null : expectedSha);
-            result.put("computedSha256", computedSha.isEmpty() ? null : computedSha);
-            result.put("hashVerified", hashVerified);
-            result.put("localPath", localPath.isEmpty() ? null : localPath);
-            if (!error.isEmpty()) result.put("error", error);
-            return result;
-        } finally {
-            cursor.close();
-        }
+        if (id <= 0 || id > Integer.MAX_VALUE) throw new Exception("Invalid download ID.");
+        JSONObject meta = AFGDownloadStore.get(getContext(), (int) id);
+        if (meta == null) throw new Exception("Model download was not found.");
+        String status = meta.optString("status", "paused");
+        String localPath = meta.optString("localPath", "");
+        File part = new File(meta.optString("partPath", ""));
+        long downloaded = "installed".equals(status) && new File(localPath).isFile()
+            ? new File(localPath).length() : (part.isFile() ? part.length() : meta.optLong("downloadedBytes", 0L));
+        JSObject result = new JSObject();
+        result.put("id", meta.optString("id", ""));
+        result.put("downloadId", id);
+        result.put("repoId", meta.optString("repoId", ""));
+        result.put("revision", meta.optString("revision", "main"));
+        result.put("fileName", meta.optString("fileName", ""));
+        result.put("status", status);
+        result.put("downloadedBytes", downloaded);
+        long expected = meta.optLong("expectedBytes", -1L);
+        result.put("expectedBytes", expected > 0 ? expected : null);
+        String expectedSha = meta.optString("expectedSha256", "");
+        String computedSha = meta.optString("computedSha256", "");
+        result.put("expectedSha256", expectedSha.isEmpty() ? null : expectedSha);
+        result.put("computedSha256", computedSha.isEmpty() ? null : computedSha);
+        result.put("hashVerified", meta.optBoolean("hashVerified", false));
+        result.put("localPath", "installed".equals(status) && !localPath.isEmpty() ? localPath : null);
+        String error = meta.optString("error", "");
+        if (!error.isEmpty()) result.put("error", error);
+        return result;
     }
 
     @PluginMethod
@@ -264,37 +211,43 @@ public class AFGOfflineModelsPlugin extends Plugin {
                 call.reject("Only HTTPS Hugging Face model downloads are allowed."); return;
             }
             if (!repoId.matches("[^/]+/[^/]+") || fileName.isEmpty() || !fileName.toLowerCase(Locale.ROOT).endsWith(".gguf") ||
-                    fileName.contains("..") || fileName.startsWith("/")) {
-                call.reject("Invalid GGUF model selection."); return;
+                    fileName.contains("..") || fileName.startsWith("/") || (!expectedSha.isEmpty() && !expectedSha.matches("(?i)[a-f0-9]{64}")) ||
+                    expectedBytes == 0 || expectedBytes < -1) {
+                call.reject("Invalid GGUF model selection or integrity metadata."); return;
             }
-            File directory = modelDirectory();
-            String safeName = UUID.randomUUID().toString() + "-" + new File(fileName).getName().replaceAll("[^a-zA-Z0-9._-]", "_");
+            File directory = new File(getContext().getFilesDir(), "afg-ai-models");
+            if (!directory.exists() && !directory.mkdirs()) throw new Exception("Unable to create private model storage.");
+            int id = AFGDownloadStore.nextId(getContext());
+            String safeName = id + "-" + new File(fileName).getName().replaceAll("[^a-zA-Z0-9._-]", "_");
+            File part = new File(directory, safeName + ".part");
             File destination = new File(directory, safeName);
-            DownloadManager.Request request = new DownloadManager.Request(uri);
-            request.setTitle("AFG AI model download");
-            request.setDescription(repoId + " · " + fileName);
-            request.setMimeType("application/octet-stream");
-            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            request.setAllowedOverMetered(true);
-            request.setDestinationInExternalFilesDir(getContext(), Environment.DIRECTORY_DOWNLOADS, "afg-ai-models/" + safeName);
-            long id = manager().enqueue(request);
-
             JSONObject meta = new JSONObject();
+            meta.put("downloadId", id);
             meta.put("id", repoId + "/" + fileName);
+            meta.put("url", url);
             meta.put("repoId", repoId);
             meta.put("revision", revision);
             meta.put("fileName", fileName);
             meta.put("expectedBytes", expectedBytes);
             meta.put("expectedSha256", expectedSha);
+            meta.put("partPath", part.getAbsolutePath());
             meta.put("localPath", destination.getAbsolutePath());
-            saveMetadata(id, meta);
-
+            meta.put("downloadedBytes", 0L);
+            meta.put("status", "queued");
+            meta.put("createdAt", System.currentTimeMillis());
+            meta.put("updatedAt", System.currentTimeMillis());
+            AFGDownloadStore.put(getContext(), id, meta);
+            Intent intent = new Intent(getContext(), AFGModelDownloadService.class);
+            intent.setAction(AFGModelDownloadService.ACTION_ENQUEUE);
+            intent.putExtra(AFGModelDownloadService.EXTRA_DOWNLOAD_ID, id);
+            if (Build.VERSION.SDK_INT >= 26) getContext().startForegroundService(intent);
+            else getContext().startService(intent);
             JSObject result = new JSObject();
             result.put("downloadId", id);
             result.put("id", repoId + "/" + fileName);
             call.resolve(result);
         } catch (Exception error) {
-            call.reject("Unable to start the Android model download.", error);
+            call.reject("Unable to start the resumable Android model download.", error);
         }
     }
 
@@ -313,13 +266,9 @@ public class AFGOfflineModelsPlugin extends Plugin {
     public void listDownloads(PluginCall call) {
         try {
             JSArray downloads = new JSArray();
-            Map<String, ?> all = getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE).getAll();
-            for (String storedKey : all.keySet()) {
-                if (!storedKey.startsWith(PREFIX)) continue;
-                try {
-                    long id = Long.parseLong(storedKey.substring(PREFIX.length()));
-                    downloads.put(queryDownload(id));
-                } catch (Exception ignored) { }
+            for (JSONObject meta : AFGDownloadStore.all(getContext())) {
+                int id = meta.optInt("downloadId", -1);
+                if (id > 0) downloads.put(queryDownload(id));
             }
             JSObject result = new JSObject();
             result.put("downloads", downloads);
@@ -327,6 +276,40 @@ public class AFGOfflineModelsPlugin extends Plugin {
         } catch (Exception error) {
             call.reject("Unable to list Android model downloads.", error);
         }
+    }
+
+    @PluginMethod
+    public void pauseDownload(PluginCall call) {
+        Long rawId = call.getLong("downloadId");
+        if (rawId == null || rawId <= 0 || rawId > Integer.MAX_VALUE) { call.reject("A valid download ID is required."); return; }
+        int id = rawId.intValue();
+        JSONObject meta = AFGDownloadStore.get(getContext(), id);
+        if (meta == null) { call.reject("Model download was not found."); return; }
+        WorkManager.getInstance(getContext()).cancelUniqueWork(AFGModelDownloadService.workName(id));
+        File part = new File(meta.optString("partPath", ""));
+        long bytes = part.isFile() ? part.length() : 0L;
+        AFGDownloadStore.update(getContext(), id, "status", "paused");
+        AFGDownloadStore.update(getContext(), id, "downloadedBytes", bytes);
+        JSObject result = new JSObject();
+        result.put("paused", true);
+        result.put("downloadedBytes", bytes);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void resumeDownload(PluginCall call) {
+        Long rawId = call.getLong("downloadId");
+        if (rawId == null || rawId <= 0 || rawId > Integer.MAX_VALUE) { call.reject("A valid download ID is required."); return; }
+        int id = rawId.intValue();
+        JSONObject meta = AFGDownloadStore.get(getContext(), id);
+        if (meta == null) { call.reject("Model download was not found."); return; }
+        if ("installed".equals(meta.optString("status", ""))) { call.reject("This model is already installed."); return; }
+        AFGDownloadStore.update(getContext(), id, "status", "queued");
+        AFGDownloadStore.update(getContext(), id, "error", "");
+        AFGModelDownloadService.enqueue(getContext(), id);
+        JSObject result = new JSObject();
+        result.put("resumed", true);
+        call.resolve(result);
     }
 
     @PluginMethod
@@ -341,18 +324,21 @@ public class AFGOfflineModelsPlugin extends Plugin {
 
     private void removeDownload(PluginCall call, boolean deleteFile) {
         try {
-            Long id = call.getLong("downloadId");
-            if (id == null || id <= 0) { call.reject("A valid download ID is required."); return; }
-            JSONObject meta = metadata(id);
-            manager().remove(id);
-            if (deleteFile) {
-                String path = meta.optString("localPath", "");
-                if (!path.isEmpty()) new File(path).delete();
+            Long rawId = call.getLong("downloadId");
+            if (rawId == null || rawId <= 0 || rawId > Integer.MAX_VALUE) { call.reject("A valid download ID is required."); return; }
+            int id = rawId.intValue();
+            JSONObject meta = AFGDownloadStore.get(getContext(), id);
+            WorkManager.getInstance(getContext()).cancelUniqueWork(AFGModelDownloadService.workName(id));
+            if (deleteFile && meta != null) {
+                String partPath = meta.optString("partPath", "");
+                String finalPath = meta.optString("localPath", "");
+                if (!partPath.isEmpty()) new File(partPath).delete();
+                if (!finalPath.isEmpty()) new File(finalPath).delete();
             }
-            getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(key(id)).apply();
+            AFGDownloadStore.remove(getContext(), id);
             JSObject result = new JSObject();
             result.put("removed", true);
-            result.put("deleted", true);
+            result.put("deleted", deleteFile);
             call.resolve(result);
         } catch (Exception error) {
             call.reject("Unable to remove the Android model file.", error);
