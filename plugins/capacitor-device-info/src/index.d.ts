@@ -4,6 +4,8 @@ export interface AFGDeviceInfoResult {
   architecture: string;
   cpuCores: number;
   memoryGiB: number;
+  availableMemoryGiB: number;
+  lowMemory: boolean;
   storageFreeBytes: number;
 }
 export interface AFGDeviceInfoPlugin {
