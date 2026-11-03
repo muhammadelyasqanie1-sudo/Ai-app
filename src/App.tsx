@@ -48,21 +48,25 @@ const DEFAULT_USER: UserProfile = {
 
 const INITIAL_MESSAGES: AfgMessage[] = [];
 
+const detectDeviceLanguage = (): Language => {
+  const preferred = (navigator.languages?.length ? navigator.languages : [navigator.language])
+    .map((tag) => tag.toLowerCase());
+  const first = preferred[0] || 'fa';
+  if (first.startsWith('en')) return 'english';
+  if (first.startsWith('fa') || first.startsWith('prs') || first.startsWith('ps')) return 'dari';
+  // AFG AI currently ships Dari and English; use Dari as the supported fallback.
+  return 'dari';
+};
+
 const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 export default function App() {
   // App State
-  const [language, setLanguage] = useState<Language>(() => {
-    const saved = localStorage.getItem('afg_language');
-    return saved === 'english' ? 'english' : 'dari';
-  });
-  const [hasSelectedLanguage, setHasSelectedLanguage] = useState(() => {
-    const saved = localStorage.getItem('afg_language');
-    // First-time onboarding always asks for language after the cinematic intro.
-    if (localStorage.getItem('afg_intro_seen') !== 'true') return false;
-    return saved === 'dari' || saved === 'english';
-  });
-  const [isIntroVisible, setIsIntroVisible] = useState(() => localStorage.getItem('afg_intro_seen') !== 'true');
+  const [language, setLanguage] = useState<Language>(() => detectDeviceLanguage());
+  // Language is detected from the device/browser; no manual language gate on startup.
+  const [hasSelectedLanguage, setHasSelectedLanguage] = useState(true);
+  // Show the full-screen cinematic motion intro on every fresh app launch.
+  const [isIntroVisible, setIsIntroVisible] = useState(true);
   const [hasEnteredApp, setHasEnteredApp] = useState(() => localStorage.getItem('afg_entry_mode') === 'guest');
 
   const [theme, setTheme] = useState<Theme>(() => {
@@ -240,7 +244,7 @@ export default function App() {
             setHasEnteredApp(true);
             localStorage.setItem('afg_entry_mode', 'account');
             setUser({ name: data.user.displayName || 'User', nameEn: data.user.displayName || 'User', email: data.user.email || '', avatar: '', isPremium: false, tier: 'Free' });
-            fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const saved=prefs?.preferences; if(saved?.appearance&&['light','dark','neon','system'].includes(saved.appearance))setTheme(saved.appearance); if((saved?.locale||saved?.language)&&['dari','english'].includes(saved.locale||saved.language)){if(localeChangedThisSession.current){const chosen=localStorage.getItem('afg_language')==='english'?'english':'dari';const csrf=document.cookie.split('; ').find((item)=>item.startsWith('afg_csrf='))?.slice('afg_csrf='.length)||'';void fetch(API_BASE_URL+'/api/account/locale',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(csrf)},body:JSON.stringify({locale:chosen})}).catch(()=>console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));}else{setLanguage(saved.locale==='english'||saved.language==='english'?'english':'dari');setHasSelectedLanguage(true);localStorage.setItem('afg_language',saved.locale==='english'||saved.language==='english'?'english':'dari');}} document.documentElement.style.fontSize=String(saved?.font_size||14)+'px'; const accentMap:Record<string,string>={cyan:'#00e5ff',blue:'#3b82f6',violet:'#8b5cf6',emerald:'#10b981',rose:'#f43f5e'}; document.documentElement.style.setProperty('--accent-cyan',accentMap[saved?.accent_color]||accentMap.cyan); document.documentElement.dataset.afgDensity=saved?.density||'comfortable'; document.documentElement.dataset.afgChatWidth=saved?.chat_width||'comfortable'; document.documentElement.classList.toggle('afg-reduce-motion',saved?.animations_enabled===false); localStorage.setItem('afg_voice_enabled',String(saved?.voice_enabled!==false)); window.dispatchEvent(new Event('afg-voice-preference-change')); if(saved?.auto_select_model===false){setSelectedModel('auto');return;} const model=saved?.default_model; if(typeof model==='string'&&model)setSelectedModel(model); }).catch(() => {});
+            fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const saved=prefs?.preferences; if(saved?.appearance&&['light','dark','neon','system'].includes(saved.appearance))setTheme(saved.appearance); if(localeChangedThisSession.current){const chosen=localStorage.getItem('afg_language')==='english'?'english':'dari';const csrf=document.cookie.split('; ').find((item)=>item.startsWith('afg_csrf='))?.slice('afg_csrf='.length)||'';void fetch(API_BASE_URL+'/api/account/locale',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(csrf)},body:JSON.stringify({locale:chosen})}).catch(()=>console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));} document.documentElement.style.fontSize=String(saved?.font_size||14)+'px'; const accentMap:Record<string,string>={cyan:'#00e5ff',blue:'#3b82f6',violet:'#8b5cf6',emerald:'#10b981',rose:'#f43f5e'}; document.documentElement.style.setProperty('--accent-cyan',accentMap[saved?.accent_color]||accentMap.cyan); document.documentElement.dataset.afgDensity=saved?.density||'comfortable'; document.documentElement.dataset.afgChatWidth=saved?.chat_width||'comfortable'; document.documentElement.classList.toggle('afg-reduce-motion',saved?.animations_enabled===false); localStorage.setItem('afg_voice_enabled',String(saved?.voice_enabled!==false)); window.dispatchEvent(new Event('afg-voice-preference-change')); if(saved?.auto_select_model===false){setSelectedModel('auto');return;} const model=saved?.default_model; if(typeof model==='string'&&model)setSelectedModel(model); }).catch(() => {});
           } else {
             if (wasAuthenticatedRef.current) {
               wasAuthenticatedRef.current = false;
