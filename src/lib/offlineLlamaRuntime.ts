@@ -26,6 +26,35 @@ export async function generateNativeLlamaResponse(messages: Array<{ role: string
   return result.text;
 }
 
+export async function streamNativeLlamaResponse(
+  messages: Array<{ role: string; content: string }>,
+  maxTokens = 256,
+  onToken: (token: string) => void,
+  signal?: AbortSignal,
+): Promise<{ text: string; cancelled: boolean }> {
+  if (Capacitor.getPlatform() !== 'android') {
+    throw new Error('Native llama.cpp streaming is only available in the Android app.');
+  }
+  if (signal?.aborted) throw new DOMException('Generation was cancelled.', 'AbortError');
+  const listener = await AFGOfflineModels.addListener('generationToken', event => onToken(event.token));
+  const abort = () => { void AFGOfflineModels.cancelGeneration(); };
+  signal?.addEventListener('abort', abort, { once: true });
+  try {
+    const result = await AFGOfflineModels.generateStream({
+      messages: JSON.stringify(messages),
+      maxTokens,
+    });
+    return result;
+  } finally {
+    signal?.removeEventListener('abort', abort);
+    await listener.remove();
+  }
+}
+
+export async function cancelNativeLlamaGeneration(): Promise<void> {
+  if (Capacitor.getPlatform() === 'android') await AFGOfflineModels.cancelGeneration();
+}
+
 export async function unloadNativeLlamaModel(): Promise<void> {
   if (Capacitor.getPlatform() === 'android') await AFGOfflineModels.unloadModel();
 }
