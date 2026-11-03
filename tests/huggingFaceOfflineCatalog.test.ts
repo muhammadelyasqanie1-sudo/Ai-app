@@ -22,6 +22,31 @@ describe('Hugging Face offline catalog', () => {
     expect(result.hasMore).toBe(false);
   });
 
+
+  it('retries transient network failures and paginates with the documented offset', async () => {
+    const rows = Array.from({ length: 40 }, (_, index) => ({ id: 'owner/model-' + index, downloads: index, tags: ['gguf'] }));
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new TypeError('network unavailable'))
+      .mockResolvedValueOnce(new Response(JSON.stringify(rows), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await searchHuggingFaceGGUF({ query: 'network-retry-test', page: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('offset=40');
+    expect(result.items).toHaveLength(40);
+    expect(result.hasMore).toBe(true);
+  });
+
+  it('assigns all supported top-level categories through the catalog classifier', async () => {
+    const { formatModelCategory } = await import('../src/lib/huggingFaceOfflineCatalog');
+    expect(formatModelCategory(['python', 'coding'], null)).toContain('coding');
+    expect(formatModelCategory(['creative-writing'], null)).toContain('creative');
+    expect(formatModelCategory([], null)).toEqual(['general']);
+    expect(formatModelCategory(['science', 'physics'], null)).toContain('science');
+    expect(formatModelCategory(['english', 'grammar'], null)).toContain('english');
+    expect(formatModelCategory(['robotics'], null)).toContain('robotics');
+    expect(formatModelCategory(['mathematics'], null)).toContain('mathematics');
+  });
+
   it('does not retry a rate-limit response', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('rate limited', { status: 429 }));
     vi.stubGlobal('fetch', fetchMock);
