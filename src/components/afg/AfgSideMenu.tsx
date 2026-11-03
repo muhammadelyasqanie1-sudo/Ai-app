@@ -52,7 +52,7 @@ export const AfgSideMenu: React.FC<AfgSideMenuProps> = ({
     { id: 'video-gen' as TabType, label: dari ? 'ابزارهای ویدیو' : 'Video tools', icon: Video },
     { id: 'tools' as TabType, label: t.navTools, icon: Wrench },
     { id: 'terminal' as TabType, label: dari ? 'ترمینل' : 'Terminal', icon: Terminal },
-    { id: 'offline-ai-hub' as TabType, label: dari ? 'هوش مصنوعی آفلاین' : 'Offline AI Hub', icon: BrainCircuit },
+    { id: 'offline-chat' as TabType, label: dari ? 'حالت آفلاین' : 'Offline Mode', icon: BrainCircuit },
     { id: 'offline-learning' as TabType, label: dari ? 'آموزش آفلاین' : 'Offline learning', icon: BookOpen },
   ];
 
