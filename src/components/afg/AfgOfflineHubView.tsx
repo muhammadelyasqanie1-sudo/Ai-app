@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownToLine, Cpu, HardDrive, MessageSquare, Search, ShieldCheck, Sparkles, WifiOff } from 'lucide-react';
+import { ArrowDownToLine, Cpu, HardDrive, MessageSquare, Search, ShieldCheck, Sparkles, WifiOff, X } from 'lucide-react';
 import type { Language } from '../../types/afg';
-import { searchHuggingFaceGGUF, getHuggingFaceRepository, formatModelCategory, type HuggingFaceModel, type HuggingFaceRepository } from '../../lib/huggingFaceOfflineCatalog';
+import { searchHuggingFaceGGUF, getHuggingFaceRepository, getPrimaryGgufFile, formatModelCategory, type HuggingFaceModel, type HuggingFaceRepository } from '../../lib/huggingFaceOfflineCatalog';
 import { assessOfflineModelFit, scanOfflineDevice, type OfflineDeviceProfile, type ModelFit } from '../../lib/offlineDevice';
 import { downloadGGUF, listOfflineDownloads, pauseGGUFDownload, removeOfflineModel, usesNativeOfflineDownloads, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
 import { clearOfflineChatMessages, loadOfflineChatMessages, saveOfflineChatMessages, type OfflineChatMessage } from '../../lib/offlineChatStorage';
@@ -45,6 +45,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const [models, setModels] = useState<CatalogModel[]>([]);
   const [hfModels, setHfModels] = useState<HuggingFaceModel[]>([]);
   const [hfFormat, setHfFormat] = useState<'gguf' | 'all'>('gguf');
+  const [hfQuery, setHfQuery] = useState('');
+  const [hfFileSummaries, setHfFileSummaries] = useState<Record<string, { status: 'loading' | 'ready' | 'error'; size: number | null; fileName: string | null }>>({});
   const [sparkModels, setSparkModels] = useState<HuggingFaceModel[]>([]);
   const [hfRecommended, setHfRecommended] = useState<Array<{ model: HuggingFaceModel; filePath: string; fileSize: number; fit: 'recommended' | 'limited' }>>([]);
   const [hfCategories, setHfCategories] = useState<string[]>([]);
@@ -63,11 +65,12 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const selectedHfModel = useMemo(() => [...hfModels, ...sparkModels].find(model => model.id === hfSelected) || null, [hfModels, sparkModels, hfSelected]);
   const [device, setDevice] = useState<OfflineDeviceProfile | null>(null);
   const [deviceScanBusy, setDeviceScanBusy] = useState(true);
-  const [modelFilter, setModelFilter] = useState<'all' | ModelFit>('all');
+  const [modelFilter, setModelFilter] = useState<'all' | ModelFit | 'unknown'>('all');
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState('');
   const [runtime, setRuntime] = useState<RuntimeState>('checking');
   const [webGpuAvailable, setWebGpuAvailable] = useState(false);
+  const [runtimeBannerDismissed, setRuntimeBannerDismissed] = useState(false);
   const [nativeRuntimeAvailable, setNativeRuntimeAvailable] = useState(false);
   const [activeOfflineModelLabel, setActiveOfflineModelLabel] = useState('');
   const [runtimeMessage, setRuntimeMessage] = useState('');
@@ -93,8 +96,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
 
   const copy = dari ? {
     title: 'مرکز هوش مصنوعی آفلاین', subtitle: 'مدل را یک‌بار دانلود کن و در همین دستگاه، بدون اینترنت از آن استفاده کن.',
-    runtime: 'وضعیت موتور محلی', compatible: 'این دستگاه از WebGPU پشتیبانی می‌کند.', unsupported: 'این مرورگر یا WebView از WebGPU پشتیبانی نمی‌کند؛ اجرای مدل آفلاین در این دستگاه فعلاً فعال نیست.',
-    checking: 'در حال بررسی سخت‌افزار…', catalog: 'مدل‌های سازگار', search: 'جست‌وجوی مدل…', install: 'دانلود و نصب', installed: 'ذخیره‌شده در دستگاه', downloading: 'در حال دانلود مدل…',
+    runtime: 'وضعیت موتور محلی', compatible: 'این دستگاه از WebGPU پشتیبانی می‌کند.', unsupported: 'WebGPU در این مرورگر در دسترس نیست. می‌توانی مدل‌ها را ببینی و دانلود کنی؛ برای اجرای آفلاین بومی از APK اندروید استفاده کن.',
+    checking: 'در حال بررسی سخت‌افزار…', catalog: 'مدل‌های سازگار', search: 'جست‌وجوی مدل…', unknown: 'نامشخص', unknownCompatibility: 'سازگاری در وب نامشخص است؛ مشخصات دقیق RAM/GPU در مرورگر در دسترس نیست.', install: 'دانلود و نصب', installed: 'ذخیره‌شده در دستگاه', downloading: 'در حال دانلود مدل…',
     minMemory: 'حداقل حافظه گرافیکی', downloadSize: 'حجم تقریبی مخزن مدل', unknownSize: 'اندازه دقیق در دسترس نیست', storage: 'فضای ذخیره‌سازی دستگاه',
     chat: 'گفت‌وگوی آفلاین', chatHint: 'مدل نصب‌شده را بارگذاری کن و بدون اتصال به سرور پیام بده.', choose: 'یک مدل انتخاب کن', load: 'بارگذاری مدل', send: 'ارسال', input: 'پیام خود را بنویس…',
     noModels: 'مدل سازگاری پیدا نشد.', noInstalled: 'هنوز مدلی نصب نشده است.', noOfflineModel: 'هیچ مدل آفلاینی نصب نیست. لطفاً از بخش مدل‌ها یک مدل دانلود کن.', ggufRuntimeUnavailable: 'فایل GGUF ذخیره شده، اما موتور اجرای آن در این نسخه آماده نیست.', loadGgufHint: 'از بخش مدل‌ها روی Load model بزن تا مدل محلی اجرا شود.', loading: 'در حال بارگذاری مدل…', ready: 'مدل آماده است؛ پیام‌ها فقط روی همین دستگاه پردازش می‌شوند.',
@@ -104,8 +107,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     deviceTitle: 'اسکن هوشمند دستگاه', deviceUnknown: 'در حال بررسی مشخصات…', deviceRam: 'حافظه RAM کل', deviceAvailableRam: 'RAM آزاد فعلی', deviceCpu: 'هسته‌های پردازنده', deviceGpu: 'پردازنده گرافیکی', deviceStorage: 'فضای قابل استفاده', devicePlatform: 'سیستم و دستگاه', recommended: 'پیشنهادشده', limited: 'با محدودیت', incompatible: 'ناسازگار', allModels: 'همه', privacyScan: 'اسکن فقط مشخصات سخت‌افزاری و قابلیت‌های مرورگر را بررسی می‌کند.', rescan: 'اسکن دوباره',
   } : {
     title: 'Offline AI Hub', subtitle: 'Download a model once, then use it on this device without an internet connection.',
-    runtime: 'Local runtime status', compatible: 'This device supports WebGPU.', unsupported: 'This browser or WebView does not support WebGPU. Offline model inference is unavailable on this device for now.',
-    checking: 'Checking device capabilities…', catalog: 'Compatible models', search: 'Search models…', install: 'Download & install', installed: 'Installed locally', downloading: 'Downloading model…',
+    runtime: 'Local runtime status', compatible: 'This device supports WebGPU.', unsupported: 'WebGPU is unavailable in this browser. You can still browse and download models; use the Android APK for native offline inference.',
+    checking: 'Checking device capabilities…', catalog: 'Compatible models', search: 'Search models…', unknown: 'Unknown', unknownCompatibility: 'Compatibility is unknown for Web; this browser does not expose exact RAM/GPU details.', install: 'Download & install', installed: 'Installed locally', downloading: 'Downloading model…',
     minMemory: 'Minimum GPU memory', downloadSize: 'Approx. repository size', unknownSize: 'Exact size unavailable', storage: 'Device storage',
     chat: 'Offline chat', chatHint: 'Load an installed model and chat without sending requests to a server.', choose: 'Choose a model', load: 'Load model', send: 'Send', input: 'Write a message…',
     noModels: 'No compatible models found.', noInstalled: 'No models installed yet.', noOfflineModel: 'No offline model installed. Please download a model from the Models section.', ggufRuntimeUnavailable: 'The GGUF file is stored locally, but its inference runtime is not available in this build.', loadGgufHint: 'Open Models and tap Load model to start the local GGUF runtime.', loading: 'Loading model…', ready: 'Model ready. Messages are processed on this device only.',
@@ -128,6 +131,11 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       } catch { if (active) setNativeRuntimeAvailable(false); }
       if (!active) return;
       const nativeMessage = dari ? 'موتور بومی llama.cpp آماده است؛ مدل‌های GGUF روی همین دستگاه اجرا می‌شوند.' : 'Native llama.cpp CPU runtime is ready for local GGUF inference.';
+      const { prebuiltAppConfig } = await import('@mlc-ai/web-llm');
+      if (!active) return;
+      const catalog = (prebuiltAppConfig.model_list || []) as CatalogModel[];
+      setModels(catalog);
+      if (!selectedId && catalog.length) setSelectedId(catalog[0].model_id);
       const gpu = (navigator as unknown as { gpu?: { requestAdapter: () => Promise<unknown> } }).gpu;
       if (!gpu) {
         setWebGpuAvailable(false);
@@ -145,17 +153,12 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
           setRuntimeMessage(nativeAvailable ? nativeMessage : copy.unsupported);
           return;
         }
-        const { prebuiltAppConfig } = await import('@mlc-ai/web-llm');
-        if (!active) return;
-        const catalog = (prebuiltAppConfig.model_list || []) as CatalogModel[];
-        setModels(catalog);
-        if (!selectedId) setSelectedId(catalog[0]?.model_id || '');
         setWebGpuAvailable(true);
         setRuntime('ready');
         setRuntimeMessage(nativeAvailable ? nativeMessage + ' WebGPU is also available.' : copy.compatible);
       } catch {
         setWebGpuAvailable(false);
-        setRuntime(nativeAvailable ? 'ready' : 'error');
+        setRuntime(nativeAvailable ? 'ready' : 'unsupported');
         setRuntimeMessage(nativeAvailable ? nativeMessage : copy.unsupported);
       }
       if (navigator.storage?.estimate) { const estimate = await navigator.storage.estimate(); if (active) setStorage({ usage: estimate.usage, quota: estimate.quota }); }
@@ -226,13 +229,13 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     setHfBusy(true);
     setHfError('');
     const timer = window.setTimeout(() => {
-      void searchHuggingFaceGGUF({ query, format: hfFormat, page: 0, sort: 'downloads', direction: 'desc', signal: controller.signal })
+      void searchHuggingFaceGGUF({ query: hfQuery, format: hfFormat, page: 0, sort: 'downloads', direction: 'desc', signal: controller.signal })
         .then(result => { setHfModels(result.items); setHfPage(0); setHfHasMore(result.hasMore); })
         .catch(error => { if (!controller.signal.aborted) setHfError(error instanceof Error ? error.message : 'Catalog unavailable'); })
         .finally(() => { if (!controller.signal.aborted) setHfBusy(false); });
     }, 350);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [query, hfFormat, hfRetry]);
+  }, [hfQuery, hfFormat, hfRetry]);
 
   useEffect(() => {
     if (!hfSelected) { setHfRepository(null); setHfQuantization(''); return; }
@@ -242,6 +245,34 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       .catch(error => { if (!controller.signal.aborted) setHfError(error instanceof Error ? error.message : 'Repository metadata unavailable'); });
     return () => controller.abort();
   }, [hfSelected, selectedHfModel?.sha]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    const uniqueModels = [...new Map([...sparkModels, ...hfModels].map(model => [model.id, model])).values()];
+    setHfFileSummaries(previous => {
+      const next = { ...previous };
+      uniqueModels.forEach(model => {
+        if (!next[model.id]) next[model.id] = { status: 'loading', size: null, fileName: null };
+      });
+      return next;
+    });
+    let cursor = 0;
+    const workers = Array.from({ length: 4 }, async () => {
+      while (active && cursor < uniqueModels.length) {
+        const model = uniqueModels[cursor++];
+        try {
+          const repository = await getHuggingFaceRepository(model.id, controller.signal, model.sha || 'main');
+          const file = getPrimaryGgufFile(repository);
+          if (active) setHfFileSummaries(previous => ({ ...previous, [model.id]: { status: 'ready', size: file?.size ?? null, fileName: file?.name ?? null } }));
+        } catch {
+          if (active && !controller.signal.aborted) setHfFileSummaries(previous => ({ ...previous, [model.id]: { status: 'error', size: null, fileName: null } }));
+        }
+      }
+    });
+    void Promise.all(workers);
+    return () => { active = false; controller.abort(); };
+  }, [hfModels, sparkModels]);
 
   const downloadSelectedGguf = async () => {
     if (!hfRepository || !hfQuantization || ggufBusyId) return;
@@ -264,18 +295,22 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const loadMoreHf = async () => {
     if (hfBusy || !hfHasMore) return;
     setHfBusy(true); setHfError('');
-    try { const nextPage = hfPage + 1; const result = await searchHuggingFaceGGUF({ query, format: hfFormat, page: nextPage });
+    try { const nextPage = hfPage + 1; const result = await searchHuggingFaceGGUF({ query: hfQuery, format: hfFormat, page: nextPage });
       setHfModels(previous => [...previous, ...result.items.filter(item => !previous.some(old => old.id === item.id))]);
       setHfPage(nextPage); setHfHasMore(result.hasMore);
     } catch (error) { setHfError(error instanceof Error ? error.message : 'Catalog unavailable'); } finally { setHfBusy(false); }
   };
   const selected = useMemo(() => models.find(model => model.model_id === selectedId) || null, [models, selectedId]);
-  const recommendedModels = useMemo(() => device ? models.filter(model => assessOfflineModelFit(model.vram_required_MB || 0, device) === 'recommended').slice(0, 5) : [], [models, device]);
+  const getCompatibility = useCallback((model: CatalogModel): ModelFit | 'unknown' => {
+    if (!device || device.memoryGiB === null || device.gpuMaxBufferBytes === null || !device.webGpuSupported) return 'unknown';
+    return assessOfflineModelFit(model.vram_required_MB || 0, device);
+  }, [device]);
+  const recommendedModels = useMemo(() => models.filter(model => getCompatibility(model) === 'recommended').slice(0, 5), [models, getCompatibility]);
   const filtered = useMemo(() => models.filter(model => {
     if (!model.model_id.toLowerCase().includes(query.toLowerCase())) return false;
-    if (!device || modelFilter === 'all') return true;
-    return assessOfflineModelFit(model.vram_required_MB || 0, device) === modelFilter;
-  }), [models, query, device, modelFilter]);
+    if (modelFilter === 'all') return true;
+    return getCompatibility(model) === modelFilter;
+  }), [models, query, modelFilter, getCompatibility]);
 
   useEffect(() => {
     if (!selected) return;
@@ -388,7 +423,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     } finally { window.clearTimeout(thermalTimer); setChatBusy(false); setThermalWarning(false); }
   };
 
-  const selectedFit = selected && device ? assessOfflineModelFit(selected.vram_required_MB || 0, device) : 'limited';
+  const selectedFit = selected ? getCompatibility(selected) : 'unknown';
   const selectedRepo = selected ? getHuggingFaceRepo(selected) : null;
   const exactSize = selectedRepo ? modelSizes[selectedRepo] : undefined;
   const selectedGgufFile = hfRepository?.ggufFiles.find(file => file.path === hfQuantization) || null;
@@ -402,7 +437,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const ggufRuntimeBlocked = usesNativeOfflineDownloads() && !nativeRuntimeAvailable;
   const ggufPreflightBlocked = !selectedGgufFile || !selectedGgufFile.size || ggufStorageUnknown || ggufStorageBlocked || ggufRamBlocked || ggufGated || ggufRuntimeBlocked;
 
-  return <section className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6" dir={dari ? 'rtl' : 'ltr'}>
+  return <section className="mx-auto w-full max-w-5xl space-y-5 px-3 py-4 text-slate-900 sm:px-6 sm:py-6 dark:text-slate-100" dir={dari ? 'rtl' : 'ltr'}>
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div><div className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-600"><WifiOff size={14}/>{dari ? 'بدون وابستگی به سرور' : 'Server-independent'}</div><h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{viewMode === 'models' ? (dari ? 'مدل‌های آفلاین' : 'Offline Models') : copy.title}</h1><p className="mt-2 max-w-2xl text-sm opacity-70">{viewMode === 'models' ? (dari ? 'مدل‌ها را جست‌وجو، بررسی، دانلود و مدیریت کن.' : 'Discover, inspect, download and manage local AI models.') : copy.subtitle}</p></div>
       <div className="rounded-2xl border p-3 text-end"><div className="flex items-center gap-2 text-xs opacity-70"><HardDrive size={15}/>{copy.storage}</div><div className="mt-1 text-sm font-bold">{formatBytes(storage.usage)} / {formatBytes(storage.quota)}</div></div>
@@ -410,7 +445,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
 
     <nav className="flex gap-2 rounded-xl border p-1" aria-label={dari ? "بخش‌های آفلاین" : "Offline sections"}><button type="button" onClick={() => setViewMode("chat")} className={"flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold " + (viewMode === "chat" ? "bg-cyan-500 text-slate-950" : "opacity-65")}>{dari ? "گفت‌وگوی آفلاین" : "Offline Chat"}</button><button type="button" onClick={() => setViewMode("models")} className={"flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold " + (viewMode === "models" ? "bg-cyan-500 text-slate-950" : "opacity-65")}>{dari ? "مدیریت مدل‌ها" : "Models"}</button></nav>
 
-    <section className="rounded-2xl border p-4 space-y-3">
+    <section className="space-y-4 rounded-[28px] border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 dark:border-white/10 dark:bg-[#0d1729]">
       <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-bold">{copy.deviceTitle}</h2><button type="button" onClick={() => { setDeviceScanBusy(true); void scanOfflineDevice().then(setDevice).finally(() => setDeviceScanBusy(false)); }} className="rounded-lg border px-3 py-1.5 text-xs font-semibold">{copy.rescan}</button></div>
       {deviceScanBusy || !device ? <p className="text-sm opacity-60">{copy.deviceUnknown}</p> : <>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -422,22 +457,33 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       </>}
     </section>
 
-    <div className={'rounded-2xl border p-4 ' + (runtime === 'ready' ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/30 bg-amber-500/5')}>
-      <div className="flex items-start gap-3"><Cpu size={20} className="mt-0.5 shrink-0"/><div className="min-w-0"><div className="font-semibold">{copy.runtime}</div><p className="mt-1 text-sm opacity-75">{runtime === 'checking' ? copy.checking : runtimeMessage}</p></div></div>
-    </div>
+    {runtime !== 'checking' && !webGpuAvailable && !runtimeBannerDismissed && <div role="status" className="rounded-[24px] border border-amber-500/30 bg-amber-50 p-4 text-slate-900 shadow-sm dark:bg-amber-950/25 dark:text-amber-100">
+      <div className="flex items-start gap-3">
+        <Cpu size={20} className="mt-1 shrink-0 text-amber-600 dark:text-amber-300"/>
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold">{copy.runtime}</div>
+          <p className="mt-1 text-sm leading-6 opacity-80">{runtimeMessage || copy.unsupported}</p>
+          <a href="https://github.com/muhammadelyasqanie1-sudo/Ai-app/releases/latest" target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full bg-slate-900 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-500 dark:bg-amber-200 dark:text-slate-950 dark:hover:bg-amber-100">
+            {dari ? 'دریافت APK برای هوش مصنوعی آفلاین بومی' : 'Download APK for Native Offline AI'}
+          </a>
+        </div>
+        <button type="button" onClick={() => setRuntimeBannerDismissed(true)} aria-label={dari ? 'بستن هشدار' : 'Dismiss WebGPU warning'} className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-slate-600 transition hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500 dark:text-amber-100 dark:hover:bg-white/10"><X size={18}/></button>
+      </div>
+    </div>}
+    {runtime === 'checking' && <div className="rounded-[24px] border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm dark:border-white/10 dark:bg-[#0d1729] dark:text-slate-300">{copy.checking}</div>
 
-    {viewMode === "models" && <section className="min-w-0 space-y-3 rounded-2xl border p-4">
+    {viewMode === "models" && <section className="min-w-0 space-y-4 rounded-[28px] border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 dark:border-white/10 dark:bg-[#0d1729]">
         {recommendedModels.length > 0 && <div className="space-y-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3"><div className="text-sm font-bold">{dari ? 'پیشنهاد برای دستگاه شما' : 'Recommended for your device'}</div><div className="flex gap-2 overflow-x-auto pb-1">{recommendedModels.map(model => <button key={model.model_id} type="button" onClick={() => setSelectedId(model.model_id)} className="min-w-44 rounded-lg border bg-slate-500/5 p-2 text-start"><div className="break-all text-xs font-semibold">{model.model_id}</div><div className="mt-1 text-[10px] text-emerald-600">{copy.recommended}</div></button>)}</div></div>}
         <div className="flex items-center justify-between gap-2"><h2 className="text-lg font-bold">{copy.catalog}</h2><span className="text-xs opacity-60">{models.length} {dari ? 'مدل' : 'models'}</span></div>
-        <label className="flex items-center gap-2 rounded-xl border px-3"><Search size={17} className="opacity-50"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={copy.search} className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none"/></label>
-        <div className="flex flex-wrap gap-1.5">{(['all','recommended','limited','incompatible'] as const).map(filter => <button key={filter} type="button" onClick={() => setModelFilter(filter)} className={'rounded-full border px-3 py-1.5 text-[11px] ' + (modelFilter === filter ? 'border-cyan-400 bg-cyan-400/10' : 'opacity-65')}>{filter === 'all' ? copy.allModels : copy[filter]}</button>)}</div>
+        <label className="flex min-h-12 items-center gap-3 rounded-full border border-slate-200 bg-slate-50 px-4 shadow-inner dark:border-white/10 dark:bg-white/[.04]"><Search size={17} className="opacity-50"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={copy.search} className="min-h-12 min-w-0 flex-1 bg-transparent py-3 text-sm outline-none placeholder:text-slate-400"/></label>
+        <div className="flex flex-wrap gap-1.5">{(['all','recommended','limited','incompatible','unknown'] as const).map(filter => <button key={filter} type="button" onClick={() => setModelFilter(filter)} className={'rounded-full border px-3 py-1.5 text-[11px] ' + (modelFilter === filter ? 'border-cyan-400 bg-cyan-400/10' : 'opacity-65')}>{filter === 'all' ? copy.allModels : copy[filter]}</button>)}</div>
         <div className="max-h-[430px] space-y-2 overflow-y-auto pe-1">
           {filtered.map(model => {
             const active = selectedId === model.model_id;
             const repo = getHuggingFaceRepo(model);
             const size = repo ? modelSizes[repo] : undefined;
             const isInstalled = installed.includes(model.model_id);
-            const fit = device ? assessOfflineModelFit(model.vram_required_MB || 0, device) : 'limited';
+            const fit = getCompatibility(model);
             return <button key={model.model_id} type="button" onClick={() => setSelectedId(model.model_id)} className={'w-full rounded-xl border p-3 text-start transition ' + (active ? 'border-cyan-400 bg-cyan-400/10' : 'hover:border-cyan-400/50')}>
               <div className="flex items-start justify-between gap-2"><span className="break-all text-sm font-semibold">{model.model_id}</span>{isInstalled && <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-600">{copy.installed}</span>}</div>
               <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] opacity-65"><span>{copy.minMemory}: {formatBytes((model.vram_required_MB || 0) * 1024 * 1024)}</span><span>{copy.downloadSize}: {size === undefined ? '…' : size === null ? copy.unknownSize : formatBytes(size)}</span><span className={fit === 'recommended' ? 'text-emerald-600' : fit === 'incompatible' ? 'text-red-500' : 'text-amber-600'}>{copy[fit]}</span></div>
@@ -450,12 +496,12 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
           <p className="text-xs opacity-65">{copy.limitation}</p>
           <p className="text-xs opacity-65">{copy.onlineNeeded}</p>
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span>{copy.downloadSize}</span><strong>{exactSize ? formatBytes(exactSize) : copy.unknownSize}</strong></div>
-          <button type="button" disabled={runtime !== 'ready' || busy || selectedFit === 'incompatible'} onClick={() => void loadModel(selected.model_id, !installed.includes(selected.model_id))} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 px-4 py-3 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"><ArrowDownToLine size={17}/>{installed.includes(selected.model_id) ? copy.load : copy.install}</button>
+          <button type="button" disabled={runtime !== 'ready' || !webGpuAvailable || busy || selectedFit === 'incompatible'} onClick={() => void loadModel(selected.model_id, !installed.includes(selected.model_id))} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 px-4 py-3 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"><ArrowDownToLine size={17}/>{installed.includes(selected.model_id) ? copy.load : copy.install}</button>
         </div>}
         {busy && <div className="space-y-2 rounded-xl border p-3"><div className="flex justify-between gap-2 text-xs"><span className="truncate">{progressText}</span><strong>{progress}%</strong></div><div className="h-2 overflow-hidden rounded-full bg-slate-500/20"><div className="h-full rounded-full bg-cyan-400 transition-all" style={{ width: progress + '%' }}/></div></div>}
       </section>}
 
-      {viewMode === "chat" && <section className="flex min-h-[480px] min-w-0 flex-col rounded-2xl border p-4">
+      {viewMode === "chat" && <section className="flex min-h-[480px] min-w-0 flex-col rounded-[28px] border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 dark:border-white/10 dark:bg-[#0d1729]">
         <div className="flex items-center gap-2"><MessageSquare size={18}/><div><h2 className="font-bold">{copy.chat}</h2><p className="text-xs opacity-60">{copy.chatHint}</p></div><button type="button" onClick={() => void clearCurrentOfflineChat()} disabled={!messages.length} className="ms-auto rounded-lg border px-2.5 py-1.5 text-[10px] disabled:opacity-40">{dari ? "پاک‌کردن گفتگو" : "Clear chat"}</button></div>
         <div className="my-3 rounded-xl bg-emerald-500/5 p-3 text-xs text-emerald-700 dark:text-emerald-300">{copy.privacy}</div><div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3 text-xs"><label className="flex items-center gap-2"><input type="checkbox" checked={lowPowerMode} onChange={event => setLowPowerMode(event.target.checked)} />{dari ? "حالت کم‌مصرف (پاسخ کوتاه‌تر و فشار کمتر)" : "Low-power mode (shorter replies, lower workload)"}</label><span className="opacity-60">{lowPowerMode ? "256" : "512"} max tokens</span></div>{thermalWarning && <p role="status" className="rounded-xl bg-amber-500/10 p-3 text-xs text-amber-700">{dari ? "مدت پردازش طولانی شد؛ برای کاهش گرما و مصرف باتری کمی استراحت بده." : "Long inference is taking over two minutes. Let the device cool down to reduce heat and battery drain."}</p>}
         {engineRef.current && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-cyan-400/25 bg-cyan-400/5 p-3 text-xs"><strong>{dari ? 'حالت آفلاین — مدل:' : 'Offline Mode — Model:'} {activeOfflineModelLabel || selectedId}</strong><button type="button" onClick={() => setViewMode('models')} className="rounded-lg border px-2.5 py-1.5">{dari ? 'تغییر مدل' : 'Change Model'}</button></div>}
@@ -470,21 +516,21 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
         </div>
       </section>}
 
-    {viewMode === "models" && <section className="space-y-4 rounded-2xl border p-4 sm:p-5">
+    {viewMode === "models" && <section className="space-y-4 rounded-[28px] border border-slate-200/80 bg-white p-4 shadow-sm sm:p-6 dark:border-white/10 dark:bg-[#0d1729]">
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-extrabold">{dari ? 'کتابخانه جهانی مدل‌ها' : 'Global Model Library'}</h2><p className="mt-1 text-xs opacity-65">{dari ? 'جست‌وجوی زنده مدل‌ها و فرمت‌ها در Hugging Face' : 'Live Hugging Face discovery across model formats'}</p></div><span className="text-xs opacity-60">{hfModels.length} {dari ? 'نتیجه' : 'results'}</span></div>
-      <div className="flex items-center gap-2 rounded-xl border px-3"><Search size={17}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={dari ? 'جست‌وجو؛ مثلاً Spark-X2.6' : 'Search models — e.g. Spark-X2.6'} className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none"/></div>
+      <div className="flex min-h-12 items-center gap-3 rounded-full border border-slate-200 bg-slate-50 px-4 shadow-inner dark:border-white/10 dark:bg-white/[.04]"><Search size={17}/><input value={hfQuery} onChange={event => setHfQuery(event.target.value)} placeholder={dari ? 'جست‌وجو؛ مثلاً Spark-X2.6' : 'Search models — e.g. Spark-X2.6'} className="min-h-12 min-w-0 flex-1 bg-transparent py-3 text-sm outline-none placeholder:text-slate-400"/></div>
       <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setHfFormat('gguf')} className={'rounded-full border px-3 py-1.5 text-xs ' + (hfFormat === 'gguf' ? 'border-cyan-400 bg-cyan-400/10' : 'opacity-65')}>GGUF</button><button type="button" onClick={() => setHfFormat('all')} className={'rounded-full border px-3 py-1.5 text-xs ' + (hfFormat === 'all' ? 'border-cyan-400 bg-cyan-400/10' : 'opacity-65')}>{dari ? 'همه فرمت‌های مدل زبانی' : 'All language-model formats'}</button></div>
       {hfError && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs"><span className="min-w-0 flex-1">{hfError}</span><button type="button" onClick={() => setHfRetry(value => value + 1)} className="shrink-0 rounded-lg border border-current/20 px-3 py-1.5 font-semibold">{dari ? 'تلاش دوباره' : 'Retry'}</button></div>}{hfBusy && <p role="status" aria-live="polite" className="text-xs opacity-60">{dari ? 'در حال دریافت…' : 'Loading models from Hugging Face…'}</p>}
-      <section className="space-y-3 rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-3"><div><h3 className="font-bold">{dari ? 'پیشنهاد ویژه: Spark X2.6' : 'Featured: Spark X2.6'}</h3><p className="mt-1 text-xs opacity-65">{dari ? 'نتایج زنده از Hugging Face' : 'Live results from Hugging Face'}</p></div><div className="grid gap-2 sm:grid-cols-2">{sparkModels.map(model => <button key={model.id} type="button" onClick={() => setHfSelected(model.id)} className={'rounded-xl border p-3 text-start ' + (hfSelected === model.id ? 'border-cyan-400 bg-cyan-400/10' : '')}><div className="break-all text-sm font-semibold">{model.id}</div><div className="mt-1 text-[11px] opacity-60">↓ {model.downloads.toLocaleString()} · ♥ {model.likes.toLocaleString()}</div></button>)}</div>{!sparkModels.length && <p className="text-xs opacity-60">{dari ? 'در حال دریافت نتایج Spark…' : 'Loading Spark results…'}</p>}</section>
+      <section className="space-y-3 rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-3"><div><h3 className="font-bold">{dari ? 'پیشنهاد ویژه: Spark X2.6' : 'Featured: Spark X2.6'}</h3><p className="mt-1 text-xs opacity-65">{dari ? 'نتایج زنده از Hugging Face' : 'Live results from Hugging Face'}</p></div><div className="grid gap-2 sm:grid-cols-2">{sparkModels.map(model => <button key={model.id} type="button" onClick={() => setHfSelected(model.id)} className={'rounded-xl border p-3 text-start ' + (hfSelected === model.id ? 'border-cyan-400 bg-cyan-400/10' : '')}><div className="break-all text-sm font-semibold">{model.id}</div><div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] opacity-70"><span>↓ {model.downloads.toLocaleString()}</span><span>♥ {model.likes.toLocaleString()}</span><span className="font-semibold text-cyan-700 dark:text-cyan-300">{dari ? 'حجم GGUF:' : 'GGUF size:'} {hfFileSummaries[model.id]?.status === 'ready' ? (hfFileSummaries[model.id].size ? formatBytes(hfFileSummaries[model.id].size) : (dari ? 'فایل GGUF ندارد' : 'No GGUF file')) : hfFileSummaries[model.id]?.status === 'error' ? (dari ? 'اندازه نامشخص' : 'Size unavailable') : (dari ? 'در حال دریافت اندازه…' : 'Fetching size…')}</span></div></button>)}</div>{!sparkModels.length && <p className="text-xs opacity-60">{dari ? 'در حال دریافت نتایج Spark…' : 'Loading Spark results…'}</p>}</section>
       {hfRecommended.length > 0 && <div className="space-y-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3"><div className="text-sm font-bold">{dari ? 'پیشنهاد برای دستگاه شما' : 'Recommended for your device'}</div><div className="grid gap-2 sm:grid-cols-3">{hfRecommended.map(item => <button key={item.model.id} type="button" onClick={() => { pendingGgufPathRef.current = item.filePath; setHfSelected(item.model.id); }} className="rounded-lg border bg-slate-500/5 p-2 text-start"><div className="break-all text-xs font-semibold">{item.model.id}</div><div className="mt-1 text-[10px] opacity-65">{formatBytes(item.fileSize)} · {item.fit === 'recommended' ? copy.recommended : copy.limited}</div></button>)}</div></div>}      <div className="flex flex-wrap gap-1.5"><button type="button" onClick={() => setHfCategories([])} className={'rounded-full border px-3 py-1.5 text-[11px] ' + (!hfCategories.length ? 'border-cyan-400 bg-cyan-400/10' : 'opacity-65')}>{dari ? 'همه مدل‌ها' : 'All Models'}</button>{['coding','learning','general','creative','science'].map(category => <button key={category} type="button" onClick={() => setHfCategories(previous => previous.includes(category) ? previous.filter(item => item !== category) : [...previous, category])} className={'rounded-full border px-3 py-1.5 text-[11px] ' + (hfCategories.includes(category) ? 'border-cyan-400 bg-cyan-400/10' : 'opacity-65')}>{category}</button>)}</div>
-      <div className="grid gap-2 sm:grid-cols-2">{hfModels.filter(model => !hfCategories.length || hfCategories.some(category => formatModelCategory(model.tags, model.pipeline_tag).includes(category) || (category === 'science' && model.tags.some(tag => /science|physics|chemistry|biology/i.test(tag))))).map(model => <button key={model.id} type="button" onClick={() => setHfSelected(model.id)} className={'rounded-xl border p-3 text-start ' + (hfSelected === model.id ? 'border-cyan-400 bg-cyan-400/10' : '')}><div className="break-all text-sm font-semibold">{model.id}</div><div className="mt-2 flex gap-3 text-[11px] opacity-65"><span>↓ {model.downloads.toLocaleString()}</span><span>♥ {model.likes.toLocaleString()}</span><span>{model.pipeline_tag || 'General'}</span></div></button>)}</div>
+      <div className="grid gap-2 sm:grid-cols-2">{hfModels.filter(model => !hfCategories.length || hfCategories.some(category => formatModelCategory(model.tags, model.pipeline_tag).includes(category) || (category === 'science' && model.tags.some(tag => /science|physics|chemistry|biology/i.test(tag))))).map(model => <button key={model.id} type="button" onClick={() => setHfSelected(model.id)} className={'rounded-xl border p-3 text-start ' + (hfSelected === model.id ? 'border-cyan-400 bg-cyan-400/10' : '')}><div className="break-all text-sm font-semibold">{model.id}</div><div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] opacity-70"><span>↓ {model.downloads.toLocaleString()}</span><span>♥ {model.likes.toLocaleString()}</span><span>{model.pipeline_tag || 'General'}</span><span className="font-semibold text-cyan-700 dark:text-cyan-300">{dari ? 'حجم GGUF:' : 'GGUF size:'} {hfFileSummaries[model.id]?.status === 'ready' ? (hfFileSummaries[model.id].size ? formatBytes(hfFileSummaries[model.id].size) : (dari ? 'فایل GGUF ندارد' : 'No GGUF file')) : hfFileSummaries[model.id]?.status === 'error' ? (dari ? 'اندازه نامشخص' : 'Size unavailable') : (dari ? 'در حال دریافت اندازه…' : 'Fetching size…')}</span></div></button>)}</div>
       {!hfModels.length && !hfBusy && <p className="py-4 text-center text-sm opacity-60">{dari ? 'مدلی پیدا نشد.' : 'No models found.'}</p>}
       {hfHasMore && <button type="button" disabled={hfBusy} onClick={() => void loadMoreHf()} className="w-full rounded-xl border px-4 py-2 text-sm">{dari ? 'مدل‌های بیشتر' : 'Load more'}</button>}
       {hfSelected && <div className="space-y-3 rounded-xl bg-slate-500/5 p-3"><div className="flex flex-wrap justify-between gap-2"><strong className="break-all text-sm">{hfSelected}</strong><span className="text-xs">{hfRepository ? formatBytes(hfRepository.totalBytes) : '…'}</span></div>
         {hfRepository && <>{hfRepository.ggufFiles.length > 0 ? <label className="block text-xs font-semibold">{dari ? 'انتخاب فایل و Quantization' : 'Select GGUF file / quantization'}<select value={hfQuantization} onChange={event => setHfQuantization(event.target.value)} className="mt-2 w-full rounded-lg border bg-transparent p-2">{hfRepository.ggufFiles.map(file => <option key={file.path} value={file.path}>{file.name} · {formatBytes(file.size)}{file.quantization ? ' · ' + file.quantization : ''}</option>)}</select></label> : <p className="rounded-lg bg-amber-500/10 p-3 text-xs">{dari ? 'این مخزن فایل GGUF ندارد. فرمت‌های دیگر فعلاً فقط قابل مشاهده‌اند؛ تا زمانی که Runtime سازگار اضافه نشود، دکمه دانلود/اجرا فعال نمی‌شود.' : 'This repository has no GGUF file. Other formats are discoverable, but download and inference remain disabled until a compatible runtime is implemented.'}</p>}<div className="flex flex-wrap items-center gap-2"><button type="button" disabled={!!ggufBusyId || !hfQuantization || ggufPreflightBlocked} onClick={() => void downloadSelectedGguf()} className="rounded-lg bg-cyan-500 px-4 py-2.5 text-xs font-bold text-slate-950 disabled:opacity-40">{dari ? 'دانلود و نصب فایل GGUF' : 'Download & install GGUF'}</button><a className="rounded-lg border px-3 py-2.5 text-xs" href={'https://huggingface.co/' + hfSelected} target="_blank" rel="noreferrer">{dari ? 'مخزن' : 'Repository'}</a></div><p className="text-xs text-amber-700">{usesNativeOfflineDownloads() ? (dari ? 'اندروید از Download Manager سیستم برای دانلود پس‌زمینه و ادامه خودکار پس از قطع شبکه استفاده می‌کند.' : 'Android uses the system Download Manager for background transfers and automatic retry after network interruptions.') : (dari ? 'فایل در حافظه خصوصی مرورگر ذخیره و SHA-256 محاسبه می‌شود. اگر مخزن هش معتبر ارائه کند، با آن مقایسه می‌شود.' : 'The file is stored in browser-private OPFS storage and SHA-256 is calculated; when the repository provides a trusted hash it is compared.')} {dari ? 'دانلود به معنی آماده بودن موتور اجرای GGUF نیست.' : 'Downloading does not mean the GGUF inference runtime is ready.'}</p>{ggufPreflightBlocked && <p className="text-xs text-red-600">{ggufGated ? (dari ? 'این مخزن محدود یا نیازمند دسترسی است؛ دانلود عمومی ممکن نیست.' : 'This repository is gated; public unauthenticated download is unavailable.') : ggufRuntimeBlocked ? (dari ? 'موتور بومی GGUF در این دستگاه یا نسخه برنامه در دسترس نیست.' : 'The native GGUF runtime is unavailable on this device or in this build.') : ggufStorageBlocked ? (dari ? 'فضای ذخیره‌سازی کافی نیست.' : 'Not enough free storage for this model.') : ggufStorageUnknown ? (dari ? 'فضای ذخیره‌سازی قابل بررسی نیست؛ دانلود تا زمان بررسی غیرفعال است.' : 'Free storage could not be verified; download is disabled until storage can be checked.') : ggufRamBlocked ? (dari ? 'حافظه RAM این دستگاه برای بارگذاری این مدل کافی نیست.' : 'Estimated RAM requirement exceeds this device budget.') : ggufRamLimited ? (dari ? 'حافظه آزاد فعلی کم است؛ پیش از اجرای مدل برنامه‌های دیگر را ببند.' : 'Currently available RAM is low; close other apps before loading the model.') : (dari ? 'اندازه فایل معتبر یا مشخصات لازم برای بررسی سازگاری در دسترس نیست.' : 'File size or required compatibility data is unavailable; download is disabled until preflight can verify it.')}</p>}{ggufBusyId === hfSelected + '/' + hfQuantization && <div className="space-y-2"><div className="flex justify-between text-xs"><span>{formatBytes(ggufProgress[ggufBusyId]?.downloadedBytes || 0)} / {formatBytes(ggufProgress[ggufBusyId]?.totalBytes)}</span><span>{ggufProgress[ggufBusyId]?.percent ?? '—'}%</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-500/20"><div className="h-full bg-cyan-400" style={{width:(ggufProgress[ggufBusyId]?.percent ?? 0)+'%'}}/></div>{!usesNativeOfflineDownloads() && <button type="button" onClick={() => pauseSelectedGguf(ggufBusyId)} className="rounded-lg border px-3 py-1.5 text-xs">{dari ? 'توقف موقت' : 'Pause'}</button>}</div>}</>}
       </div>}
     </section>}
-    {viewMode === "models" && <section className="space-y-3 rounded-2xl border p-4">
+    {viewMode === "models" && <section className="space-y-4 rounded-[28px] border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 dark:border-white/10 dark:bg-[#0d1729]">
       <div className="flex items-center justify-between gap-2"><h2 className="font-bold">{dari ? 'فایل‌های GGUF دانلودشده' : 'Downloaded GGUF files'}</h2><span className="text-xs opacity-60">{ggufTasks.filter(task => task.status === 'installed').length}</span></div>
       {!ggufTasks.length && <p className="text-xs opacity-60">{dari ? 'هنوز فایل GGUF دانلود نشده است.' : 'No GGUF files downloaded yet.'}</p>}
       {ggufTasks.some(task => task.status === 'installed') && <p className="rounded-lg bg-amber-500/10 p-2.5 text-xs text-amber-700">{dari ? 'فایل‌ها در دستگاه ذخیره شده‌اند؛ برای اجرای آن‌ها هنوز موتور GGUF (llama.cpp) باید اضافه شود.' : 'These files are stored locally. They cannot be used for inference until the GGUF runtime (llama.cpp) is integrated.'}</p>}
