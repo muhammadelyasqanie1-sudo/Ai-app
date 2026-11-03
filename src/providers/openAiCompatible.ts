@@ -73,7 +73,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
           if (after) url.searchParams.set('after', after);
           const response = await fetch(url, {
             headers: { Authorization: 'Bearer ' + current.apiKey, Accept: 'application/json' },
-            signal: AbortSignal.timeout(15_000),
+            signal: AbortSignal.timeout(15_000), redirect: 'error',
           });
           if (!response.ok) {
             console.error('AI_PROVIDER_MODEL_DISCOVERY_FAILED', JSON.stringify({ provider: current.id, status: response.status }));
@@ -128,7 +128,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
     },
 
     async healthCheck(modelId: string): Promise<HealthStatus> {
-      const current = config();
+      const current = currentConfig();
       const checkedAt = new Date().toISOString();
       if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
         return { healthy: false, checkedAt, message: 'Provider not reachable.' };
@@ -140,7 +140,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
           method: 'POST',
           headers: { Authorization: 'Bearer ' + current.apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify({ model: modelId, messages: [{ role: 'user', content: 'Reply with OK.' }], max_tokens: 1, stream: false }),
-          signal: AbortSignal.timeout(15_000),
+          signal: AbortSignal.timeout(15_000), redirect: 'error',
         });
         if (!response.ok) {
           console.warn('AI_PROVIDER_HEALTH_CHECK_FAILED', JSON.stringify({ provider: current.id, model: modelId, status: response.status }));
@@ -157,7 +157,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
     },
 
     async *streamChat(input: ChatRequest): AsyncIterable<ChatChunk> {
-      const current = config();
+      const current = currentConfig();
       if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
         throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
       }
@@ -167,7 +167,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
           method: 'POST',
           headers: { Authorization: 'Bearer ' + current.apiKey, 'Content-Type': 'application/json', Accept: 'text/event-stream' },
           body: JSON.stringify({ model: input.model, messages: input.messages, stream: true }),
-          signal: input.signal ? AbortSignal.any([AbortSignal.timeout(90_000), input.signal]) : AbortSignal.timeout(90_000),
+          signal: input.signal ? AbortSignal.any([AbortSignal.timeout(90_000), input.signal]) : AbortSignal.timeout(90_000), redirect: 'error',
         });
       } catch (error) {
         console.error('AI_PROVIDER_CHAT_CONNECTION_ERROR', JSON.stringify({ provider: current.id, model: input.model, error: error instanceof Error ? error.message : 'unknown_error' }));
