@@ -102,8 +102,13 @@ export async function handleFilesApi(req:IncomingMessage,res:ServerResponse,path
       await client.query('DELETE FROM files WHERE id=$1 AND user_id=$2',[match[1],user.id]);
       await client.query('COMMIT');
       const storageKey=String(found.rows[0].storage_key||'');
-      const root=path.resolve(process.env.AFG_UPLOAD_QUARANTINE_DIR||'/nonexistent');
-      if (storageKey && path.dirname(path.resolve(storageKey))===root) await unlink(storageKey).catch(()=>{});
+      try {
+        const root=await ensureQuarantineDirectory();
+        const candidate=path.resolve(storageKey);
+        if (storageKey && path.dirname(candidate)===root && path.basename(candidate)===path.basename(storageKey)) {
+          await unlink(candidate).catch(()=>{});
+        }
+      } catch { /* Keep metadata deletion successful even if private storage is unavailable. */ }
       reply(res,200,{deleted:true,id:match[1]}); return true;
     } catch {
       await client.query('ROLLBACK').catch(()=>{});
