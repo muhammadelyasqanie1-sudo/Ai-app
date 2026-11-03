@@ -33,7 +33,7 @@ export function createAnthropicAdapter(options:AnthropicAdapterOptions):ChatProv
           const url=new URL(baseUrl+'/v1/models');
           url.searchParams.set('limit','100');
           if(afterId)url.searchParams.set('after_id',afterId);
-          const response=await fetch(url,{headers:{'x-api-key':options.apiKey,'anthropic-version':ANTHROPIC_VERSION,accept:'application/json'},signal:AbortSignal.timeout(15000)});
+          const response=await fetch(url,{headers:{'x-api-key':options.apiKey,'anthropic-version':ANTHROPIC_VERSION,accept:'application/json'},signal:AbortSignal.timeout(15000),redirect:'error'});
           if(!response.ok)throw new ProviderAdapterError('Anthropic model discovery failed.',response.status>=500?502:response.status,'model_catalog_failed');
           const payload=await response.json() as {data?:AnthropicModel[];has_more?:boolean;last_id?:string};
           if(!Array.isArray(payload.data))throw new ProviderAdapterError('Anthropic returned an invalid model catalog.',502,'invalid_model_catalog');
@@ -55,7 +55,7 @@ export function createAnthropicAdapter(options:AnthropicAdapterOptions):ChatProv
       try{
         const response=await fetch(baseUrl+'/v1/messages',{method:'POST',headers,body:JSON.stringify({
           model:modelId,max_tokens:1,messages:[{role:'user',content:'Reply OK.'}],
-        }),signal:AbortSignal.timeout(15000)});
+        }),signal:AbortSignal.timeout(15000),redirect:'error'});
         if(!response.ok)return {healthy:false,checkedAt,message:'Anthropic inference probe failed.'};
         const payload=await response.json() as {content?:unknown[];error?:unknown};
         return {healthy:Array.isArray(payload.content)&&!payload.error,checkedAt};
@@ -67,7 +67,7 @@ export function createAnthropicAdapter(options:AnthropicAdapterOptions):ChatProv
       try{
         response=await fetch(baseUrl+'/v1/messages',{method:'POST',headers:{...headers,accept:'text/event-stream'},
           body:JSON.stringify({model:input.model,...mapped,max_tokens:4096,stream:true}),
-          signal:input.signal?AbortSignal.any([AbortSignal.timeout(90000),input.signal]):AbortSignal.timeout(90000)});
+          signal:input.signal?AbortSignal.any([AbortSignal.timeout(90000),input.signal]):AbortSignal.timeout(90000),redirect:'error'});
       }catch{throw new ProviderAdapterError('Could not contact Anthropic.',502,'provider_unreachable');}
       if(!response.ok||!response.body)throw new ProviderAdapterError('Anthropic rejected the request.',response.status>=400&&response.status<500?response.status:502,'provider_request_rejected');
       const reader=response.body.getReader();const decoder=new TextDecoder();let buffer='';
