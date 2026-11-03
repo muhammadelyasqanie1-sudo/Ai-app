@@ -139,7 +139,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
 
 
     const keyRoute = pathname.match(/^\\/api\\/admin\\/providers\\/([a-z0-9-]+)\\/keys(?:\\/rotate)?$/);
-    if (keyRoute && ((req.method==='PUT' && !pathname.endsWith('/rotate')) || (req.method==='POST' && pathname.endsWith('/rotate'))) {
+    if (keyRoute && ((req.method==='PUT' && !pathname.endsWith('/rotate')) || (req.method==='POST' && pathname.endsWith('/rotate')))) {
       if (user.role !== 'superadmin') { sendAuthJson(res,403,{error:'Superadmin access is required to manage provider keys.'}); return true; }
       const providerSlug=keyRoute[1];
       const body=await readJsonBody(req,10000);
