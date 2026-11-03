@@ -254,10 +254,21 @@ export default function App() {
           }
         }).catch(() => {});
     };
+    const handleSignOut = () => {
+      wasAuthenticatedRef.current = false;
+      serverConversationRef.current = null;
+      setMessages([]);
+      setCurrentSessionId(`chat-${Date.now()}`);
+      setUser(DEFAULT_USER);
+      setCurrentTab('chat');
+      setHasEnteredApp(false);
+      localStorage.removeItem('afg_entry_mode');
+    };
     window.addEventListener('afg-auth-change', syncAccount);
     window.addEventListener('afg-preferences-change', syncAccount);
+    window.addEventListener('afg-signout', handleSignOut);
     syncAccount();
-    return () => { window.removeEventListener('afg-auth-change', syncAccount); window.removeEventListener('afg-preferences-change', syncAccount); };
+    return () => { window.removeEventListener('afg-auth-change', syncAccount); window.removeEventListener('afg-preferences-change', syncAccount); window.removeEventListener('afg-signout', handleSignOut); };
   }, []);
 
   useEffect(() => {
