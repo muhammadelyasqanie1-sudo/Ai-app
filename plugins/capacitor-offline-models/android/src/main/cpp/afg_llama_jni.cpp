@@ -161,11 +161,14 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerateStream(
     JNIEnv * env, jobject, jstring jmessages, jint max_tokens, jobject callback) {
     std::lock_guard<std::mutex> lock(g_mutex);
     g_last_error.clear();
-    if (callback == nullptr) { g_last_error = "A native streaming callback is required."; return nullptr; }
-    jclass callback_class = env->GetObjectClass(callback);
-    if (callback_class == nullptr) { g_last_error = "Unable to resolve the streaming callback."; return nullptr; }
-    jmethodID on_token = env->GetMethodID(callback_class, "onNativeToken", "(Ljava/lang/String;)V");
-    if (on_token == nullptr) { env->DeleteLocalRef(callback_class); g_last_error = "The Java streaming callback method is unavailable."; return nullptr; }
+    jclass callback_class = nullptr;
+    jmethodID on_token = nullptr;
+    if (callback != nullptr) {
+        callback_class = env->GetObjectClass(callback);
+        if (callback_class == nullptr) { g_last_error = "Unable to resolve the streaming callback."; return nullptr; }
+        on_token = env->GetMethodID(callback_class, "onNativeToken", "(Ljava/lang/String;)V");
+        if (on_token == nullptr) { env->DeleteLocalRef(callback_class); g_last_error = "The Java streaming callback method is unavailable."; return nullptr; }
+    }
 
     if (!g_model || !g_context || !g_vocab) {
         g_last_error = "No GGUF model is loaded.";
@@ -244,14 +247,14 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerateStream(
         const int32_t prompt_batch_size = static_cast<int32_t>(std::min<uint32_t>(llama_n_batch(g_context), 512));
         for (int32_t offset = 0; offset < token_count; offset += prompt_batch_size) {
             if (g_cancel_requested.load(std::memory_order_acquire)) {
-                env->DeleteLocalRef(callback_class);
+                if (callback_class != nullptr) env->DeleteLocalRef(callback_class);
                 return env->NewStringUTF("");
             }
             const int32_t count = std::min(prompt_batch_size, token_count - offset);
             llama_batch prompt_batch = llama_batch_get_one(tokens.data() + offset, count);
             if (llama_decode(g_context, prompt_batch) < 0) {
                 if (g_cancel_requested.load(std::memory_order_acquire)) {
-                    env->DeleteLocalRef(callback_class);
+                    if (callback_class != nullptr) env->DeleteLocalRef(callback_class);
                     return env->NewStringUTF("");
                 }
                 g_last_error = "llama.cpp failed while processing the prompt.";
@@ -282,22 +285,24 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerateStream(
             if (piece_size > 0) {
                 const std::string token_piece(piece, static_cast<size_t>(piece_size));
                 output.append(token_piece);
-                pending_utf8.append(token_piece);
-                const size_t complete_size = complete_utf8_prefix(pending_utf8);
-                if (complete_size > 0) {
-                    const std::string complete_piece = pending_utf8.substr(0, complete_size);
-                    pending_utf8.erase(0, complete_size);
-                    jstring java_piece = utf8_to_jstring(env, complete_piece);
-                    if (java_piece != nullptr) {
-                        env->CallVoidMethod(callback, on_token, java_piece);
-                        env->DeleteLocalRef(java_piece);
+                if (callback != nullptr) {
+                    pending_utf8.append(token_piece);
+                    const size_t complete_size = complete_utf8_prefix(pending_utf8);
+                    if (complete_size > 0) {
+                        const std::string complete_piece = pending_utf8.substr(0, complete_size);
+                        pending_utf8.erase(0, complete_size);
+                        jstring java_piece = utf8_to_jstring(env, complete_piece);
+                        if (java_piece != nullptr) {
+                            env->CallVoidMethod(callback, on_token, java_piece);
+                            env->DeleteLocalRef(java_piece);
+                        }
                     }
-                }
-                if (env->ExceptionCheck()) {
-                    env->ExceptionClear();
-                    g_last_error = "The JavaScript streaming listener failed.";
-                    env->DeleteLocalRef(callback_class);
-                    return nullptr;
+                    if (env->ExceptionCheck()) {
+                        env->ExceptionClear();
+                        g_last_error = "The JavaScript streaming listener failed.";
+                        env->DeleteLocalRef(callback_class);
+                        return nullptr;
+                    }
                 }
             }
 
@@ -308,14 +313,14 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerateStream(
                 break;
             }
         }
-        if (!pending_utf8.empty()) {
+        if (callback != nullptr && !pending_utf8.empty()) {
             jstring final_piece = utf8_to_jstring(env, pending_utf8);
             if (final_piece != nullptr) {
                 env->CallVoidMethod(callback, on_token, final_piece);
                 env->DeleteLocalRef(final_piece);
             }
         }
-        env->DeleteLocalRef(callback_class);
+        if (callback_class != nullptr) env->DeleteLocalRef(callback_class);
         return utf8_to_jstring(env, output);
     } catch (const std::exception & error) {
         g_last_error = error.what();
