@@ -96,19 +96,26 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/providers') {
+      await refreshDatabaseProviderAdapters(true);
       const result = await pool.query(`SELECT p.id,p.slug,p.kind,p.display_name,p.base_url,p.enabled,p.config_json,
           p.last_health_at,p.last_health_ok,p.last_error_code,p.source,p.created_at,p.updated_at,
           EXISTS(SELECT 1 FROM provider_keys k WHERE k.provider_id=p.id AND k.status='active') AS has_key,
           (SELECT k.key_hint FROM provider_keys k WHERE k.provider_id=p.id AND k.alias='default' AND k.status='active' LIMIT 1) AS key_hint,
           (SELECT k.status FROM provider_keys k WHERE k.provider_id=p.id AND k.alias='default' ORDER BY k.created_at DESC LIMIT 1) AS key_status
         FROM providers p ORDER BY p.source,p.display_name`);
-      sendAuthJson(res,200,{providers:result.rows.map((row)=>({
-        ...row,id:row.slug,displayName:row.display_name,
-        configured: row.kind==='cloudflare' ? Boolean(process.env.CLOUDFLARE_ACCOUNT_ID&&process.env.CLOUDFLARE_API_TOKEN)
-          : row.kind==='ollama' ? false : Boolean(row.has_key),
-        keyHint:user.role==='superadmin' ? row.key_hint : null,
-        keyStatus:row.key_status,
-      }))}); return true;
+      const providers=await Promise.all(result.rows.map(async(row)=>{
+        const id=String(row.slug||row.kind);
+        const adapter=getProviderAdapter(id);
+        let runtimeConfigured=false;
+        try{runtimeConfigured=Boolean((await adapter?.validateConfig())?.valid);}catch{}
+        return {
+          ...row,id,displayName:row.display_name,
+          configured:runtimeConfigured||Boolean(row.has_key),
+          keyHint:user.role==='superadmin'?row.key_hint:null,
+          keyStatus:row.key_status,
+        };
+      }));
+      sendAuthJson(res,200,{providers});return true;
     }
 
     if(req.method==='POST' && pathname==='/api/admin/providers/custom'){
