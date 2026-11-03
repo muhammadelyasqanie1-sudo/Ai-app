@@ -37,7 +37,8 @@ public final class AFGModelDownloadService extends Service {
             int id = intent.getIntExtra(EXTRA_DOWNLOAD_ID, -1);
             if (id > 0) enqueue(this, id);
         }
-        stopForeground(STOP_FOREGROUND_REMOVE);
+        if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE);
+        else stopForeground(true);
         stopSelf(startId);
         return START_NOT_STICKY;
     }
