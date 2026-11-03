@@ -263,6 +263,14 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     }
     await patchUser(user,patch);
   };
+  const sendPasswordReset=async(user:UserRow)=>{
+    const identity=user.email||user.id;
+    const entered=window.prompt(`Send a password reset email to ${identity}? Type the email to confirm.`);
+    if(entered!==identity){setError('Confirmation did not match.');return;}
+    try{const result=await api('/api/admin/users/'+encodeURIComponent(user.id)+'/password-reset',{method:'POST',body:'{}'});
+      setNotice(result.message||'Password reset request processed.');}
+    catch(err){setError(err instanceof Error?err.message:'Password reset could not be sent.');}
+  };
   const revokeSession=async(session:any)=>{
     if(!window.confirm('Revoke this active session? The device will need to sign in again.'))return;
     try{await api('/api/admin/sessions/'+encodeURIComponent(session.id),{method:'DELETE'});setNotice('Session revoked.');await loadAdminData();}
@@ -378,6 +386,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     {tab==='users'&&<div className={panel}><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">User management</h2><p className="text-xs text-slate-500">Suspend access, revoke sessions, and assign roles.</p></div><div className="relative w-full sm:w-72"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500"/><input className={field+' pl-9'} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search email or user ID"/></div></div>
       <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="text-slate-500"><tr>{['User','Role','Status','Last activity','Requests 30d','Actions'].map(x=><th key={x} className="border-b border-slate-800 px-3 py-3">{x}</th>)}</tr></thead><tbody>{filteredUsers.map(u=><tr key={u.id} className="border-b border-slate-900"><td className="px-3 py-3"><p className="font-semibold text-white">{u.display_name||u.email||'Unnamed user'}</p><p className="mt-1 text-[10px] text-slate-500">{u.email} · {u.id.slice(0,8)}</p></td><td className="px-3 py-3 text-slate-300">{u.role}</td><td className="px-3 py-3"><span className={u.status==='active'?'text-emerald-300':'text-amber-300'}>{u.status}</span></td><td className="px-3 py-3 text-slate-400">{date(u.last_seen_at)}</td><td className="px-3 py-3 text-slate-300">{fmt(u.requests_30d)}</td><td className="px-3 py-3"><div className="flex flex-wrap gap-2">
         <button className={secondary} onClick={()=>void openUserProfile(u)}>Profile</button>
+        <button className={secondary} onClick={()=>void sendPasswordReset(u)}>Reset password</button>
         {u.id!==selectedUser?.id&&<button className={secondary} onClick={()=>void confirmUserChange(u,{status:u.status==='active'?'suspended':'active'})}>{u.status==='active'?'Suspend':'Reactivate'}</button>}
         {u.role!=='superadmin'&&<button className={secondary} onClick={()=>void confirmUserChange(u,{role:u.role==='admin'?'user':'admin'})}>{u.role==='admin'?'Demote':'Make admin'}</button>}
         {isSuperadmin&&u.role!=='superadmin'&&<button className={secondary} onClick={()=>void confirmUserChange(u,{role:'superadmin'})}>Make superadmin</button>}
