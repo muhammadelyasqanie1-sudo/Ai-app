@@ -14,11 +14,11 @@ Repository reviewed: `muhammadelyasqanie1-sudo/Ai-app`, branch baseline `main`.
 ## Critical gaps against the requested specification
 
 ### Provider control plane
-- The adapter registry is not the requested seven-provider catalog. It has only Cloudflare Workers AI, one configurable OpenAI-compatible endpoint, and GPT-OSS proxy.
+- The provider database catalog is now seeded with Cloudflare Workers AI, DeepSeek, OpenAI, Anthropic, Gemini, OpenRouter, and local Ollama. The runtime adapter registry still has only Cloudflare Workers AI, one configurable OpenAI-compatible endpoint, and GPT-OSS proxy.
 - DeepSeek, first-party OpenAI, Anthropic, Gemini, OpenRouter, and desktop-local Ollama do not have dedicated adapters in the registry.
-- Provider metadata/base URLs are not stored as a normalized pre-seeded catalog. Provider settings currently live in `provider_configs`.
+- A new migration adds normalized provider slugs, base URLs, non-secret configuration, source markers, and idempotent seeds. A read-only provider inventory endpoint and custom-provider registration endpoint were added. The UI and runtime execution/discovery for arbitrary custom providers are still missing.
 - Provider testing currently validates configuration and model listing; it does not consistently execute a generation request against a selected model.
-- No encrypted multi-key `provider_keys` vault, key rotation API, or superadmin-only key management exists.
+- The schema now includes an encrypted multi-key `provider_keys` table, but encryption/decryption services, key-management APIs, key rotation, and superadmin-only authorization are not implemented.
 
 ### Model inventory and verification
 - Discovery is currently invoked globally, not per provider.
@@ -47,11 +47,13 @@ Repository reviewed: `muhammadelyasqanie1-sudo/Ai-app`, branch baseline `main`.
 
 ## Work started on this branch
 
-- `src/services/providerGateway.ts`: new model discoveries are inserted disabled by default. Existing rows retain their administrator-selected enabled state. This removes the unsafe implicit enablement path.
+- `src/services/providerGateway.ts`: new model discoveries are inserted disabled by default. Existing rows retain their administrator-selected enabled state.
+- `database/migrations/0003_provider_control_plane.sql`: adds provider catalog metadata, custom-provider-capable schema, encrypted-key table structure, model metadata fields, seven idempotently seeded built-in providers, five disabled/unverified DeepSeek model catalog entries, and append-only audit mutation trigger.
+- `src/api/adminHandler.ts`: adds provider inventory read API and validated custom-provider registration API with audit event. This removes the unsafe implicit enablement path.
 
 ## Implementation order
 
-1. Normalize provider registry metadata and add adapters for the requested providers; keep unsupported providers visibly unconfigured rather than pretending they are connected.
+1. Wire the seeded provider catalog into the UI and runtime; implement dedicated adapters for the requested providers and arbitrary custom OpenAI-compatible endpoints.
 2. Add per-provider complete discovery with pagination, upsert metadata, default-disabled semantics, and explicit discovery audit events.
 3. Add durable per-model inference probes and enforce the 24-hour verification predicate in every user-facing catalog path.
 4. Add role migration and RBAC with `user`, `admin`, and `superadmin`; add immutable audit enforcement.
