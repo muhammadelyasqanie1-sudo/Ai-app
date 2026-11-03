@@ -54,16 +54,28 @@ export async function streamNativeLlamaResponse(
   }
   if (signal?.aborted) throw new DOMException('Generation was cancelled.', 'AbortError');
   const listener = await AFGOfflineModels.addListener('generationToken', event => onToken(event.token));
-  const abort = () => { void AFGOfflineModels.cancelGeneration(); };
+  let nativeCallStarted = false;
+  let abortBeforeStart = false;
+  const abort = () => {
+    if (!nativeCallStarted) { abortBeforeStart = true; return; }
+    void AFGOfflineModels.cancelGeneration();
+  };
   signal?.addEventListener('abort', abort, { once: true });
-  if (signal?.aborted) abort();
+  if (signal?.aborted) {
+    signal.removeEventListener('abort', abort);
+    await listener.remove();
+    throw new DOMException('Generation was cancelled.', 'AbortError');
+  }
   const startedAt = Date.now();
-  await recordOfflineMetric({ name: 'inference_started' }).catch(() => undefined);
+  void recordOfflineMetric({ name: 'inference_started' }).catch(() => undefined);
   try {
-    const result = await AFGOfflineModels.generateStream({
+    const pendingGeneration = AFGOfflineModels.generateStream({
       messages: JSON.stringify(messages),
       maxTokens,
     });
+    nativeCallStarted = true;
+    if (abortBeforeStart || signal?.aborted) void AFGOfflineModels.cancelGeneration();
+    const result = await pendingGeneration;
     await recordOfflineMetric({ name: result.cancelled ? 'inference_failed' : 'inference_completed', durationMs: Date.now() - startedAt }).catch(() => undefined);
     return result;
   } catch (error) {
