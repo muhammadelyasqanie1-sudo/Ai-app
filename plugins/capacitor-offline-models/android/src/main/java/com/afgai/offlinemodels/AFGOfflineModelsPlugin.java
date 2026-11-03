@@ -135,6 +135,7 @@ public class AFGOfflineModelsPlugin extends Plugin {
 
     private volatile boolean generationCancelled = false;
 
+    @androidx.annotation.Keep
     public void onNativeToken(String token) {
         JSObject event = new JSObject();
         event.put("token", token);
