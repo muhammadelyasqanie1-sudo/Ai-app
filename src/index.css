@@ -479,3 +479,38 @@ body:after {width:32rem;height:32rem;right:-18rem;bottom:4%;background:#5142a8}
  .afg-prompt-card {min-height:74px!important}
 }
 @media(prefers-reduced-motion:reduce){.afg-chat-welcome-orb{animation:none}}
+
+
+/* Cinematic intro viewport balance: keep the motion artwork in the visual
+   center instead of letting the hero stage sit low on tall mobile screens. */
+.afg-cinematic-intro {
+  box-sizing: border-box;
+  height: 100dvh;
+  min-height: 100svh;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  align-content: stretch;
+}
+.afg-intro-stage {
+  align-self: center;
+  width: min(100%, 980px);
+  height: min(52dvh, 500px);
+  min-height: 270px;
+  margin-top: -2.5dvh;
+}
+.afg-intro-copy { margin-top: 0; }
+@media (max-width: 680px) {
+  .afg-intro-stage {
+    width: 112%;
+    height: min(46dvh, 410px);
+    min-height: 285px;
+    margin-top: -2dvh;
+  }
+  .afg-intro-copy { margin-top: -.25rem; }
+}
+@media (max-height: 680px) {
+  .afg-intro-stage {
+    height: min(40dvh, 300px);
+    min-height: 190px;
+    margin-top: 0;
+  }
+}
