@@ -291,6 +291,8 @@ const localized = (language: Language) => ({
 
 export const translations = {
   ...baseTranslations,
+  dari: { ...baseTranslations.dari, ...getCoreUi('dari'), ...getMoreCoreUi('dari') },
+  english: localized('english'),
   pashto: localized('pashto'),
   persian: localized('persian'),
   arabic: localized('arabic'),
