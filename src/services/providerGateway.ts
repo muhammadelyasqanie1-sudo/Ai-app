@@ -151,7 +151,7 @@ async function applyCapabilityOverrides(providerId: string, models: ModelDescrip
     const selected = new Set(override);
     return { ...model, capabilities: Object.fromEntries(
       Object.keys(model.capabilities).map((key) => [key, selected.has(key)]),
-    ) as CapabilityFlags };
+    ) as unknown as CapabilityFlags };
   });
 }
 
