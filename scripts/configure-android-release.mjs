@@ -61,7 +61,7 @@ if (!source.includes('AFG_AI_RELEASE_SIGNING')) {
         }
     }
 `;
-  source = source.slice(0, android.close) + signing + source.slice(android.close);
+  source = source.slice(0, android.open + 1) + signing + source.slice(android.open + 1);
   android = locateBlock(source, 'android');
 }
 const buildTypes = locateBlock(source, 'buildTypes', android.open);
