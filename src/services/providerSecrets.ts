@@ -11,20 +11,22 @@ function encryptionKey(): Buffer {
   return key;
 }
 
-export function encryptProviderConfig(value: Record<string, unknown>): string {
+export function encryptProviderConfig(value: Record<string, unknown>, context = ''): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', encryptionKey(), iv);
+  cipher.setAAD(Buffer.from(context, 'utf8'));
   const ciphertext = Buffer.concat([cipher.update(JSON.stringify(value), 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
   return [ENVELOPE_VERSION, iv.toString('base64url'), tag.toString('base64url'), ciphertext.toString('base64url')].join('.');
 }
 
-export function decryptProviderConfig(envelope: string): Record<string, unknown> {
+export function decryptProviderConfig(envelope: string, context = ''): Record<string, unknown> {
   const [version, ivText, tagText, ciphertextText, extra] = envelope.split('.');
   if (version !== ENVELOPE_VERSION || !ivText || !tagText || !ciphertextText || extra !== undefined) {
     throw new Error('Stored provider configuration has an unsupported encryption envelope.');
   }
   const decipher = createDecipheriv('aes-256-gcm', encryptionKey(), Buffer.from(ivText, 'base64url'));
+  decipher.setAAD(Buffer.from(context, 'utf8'));
   decipher.setAuthTag(Buffer.from(tagText, 'base64url'));
   const plaintext = Buffer.concat([
     decipher.update(Buffer.from(ciphertextText, 'base64url')),
