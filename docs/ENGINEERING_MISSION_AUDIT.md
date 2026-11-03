@@ -126,3 +126,8 @@ The first implementation draft briefly introduced a schema migration, but source
 ### Live execution update — administrator bootstrap
 
 The one-time administrator bootstrap now uses a PostgreSQL transaction-scoped advisory lock to serialize concurrent first-admin requests. The active-administrator check and account promotion/creation run in the same transaction. Inactive accounts are rejected rather than silently reactivated, and the session is created only after commit. This is source-level implementation only; no live concurrency/database test was run.
+
+
+### Live execution update — administrator lifecycle protection
+
+The `PATCH /api/admin/users` mutation now serializes with first-admin bootstrap using the same transaction-scoped advisory lock. It locks the target user row, prevents demotion/suspension of the final active administrator, and commits the user change, session revocation and audit record together. Source-level only; no database or concurrency test was run.
