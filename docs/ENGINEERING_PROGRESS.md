@@ -286,3 +286,19 @@ Build output note: the production bundle reports a 6,116.37 kB JavaScript librar
 ### Next action
 
 - Run the production build in CI, compare emitted chunk sizes, and address any integration regressions.
+
+
+### Follow-up to Milestone 10 — Lazy-load secondary workspace modules
+
+**Status:** IMPLEMENTED BUT NOT VERIFIED
+
+The initial PR #8 bundle output showed that the Offline Hub component itself split into a 72.11 kB chunk, but the shared `lib` chunk remained 6,116.37 kB. The optimization was therefore extended rather than reported as a complete initial-payload reduction.
+
+- Image generation, video generation, tools, history, settings, admin, terminal, and offline learning are now also loaded through `React.lazy` only when their workspace tab is selected.
+- A shared accessible loading state covers the lazy workspace modules.
+- Chat and Home remain eagerly available as core entry experiences.
+- The Offline Hub remains lazy-loaded.
+
+**Files changed:** `src/App.tsx`
+
+**Verification:** Source reviewed; the updated production build is pending CI. No size reduction is claimed until the next build output confirms it.
