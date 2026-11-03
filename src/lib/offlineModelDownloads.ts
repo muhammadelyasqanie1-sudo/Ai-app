@@ -10,6 +10,7 @@ export type OfflineDownloadState = {
   expectedBytes: number | null;
   downloadedBytes: number;
   expectedSha256: string | null;
+  etag?: string | null;
   computedSha256?: string | null;
   hashVerified?: boolean;
   localPath?: string | null;
@@ -256,27 +257,54 @@ export async function downloadGGUF(options: {
   const expectedSha256 = options.expectedSha256?.toLowerCase() || null;
   let activeWritable: FileSystemWritableFileStream | null = null;
   let dir: FileSystemDirectoryHandle | null = null;
+  let currentEtag: string | null = null;
   try {
     dir = await modelDirectory();
     const previousTask = await getOfflineDownload(id);
-    if (previousTask && previousTask.revision !== revision) await dir.removeEntry(partial).catch(() => undefined);
+    if (previousTask && previousTask.revision !== revision) {
+      await dir.removeEntry(partial).catch(() => undefined);
+    }
     let offset = await getFileSize(dir, partial);
+    currentEtag = previousTask?.revision === revision ? previousTask.etag || null : null;
+    if (offset > 0 && !currentEtag) {
+      await dir.removeEntry(partial).catch(() => undefined);
+      offset = 0;
+    }
     const modelUrl = 'https://huggingface.co/' + repoId + '/resolve/' + encodeURIComponent(revision) + '/' + fileName.split('/').map(encodeURIComponent).join('/');
-    await saveTask({ id, repoId, fileName, revision, url: modelUrl, expectedBytes, downloadedBytes: offset, expectedSha256, status: 'downloading', updatedAt: Date.now() });
-    let response = await fetch(modelUrl, {
-      headers: offset ? { Range: 'bytes=' + offset + '-' } : {},
+    await saveTask({ id, repoId, fileName, revision, url: modelUrl, expectedBytes, downloadedBytes: offset, expectedSha256, etag: currentEtag, status: 'downloading', updatedAt: Date.now() });
+    const requestHeaders: Record<string, string> = {};
+    if (offset > 0) {
+      requestHeaders.Range = 'bytes=' + offset + '-';
+      requestHeaders['If-Range'] = currentEtag as string;
+    }
+    const response = await fetch(modelUrl, {
+      headers: requestHeaders,
       signal: controller.signal,
       redirect: 'follow',
     });
-    if (offset && response.status === 200) {
+    const responseEtag = response.headers.get('etag');
+    if (offset > 0 && response.status === 200) {
       await dir.removeEntry(partial).catch(() => undefined);
       offset = 0;
-    } else if (offset && response.status !== 206) {
-      throw new Error('The model host did not support byte-range resume. Retry after clearing the partial download.');
+      currentEtag = responseEtag;
+      await saveTask({ id, repoId, fileName, revision, url: modelUrl, expectedBytes, downloadedBytes: 0, expectedSha256, etag: currentEtag, status: 'downloading', updatedAt: Date.now() });
+    } else if (offset > 0 && response.status === 206) {
+      const rangeHeader = response.headers.get('content-range') || '';
+      const rangeMatch = /^bytes (\\d+)-(\\d+)\\/(\\d+|\\*)$/.exec(rangeHeader);
+      if (!rangeMatch || Number(rangeMatch[1]) !== offset || !responseEtag || responseEtag !== currentEtag) {
+        await dir.removeEntry(partial).catch(() => undefined);
+        await saveTask({ id, repoId, fileName, revision, url: modelUrl, expectedBytes, downloadedBytes: 0, expectedSha256, etag: responseEtag, status: 'paused', updatedAt: Date.now(), error: 'The server range or ETag validator changed. Retry to start a fresh download.' });
+        throw new Error('The server range or ETag validator changed. The partial file was discarded; retry the download.');
+      }
+    } else if (offset > 0) {
+      throw new Error('The model host did not return 206 Partial Content for a resumed request.');
+    } else if (response.status === 206) {
+      const rangeHeader = response.headers.get('content-range') || '';
+      if (!/^bytes 0-\\d+\\/(\\d+|\\*)$/.test(rangeHeader)) throw new Error('The model host returned an invalid initial byte range.');
     }
+    currentEtag = responseEtag || currentEtag;
     if (!response.ok || !response.body) throw new Error('Model download failed (' + response.status + ').');
     const range = response.headers.get('content-range');
-    if (offset && range && !range.startsWith('bytes ' + offset + '-')) throw new Error('Server returned an unexpected byte range.');
     const totalFromRange = range ? Number(range.split('/')[1]) : null;
     const totalBytes = Number.isFinite(totalFromRange) && totalFromRange! > 0 ? totalFromRange : expectedBytes;
     const handle = await dir.getFileHandle(partial, { create: true });
@@ -303,7 +331,7 @@ export async function downloadGGUF(options: {
       sha.update(item.value);
       downloadedBytes += item.value.length;
       if (downloadedBytes - lastPersistedBytes >= 8 * 1024 * 1024) {
-        await saveTask({ id, repoId, fileName, revision, url: modelUrl, expectedBytes: totalBytes, downloadedBytes, expectedSha256, status: 'downloading', updatedAt: Date.now() });
+        await saveTask({ id, repoId, fileName, revision, url: modelUrl, expectedBytes: totalBytes, downloadedBytes, expectedSha256, etag: currentEtag, status: 'downloading', updatedAt: Date.now() });
         lastPersistedBytes = downloadedBytes;
       }
       emit('downloading');
@@ -327,7 +355,7 @@ export async function downloadGGUF(options: {
     await dir.removeEntry(partial);
     const result: OfflineDownloadState = {
       id, repoId, fileName, revision, url: modelUrl,
-      expectedBytes: downloadedBytes, downloadedBytes, expectedSha256, computedSha256: digest,
+      expectedBytes: downloadedBytes, downloadedBytes, expectedSha256, etag: currentEtag, computedSha256: digest,
       hashVerified: Boolean(expectedSha256 && digest === expectedSha256), status: 'installed', updatedAt: Date.now(),
     };
     await saveTask(result);
@@ -339,7 +367,7 @@ export async function downloadGGUF(options: {
     const current = dir ? await getFileSize(dir, partial).catch(() => 0) : 0;
     const result: OfflineDownloadState = {
       id, repoId, fileName, revision, url: 'https://huggingface.co/' + repoId + '/resolve/' + encodeURIComponent(revision) + '/' + fileName,
-      expectedBytes, downloadedBytes: current, expectedSha256, status: paused ? 'paused' : 'error',
+      expectedBytes, downloadedBytes: current, expectedSha256, etag: currentEtag, status: paused ? 'paused' : 'error',
       updatedAt: Date.now(), error: paused ? undefined : error instanceof Error ? error.message : String(error),
     };
     await saveTask(result);
