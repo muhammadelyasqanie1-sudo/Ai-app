@@ -70,6 +70,7 @@ See [.env.example](.env.example) for the complete variable list. Main groups:
 |---|---|
 | `DATABASE_URL`, `DATABASE_SSL`, `DATABASE_SSL_REJECT_UNAUTHORIZED`, `DATABASE_POOL_MAX` | PostgreSQL connection and pool settings |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | Cloudflare Workers AI provider |
+| `BEATAPI_API_KEY`, `BEATAPI_BASE_URL` | BeatAPI model provider and authenticated read-only catalog; default base URL is `https://api.beatapi.io` |
 | `OPENAI_COMPAT_BASE_URL`, `OPENAI_COMPAT_API_KEY`, `OPENAI_COMPAT_PROVIDER_ID`, `OPENAI_COMPAT_DISPLAY_NAME` | Optional OpenAI-compatible provider |
 | `APP_ORIGIN` | Canonical HTTPS origin and trusted browser origins |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Google OAuth |
@@ -87,9 +88,11 @@ Cloudflare credentials are obtained from the Cloudflare dashboard/API Tokens wit
 
 ## Provider behavior
 
-- The gateway currently registers Cloudflare Workers AI and an optional OpenAI-compatible adapter.
+- The gateway registers Cloudflare Workers AI, an optional OpenAI-compatible adapter, GPT-OSS proxy, and BeatAPI when `BEATAPI_API_KEY` is configured.
 - A model is selectable only after live catalog discovery and a recent successful health check, and when the model is enabled and advertises streaming text capability.
 - The gateway can fall back to another verified text model unless the request disables fallback.
+- BeatAPI uses its OpenAI-compatible `/v1/chat/completions` text endpoint and `/v1/models` catalog. BeatAPI health verification is catalog-only so routine model discovery never sends a billable generation probe.
+- Authenticated read-only integration routes expose `/api/beatapi/status`, `/api/beatapi/models`, `/api/beatapi/workflows`, `/api/beatapi/capabilities/search`, and `/api/beatapi/capabilities/inspect`. No capability-run route is exposed by this integration yet.
 - A configured provider key alone is not evidence that a model or optional capability works.
 - The currently implemented Cloudflare and OpenAI-compatible adapters declare chat/streaming only. Do not assume image, vision, OCR, voice, tools or video support from these adapters.
 - Provider calls and secrets remain server-side.
