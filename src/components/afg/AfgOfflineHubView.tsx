@@ -80,7 +80,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const copy = dari ? {
     title: 'مرکز هوش مصنوعی آفلاین', subtitle: 'مدل را یک‌بار دانلود کن و در همین دستگاه، بدون اینترنت از آن استفاده کن.',
     runtime: 'وضعیت موتور محلی', compatible: 'این دستگاه از WebGPU پشتیبانی می‌کند.', unsupported: 'این مرورگر یا WebView از WebGPU پشتیبانی نمی‌کند؛ اجرای مدل آفلاین در این دستگاه فعلاً فعال نیست.',
-    checking: 'در حال بررسی سخت‌افزار…', catalog: 'مدل‌های سازگار', search: 'جست‌وجوی مدل…', install: 'دانلود و نصب', installed: 'قبلاً بارگذاری‌شده', downloading: 'در حال دانلود مدل…',
+    checking: 'در حال بررسی سخت‌افزار…', catalog: 'مدل‌های سازگار', search: 'جست‌وجوی مدل…', install: 'دانلود و نصب', installed: 'ذخیره‌شده در دستگاه', downloading: 'در حال دانلود مدل…',
     minMemory: 'حداقل حافظه گرافیکی', downloadSize: 'حجم تقریبی مخزن مدل', unknownSize: 'اندازه دقیق در دسترس نیست', storage: 'فضای ذخیره‌سازی دستگاه',
     chat: 'گفت‌وگوی آفلاین', chatHint: 'مدل نصب‌شده را بارگذاری کن و بدون اتصال به سرور پیام بده.', choose: 'یک مدل انتخاب کن', load: 'بارگذاری مدل', send: 'ارسال', input: 'پیام خود را بنویس…',
     noModels: 'مدل سازگاری پیدا نشد.', noInstalled: 'هنوز مدلی نصب نشده است.', loading: 'در حال بارگذاری مدل…', ready: 'مدل آماده است؛ پیام‌ها فقط روی همین دستگاه پردازش می‌شوند.',
@@ -91,7 +91,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   } : {
     title: 'Offline AI Hub', subtitle: 'Download a model once, then use it on this device without an internet connection.',
     runtime: 'Local runtime status', compatible: 'This device supports WebGPU.', unsupported: 'This browser or WebView does not support WebGPU. Offline model inference is unavailable on this device for now.',
-    checking: 'Checking device capabilities…', catalog: 'Compatible models', search: 'Search models…', install: 'Download & install', installed: 'Previously loaded', downloading: 'Downloading model…',
+    checking: 'Checking device capabilities…', catalog: 'Compatible models', search: 'Search models…', install: 'Download & install', installed: 'Installed locally', downloading: 'Downloading model…',
     minMemory: 'Minimum GPU memory', downloadSize: 'Approx. repository size', unknownSize: 'Exact size unavailable', storage: 'Device storage',
     chat: 'Offline chat', chatHint: 'Load an installed model and chat without sending requests to a server.', choose: 'Choose a model', load: 'Load model', send: 'Send', input: 'Write a message…',
     noModels: 'No compatible models found.', noInstalled: 'No models installed yet.', loading: 'Loading model…', ready: 'Model ready. Messages are processed on this device only.',
@@ -202,6 +202,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     } catch (error) { setHfError(error instanceof Error ? error.message : 'Catalog unavailable'); } finally { setHfBusy(false); }
   };
   const selected = useMemo(() => models.find(model => model.model_id === selectedId) || null, [models, selectedId]);
+  const recommendedModels = useMemo(() => device ? models.filter(model => assessOfflineModelFit(model.vram_required_MB || 0, device) === 'recommended').slice(0, 5) : [], [models, device]);
   const filtered = useMemo(() => models.filter(model => {
     if (!model.model_id.toLowerCase().includes(query.toLowerCase())) return false;
     if (!device || modelFilter === 'all') return true;
@@ -326,6 +327,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     </div>
 
     {viewMode === "models" && <section className="min-w-0 space-y-3 rounded-2xl border p-4">
+        {recommendedModels.length > 0 && <div className="space-y-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3"><div className="text-sm font-bold">{dari ? 'پیشنهاد برای دستگاه شما' : 'Recommended for your device'}</div><div className="flex gap-2 overflow-x-auto pb-1">{recommendedModels.map(model => <button key={model.model_id} type="button" onClick={() => setSelectedId(model.model_id)} className="min-w-44 rounded-lg border bg-slate-500/5 p-2 text-start"><div className="break-all text-xs font-semibold">{model.model_id}</div><div className="mt-1 text-[10px] text-emerald-600">{copy.recommended}</div></button>)}</div></div>}
         <div className="flex items-center justify-between gap-2"><h2 className="text-lg font-bold">{copy.catalog}</h2><span className="text-xs opacity-60">{models.length} {dari ? 'مدل' : 'models'}</span></div>
         <label className="flex items-center gap-2 rounded-xl border px-3"><Search size={17} className="opacity-50"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={copy.search} className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none"/></label>
         <div className="flex flex-wrap gap-1.5">{(['all','recommended','limited','incompatible'] as const).map(filter => <button key={filter} type="button" onClick={() => setModelFilter(filter)} className={'rounded-full border px-3 py-1.5 text-[11px] ' + (modelFilter === filter ? 'border-cyan-400 bg-cyan-400/10' : 'opacity-65')}>{filter === 'all' ? copy.allModels : copy[filter]}</button>)}</div>
