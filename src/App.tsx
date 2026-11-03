@@ -20,6 +20,7 @@ import { AfgOfflineHubView } from './components/afg/AfgOfflineHubView';
 import { AfgSideMenu } from './components/afg/AfgSideMenu';
 import { AfgLanguageModal } from './components/afg/AfgLanguageModal';
 import { AfgCinematicIntro } from './components/afg/AfgCinematicIntro';
+import { AfgCommandPalette, type AfgSystemFeatures } from './components/afg/AfgCommandPalette';
 import { AfgAuthGate } from './components/afg/AfgAuthGate';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { ErrorBoundary } from './components/afg/AfgDesignSystem';
@@ -104,6 +105,13 @@ export default function App() {
     },
   });
   const [initialPromptForChat, setInitialPromptForChat] = useState<string | undefined>(undefined);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [thinkingLevel, setThinkingLevel] = useState<'minimal' | 'standard' | 'deep'>(() => (localStorage.getItem('afg_thinking_level') as any) || 'standard');
+  const [planMode, setPlanMode] = useState(() => localStorage.getItem('afg_plan_mode') === 'true');
+  const [dualPlanning, setDualPlanning] = useState(false);
+  const [permissionLevel, setPermissionLevel] = useState<'ask' | 'guided' | 'full'>(() => (localStorage.getItem('afg_permission_level') as any) || 'guided');
+  const [chatFindQuery, setChatFindQuery] = useState('');
+  const [systemFeatures, setSystemFeatures] = useState<AfgSystemFeatures>({ voice_stt_enabled:false, terminal_exec_enabled:false, github_connected:false, web_preview_enabled:false, file_upload_enabled:false, dual_planning_enabled:false, undo_file_changes_enabled:false });
 
   // Modals state
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
@@ -129,6 +137,19 @@ export default function App() {
     if (theme === 'system') media.addEventListener('change', applyTheme);
     return () => media.removeEventListener('change', applyTheme);
   }, [theme]);
+
+  useEffect(() => {
+    let active = true;
+    fetch(API_BASE_URL + '/api/system/features', { credentials: 'include', cache: 'no-store' })
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((data) => { if (active && data?.features) setSystemFeatures((current) => ({ ...current, ...data.features })); })
+      .catch(() => { if (active) setSystemFeatures((current) => ({ ...current, voice_stt_enabled:false, terminal_exec_enabled:false })); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => { localStorage.setItem('afg_thinking_level', thinkingLevel); }, [thinkingLevel]);
+  useEffect(() => { localStorage.setItem('afg_plan_mode', String(planMode)); }, [planMode]);
+  useEffect(() => { localStorage.setItem('afg_permission_level', permissionLevel); }, [permissionLevel]);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/capabilities`)
@@ -327,7 +348,10 @@ export default function App() {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 't') {
         e.preventDefault();
         setIsSideMenuOpen(false);
-        setCurrentTab('terminal');
+        if (systemFeatures.terminal_exec_enabled) setCurrentTab('terminal');
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen((previous) => !previous);
       } else if ((e.ctrlKey || e.metaKey) && e.key === '/') {
         e.preventDefault();
         setIsShortcutsOpen(prev => !prev);
@@ -338,7 +362,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [systemFeatures.terminal_exec_enabled]);
 
   const handleSetLanguage = (nextLanguage: Language) => {
     localeChangedThisSession.current = true;
@@ -425,6 +449,10 @@ export default function App() {
               model: modelToUse,
               language,
               ...toolOptions,
+              thinking_level: thinkingLevel,
+              plan_mode: planMode,
+              permission_level: permissionLevel,
+              dual_planning: dualPlanning && systemFeatures.dual_planning_enabled,
             }),
             signal: abortController.signal,
           });
@@ -609,7 +637,7 @@ export default function App() {
         onToggleLanguage={handleToggleLanguage}
         onToggleTheme={handleToggleTheme}
         onOpenSettings={() => setCurrentTab('settings')}
-        onOpenMenu={() => setIsSideMenuOpen(true)}
+        onOpenMenu={() => setIsCommandPaletteOpen(true)}
         onNewChat={handleNewChat}
         onOpenModels={() => setCurrentTab('offline-models')}
       />
@@ -645,6 +673,12 @@ export default function App() {
             selectedModel={selectedModel}
             onSelectModel={handleSelectModel}
             capabilities={capabilitySnapshot.capabilities}
+            thinkingLevel={thinkingLevel}
+            planMode={planMode}
+            permissionLevel={permissionLevel}
+            systemFeatures={systemFeatures}
+            findQuery={chatFindQuery}
+            onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
           />
         )}
 
@@ -701,7 +735,7 @@ export default function App() {
         </ErrorBoundary>
       </main>
 
-      {currentTab !== 'terminal' && (
+      {currentTab !== 'terminal' && systemFeatures.terminal_exec_enabled && (
         <button
           type="button"
           onClick={() => setCurrentTab('terminal')}
@@ -713,6 +747,30 @@ export default function App() {
           <span>{language === 'dari' ? 'ترمینل' : 'Terminal'}</span>
         </button>
       )}
+
+      <AfgCommandPalette
+        open={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        language={language}
+        messages={messages}
+        modelName={selectedModel === 'auto' ? 'Auto model' : (modelOptions.find((item) => selectedModel.endsWith(item.id))?.displayName || selectedModel)}
+        contextWindow={modelOptions.find((item) => selectedModel.endsWith(item.id))?.contextWindow || 0}
+        thinkingLevel={thinkingLevel}
+        onThinkingLevel={setThinkingLevel}
+        planMode={planMode}
+        onPlanMode={setPlanMode}
+        dualPlanning={dualPlanning}
+        onDualPlanning={setDualPlanning}
+        permissionLevel={permissionLevel}
+        onPermissionLevel={setPermissionLevel}
+        features={systemFeatures}
+        onOpenHistory={() => setCurrentTab('history')}
+        onOpenSettings={() => setCurrentTab('settings')}
+        onOpenNavigation={() => setIsSideMenuOpen(true)}
+        onOpenTerminal={() => setCurrentTab('terminal')}
+        onClearChat={() => { serverConversationRef.current = null; setMessages([]); setCurrentSessionId('chat-' + Date.now()); }}
+        onFindInChat={(query) => setChatFindQuery(query)}
+      />
 
       {/* Slide-over Side Menu Drawer */}
       <AfgSideMenu
