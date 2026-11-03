@@ -22,7 +22,7 @@ export async function getSavedLanguage(): Promise<'english' | 'dari' | null> {
     const value = Capacitor.isNativePlatform()
       ? (await Preferences.get({ key: LANGUAGE_KEY })).value
       : localStorage.getItem(LANGUAGE_KEY);
-    return fromLanguageCode(value);
+    return fromLanguageCode(value) || fromLanguageCode(localStorage.getItem(LANGUAGE_KEY));
   } catch {
     return fromLanguageCode(typeof localStorage === 'undefined' ? null : localStorage.getItem(LANGUAGE_KEY));
   }
@@ -39,7 +39,8 @@ export async function getSavedTheme(): Promise<AppThemePreference | null> {
     const value = Capacitor.isNativePlatform()
       ? (await Preferences.get({ key: THEME_KEY })).value
       : localStorage.getItem(THEME_KEY);
-    return value === 'dark' || value === 'light' || value === 'neon' || value === 'system' ? value : null;
+    const stored = value || localStorage.getItem(THEME_KEY);
+    return stored === 'dark' || stored === 'light' || stored === 'neon' || stored === 'system' ? stored : null;
   } catch {
     const value = typeof localStorage === 'undefined' ? null : localStorage.getItem(THEME_KEY);
     return value === 'dark' || value === 'light' || value === 'neon' || value === 'system' ? value : null;
