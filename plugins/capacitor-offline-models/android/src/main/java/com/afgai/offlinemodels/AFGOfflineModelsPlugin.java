@@ -138,9 +138,13 @@ public class AFGOfflineModelsPlugin extends Plugin {
 
     @androidx.annotation.Keep
     public void onNativeToken(String token) {
-        JSObject event = new JSObject();
-        event.put("token", token);
-        notifyListeners("generationToken", event);
+        android.app.Activity activity = getActivity();
+        if (activity == null) return;
+        activity.runOnUiThread(() -> {
+            JSObject event = new JSObject();
+            event.put("token", token);
+            notifyListeners("generationToken", event);
+        });
     }
 
     @PluginMethod
