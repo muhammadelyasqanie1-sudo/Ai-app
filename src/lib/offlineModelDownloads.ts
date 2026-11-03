@@ -187,16 +187,16 @@ export async function downloadGGUF(options: {
     const totalBytes = Number.isFinite(totalFromRange) && totalFromRange! > 0 ? totalFromRange : expectedBytes;
     const handle = await dir.getFileHandle(partial, { create: true });
     const reader = response.body.getReader();
-    const writable = await handle.createWritable({ keepExistingData: true });
-    activeWritable = writable;
-    await writable.seek(offset);
     let downloadedBytes = offset;
     const sha = new Sha256();
-    // Resumed files are re-read to ensure the final digest covers every byte.
+    // Re-read a partial file before opening its writer so hashing sees committed bytes.
     if (offset) {
       const existing = await (await handle.getFile()).stream().getReader();
       while (true) { const item = await existing.read(); if (item.done) break; sha.update(item.value); }
     }
+    const writable = await handle.createWritable({ keepExistingData: true });
+    activeWritable = writable;
+    await writable.seek(offset);
     const emit = (status: OfflineDownloadState['status']) => options.onProgress?.({
       downloadedBytes, totalBytes, percent: totalBytes ? Math.min(100, Math.floor(downloadedBytes / totalBytes * 100)) : null, status,
     });
@@ -219,12 +219,12 @@ export async function downloadGGUF(options: {
     }
     const partHandle = await dir.getFileHandle(partial);
     const finalHandle = await dir.getFileHandle(target, { create: true });
-    const writable = await finalHandle.createWritable();
+    const finalWritable = await finalHandle.createWritable();
     try {
       const fileReader = (await partHandle.getFile()).stream().getReader();
-      while (true) { const item = await fileReader.read(); if (item.done) break; await writable.write(item.value); }
-      await writable.close();
-    } catch (error) { await writable.abort().catch(() => undefined); await dir.removeEntry(target).catch(() => undefined); throw error; }
+      while (true) { const item = await fileReader.read(); if (item.done) break; await finalWritable.write(item.value); }
+      await finalWritable.close();
+    } catch (error) { await finalWritable.abort().catch(() => undefined); await dir.removeEntry(target).catch(() => undefined); throw error; }
     await dir.removeEntry(partial);
     const result: OfflineDownloadState = {
       id, repoId, fileName, url: 'https://huggingface.co/' + repoId + '/resolve/main/' + fileName,
