@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomUUID } from 'crypto';
 import { handleChatApi } from './chatHandler.ts';
+import { handleBeatApiApi } from './beatapi.ts';
 import { checkDatabase, pool } from './database.ts';
 import { getProviderModelCatalog } from './modelCatalog.ts';
 import { getCapabilitySnapshot, getImageStudioSnapshot, getFileAssistantSnapshot } from '../services/providerGateway.ts';
@@ -215,6 +216,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     }
     if (await enforceAdminConfiguredRateLimits(req, res, pathname, requestId)) return;
     if (await handleAuthApi(req, res, pathname)) return;
+    if (await handleBeatApiApi(req, res)) return;
     if (await handleUserIntegrationApi(req, res, pathname)) return;
     if (await handleAccountApi(req, res, pathname)) return;
     if (await handleFilesApi(req, res, pathname)) return;
