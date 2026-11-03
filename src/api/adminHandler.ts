@@ -251,6 +251,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           await client.query('ROLLBACK');
           sendAuthJson(res, 404, { error: 'Active user or enabled plan not found.' }); return true;
         }
+        const previousSubscription=await client.query("SELECT p.plan_key,s.status,s.starts_at,s.ends_at FROM user_subscriptions s JOIN subscription_plans p ON p.id=s.plan_id WHERE s.user_id=$1 AND s.status IN ('active','trialing') ORDER BY s.starts_at DESC LIMIT 1",[targetId]);
         await client.query("UPDATE user_subscriptions SET status='cancelled',ends_at=now(),updated_at=now() WHERE user_id=$1 AND status IN ('active','trialing')",[targetId]);
         const created = await client.query(`INSERT INTO user_subscriptions(user_id,plan_id,status,provider)
           VALUES($1,$2,'active','admin_manual') RETURNING id,status,starts_at`,[targetId,plan.rows[0].id]);
@@ -555,7 +556,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const providerId=routeId || (typeof body.providerId==='string'?body.providerId:'');
       if(!providerId){sendAuthJson(res,400,{error:'Provider ID is required.'});return true;}
       await refreshDatabaseProviderAdapters(true);
-      const providerRow=await pool.query('SELECT slug,display_name,enabled,kind FROM providers WHERE slug=$1 LIMIT 1',[providerId]);
+      const providerRow=await pool.query('SELECT slug,display_name,enabled,kind,last_health_at,last_health_ok,last_error_code FROM providers WHERE slug=$1 LIMIT 1',[providerId]);
       const adapter=getProviderAdapter(providerId);
       if(!providerRow.rows[0]&&!adapter){sendAuthJson(res,404,{error:'Provider not found.'});return true;}
       const started=Date.now();let configured=false,connected=false,discoveredModels=0,probeModel:string|null=null,providerFailureStatus:number|null=null;
@@ -574,8 +575,12 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       await pool.query(`UPDATE provider_keys k SET last_used_at=now(),status=CASE WHEN $3 THEN 'invalid' ELSE 'active' END
         FROM providers p WHERE p.id=k.provider_id AND p.slug=$1 AND k.alias='default' AND k.status IN ('active','invalid')`,
         [providerId,connected,providerFailureStatus===401||providerFailureStatus===403]).catch(()=>{});
-      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
-        [user.id,user.role,'provider.connection_test','provider',providerId,JSON.stringify({configured,connected,discoveredModels,probeModel,latencyMs})]);
+      const providerAfter=providerRow.rows[0]?await pool.query('SELECT slug,enabled,last_health_at,last_health_ok,last_error_code FROM providers WHERE slug=$1 LIMIT 1',[providerId]):{rows:[] as any[]};
+      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+        [user.id,user.role,'provider.connection_test','provider',providerId,
+          providerRow.rows[0]?JSON.stringify({enabled:providerRow.rows[0].enabled,lastHealthAt:providerRow.rows[0].last_health_at,lastHealthOk:providerRow.rows[0].last_health_ok,lastErrorCode:providerRow.rows[0].last_error_code}):null,
+          providerAfter.rows[0]?JSON.stringify(providerAfter.rows[0]):JSON.stringify({connected,configured}),
+          JSON.stringify({configured,connected,discoveredModels,probeModel,latencyMs})]);
       sendAuthJson(res,connected?200:502,{providerId,configured,connected,discoveredModels,probeModel,latencyMs,
         message:connected?'Provider inference probe succeeded.':(configured?'Provider inference probe failed.':'Provider credentials are not configured or adapter is unavailable.')});return true;
     }
@@ -661,10 +666,12 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
 
     const revokeSession=pathname.match(/^\\/api\\/admin\\/sessions\\/([0-9a-f-]{36})$/i);
     if(req.method==='DELETE' && revokeSession){
-      const result=await pool.query('UPDATE sessions SET revoked_at=now() WHERE id=$1 AND revoked_at IS NULL RETURNING id,user_id',[revokeSession[1]]);
+      const beforeSession=await pool.query('SELECT id,user_id,created_at,last_seen_at,expires_at FROM sessions WHERE id=$1 AND revoked_at IS NULL LIMIT 1',[revokeSession[1]]);
+      const result=await pool.query('UPDATE sessions SET revoked_at=now() WHERE id=$1 AND revoked_at IS NULL RETURNING id,user_id,revoked_at',[revokeSession[1]]);
       if(!result.rows[0]){sendAuthJson(res,404,{error:'Active session not found.'});return true;}
-      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
-        [user.id,user.role,'session.revoke','session',revokeSession[1],JSON.stringify({targetUserId:result.rows[0].user_id})]);
+      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+        [user.id,user.role,'session.revoke','session',revokeSession[1],beforeSession.rows[0]?JSON.stringify(beforeSession.rows[0]):null,
+          JSON.stringify({id:result.rows[0].id,revokedAt:result.rows[0].revoked_at}),JSON.stringify({targetUserId:result.rows[0].user_id})]);
       sendAuthJson(res,200,{revoked:true,sessionId:revokeSession[1]});return true;
     }
 
@@ -680,8 +687,8 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       if(!title||!message){sendAuthJson(res,400,{error:'Announcement title and body are required.'});return true;}
       const created=await pool.query(`INSERT INTO announcements(title,body,created_by) VALUES($1,$2,$3)
         RETURNING id,title,body,enabled,starts_at,expires_at,created_at`,[title,message,user.id]);
-      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
-        [user.id,user.role,'announcement.create','announcement',created.rows[0].id,JSON.stringify({title})]);
+      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+        [user.id,user.role,'announcement.create','announcement',created.rows[0].id,null,JSON.stringify(created.rows[0]),JSON.stringify({title})]);
       sendAuthJson(res,201,{announcement:created.rows[0]});return true;
     }
 
