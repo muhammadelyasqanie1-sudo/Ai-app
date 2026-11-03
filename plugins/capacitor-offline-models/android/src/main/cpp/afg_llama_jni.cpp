@@ -24,6 +24,10 @@ static const llama_vocab * g_vocab = nullptr;
 static bool g_backend_initialized = false;
 static std::string g_last_error;
 
+static bool afg_llama_abort_callback(void *) {
+    return g_cancel_requested.load(std::memory_order_acquire);
+}
+
 static std::string from_jstring(JNIEnv * env, jstring value) {
     if (value == nullptr) return {};
     const char * chars = env->GetStringUTFChars(value, nullptr);
@@ -71,6 +75,8 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeLoadModel(
     context_params.n_ubatch = std::min<uint32_t>(ctx, 512);
     context_params.n_threads = thread_count;
     context_params.n_threads_batch = thread_count;
+    context_params.abort_callback = afg_llama_abort_callback;
+    context_params.abort_callback_data = nullptr;
     g_context = llama_init_from_model(g_model, context_params);
     if (!g_context) {
         g_last_error = "llama.cpp could not allocate the inference context. This model may exceed available RAM.";
@@ -180,6 +186,10 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerateStream(
             const int32_t count = std::min(prompt_batch_size, token_count - offset);
             llama_batch prompt_batch = llama_batch_get_one(tokens.data() + offset, count);
             if (llama_decode(g_context, prompt_batch) < 0) {
+                if (g_cancel_requested.load(std::memory_order_acquire)) {
+                    env->DeleteLocalRef(callback_class);
+                    return env->NewStringUTF("");
+                }
                 g_last_error = "llama.cpp failed while processing the prompt.";
                 return nullptr;
             }
@@ -221,7 +231,11 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerateStream(
             }
 
             llama_batch next_batch = llama_batch_get_one(&best, 1);
-            if (llama_decode(g_context, next_batch) < 0) break;
+            if (llama_decode(g_context, next_batch) < 0) {
+                if (g_cancel_requested.load(std::memory_order_acquire)) break;
+                g_last_error = "llama.cpp failed while evaluating the next token.";
+                break;
+            }
         }
         env->DeleteLocalRef(callback_class);
         return env->NewStringUTF(output.c_str());
