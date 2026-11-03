@@ -14,7 +14,7 @@
       <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#bg)"/>
   <circle cx="256" cy="238" r="150" fill="none" stroke="url(#accent)" stroke-width="8" opacity=".35"/>
   <circle cx="256" cy="238" r="119" fill="none" stroke="#0DF2FF" stroke-width="3" opacity=".55"/>
   <path d="M256 62c-76 0-138 62-138 138 0 53 30 99 74 122v44c0 12 10 22 22 22h84c12 0 22-10 22-22v-44c44-23 74-69 74-122 0-76-62-138-138-138Z" fill="#0A1323" stroke="url(#accent)" stroke-width="7" filter="url(#glow)"/>
