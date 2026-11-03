@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownToLine, Cpu, HardDrive, MessageSquare, Search, ShieldCheck, Sparkles, WifiOff } from 'lucide-react';
 import type { Language } from '../../types/afg';
+import { assessOfflineModelFit, scanOfflineDevice, type OfflineDeviceProfile, type ModelFit } from '../../lib/offlineDevice';
 
 type CatalogModel = {
   model_id: string;
@@ -37,6 +38,9 @@ function getHuggingFaceRepo(model: CatalogModel): string | null {
 export function AfgOfflineHubView({ language }: { language: Language }) {
   const dari = language === 'dari';
   const [models, setModels] = useState<CatalogModel[]>([]);
+  const [device, setDevice] = useState<OfflineDeviceProfile | null>(null);
+  const [deviceScanBusy, setDeviceScanBusy] = useState(true);
+  const [modelFilter, setModelFilter] = useState<'all' | ModelFit>('all');
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState('');
   const [runtime, setRuntime] = useState<RuntimeState>('checking');
@@ -65,6 +69,7 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
     failed: 'عملیات انجام نشد. فضای خالی و سازگاری دستگاه را بررسی کن.', remove: 'فراموش‌کردن مدل', privacy: 'حریم خصوصی: متن گفتگو به سرور AFG AI ارسال نمی‌شود.',
     source: 'منبع مدل: MLC / WebLLM', limitation: 'این فهرست، مدل‌های از پیش تبدیل‌شده و سازگار با WebLLM را نشان می‌دهد؛ همه فایل‌های GGUF یا همه مدل‌های Hugging Face قابل اجرا نیستند.',
     onlineNeeded: 'برای دانلود اولیه به اینترنت نیاز است. پس از ذخیره موفق، اجرای مدل می‌تواند آفلاین باشد.',
+    deviceTitle: 'اسکن هوشمند دستگاه', deviceUnknown: 'در حال بررسی مشخصات…', deviceRam: 'حافظه RAM (تخمینی)', deviceCpu: 'هسته‌های پردازنده', deviceGpu: 'پردازنده گرافیکی', deviceStorage: 'فضای قابل استفاده', devicePlatform: 'سیستم و دستگاه', recommended: 'پیشنهادشده', limited: 'با محدودیت', incompatible: 'ناسازگار', allModels: 'همه', privacyScan: 'اسکن فقط مشخصات سخت‌افزاری و قابلیت‌های مرورگر را بررسی می‌کند.', rescan: 'اسکن دوباره',
   } : {
     title: 'Offline AI Hub', subtitle: 'Download a model once, then use it on this device without an internet connection.',
     runtime: 'Local runtime status', compatible: 'This device supports WebGPU.', unsupported: 'This browser or WebView does not support WebGPU. Offline model inference is unavailable on this device for now.',
@@ -75,10 +80,13 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
     failed: 'Operation failed. Check free storage and device compatibility.', remove: 'Forget model', privacy: 'Privacy: chat text is not sent to AFG AI servers.',
     source: 'Model source: MLC / WebLLM', limitation: 'This catalog lists pre-converted models compatible with WebLLM. Not every GGUF file or every Hugging Face model can run here.',
     onlineNeeded: 'An internet connection is required for the first download. Once cached, the model can run offline.',
+    deviceTitle: 'Smart device scan', deviceUnknown: 'Checking device details…', deviceRam: 'RAM (estimate)', deviceCpu: 'CPU cores', deviceGpu: 'Graphics processor', deviceStorage: 'Available storage', devicePlatform: 'Platform & device', recommended: 'Recommended', limited: 'Limited', incompatible: 'Incompatible', allModels: 'All', privacyScan: 'The scan checks hardware capabilities and browser-provided information only.', rescan: 'Rescan device',
   };
 
   useEffect(() => {
     let active = true;
+    setDeviceScanBusy(true);
+    void scanOfflineDevice().then(result => { if (active) setDevice(result); }).catch(() => {}).finally(() => { if (active) setDeviceScanBusy(false); });
     (async () => {
       try {
         const gpu = (navigator as Navigator & { gpu?: { requestAdapter: () => Promise<unknown> } }).gpu;
@@ -112,7 +120,11 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
   }, [installed]);
 
   const selected = useMemo(() => models.find(model => model.model_id === selectedId) || null, [models, selectedId]);
-  const filtered = useMemo(() => models.filter(model => model.model_id.toLowerCase().includes(query.toLowerCase())), [models, query]);
+  const filtered = useMemo(() => models.filter(model => {
+    if (!model.model_id.toLowerCase().includes(query.toLowerCase())) return false;
+    if (!device || modelFilter === 'all') return true;
+    return assessOfflineModelFit(model.vram_required_MB || 0, device) === modelFilter;
+  }), [models, query, device, modelFilter]);
 
   useEffect(() => {
     if (!selected) return;
@@ -134,6 +146,9 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
 
   const loadModel = useCallback(async (modelId: string, isDownload: boolean) => {
     if (busy || runtime !== 'ready') return;
+    const target = models.find(item => item.model_id === modelId);
+    const fit = target && device ? assessOfflineModelFit(target.vram_required_MB || 0, device) : 'limited';
+    if (fit === 'incompatible') { setRuntimeMessage(dari ? 'این مدل با قابلیت‌های شناسایی‌شده دستگاه سازگار نیست.' : 'This model is incompatible with the detected device capabilities.'); return; }
     setBusy(true); setProgress(0); setProgressText(isDownload ? copy.downloading : copy.loading);
     try {
       if (engineRef.current) {
@@ -160,7 +175,7 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
     } catch (error) {
       setRuntimeMessage(error instanceof Error ? error.message : copy.failed);
     } finally { setBusy(false); setProgress(0); setProgressText(''); }
-  }, [busy, runtime, copy, dari]);
+  }, [busy, runtime, copy, dari, models, device]);
 
   const sendMessage = async () => {
     const text = prompt.trim();
@@ -188,6 +203,17 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
       <div className="rounded-2xl border p-3 text-end"><div className="flex items-center gap-2 text-xs opacity-70"><HardDrive size={15}/>{copy.storage}</div><div className="mt-1 text-sm font-bold">{formatBytes(storage.usage)} / {formatBytes(storage.quota)}</div></div>
     </header>
 
+    <section className="rounded-2xl border p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-bold">{copy.deviceTitle}</h2><button type="button" onClick={() => { setDeviceScanBusy(true); void scanOfflineDevice().then(setDevice).finally(() => setDeviceScanBusy(false)); }} className="rounded-lg border px-3 py-1.5 text-xs font-semibold">{copy.rescan}</button></div>
+      {deviceScanBusy || !device ? <p className="text-sm opacity-60">{copy.deviceUnknown}</p> : <>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[[copy.devicePlatform, device.deviceLabel + ' · ' + device.osLabel], [copy.deviceRam, device.memoryGiB ? device.memoryGiB + ' GB' : '—'], [copy.deviceCpu, device.cpuCores ? String(device.cpuCores) : '—'], [copy.deviceGpu, device.gpuName || (device.gpuAvailable ? 'WebGPU' : 'Unavailable')], [copy.deviceStorage, device.storageFreeBytes ? formatBytes(device.storageFreeBytes) : '—']].map(([label,value]) => <div key={label} className="min-w-0 rounded-xl bg-slate-500/5 p-3"><div className="text-[11px] opacity-60">{label}</div><div className="mt-1 break-words text-xs font-semibold">{value}</div></div>)}
+        </div>
+        <p className="text-[11px] opacity-60">{copy.privacyScan} {device.browser} · {device.architecture} · {device.nativeInfoAvailable ? 'Native info' : 'Browser estimate'}</p>
+        {device.notes.map(note => <p key={note} className="text-[11px] opacity-55">{note}</p>)}
+      </>}
+    </section>
+
     <div className={'rounded-2xl border p-4 ' + (runtime === 'ready' ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/30 bg-amber-500/5')}>
       <div className="flex items-start gap-3"><Cpu size={20} className="mt-0.5 shrink-0"/><div className="min-w-0"><div className="font-semibold">{copy.runtime}</div><p className="mt-1 text-sm opacity-75">{runtime === 'checking' ? copy.checking : runtimeMessage}</p></div></div>
     </div>
@@ -196,15 +222,17 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
       <section className="min-w-0 space-y-3 rounded-2xl border p-4">
         <div className="flex items-center justify-between gap-2"><h2 className="text-lg font-bold">{copy.catalog}</h2><span className="text-xs opacity-60">{models.length} {dari ? 'مدل' : 'models'}</span></div>
         <label className="flex items-center gap-2 rounded-xl border px-3"><Search size={17} className="opacity-50"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={copy.search} className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none"/></label>
+        <div className="flex flex-wrap gap-1.5">{(['all','recommended','limited','incompatible'] as const).map(filter => <button key={filter} type="button" onClick={() => setModelFilter(filter)} className={'rounded-full border px-3 py-1.5 text-[11px] ' + (modelFilter === filter ? 'border-cyan-400 bg-cyan-400/10' : 'opacity-65')}>{filter === 'all' ? copy.allModels : copy[filter]}</button>)}</div>
         <div className="max-h-[430px] space-y-2 overflow-y-auto pe-1">
           {filtered.map(model => {
             const active = selectedId === model.model_id;
             const repo = getHuggingFaceRepo(model);
             const size = repo ? modelSizes[repo] : undefined;
             const isInstalled = installed.includes(model.model_id);
+            const fit = device ? assessOfflineModelFit(model.vram_required_MB || 0, device) : 'limited';
             return <button key={model.model_id} type="button" onClick={() => setSelectedId(model.model_id)} className={'w-full rounded-xl border p-3 text-start transition ' + (active ? 'border-cyan-400 bg-cyan-400/10' : 'hover:border-cyan-400/50')}>
               <div className="flex items-start justify-between gap-2"><span className="break-all text-sm font-semibold">{model.model_id}</span>{isInstalled && <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-600">{copy.installed}</span>}</div>
-              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] opacity-65"><span>{copy.minMemory}: {formatBytes((model.vram_required_MB || 0) * 1024 * 1024)}</span><span>{copy.downloadSize}: {size === undefined ? '…' : size === null ? copy.unknownSize : formatBytes(size)}</span></div>
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] opacity-65"><span>{copy.minMemory}: {formatBytes((model.vram_required_MB || 0) * 1024 * 1024)}</span><span>{copy.downloadSize}: {size === undefined ? '…' : size === null ? copy.unknownSize : formatBytes(size)}</span><span className={fit === 'recommended' ? 'text-emerald-600' : fit === 'incompatible' ? 'text-red-500' : 'text-amber-600'}>{copy[fit]}</span></div>
             </button>;
           })}
           {!filtered.length && <p className="p-5 text-center text-sm opacity-60">{copy.noModels}</p>}
