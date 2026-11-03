@@ -4,7 +4,7 @@
 
 - A dedicated Offline AI Hub entry in AFG AI navigation.
 - WebLLM's prebuilt MLC-compatible catalogue and local WebGPU chat. Prompts are processed by the browser runtime and are not sent to the AFG AI chat API.
-- First-run model download/loading progress and an estimated repository size when Hugging Face metadata exposes file sizes.
+- First-run model download/loading progress, live transfer speed and estimated remaining time, plus repository-size estimates when Hugging Face metadata exposes file sizes.
 - IndexedDB-backed model cache managed by WebLLM; the app requests persistent browser storage where supported.
 - App-shell service worker and PWA manifest for reopening the cached application shell offline. API requests are never cached.
 - Device capability scan:
