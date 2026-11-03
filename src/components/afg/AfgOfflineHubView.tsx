@@ -176,7 +176,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   }, [selectedId]);
 
   useEffect(() => {
-    if (selectedId && messagesModelId === selectedId) void saveOfflineChatMessages(selectedId, messages).catch(() => undefined);
+    if (selectedId && messagesModelId === selectedId && messages.length) void saveOfflineChatMessages(selectedId, messages).catch(() => undefined);
   }, [selectedId, messagesModelId, messages]);
 
 
