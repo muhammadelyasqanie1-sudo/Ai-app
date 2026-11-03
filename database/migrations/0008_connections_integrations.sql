@@ -90,3 +90,13 @@ CREATE TABLE IF NOT EXISTS mcp_server_credentials (
 INSERT INTO integration_rate_limits(integration_id,requests,window_seconds)
 SELECT id,12,60 FROM integrations WHERE slug='web-search'
 ON CONFLICT(integration_id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS integration_user_credentials (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  integration_id uuid NOT NULL REFERENCES integrations(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  credential_key varchar(64) NOT NULL,
+  credential_value_encrypted text NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(integration_id,user_id,credential_key)
+);
