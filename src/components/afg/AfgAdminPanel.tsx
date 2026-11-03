@@ -63,6 +63,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [customSlug,setCustomSlug] = useState('');
   const [customName,setCustomName] = useState('');
   const [customBaseUrl,setCustomBaseUrl] = useState('');
+  const [customProtocol,setCustomProtocol] = useState<'openai-compatible'|'anthropic-messages'>('openai-compatible');
   const [models,setModels] = useState<ModelRow[]>([]);
   const [manualProviderId,setManualProviderId] = useState('deepseek');
   const [manualModelId,setManualModelId] = useState('');
@@ -207,8 +208,8 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     catch(err){setError(err instanceof Error?err.message:'Provider key could not be saved.');}
   };
   const createCustomProvider=async()=>{
-    try{const result=await api('/api/admin/providers/custom',{method:'POST',body:JSON.stringify({slug:customSlug,displayName:customName,baseUrl:customBaseUrl,protocol:'openai-compatible'})});
-      setCustomSlug('');setCustomName('');setCustomBaseUrl('');setNotice(`Custom provider ${result.provider.slug} created. Add a key from the provider card.`);await loadAdminData();}
+    try{const result=await api('/api/admin/providers/custom',{method:'POST',body:JSON.stringify({slug:customSlug,displayName:customName,baseUrl:customBaseUrl,protocol:customProtocol})});
+      setCustomSlug('');setCustomName('');setCustomBaseUrl('');setCustomProtocol('openai-compatible');setNotice(`Custom provider ${result.provider.slug} created. Add a key from the provider card.`);await loadAdminData();}
     catch(err){setError(err instanceof Error?err.message:'Custom provider could not be created.');}
   };
   const testModel=async(model:ModelRow)=>{
@@ -395,10 +396,11 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     {tab==='providers'&&<div className="space-y-4">
       <div className={panel}><h2 className="text-lg font-bold text-white">Add custom provider</h2>
         <p className="mb-3 text-xs text-slate-500">Register any OpenAI-compatible API endpoint. It starts disabled; configure its key, test it, discover models, then enable it.</p>
-        <div className="grid gap-2 md:grid-cols-3">
+        <div className="grid gap-2 md:grid-cols-4">
           <input className={field} value={customSlug} onChange={e=>setCustomSlug(e.target.value)} placeholder="provider-slug (e.g. my-ai)"/>
           <input className={field} value={customName} onChange={e=>setCustomName(e.target.value)} placeholder="Display name"/>
           <input className={field} value={customBaseUrl} onChange={e=>setCustomBaseUrl(e.target.value)} placeholder="https://api.example.com/v1"/>
+          <select className={field} value={customProtocol} onChange={e=>setCustomProtocol(e.target.value as any)}><option value="openai-compatible">OpenAI-compatible</option><option value="anthropic-messages">Anthropic Messages API</option></select>
         </div>
         <button className={primary+' mt-3'} disabled={!customSlug.trim()||!customName.trim()||!customBaseUrl.trim()} onClick={()=>void createCustomProvider()}>Register custom provider</button>
       </div>
