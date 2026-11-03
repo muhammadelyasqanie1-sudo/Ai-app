@@ -321,7 +321,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           apiKey,
           authHeaderName,
           defaultHeaders,
-        });
+        }, providerId);
       } catch {
         sendAuthJson(res, 503, { error: 'Custom provider storage is unavailable. Configure AFG_PROVIDER_SECRET_ENCRYPTION_KEY as a base64-encoded 32-byte key.' });
         return true;
