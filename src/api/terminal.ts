@@ -57,13 +57,13 @@ async function runNativeCommand(command: string, userId: string): Promise<{ outp
   if (args.length === 1 && args[0] === 'version') return { output: 'AFG AI CLI API v1 (server command surface)', exitCode: 0 };
   if (args.join(' ') === 'status') {
     await pool!.query('SELECT 1 AS ready');
-    return { output: ['AFG AI API: responding', 'PostgreSQL: connected', 'Account scope: enforced', 'Shell execution: disabled', 'Terminal workspace: browser-isolated'].join('\\n'), exitCode: 0 };
+    return { output: ['AFG AI API: responding', 'PostgreSQL: connected', 'Account scope: enforced', 'Shell execution: disabled', 'Terminal workspace: browser-isolated'].join('\n'), exitCode: 0 };
   }
   if (args.join(' ') === 'account') {
     const result = await pool!.query('SELECT display_name,role,status FROM users WHERE id=$1 LIMIT 1',[userId]);
     const account = result.rows[0];
     if (!account) return { output: 'Account profile not found.', exitCode: 1 };
-    return { output: ['Name: ' + String(account.display_name || 'AFG AI user').replace(/[\\r\\n]/g,' ').slice(0,100), 'Role: ' + account.role, 'Status: ' + account.status].join('\\n'), exitCode: 0 };
+    return { output: ['Name: ' + String(account.display_name || 'AFG AI user').replace(/[\r\n]/g,' ').slice(0,100), 'Role: ' + account.role, 'Status: ' + account.status].join('\n'), exitCode: 0 };
   }
   if (args.join(' ') === 'models list') {
     const result = await pool!.query(`SELECT provider_key,model_key,display_name,enabled,last_health_ok FROM model_catalog ORDER BY provider_key,display_name LIMIT 100`);
