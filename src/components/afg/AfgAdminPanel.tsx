@@ -96,6 +96,9 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [selectedUser,setSelectedUser] = useState<any|null>(null);
   const [security,setSecurity] = useState<any[]>([]);
   const [audit,setAudit] = useState<any[]>([]);
+  const [auditFrom,setAuditFrom] = useState('');
+  const [auditTo,setAuditTo] = useState('');
+  const [auditActor,setAuditActor] = useState('');
   const [policies,setPolicies] = useState<RatePolicy[]>([]);
   const [flags,setFlags] = useState<any[]>([]);
   const [health,setHealth] = useState<any|null>(null);
@@ -251,6 +254,14 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     catch(err){setError(err instanceof Error?err.message:'Model deletion failed.');}
   };
 
+  const loadAudit=async()=>{
+    const params=new URLSearchParams();
+    if(auditFrom)params.set('from',new Date(auditFrom).toISOString());
+    if(auditTo)params.set('to',new Date(auditTo).toISOString());
+    if(auditActor)params.set('actor',auditActor);
+    try{const result=await api('/api/admin/audit'+(params.size?'?'+params.toString():''));setAudit(result.events||[]);}
+    catch(err){setError(err instanceof Error?err.message:'Audit records could not be loaded.');}
+  };
   const loadUsage=async()=>{
     const params=new URLSearchParams();
     if(usageFrom)params.set('from',new Date(usageFrom).toISOString());
@@ -577,7 +588,12 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
 
     {tab==='flags'&&<div className="space-y-4"><div className={panel}><h2 className="mb-3 text-lg font-bold text-white">Feature flags</h2><div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"><input className={field} value={newFlag} onChange={e=>setNewFlag(e.target.value)} placeholder="feature.key"/><input className={field} value={newFlagDescription} onChange={e=>setNewFlagDescription(e.target.value)} placeholder="Description"/><button className={primary+' flex items-center justify-center gap-2'} onClick={()=>void createFlag()}><Plus className="h-4 w-4"/>Add flag</button></div><div className="mt-4 space-y-2">{flags.map(flag=><div key={flag.flag_key} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3"><div><p className="font-semibold text-white">{flag.flag_key}</p><p className="text-xs text-slate-500">{flag.description}</p></div><button className={flag.enabled?primary:secondary} onClick={()=>void toggleFlag(flag)}>{flag.enabled?'Enabled':'Disabled'}</button></div>)}</div></div><div className={panel}><h2 className="mb-2 font-bold text-white">Publish announcement</h2><p className="mb-3 text-xs text-slate-500">Persists the announcement and sends in-app notifications to users who opted into product updates.</p><input className={field+' mb-2'} value={announcementTitle} onChange={e=>setAnnouncementTitle(e.target.value)} maxLength={120} placeholder="Announcement title"/><textarea className={field} rows={4} value={announcementBody} onChange={e=>setAnnouncementBody(e.target.value)} maxLength={2000} placeholder="Announcement message"/><button className={primary+' mt-3'} disabled={!announcementTitle.trim()||!announcementBody.trim()} onClick={()=>void sendAnnouncement()}>Publish and notify</button><div className="mt-4 space-y-2">{announcements.map((item:any)=><div key={item.id} className="rounded-lg border border-slate-800 bg-slate-900 p-3"><b className="text-sm text-white">{item.title}</b><p className="mt-1 text-xs text-slate-300">{item.body}</p><p className="mt-1 text-[10px] text-slate-500">{date(item.created_at)} · {item.enabled?'Published':'Disabled'}</p></div>)}</div></div></div>}
 
-    {tab==='audit'&&<div className={panel}><h2 className="mb-1 text-lg font-bold text-white">Immutable audit log</h2><p className="mb-4 text-xs text-slate-500">Append-only database trigger prevents UPDATE and DELETE operations.</p><div className="space-y-2">{audit.map(a=><div key={a.id} className="rounded-xl border border-slate-800 bg-slate-900/70 p-3"><div className="flex flex-wrap justify-between gap-2"><b className="text-xs text-cyan-200">{a.action}</b><span className="text-[10px] text-slate-500">{date(a.created_at)}</span></div><p className="mt-1 text-xs text-slate-300">{a.actor_email||'System'} · {a.target_type||'—'} / {a.target_id||'—'}</p><pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">{JSON.stringify(a.metadata)}</pre></div>)}{!audit.length&&<p className="text-sm text-slate-500">No audit events yet.</p>}</div></div>}
+    {tab==='audit'&&<div className={panel}><h2 className="mb-1 text-lg font-bold text-white">Immutable audit log</h2><p className="mb-4 text-xs text-slate-500">Append-only database trigger prevents application-level UPDATE and DELETE operations. Entries include before/after state where applicable.</p>
+      <div className="mb-4 grid gap-2 sm:grid-cols-3"><input className={field} type="datetime-local" value={auditFrom} onChange={e=>setAuditFrom(e.target.value)}/><input className={field} type="datetime-local" value={auditTo} onChange={e=>setAuditTo(e.target.value)}/><div className="flex gap-2"><input className={field} value={auditActor} onChange={e=>setAuditActor(e.target.value)} placeholder="Actor email or ID"/><button className={primary} onClick={()=>void loadAudit()}>Filter</button></div></div>
+      <div className="space-y-2">{audit.map(a=><div key={a.id} className="rounded-xl border border-slate-800 bg-slate-900/70 p-3"><div className="flex flex-wrap justify-between gap-2"><b className="text-xs text-cyan-200">{a.action}</b><span className="text-[10px] text-slate-500">{date(a.created_at)}</span></div><p className="mt-1 text-xs text-slate-300">{a.actor_email||'System'} · {a.actor_role||'system'} · {a.target_type||'—'} / {a.target_id||'—'}</p>
+        {a.before_json!=null&&<details className="mt-2"><summary className="cursor-pointer text-[10px] text-slate-400">Before state</summary><pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">{JSON.stringify(a.before_json,null,2)}</pre></details>}
+        {a.after_json!=null&&<details className="mt-2"><summary className="cursor-pointer text-[10px] text-slate-400">After state</summary><pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">{JSON.stringify(a.after_json,null,2)}</pre></details>}
+        <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">{JSON.stringify(a.metadata)}</pre></div>)}{!audit.length&&<p className="text-sm text-slate-500">No audit events match these filters.</p>}</div></div>}
 
     {tab==='security'&&<div className="space-y-4">
       <div className={panel}><h2 className="mb-1 text-lg font-bold text-white">Active sessions</h2><p className="mb-4 text-xs text-slate-500">Sessions expose metadata only; the session token is never returned.</p>
