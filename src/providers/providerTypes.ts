@@ -81,6 +81,7 @@ export interface AudioResult { audio: Uint8Array; mimeType: string; }
 
 export interface ProviderAdapter {
   readonly id: string;
+  readonly displayName: string;
   validateConfig(): Promise<ConfigStatus>;
   listModels(): Promise<ModelDescriptor[]>;
   healthCheck(modelId: string): Promise<HealthStatus>;
