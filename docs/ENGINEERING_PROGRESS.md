@@ -365,3 +365,11 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 - Uploads remain quarantined. No download, document parsing, or AI ingestion endpoint is exposed until malware scanning and safe extraction are integrated. Chat attachment upload remains disabled.
 - Render must mount a private persistent disk and set `AFG_UPLOAD_QUARANTINE_DIR` to its absolute mount path. Apply database migrations before using the library.
 - No build, tests, migration, deployment, or live storage operation was run for this milestone.
+
+
+### Private file library hardening follow-up
+
+- Server readiness now validates the actual quarantine directory, rejects symlinks and filesystem root, applies restrictive directory permissions, and refuses paths inside the application directory.
+- Per-account file quota checks and inserts are serialized with a PostgreSQL advisory lock to prevent concurrent uploads from exceeding the 100-file / 100 MB limits.
+- Deletion revalidates the canonical quarantine directory before unlinking a stored path.
+- These source changes have not been built, tested, migrated, or deployed.
