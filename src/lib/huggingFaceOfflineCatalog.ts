@@ -44,10 +44,37 @@ function safeWrite<T>(key: string, value: T): void {
 }
 
 async function request<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(url, { signal, headers: { Accept: 'application/json' } });
-  if (response.status === 429) throw new Error('Hugging Face rate limit reached. Wait briefly and retry.');
-  if (!response.ok) throw new Error('Hugging Face request failed (' + response.status + ').');
-  return response.json() as Promise<T>;
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 20000);
+  const abortFromCaller = () => controller.abort();
+  signal?.addEventListener('abort', abortFromCaller, { once: true });
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+      // Public Hugging Face model metadata is anonymous; never send cookies.
+    });
+    if (response.status === 429) throw new Error('Hugging Face rate limit reached. Wait briefly and retry.');
+    if (!response.ok) {
+      const detail = (await response.text()).slice(0, 300);
+      throw new Error('Hugging Face request failed (' + response.status + ')' + (detail ? ': ' + detail : '.'));
+    }
+    return await response.json() as T;
+  } catch (error) {
+    if (timedOut) throw new Error('Hugging Face request timed out after 20 seconds. Check the connection and retry.');
+    if (signal?.aborted) throw error;
+    if (error instanceof Error && error.name === 'AbortError') throw new Error('Hugging Face request was cancelled.');
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+    signal?.removeEventListener('abort', abortFromCaller);
+  }
 }
 
 export async function searchHuggingFaceGGUF(options: {
@@ -74,8 +101,11 @@ export async function searchHuggingFaceGGUF(options: {
     full: 'true',
     ...(query ? { search: query } : {}),
   });
-  const raw = await request<Array<Record<string, unknown>>>(API + '/models?' + params.toString(), options.signal);
-  const items = raw.map((item): HuggingFaceModel => ({
+  const raw = await request<unknown>(API + '/models?' + params.toString(), options.signal);
+  if (!Array.isArray(raw)) {
+    throw new Error('Hugging Face returned an unexpected model-catalog response. Please retry.');
+  }
+  const items = raw.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object').map((item): HuggingFaceModel => ({
     id: String(item.id || ''),
     sha: typeof item.sha === 'string' ? item.sha : null,
     downloads: Number(item.downloads || 0),
