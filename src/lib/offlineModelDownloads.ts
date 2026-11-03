@@ -93,7 +93,7 @@ async function getFileSize(dir: FileSystemDirectoryHandle, name: string): Promis
 
 
 /** Incremental SHA-256 so multi-gigabyte models are never loaded into one ArrayBuffer. */
-class Sha256 {
+export class Sha256 {
   private h = new Uint32Array([0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19]);
   private buffer = new Uint8Array(64);
   private buffered = 0;
