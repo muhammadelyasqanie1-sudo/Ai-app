@@ -7,6 +7,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
+import android.system.Os;
 
 import androidx.core.app.NotificationCompat;
 import androidx.work.Data;
@@ -24,6 +25,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.concurrent.TimeUnit;
 
 public final class AFGDownloadWorker extends Worker {
@@ -75,8 +78,12 @@ public final class AFGDownloadWorker extends Worker {
                 return Result.retry();
             }
             if (status == HttpURLConnection.HTTP_OK && offset > 0) {
+                // If-Range failed or the origin ignored Range. Never append a full 200 body.
+                // FileOutputStream below opens with append=false because offset is reset to zero.
                 offset = 0;
                 previousEtag = "";
+                AFGDownloadStore.update(getApplicationContext(), downloadId, "etag", "");
+                AFGDownloadStore.update(getApplicationContext(), downloadId, "downloadedBytes", 0L);
             } else if (status != HttpURLConnection.HTTP_OK && status != HttpURLConnection.HTTP_PARTIAL) {
                 if (status >= 500 || status == 408 || status == 429) return Result.retry();
                 AFGDownloadStore.update(getApplicationContext(), downloadId, "status", "error");
@@ -85,15 +92,18 @@ public final class AFGDownloadWorker extends Worker {
             }
             if (status == HttpURLConnection.HTTP_PARTIAL) {
                 String range = connection.getHeaderField("Content-Range");
-                if (range == null || !range.startsWith("bytes " + offset + "-")) {
-                    part.delete();
-                    AFGDownloadStore.update(getApplicationContext(), downloadId, "etag", "");
-                    return Result.retry();
+                Matcher rangeMatcher = range == null ? null : Pattern.compile("^bytes (\\\\d+)-(\\\\d+)/(\\\\d+|\\\\*)$").matcher(range);
+                boolean validRange = offset > 0 && rangeMatcher != null && rangeMatcher.matches()
+                    && Long.parseLong(rangeMatcher.group(1)) == offset
+                    && Long.parseLong(rangeMatcher.group(2)) >= offset;
+                if (validRange && meta.optLong("expectedBytes", -1L) > 0 && !rangeMatcher.group(3).equals("*")) {
+                    validRange = Long.parseLong(rangeMatcher.group(3)) == meta.optLong("expectedBytes", -1L);
                 }
-                if (!previousEtag.isEmpty() && etag != null && !previousEtag.equals(etag)) {
+                if (!validRange || previousEtag.isEmpty() || etag == null || !previousEtag.equals(etag)) {
                     part.delete();
                     AFGDownloadStore.update(getApplicationContext(), downloadId, "etag", "");
                     AFGDownloadStore.update(getApplicationContext(), downloadId, "downloadedBytes", 0L);
+                    AFGDownloadStore.update(getApplicationContext(), downloadId, "status", "paused");
                     return Result.retry();
                 }
             }
@@ -153,8 +163,8 @@ public final class AFGDownloadWorker extends Worker {
             AFGDownloadStore.update(getApplicationContext(), downloadId, "error", "SHA-256 verification failed; partial model removed.");
             return Result.failure();
         }
-        if (destination.exists() && !destination.delete()) throw new java.io.IOException("Cannot replace existing model file.");
-        if (!part.renameTo(destination)) throw new java.io.IOException("Atomic model-file installation failed.");
+        // Both paths are inside the same app-private directory; POSIX rename is atomic.
+        Os.rename(part.getAbsolutePath(), destination.getAbsolutePath());
         AFGDownloadStore.update(getApplicationContext(), downloadId, "computedSha256", computed);
         AFGDownloadStore.update(getApplicationContext(), downloadId, "hashVerified", !expected.isEmpty());
         AFGDownloadStore.update(getApplicationContext(), downloadId, "downloadedBytes", destination.length());
