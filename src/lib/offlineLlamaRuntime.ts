@@ -56,6 +56,7 @@ export async function streamNativeLlamaResponse(
   const listener = await AFGOfflineModels.addListener('generationToken', event => onToken(event.token));
   const abort = () => { void AFGOfflineModels.cancelGeneration(); };
   signal?.addEventListener('abort', abort, { once: true });
+  if (signal?.aborted) abort();
   const startedAt = Date.now();
   await recordOfflineMetric({ name: 'inference_started' }).catch(() => undefined);
   try {
