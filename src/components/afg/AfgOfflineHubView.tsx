@@ -365,7 +365,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       }
     } catch (error) {
       const outOfMemory = /out of memory|allocation failed|cannot allocate/i.test(error instanceof Error ? error.message : '');
-      if (isDownload) void recordOfflineMetric({ name: outOfMemory ? 'out_of_memory' : 'download_failed', modelId, durationMs: Date.now() - modelOperationStartedAt }).catch(() => undefined);
+      if (outOfMemory) void recordOfflineMetric({ name: 'out_of_memory', modelId, durationMs: Date.now() - modelOperationStartedAt }).catch(() => undefined);
+      else if (isDownload) void recordOfflineMetric({ name: 'download_failed', modelId, durationMs: Date.now() - modelOperationStartedAt }).catch(() => undefined);
       void recordOfflineDiagnostic({ code: outOfMemory ? 'out_of_memory' : isDownload ? 'download_error' : 'model_load_error', modelId }).catch(() => undefined);
       setRuntimeMessage(error instanceof Error ? error.message : copy.failed);
     } finally { setBusy(false); setProgress(0); setProgressText(''); }
