@@ -231,3 +231,28 @@ Build output note: the production bundle reports a 6,116.37 kB JavaScript librar
 ### Next action
 
 - Continue security review and inspect the large client bundle's import graph. Recheck PR #7 CI before considering integration. No PR has been merged and no Render deployment has been triggered.
+
+
+## Live CI result — Terminal token audit PR #7
+
+**PR:** https://github.com/muhammadelyasqanie1-sudo/Ai-app/pull/7
+
+**Status:** COMPLETE AND VERIFIED for the repository CI jobs.
+
+- `validate-locales`: passed.
+- Locale dictionary validation: passed.
+- Production web build: passed.
+- `web-checks`: passed.
+- TypeScript validation (`npm run lint`): passed.
+- Offline SHA-256 regression tests (`npm run test:offline-sha`): passed.
+- Production web build: passed.
+
+### Integration status
+
+- PR #6 and PR #7 remain open and unmerged. Both have passing CI. No merge has been performed.
+- Render deployment has not been triggered.
+- A separate existing Android offline-hub build on branch `offline-complete` succeeded (run 41609961992); this is not a build of the current `main` or either PR head. A separate old Android release workflow on that branch failed; it is not the current `android-apk.yml` workflow and was not used as current-branch evidence.
+
+### Next action
+
+- Continue reducing initial client bundle weight and review cross-platform runtime capability gating. Keep all deployment and production-data changes untouched.
