@@ -62,7 +62,26 @@ export async function handleAccountApi(req: IncomingMessage, res: ServerResponse
   if (pathname === '/api/account/preferences' && req.method === 'PATCH') {
     try {
       const body = await readJsonBody(req, 20000);
-      const v = Object.fromEntries(Object.entries(body).filter(([key]) => PREFERENCE_FIELDS.has(key)));
+      const v: Record<string, unknown> = Object.fromEntries(Object.entries(body).filter(([key]) => PREFERENCE_FIELDS.has(key)));
+      // PATCH is partial: preserve every preference the client did not send.
+      // Without this merge, saving only a model or theme silently resets the rest.
+      const existingResult = await pool.query('SELECT * FROM user_preferences WHERE user_id=$1 LIMIT 1', [user.id]);
+      const existing = existingResult.rows[0] || {};
+      const persistedFields: Record<string, string> = {
+        language: 'language', appearance: 'appearance', accentColor: 'accent_color',
+        density: 'density', fontSize: 'font_size', chatWidth: 'chat_width',
+        animationsEnabled: 'animations_enabled', defaultModel: 'default_model',
+        autoSelectModel: 'auto_select_model', responseStyle: 'response_style',
+        responseLength: 'response_length', creativity: 'creativity',
+        memoryEnabled: 'memory_enabled', voiceEnabled: 'voice_enabled',
+        defaultLanguage: 'default_language', notifications: 'notifications_json',
+      };
+      for (const [apiField, dbField] of Object.entries(persistedFields)) {
+        if (!(apiField in v) && existing[dbField] !== undefined) v[apiField] = existing[dbField];
+      }
+      if (v.notifications && typeof v.notifications === 'string') {
+        try { v.notifications = JSON.parse(v.notifications); } catch { v.notifications = {}; }
+      }
       if (typeof body.defaultModel === 'string' && body.defaultModel.trim()) {
         const { getVerifiedModelDescriptors } = await import('../services/providerGateway.ts');
         const models = await getVerifiedModelDescriptors();
