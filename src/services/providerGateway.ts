@@ -77,7 +77,7 @@ async function syncDiscoveredModels(provider: ChatProviderAdapter, models: Model
     await pool.query(
       `INSERT INTO model_catalog
         (provider_key, model_key, display_name, capabilities, enabled, context_window)
-       VALUES ($1, $2, $3, $4, true, $5)
+       VALUES ($1, $2, $3, $4, false, $5)
        ON CONFLICT (provider_key, model_key) DO UPDATE SET
          display_name = EXCLUDED.display_name,
          capabilities = COALESCE(model_catalog.capabilities_override, EXCLUDED.capabilities),
