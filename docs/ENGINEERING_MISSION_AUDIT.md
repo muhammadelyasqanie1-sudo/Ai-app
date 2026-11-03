@@ -143,3 +143,8 @@ Provider toggles, model configuration changes and fallback-chain updates now exe
 - `src/api/database.ts` now emits `SUCCESS SUPABASE_DATABASE_CONNECTED` only after a real successful `SELECT 1` through the configured pool. It emits once per process. This is source-reviewed but not live-connection verified.
 - `.env.example` no longer advertises implicit Gemini selection; provider setup is explicitly opt-in.
 - No database credentials were introduced, and no migration/deployment was performed.
+
+
+### Terminal token audit integrity
+
+CLI token creation and revocation now share PostgreSQL transactions with their corresponding audit records. Audit failure rolls back the token mutation. Source-reviewed only; database integration verification remains pending.
