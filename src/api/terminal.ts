@@ -83,6 +83,12 @@ async function runNativeCommand(command: string, userId: string): Promise<{ outp
 
 export async function handleTerminalApi(req: IncomingMessage, res: ServerResponse, pathname: string, requestId: string): Promise<boolean> {
   if (!pathname.startsWith('/api/terminal')) return false;
+  let terminalEnabled = false;
+  try {
+    const flag = await pool?.query("SELECT enabled FROM feature_flags WHERE flag_key='terminal_exec_enabled' LIMIT 1");
+    terminalEnabled = flag?.rows[0]?.enabled === true;
+  } catch { terminalEnabled = false; }
+  if (!terminalEnabled) { send(res, 403, { error: 'Terminal is disabled by the administrator.' }, requestId); return true; }
   if (!pool) { send(res,503,{error:'Terminal requires the PostgreSQL database.'},requestId); return true; }
   let auth: Auth | null;
   try { auth = await authenticateTerminal(req); }
