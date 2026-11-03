@@ -126,10 +126,10 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
       const caps=cap.capabilities||{};
       next.models=cap.verified===true?'ready':'setup';
       const localFlag = flagMap.local_models ?? flagMap.offline_models ?? flagMap.offline_learning;
-      next.local=localFlag===false?'disabled':localFlag===true?'ready':'unknown';
+      next.local=localFlag===false?'disabled':localFlag===true?'setup':'unknown';
       next.voice=flagMap.voice===false?'disabled':flagMap.voice===true && (caps['speech-to-text']||caps['text-to-speech'])?'ready':(caps['speech-to-text']||caps['text-to-speech'])?'ready':'setup';
       next.github=gh.linked===true?'active':gh.configured===true?'ready':'setup';
-      const integrationStatus=(slug:string):Status => integrations[slug]?.active===true?'active':integrations[slug]?.status==='disabled'?'disabled':'setup';
+      const integrationStatus=(slug:string):Status => integrations[slug]?.active===true?'ready':integrations[slug]?.status==='disabled'?'disabled':'setup';
       next.telegram=integrationStatus('telegram'); next.ftp=integrationStatus('ftp-sftp'); next.mcp=integrationStatus('mcp');
       next.byok=flagMap.byok===false?'disabled':flagMap.byok===true?'ready':'unknown'; next.router='setup';
       setStatus(next);
@@ -148,8 +148,9 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
 
   const filtered = useMemo(()=>ITEMS.filter(item=>{
     const q=query.trim().toLowerCase();
+    if(item.id==='byok' && featureFlags.byok===false) return false;
     return !q || [item.title,item.subtitle,item.group,...item.keywords].join(' ').toLowerCase().includes(q);
-  }),[query]);
+  }),[query,featureFlags]);
   const groups = ['Personalize','Your Assistant','Connections','Special Providers'];
   const statusLabel=(id:SettingId)=>{
     if(statusLoading)return t.checking;
