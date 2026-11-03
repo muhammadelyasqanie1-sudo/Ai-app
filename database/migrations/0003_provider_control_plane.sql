@@ -7,7 +7,7 @@ ALTER TABLE providers ADD COLUMN IF NOT EXISTS config_json jsonb NOT NULL DEFAUL
 ALTER TABLE providers ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'system'
   CHECK (source IN ('system','custom'));
 ALTER TABLE providers ADD COLUMN IF NOT EXISTS last_error_code text;
-CREATE UNIQUE INDEX IF NOT EXISTS providers_slug_unique_idx ON providers(slug) WHERE slug IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS providers_slug_unique_idx ON providers(slug);
 
 CREATE TABLE IF NOT EXISTS provider_keys (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
