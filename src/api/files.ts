@@ -28,6 +28,10 @@ export async function handleFilesApi(req:IncomingMessage,res:ServerResponse,path
   if (!user) { reply(res,401,{error:'Sign in to manage private files.'}); return true; }
   if (req.method !== 'GET' && !verifyCsrf(req)) { reply(res,403,{error:'CSRF validation failed.'}); return true; }
 
+  if (pathname === '/api/files/status' && req.method === 'GET') {
+    reply(res,200,{verified:true,privateStorageConfigured:Boolean(process.env.AFG_UPLOAD_QUARANTINE_DIR && path.isAbsolute(process.env.AFG_UPLOAD_QUARANTINE_DIR)),scannerConfigured:false,aiIngestionEnabled:false,maxUploadBytes:MAX_UPLOAD_BYTES}); return true;
+  }
+
   if (pathname === '/api/files' && req.method === 'GET') {
     const result = await pool.query(
       `SELECT id,original_name AS "name",kind,mime,size_bytes AS "sizeBytes",status,created_at AS "createdAt"
