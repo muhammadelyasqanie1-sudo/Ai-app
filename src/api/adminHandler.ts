@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
-import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf, revokeUserSessions } from './auth.ts';
+import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './auth.ts';
 import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors } from '../services/providerGateway.ts';
 
 const ALLOWED_FALLBACK_CAPABILITIES = new Set(['text', 'vision', 'imageGen', 'tts', 'stt']);
