@@ -137,7 +137,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         try{runtimeConfigured=Boolean((await adapter?.validateConfig())?.valid);}catch{}
         return {
           ...row,id,displayName:row.display_name,
-          configured:runtimeConfigured||Boolean(row.has_key),
+          configured:runtimeConfigured,
           keyHint:user.role==='superadmin'?row.key_hint:null,
           keyStatus:row.key_status,
         };
