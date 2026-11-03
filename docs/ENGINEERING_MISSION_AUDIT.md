@@ -121,3 +121,8 @@ Changes committed after the baseline audit:
 The first implementation draft briefly introduced a schema migration, but source review showed that the existing `messages.id` UUID primary key can provide the idempotency guarantee without changing the database schema. That unnecessary migration was removed before delivery. No migration was applied or is required for this change.
 
 **Verification boundary:** the updated source files were fetched again from GitHub and the expected idempotency, transaction, UUID reuse, and explicit-provider configuration code paths were confirmed by source inspection. No tests, type-check, build, live database query, provider smoke test, APK build, or deployment was run.
+
+
+### Live execution update — administrator bootstrap
+
+The one-time administrator bootstrap now uses a PostgreSQL transaction-scoped advisory lock to serialize concurrent first-admin requests. The active-administrator check and account promotion/creation run in the same transaction. Inactive accounts are rejected rather than silently reactivated, and the session is created only after commit. This is source-level implementation only; no live concurrency/database test was run.
