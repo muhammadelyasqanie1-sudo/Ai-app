@@ -199,8 +199,10 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const saveProviderKey=async(provider:ProviderRow,rotate=false)=>{
     const apiKey=(providerSecrets[provider.id]||'').trim();if(!apiKey){setError('Enter the provider API key first.');return;}
     if(!isSuperadmin){setError('Only superadmin can manage provider keys.');return;}
+    const currentPassword=window.prompt('Re-authenticate: enter your current administrator password.');
+    if(!currentPassword){setError('Password confirmation is required.');return;}
     try{const route='/api/admin/providers/'+encodeURIComponent(provider.id)+'/keys'+(rotate?'/rotate':'');
-      await api(route,{method:rotate?'POST':'PUT',body:JSON.stringify({apiKey,alias:'default'})});
+      await api(route,{method:rotate?'POST':'PUT',body:JSON.stringify({apiKey,alias:'default',currentPassword})});
       setProviderSecrets(current=>({...current,[provider.id]:''}));setNotice(`${provider.displayName} key securely saved.`);await loadAdminData();}
     catch(err){setError(err instanceof Error?err.message:'Provider key could not be saved.');}
   };
@@ -252,6 +254,12 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     const identity=user.email||user.display_name||user.id;
     const entered=window.prompt(`Confirm this sensitive change by typing exactly: ${identity}`);
     if(entered!==identity){setError('Confirmation did not match. No change was made.');return;}
+    if(patch.status==='deleted'){
+      const currentPassword=window.prompt('Re-authenticate: enter your current administrator password.');
+      if(!currentPassword){setError('Password confirmation is required.');return;}
+      await api('/api/admin/users',{method:'PATCH',body:JSON.stringify({userId:user.id,...patch,currentPassword})});
+      setNotice('Account soft-deleted.');await loadAdminData();return;
+    }
     await patchUser(user,patch);
   };
   const revokeSession=async(session:any)=>{
