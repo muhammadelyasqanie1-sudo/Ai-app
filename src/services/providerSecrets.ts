@@ -27,6 +27,7 @@ export function decryptProviderConfig(envelope: string, context = ''): Record<st
   }
   const decipher = createDecipheriv('aes-256-gcm', encryptionKey(), Buffer.from(ivText, 'base64url'));
   decipher.setAAD(Buffer.from(context, 'utf8'));
+  decipher.setAAD(Buffer.from(context, 'utf8'));
   decipher.setAuthTag(Buffer.from(tagText, 'base64url'));
   const plaintext = Buffer.concat([
     decipher.update(Buffer.from(ciphertextText, 'base64url')),
