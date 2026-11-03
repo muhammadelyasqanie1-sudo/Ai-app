@@ -55,6 +55,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const [ggufTasks, setGgufTasks] = useState<OfflineDownloadState[]>([]);
   const [ggufProgress, setGgufProgress] = useState<Record<string, { downloadedBytes: number; totalBytes: number | null; percent: number | null; status: string }>>({});
   const [ggufBusyId, setGgufBusyId] = useState('');
+  const selectedHfModel = useMemo(() => [...hfModels, ...sparkModels].find(model => model.id === hfSelected) || null, [hfModels, sparkModels, hfSelected]);
   const [device, setDevice] = useState<OfflineDeviceProfile | null>(null);
   const [deviceScanBusy, setDeviceScanBusy] = useState(true);
   const [modelFilter, setModelFilter] = useState<'all' | ModelFit>('all');
@@ -172,11 +173,11 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   useEffect(() => {
     if (!hfSelected) { setHfRepository(null); setHfQuantization(''); return; }
     const controller = new AbortController(); setHfRepository(null);
-    void getHuggingFaceRepository(hfSelected, controller.signal)
+    void getHuggingFaceRepository(hfSelected, controller.signal, selectedHfModel?.sha || 'main')
       .then(repository => { setHfRepository(repository); setHfQuantization(pendingGgufPathRef.current || repository.ggufFiles[0]?.path || ''); pendingGgufPathRef.current = ''; })
       .catch(error => { if (!controller.signal.aborted) setHfError(error instanceof Error ? error.message : 'Repository metadata unavailable'); });
     return () => controller.abort();
-  }, [hfSelected]);
+  }, [hfSelected, selectedHfModel?.sha]);
 
   const downloadSelectedGguf = async () => {
     if (!hfRepository || !hfQuantization || ggufBusyId) return;
@@ -185,7 +186,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     const id = hfSelected + '/' + file.path;
     setGgufBusyId(id);
     try {
-      await downloadGGUF({ repoId: hfSelected, fileName: file.path, expectedBytes: file.size, expectedSha256: file.sha256, onProgress: progress => setGgufProgress(previous => ({ ...previous, [id]: progress })) });
+      await downloadGGUF({ repoId: hfSelected, fileName: file.path, revision: hfRepository.revision, expectedBytes: file.size, expectedSha256: file.sha256, onProgress: progress => setGgufProgress(previous => ({ ...previous, [id]: progress })) });
       setGgufTasks(await listOfflineDownloads());
     } catch (error) { setHfError(error instanceof Error ? error.message : 'GGUF download failed.'); }
     finally { setGgufBusyId(''); setGgufTasks(await listOfflineDownloads().catch(() => [])); }
