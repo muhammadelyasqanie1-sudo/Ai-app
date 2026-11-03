@@ -13,7 +13,7 @@ export interface AuthenticatedUser {
   id: string;
   email: string;
   displayName: string;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'superadmin';
   status: 'active' | 'suspended' | 'deleted';
   defaultModel: string | null;
 }
@@ -172,7 +172,7 @@ export async function authenticateRequest(req: IncomingMessage): Promise<Authent
     id: row.id,
     email: row.email || '',
     displayName: row.display_name || '',
-    role: row.role === 'admin' ? 'admin' : 'user',
+    role: row.role === 'superadmin' ? 'superadmin' : row.role === 'admin' ? 'admin' : 'user',
     status: row.status,
     defaultModel: row.default_model || null,
   };
@@ -189,7 +189,9 @@ export async function createSession(userId: string, res: ServerResponse): Promis
   if (!pool) throw new Error('Database is not configured.');
   const sessionToken = randomBytes(32).toString('base64url');
   const csrfToken = randomBytes(32).toString('base64url');
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  const roleResult = await pool.query('SELECT role FROM users WHERE id=$1 LIMIT 1',[userId]);
+  const isAdministrator = ['admin','superadmin'].includes(String(roleResult.rows[0]?.role || ''));
+  const expiresAt = new Date(Date.now() + (isAdministrator ? 8 * 60 * 60 * 1000 : SESSION_TTL_MS));
   await pool.query(
     'INSERT INTO sessions (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
     [userId, hash(sessionToken), expiresAt],
@@ -503,7 +505,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         await client.query('BEGIN');
         // Serialize first-admin creation so concurrent requests cannot create multiple administrators.
         await client.query("SELECT pg_advisory_xact_lock(hashtext('afg-ai:admin-bootstrap'))");
-        const existingAdmins = await client.query("SELECT 1 FROM users WHERE role = 'admin' AND status = 'active' LIMIT 1");
+        const existingAdmins = await client.query("SELECT 1 FROM users WHERE role IN ('admin','superadmin') AND status = 'active' LIMIT 1");
         if (existingAdmins.rows.length) {
           await client.query('ROLLBACK');
           sendAuthJson(res, 409, { error: 'An active administrator already exists. Bootstrap is permanently closed.' });
@@ -520,13 +522,13 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         }
         if (existingUser.rows[0]) {
           const promoted = await client.query(
-            "UPDATE users SET display_name=$2,password_hash=$3,role='admin',email_verified=true,updated_at=now() WHERE id=$1 RETURNING id",
+            "UPDATE users SET display_name=$2,password_hash=$3,role='superadmin',email_verified=true,updated_at=now() WHERE id=$1 RETURNING id",
             [existingUser.rows[0].id,displayName,passwordHash],
           );
           adminUserId = promoted.rows[0].id;
         } else {
           const created = await client.query(
-            "INSERT INTO users (email,display_name,password_hash,role,email_verified) VALUES ($1,$2,$3,'admin',true) RETURNING id",
+            "INSERT INTO users (email,display_name,password_hash,role,email_verified) VALUES ($1,$2,$3,'superadmin',true) RETURNING id",
             [email,displayName,passwordHash],
           );
           adminUserId = created.rows[0].id;
