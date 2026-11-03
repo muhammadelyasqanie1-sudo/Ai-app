@@ -2,24 +2,74 @@ import { cloudflareWorkersAi } from '../providers/cloudflareWorkersAi.ts';
 import { createOpenAICompatibleAdapter } from '../providers/openAiCompatible.ts';
 import { gptOssProxy } from '../providers/gptOssProxy.ts';
 import { pool } from '../api/database.ts';
+import { createOpenAICompatibleAdapter } from '../providers/openAiCompatible.ts';
+import { decryptProviderSecret } from '../security/providerVault.ts';
 import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescriptor, CapabilityFlags } from '../providers/providerTypes.ts';
 
 const openAICompatible = createOpenAICompatibleAdapter();
-const providerRegistry: ChatProviderAdapter[] = [cloudflareWorkersAi, openAICompatible, gptOssProxy];
+const staticProviderRegistry: ChatProviderAdapter[] = [cloudflareWorkersAi, openAICompatible, gptOssProxy];
+let databaseProviderRegistry: ChatProviderAdapter[] = [];
+let databaseProviderRefreshAt = 0;
+const DATABASE_PROVIDER_REFRESH_MS = 15_000;
+
+async function refreshDatabaseProviderAdapters(force = false): Promise<void> {
+  if (!pool || (!force && Date.now() - databaseProviderRefreshAt < DATABASE_PROVIDER_REFRESH_MS)) return;
+  databaseProviderRefreshAt = Date.now();
+  try {
+    const result = await pool.query(`SELECT p.slug,p.display_name,p.base_url,p.kind,p.enabled,
+          pk.key_encrypted,pk.status AS key_status
+        FROM providers p
+        LEFT JOIN provider_keys pk ON pk.provider_id=p.id AND pk.alias='default' AND pk.status='active'
+        WHERE p.source='custom' OR p.kind IN ('deepseek','openai','google','openrouter')
+        ORDER BY p.slug`);
+    const next: ChatProviderAdapter[] = [];
+    for (const row of result.rows) {
+      if (!row.enabled || !row.key_encrypted || !row.base_url) continue;
+      if (!['custom','deepseek','openai','google','openrouter'].includes(String(row.kind))) continue;
+      try {
+        const apiKey = decryptProviderSecret(String(row.key_encrypted));
+        const baseUrl = String(row.base_url);
+        const parsed = new URL(baseUrl);
+        if (!['https:','http:'].includes(parsed.protocol) ||
+            (parsed.protocol === 'http:' && !['localhost','127.0.0.1'].includes(parsed.hostname))) continue;
+        next.push(createOpenAICompatibleAdapter({
+          id: String(row.slug),
+          displayName: String(row.display_name),
+          baseUrl,
+          apiKey,
+        }));
+      } catch {
+        console.error('AI_PROVIDER_RUNTIME_CONFIGURATION_INVALID', JSON.stringify({ provider: String(row.slug) }));
+      }
+    }
+    databaseProviderRegistry = next;
+  } catch {
+    // A not-yet-applied migration should not make the pre-existing environment adapters disappear.
+    databaseProviderRegistry = [];
+  }
+}
+
+function allProviderAdapters(): ChatProviderAdapter[] {
+  const map = new Map<string, ChatProviderAdapter>();
+  for (const provider of [...staticProviderRegistry, ...databaseProviderRegistry]) map.set(provider.id, provider);
+  return [...map.values()];
+}
 const HEALTH_TTL_MS = 5 * 60 * 1000;
 const healthCache = new Map<string, { healthy: boolean; checkedAt: string }>();
 
 export function getProviderRegistry(): Array<Pick<ChatProviderAdapter, 'id' | 'key' | 'displayName'>> {
-  return providerRegistry.map(({ id, key, displayName }) => ({ id, key, displayName }));
+  return allProviderAdapters().map(({ id, key, displayName }) => ({ id, key, displayName }));
 }
 
 export function getProviderAdapter(providerId: string): ChatProviderAdapter | undefined {
-  return providerRegistry.find((provider) => provider.id === providerId);
+  return allProviderAdapters().find((provider) => provider.id === providerId);
 }
 
 async function isProviderEnabled(providerId: string): Promise<boolean> {
   if (!pool) return true;
   try {
+    const catalog = await pool.query('SELECT enabled FROM providers WHERE slug = $1 LIMIT 1', [providerId]);
+    if (catalog.rows.length) return Boolean(catalog.rows[0].enabled);
     const result = await pool.query('SELECT enabled FROM provider_configs WHERE provider_key = $1 LIMIT 1', [providerId]);
     return result.rows.length ? Boolean(result.rows[0].enabled) : true;
   } catch (error) {
@@ -157,8 +207,9 @@ async function applyCapabilityOverrides(providerId: string, models: ModelDescrip
 }
 
 export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> {
+  await refreshDatabaseProviderAdapters();
   const verified: ModelDescriptor[] = [];
-  for (const provider of providerRegistry) {
+  for (const provider of allProviderAdapters()) {
     let configValid = false;
     try { configValid = (await provider.validateConfig()).valid; } catch { configValid = false; }
     let providerEnabled = true;
