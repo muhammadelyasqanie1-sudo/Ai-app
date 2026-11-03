@@ -8,12 +8,10 @@ const CAPABILITIES: CapabilityFlags = {
 };
 
 function config() {
-  const geminiKey = process.env.GEMINI_API_KEY?.trim();
-  const baseUrl = (process.env.OPENAI_COMPAT_BASE_URL?.trim() ||
-    (geminiKey ? 'https://generativelanguage.googleapis.com/v1beta/openai' : '')).replace(/\/+$/, '');
-  const apiKey = process.env.OPENAI_COMPAT_API_KEY?.trim() || geminiKey;
-  const id = process.env.OPENAI_COMPAT_PROVIDER_ID?.trim() || (geminiKey ? 'gemini-openai-compatible' : 'openai-compatible');
-  const displayName = process.env.OPENAI_COMPAT_DISPLAY_NAME?.trim() || (geminiKey ? 'Google Gemini' : 'OpenAI-compatible provider');
+  const baseUrl = (process.env.OPENAI_COMPAT_BASE_URL?.trim() || '').replace(/\/+$/, '');
+  const apiKey = process.env.OPENAI_COMPAT_API_KEY?.trim() || '';
+  const id = process.env.OPENAI_COMPAT_PROVIDER_ID?.trim() || 'openai-compatible';
+  const displayName = process.env.OPENAI_COMPAT_DISPLAY_NAME?.trim() || 'OpenAI-compatible provider';
   return { baseUrl, apiKey, id, displayName };
 }
 
