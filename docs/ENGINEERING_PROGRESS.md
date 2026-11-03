@@ -203,3 +203,36 @@
 ### Next action
 
 - Inspect and strengthen the next highest-priority backend reliability issue, then update the platform verification evidence and continue toward model routing/offline runtime gaps.
+
+
+## Milestone 8 — Explicit model pinning and policy-bound automatic fallback
+
+**Status:** IMPLEMENTED BUT NOT VERIFIED
+
+### Problem found
+
+- A manually selected model could be silently replaced by an administrator fallback model when it was unhealthy.
+- The streaming retry list also included every healthy model across every provider, rather than only models permitted by the configured fallback policy.
+- This could change model cost or provider data-handling characteristics without the user choosing Auto or an explicit fallback policy authorizing the switch.
+
+### Changes
+
+- Manual model selection is now pinned to the exact requested model/provider. If it is not verified, the API returns `selected_model_unavailable` and asks the user to choose another model or Auto; it does not substitute a different model.
+- Auto mode selects its initial healthy model using the existing configured pricing/selection logic.
+- Automatic cross-model/provider retries are now limited to the ordered model IDs in the administrator-configured fallback chain for the requested capability.
+- If no fallback chain is configured or its database read fails, the request does not silently roam across all providers.
+- The configured fallback list is validated and matched against currently verified, enabled text+streaming models before use.
+
+### Files changed
+
+- `src/services/providerGateway.ts`
+- `src/services/chatService.ts`
+
+### Verification
+
+- Source-level review confirms manual requests cannot enter the fallback branch and automatic candidates are derived only from the configured fallback IDs.
+- No runtime test, type-check, build, provider request or database-backed fallback test has yet run. A pull request will be used to invoke the repository's existing CI workflows.
+
+### Next action
+
+- Run the repository's CI checks through a pull request, inspect failures and correct them safely.
