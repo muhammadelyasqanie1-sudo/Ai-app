@@ -177,7 +177,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     setMessagesModelId('');
     setMessages([]);
     void loadOfflineChatMessages(selectedId).then(history => { if (active) { setMessages(history); setMessagesModelId(selectedId); } }).catch(() => { if (active) setMessagesModelId(selectedId); });
-    if (engineRef.current && engineModelIdRef.current !== selectedId) { const engine = engineRef.current; engineRef.current = null; engineModelIdRef.current = ''; setActiveOfflineModelLabel(''); void engine.unload().catch(() => undefined); }
+    if (engineRef.current && engineModelIdRef.current !== selectedId) { const engine = engineRef.current; engineRef.current = null; engineModelIdRef.current = ''; nativeEngineRef.current = false; setActiveOfflineModelLabel(''); void engine.unload().catch(() => undefined); }
     return () => { active = false; };
   }, [selectedId]);
 
@@ -284,7 +284,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     }
   };
   const removeGguf = async (id: string) => {
-    if (selectedId === id && engineRef.current) { const engine = engineRef.current; engineRef.current = null; engineModelIdRef.current = ''; setActiveOfflineModelLabel(''); await engine.unload().catch(() => undefined); }
+    if (selectedId === id && engineRef.current) { const engine = engineRef.current; engineRef.current = null; engineModelIdRef.current = ''; nativeEngineRef.current = false; setActiveOfflineModelLabel(''); await engine.unload().catch(() => undefined); }
     await removeOfflineModel(id);
     setGgufTasks(await listOfflineDownloads());
   };
@@ -393,7 +393,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   };
   const removeMlcModel = async (modelId: string) => {
     try {
-      if (selectedId === modelId && engineRef.current) { await engineRef.current.unload(); engineRef.current = null; engineModelIdRef.current = ''; setActiveOfflineModelLabel(''); setMessages([]); }
+      if (selectedId === modelId && engineRef.current) { await engineRef.current.unload(); engineRef.current = null; engineModelIdRef.current = ''; nativeEngineRef.current = false; setActiveOfflineModelLabel(''); setMessages([]); }
       const { deleteModelAllInfoInCache, prebuiltAppConfig } = await import('@mlc-ai/web-llm');
       await deleteModelAllInfoInCache(modelId, { ...prebuiltAppConfig, cacheBackend: 'indexeddb' });
       setInstalled(previous => previous.filter(id => id !== modelId));
@@ -407,7 +407,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     const thermalTimer = window.setTimeout(() => setThermalWarning(true), 120000);
     const inferenceStartedAt = Date.now();
     let streamedAnswer = '';
-    void recordOfflineMetric({ name: 'inference_started', modelId: selectedId || null }).catch(() => undefined);
+    if (!nativeEngineRef.current) void recordOfflineMetric({ name: 'inference_started', modelId: selectedId || null }).catch(() => undefined);
     try {
       if (nativeEngineRef.current) {
         const controller = new AbortController();
