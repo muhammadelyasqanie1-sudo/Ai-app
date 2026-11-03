@@ -29,6 +29,8 @@ export interface ModelDescriptor {
   displayName: string;
   description: string;
   contextWindow: number;
+  maxOutput?: number;
+  pricing?: { inputPerMillion?: number | null; outputPerMillion?: number | null; currency?: string };
   capabilities: CapabilityFlags;
   enabled: boolean;
   verifiedAt: string | null;
