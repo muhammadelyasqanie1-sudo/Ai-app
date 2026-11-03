@@ -1020,9 +1020,12 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       if ((!descriptor&&!storedModel.rows[0]) || typeof enabled !== 'boolean') {
         sendAuthJson(res,400,{error:'Select a registered model and provide a boolean enabled value.'});return true;
       }
-      const actualCapabilities=descriptor
-        ? Object.entries(descriptor.capabilities).filter(([,enabled])=>enabled).map(([name])=>name)
-        : (Array.isArray(storedModel.rows[0]?.capabilities)?storedModel.rows[0].capabilities as string[]:[]);
+      // Keep the provider-discovered capability set separate from the administrator override.
+      // The descriptor already applies overrides, so using it here would make a disabled
+      // capability impossible to re-enable later.
+      const actualCapabilities=Array.isArray(storedModel.rows[0]?.capabilities)
+        ? storedModel.rows[0].capabilities as string[]
+        : (descriptor ? Object.entries(descriptor.capabilities).filter(([,enabled])=>enabled).map(([name])=>name) : []);
       if(capabilities!==null&&capabilities.some((name:string)=>!actualCapabilities.includes(name))){
         sendAuthJson(res,400,{error:'Capability overrides may disable provider capabilities, but cannot invent unsupported capabilities.'});return true;
       }
@@ -1051,7 +1054,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
              last_health_ok = EXCLUDED.last_health_ok,
              updated_at = now()`,
           [providerId, modelId, descriptor?.displayName || storedModel.rows[0].display_name,
-            descriptor ? Object.entries(descriptor.capabilities).filter(([, value]) => value).map(([key]) => key) : storedModel.rows[0].capabilities,
+            actualCapabilities,
             enabled, descriptor?.contextWindow ?? Number(storedModel.rows[0].context_window) ?? 0, inputCost ?? null, outputCost ?? null,
             descriptor?.verifiedAt ?? null, Boolean(descriptor?.verifiedAt), capabilities],
         );
