@@ -322,3 +322,13 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 - Production web build: passed.
 - Latest Android workflow was queued/pending; Android build is not required to validate this backend-only TLS change and no Android compatibility claim is made from it.
 - No live Supabase TLS connection was established; the tests validate host detection/policy only.
+
+
+### Supabase TLS PR #10 — Latest head CI confirmation
+
+- `npm run lint`: passed.
+- `npm run test:database-config`: passed.
+- `npm run test:offline-sha`: passed.
+- `npm run i18n:check`: passed.
+- `npm run build`: passed.
+- Android workflow for the latest PR head was still running; no Android claim is needed for this backend change.
