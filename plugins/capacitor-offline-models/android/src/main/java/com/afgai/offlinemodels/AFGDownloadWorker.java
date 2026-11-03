@@ -32,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 public final class AFGDownloadWorker extends Worker {
     private static final String CHANNEL = "afg-ai-model-downloads";
     private static final int NOTIFICATION_ID = 7341;
+    private static final int HTTP_RANGE_NOT_SATISFIABLE = 416;
     private final int downloadId;
     private volatile HttpURLConnection activeConnection;
 
@@ -71,7 +72,7 @@ public final class AFGDownloadWorker extends Worker {
             }
             int status = connection.getResponseCode();
             String etag = connection.getHeaderField("ETag");
-            if (status == HttpURLConnection.HTTP_REQUESTED_RANGE_NOT_SATISFIABLE) {
+            if (status == HTTP_RANGE_NOT_SATISFIABLE) {
                 long expected = meta.optLong("expectedBytes", -1L);
                 if (expected > 0 && offset == expected) return verifyAndInstall(meta, part, destination);
                 part.delete();
