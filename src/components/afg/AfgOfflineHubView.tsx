@@ -376,10 +376,29 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     if (!nativeRuntimeAvailable || !task.localPath || busy || task.status !== 'installed') return;
     setBusy(true); setProgressText(dari ? 'در حال بارگذاری مدل GGUF…' : 'Loading local GGUF model…');
     try {
-      if (engineRef.current) { const previous = engineRef.current; engineRef.current = null; engineModelIdRef.current = ''; await previous.unload().catch(() => undefined); }
+      if (engineRef.current) {
+        const previous = engineRef.current;
+        engineRef.current = null;
+        engineModelIdRef.current = '';
+        nativeEngineRef.current = false;
+        await previous.unload().catch(() => undefined);
+      }
+      const freshDevice = await scanOfflineDevice();
+      setDevice(freshDevice);
+      const modelBytes = task.expectedBytes || task.downloadedBytes;
+      const estimatedRequiredRamGiB = modelBytes > 0 ? (modelBytes / (1024 ** 3)) * 1.35 + (lowPowerMode ? 0.5 : 0.8) : null;
+      if (!freshDevice.nativeInfoAvailable || freshDevice.availableMemoryGiB === null || freshDevice.lowMemory === true) {
+        throw new Error(dari ? 'حافظه آزاد فعلی دستگاه قابل تأیید نیست یا سیستم در حالت کمبود حافظه است. برنامه‌های دیگر را ببند و دوباره اسکن کن.' : 'Current free RAM could not be verified, or Android reports low-memory state. Close other apps and rescan before loading.');
+      }
+      if (estimatedRequiredRamGiB !== null && estimatedRequiredRamGiB > freshDevice.availableMemoryGiB * 0.8) {
+        throw new Error(dari ? 'حافظه آزاد فعلی برای بارگذاری این مدل کافی نیست. یک مدل کوچک‌تر انتخاب کن.' : 'Current available RAM is insufficient for this model. Choose a smaller quantization or model.');
+      }
+      if (estimatedRequiredRamGiB !== null && freshDevice.memoryGiB !== null && estimatedRequiredRamGiB > freshDevice.memoryGiB * 0.8) {
+        throw new Error(dari ? 'نیاز تخمینی RAM مدل از ظرفیت امن دستگاه بیشتر است.' : 'Estimated model RAM exceeds the device safe memory budget.');
+      }
       setSelectedId(task.id);
       const contextSize = lowPowerMode ? 1024 : 2048;
-      const threads = Math.max(1, Math.min(4, device?.cpuCores || 4));
+      const threads = Math.max(1, Math.min(4, freshDevice.cpuCores || 4));
       await loadNativeLlamaModel(task.localPath, contextSize, threads);
       nativeEngineRef.current = true;
       engineRef.current = {
@@ -391,7 +410,12 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       setRuntime('ready');
       setRuntimeMessage(dari ? 'مدل GGUF به‌صورت محلی آماده است.' : 'GGUF model loaded locally and ready for offline chat.');
       setViewMode('chat');
-    } catch (error) { setRuntimeMessage(error instanceof Error ? error.message : copy.failed); }
+    } catch (error) {
+      const outOfMemory = /out of memory|allocation failed|cannot allocate|memory/i.test(error instanceof Error ? error.message : '');
+      void recordOfflineDiagnostic({ code: outOfMemory ? 'out_of_memory' : 'model_load_error', modelId: task.repoId }).catch(() => undefined);
+      if (outOfMemory) void recordOfflineMetric({ name: 'out_of_memory', modelId: task.repoId }).catch(() => undefined);
+      setRuntimeMessage(error instanceof Error ? error.message : copy.failed);
+    }
     finally { setBusy(false); setProgressText(''); }
   };
   const clearCurrentOfflineChat = async () => {
