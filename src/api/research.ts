@@ -2,6 +2,8 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { authenticateRequest } from './auth.ts';
+import { pool } from './database.ts';
+import { getIntegrationRuntime } from './connections.ts';
 
 const MAX_QUERY_LENGTH = 500;
 let activeSearches = 0;
@@ -22,6 +24,21 @@ export async function handleResearchApi(req: IncomingMessage, res: ServerRespons
     reply(res, 405, { error: 'Method not allowed.' }, requestId);
     return true;
   }
+  if (pool) {
+    const integration = await pool.query("SELECT id FROM integrations WHERE slug='web-search' AND enabled=true AND status='active' AND last_check_ok=true LIMIT 1");
+    if (integration.rows[0]) {
+      const policy = await pool.query('SELECT requests,window_seconds FROM integration_rate_limits WHERE integration_id=$1',[integration.rows[0].id]);
+      const maxRequests = Number(policy.rows[0]?.requests || 12);
+      const windowSeconds = Number(policy.rows[0]?.window_seconds || 60);
+      const counter = await pool.query(`INSERT INTO integration_rate_counters(integration_id,user_id,window_start,request_count)
+        VALUES($1,$2,to_timestamp((floor(extract(epoch FROM now())/$3)*$3)::double precision),1)
+        ON CONFLICT(integration_id,user_id,window_start) DO UPDATE SET request_count=integration_rate_counters.request_count+1
+        RETURNING request_count`,[integration.rows[0].id,user.id,windowSeconds]);
+      if (Number(counter.rows[0]?.request_count||0)>maxRequests) {
+        reply(res,429,{error:'Web Search integration rate limit reached. Please retry after the current window.'},requestId);return true;
+      }
+    }
+  }
   const clientKey = req.socket.remoteAddress || 'unknown';
   const now = Date.now();
   const windowState = searchRate.get(clientKey);
@@ -33,9 +50,11 @@ export async function handleResearchApi(req: IncomingMessage, res: ServerRespons
   if (searchRate.size > 500) {
     for (const [key, value] of searchRate) if (now - value.startedAt >= 60_000) searchRate.delete(key);
   }
-  const apiKey = process.env.TAVILY_API_KEY;
+  const runtime = await getIntegrationRuntime('web-search');
+  const provider = String(runtime?.config.provider || 'tavily');
+  const apiKey = runtime?.credentials.api_key || (process.env.TAVILY_API_KEY || '');
   if (!apiKey) {
-    reply(res, 503, { available: false, error: 'Web Research is disabled. Configure TAVILY_API_KEY on the server.' }, requestId);
+    reply(res, 503, { available: false, error: 'Web Research is disabled. Configure and verify a Web Search connection in Admin → Connections.' }, requestId);
     return true;
   }
   if (activeSearches >= 3) {
@@ -72,24 +91,33 @@ export async function handleResearchApi(req: IncomingMessage, res: ServerRespons
       return true;
     }
     const query = input.data.query;
-    const upstream = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({ api_key: apiKey, query, search_depth: 'advanced', max_results: 8, include_answer: false, include_raw_content: false }),
-    });
+    let endpoint: string;
+    let init: RequestInit;
+    if (provider === 'brave') {
+      endpoint = 'https://api.search.brave.com/res/v1/web/search?q=' + encodeURIComponent(query) + '&count=8';
+      init = {headers:{'X-Subscription-Token':apiKey,Accept:'application/json'},signal:controller.signal};
+    } else if (provider === 'serpapi') {
+      endpoint = 'https://serpapi.com/search.json?engine=google&q=' + encodeURIComponent(query) + '&api_key=' + encodeURIComponent(apiKey);
+      init = {signal:controller.signal};
+    } else {
+      endpoint = 'https://api.tavily.com/search';
+      init = {method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,
+        body:JSON.stringify({api_key:apiKey,query,search_depth:'advanced',max_results:8,include_answer:false,include_raw_content:false})};
+    }
+    const upstream = await fetch(endpoint,init);
     if (!upstream.ok) {
-      console.error('AFG_RESEARCH_PROVIDER_FAILED', JSON.stringify({ requestId, status: upstream.status }));
+      console.error('AFG_RESEARCH_PROVIDER_FAILED', JSON.stringify({ requestId, status: upstream.status, provider }));
       reply(res, 502, { available: true, error: 'The configured search provider could not complete this search.' }, requestId);
       return true;
     }
-    const data = await upstream.json() as { results?: Array<{ title?: string; url?: string; content?: string; score?: number }> };
-    const results = Array.isArray(data.results) ? data.results.filter((item) =>
-      typeof item.url === 'string' && /^https?:\/\//i.test(item.url) && typeof item.title === 'string',
-    ).map((item) => ({
-      title: item.title!.slice(0, 300),
-      url: item.url!,
-      snippet: typeof item.content === 'string' ? item.content.slice(0, 1200) : '',
+    const data = await upstream.json() as any;
+    const rawResults = provider==='brave' ? data.web?.results : provider==='serpapi' ? data.organic_results : data.results;
+    const results = Array.isArray(rawResults) ? rawResults.filter((item:any) =>
+      typeof (item.url||item.link) === 'string' && /^https?:\/\//i.test(item.url||item.link) && typeof item.title === 'string',
+    ).map((item:any) => ({
+      title: item.title.slice(0,300),
+      url: item.url||item.link,
+      snippet: typeof (item.content||item.description||item.snippet) === 'string' ? (item.content||item.description||item.snippet).slice(0,1200) : '',
       score: typeof item.score === 'number' ? item.score : undefined,
     })) : [];
     reply(res, 200, { available: true, query, sources: results, sourceCount: results.length, message: results.length ? 'Search results returned by Tavily.' : 'The search provider returned no verifiable URLs.' }, requestId);

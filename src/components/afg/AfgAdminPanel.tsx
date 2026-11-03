@@ -2,13 +2,14 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ShieldCheck, LockKeyhole, RefreshCw, LogOut, LayoutDashboard, Users, Network,
   Cpu, Activity, Gauge, HardDrive, Flag, ClipboardList, ShieldAlert, CheckCircle2,
-  Search, Play, Power, Save, Plus, AlertTriangle
+  Search, Play, Power, Save, Plus, AlertTriangle, PlugZap
 } from 'lucide-react';
+import { AfgConnectionsPanel } from './AfgConnectionsPanel.tsx';
 import type { Language } from '../../types/afg';
 import { getIntlLocale } from '../../utils/i18n';
 
 interface AfgAdminPanelProps { language: Language; }
-type Tab = 'overview'|'users'|'providers'|'models'|'usage'|'limits'|'health'|'flags'|'audit'|'security';
+type Tab = 'overview'|'users'|'providers'|'models'|'usage'|'limits'|'health'|'flags'|'audit'|'security'|'connections';
 type ProviderRow = { id:string; displayName:string; enabled:boolean; configured:boolean; configMessage?:string|null };
 type ModelRow = {
   id:string; providerId:string; displayName:string; description?:string; contextWindow:number;
@@ -27,6 +28,7 @@ const NAV: {id:Tab;labelEn:string;labelFa:string;icon:any}[] = [
   {id:'usage',labelEn:'Usage & Errors',labelFa:'مصرف و خطاها',icon:Activity},{id:'limits',labelEn:'Rate Limits',labelFa:'محدودیت درخواست',icon:Gauge},
   {id:'health',labelEn:'Storage & Health',labelFa:'ذخیره‌سازی و سلامت',icon:HardDrive},{id:'flags',labelEn:'Flags & Announcements',labelFa:'امکانات و اطلاعیه‌ها',icon:Flag},
   {id:'audit',labelEn:'Audit Log',labelFa:'گزارش رویدادها',icon:ClipboardList},{id:'security',labelEn:'Security Events',labelFa:'رویدادهای امنیتی',icon:ShieldAlert},
+  {id:'connections',labelEn:'Connections',labelFa:'اتصال‌ها و یکپارچه‌سازی',icon:PlugZap},
 ];
 const CAPABILITIES = ['text','streaming','vision','imageGen','imageEdit','ocr','tts','stt','tools','jsonMode'];
 
@@ -250,6 +252,8 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     {tab==='flags'&&<div className="space-y-4"><div className={panel}><h2 className="mb-3 text-lg font-bold text-white">Feature flags</h2><div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"><input className={field} value={newFlag} onChange={e=>setNewFlag(e.target.value)} placeholder="feature.key"/><input className={field} value={newFlagDescription} onChange={e=>setNewFlagDescription(e.target.value)} placeholder="Description"/><button className={primary+' flex items-center justify-center gap-2'} onClick={()=>void createFlag()}><Plus className="h-4 w-4"/>Add flag</button></div><div className="mt-4 space-y-2">{flags.map(flag=><div key={flag.flag_key} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3"><div><p className="font-semibold text-white">{flag.flag_key}</p><p className="text-xs text-slate-500">{flag.description}</p></div><button className={flag.enabled?primary:secondary} onClick={()=>void toggleFlag(flag)}>{flag.enabled?'Enabled':'Disabled'}</button></div>)}</div></div><div className={panel}><h2 className="mb-2 font-bold text-white">Product announcement</h2><p className="mb-3 text-xs text-slate-500">Delivered in-app only to users who opted into product updates.</p><input className={field+' mb-2'} value={announcementTitle} onChange={e=>setAnnouncementTitle(e.target.value)} maxLength={120} placeholder="Announcement title"/><textarea className={field} rows={4} value={announcementBody} onChange={e=>setAnnouncementBody(e.target.value)} maxLength={2000} placeholder="Announcement message"/><button className={primary+' mt-3'} disabled={!announcementTitle.trim()||!announcementBody.trim()} onClick={()=>void sendAnnouncement()}>Send announcement</button></div></div>}
 
     {tab==='audit'&&<div className={panel}><h2 className="mb-1 text-lg font-bold text-white">Immutable audit log</h2><p className="mb-4 text-xs text-slate-500">Append-only database trigger prevents UPDATE and DELETE operations.</p><div className="space-y-2">{audit.map(a=><div key={a.id} className="rounded-xl border border-slate-800 bg-slate-900/70 p-3"><div className="flex flex-wrap justify-between gap-2"><b className="text-xs text-cyan-200">{a.action}</b><span className="text-[10px] text-slate-500">{date(a.created_at)}</span></div><p className="mt-1 text-xs text-slate-300">{a.actor_email||'System'} · {a.target_type||'—'} / {a.target_id||'—'}</p><pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">{JSON.stringify(a.metadata)}</pre></div>)}{!audit.length&&<p className="text-sm text-slate-500">No audit events yet.</p>}</div></div>}
+
+    {tab==='connections'&&<AfgConnectionsPanel/>}
 
     {tab==='security'&&<div className={panel}><h2 className="mb-1 text-lg font-bold text-white">Security events feed</h2><p className="mb-4 text-xs text-slate-500">Authentication denials and API server failures. Sensitive credential values are excluded.</p><div className="space-y-2">{security.map(e=><div key={e.id} className="rounded-xl border border-slate-800 bg-slate-900 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><span className={e.severity==='critical'?'text-red-300':e.severity==='warning'?'text-amber-300':'text-cyan-300'}><ShieldAlert className="h-4 w-4"/></span><b className="text-sm text-white">{e.event_type}</b></div><span className="text-[10px] text-slate-500">{date(e.created_at)}</span></div><p className="mt-1 text-[10px] text-slate-400">Severity: {e.severity} · User: {e.user_id||'unknown'} · Request: {e.request_id||'—'}</p><pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">{JSON.stringify(e.metadata)}</pre></div>)}{!security.length&&<p className="text-sm text-slate-500">No security events recorded.</p>}</div></div>}
   </section>;
