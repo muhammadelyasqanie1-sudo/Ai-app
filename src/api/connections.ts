@@ -66,6 +66,12 @@ async function getCredentials(integrationId: string) {
   const result = await pool!.query('SELECT credential_key,credential_value_encrypted FROM integration_credentials WHERE integration_id=$1',[integrationId]);
   return Object.fromEntries(result.rows.map((row:any)=>[row.credential_key,decryptSecret(row.credential_value_encrypted)])) as Record<string,string>;
 }
+export async function getIntegrationRuntime(slug: string): Promise<{config: Json; credentials: Record<string,string>} | null> {
+  if (!pool) return null;
+  const row = await pool.query('SELECT id,config_json FROM integrations WHERE slug=$1 AND enabled=true AND status=\'active\' AND last_check_ok=true',[slug]);
+  if (!row.rows[0]) return null;
+  return {config:row.rows[0].config_json||{},credentials:await getCredentials(row.rows[0].id)};
+}
 async function testIntegration(slug: string, credentials: Record<string,string>, config: Json) {
   const secrets = Object.values(credentials);
   if (slug === 'github') {
