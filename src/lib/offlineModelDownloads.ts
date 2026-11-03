@@ -311,7 +311,7 @@ export async function downloadGGUF(options: {
       await saveTask({ id, repoId, fileName, revision, url: modelUrl, expectedBytes, downloadedBytes: 0, expectedSha256, etag: currentEtag, lastModified: currentLastModified, status: 'downloading', updatedAt: Date.now() });
     } else if (offset > 0 && response.status === 206) {
       const rangeHeader = response.headers.get('content-range') || '';
-      const rangeMatch = /^bytes (\\d+)-(\\d+)\\/(\\d+|\\*)$/.exec(rangeHeader);
+      const rangeMatch = /^bytes (\d+)-(\d+)\\/(\d+|\\*)$/.exec(rangeHeader);
       const previousValidator = currentEtag || currentLastModified;
       const responseValidator = responseEtag || responseLastModified;
       if (!rangeMatch || Number(rangeMatch[1]) !== offset || !responseValidator || responseValidator !== previousValidator) {
@@ -323,7 +323,7 @@ export async function downloadGGUF(options: {
       throw new Error('The model host did not return 206 Partial Content for a resumed request.');
     } else if (response.status === 206) {
       const rangeHeader = response.headers.get('content-range') || '';
-      if (!/^bytes 0-\\d+\\/(\\d+|\\*)$/.test(rangeHeader)) throw new Error('The model host returned an invalid initial byte range.');
+      if (!/^bytes 0-\d+\\/(\d+|\\*)$/.test(rangeHeader)) throw new Error('The model host returned an invalid initial byte range.');
     }
     currentEtag = responseEtag || currentEtag;
     currentLastModified = responseLastModified || currentLastModified;
