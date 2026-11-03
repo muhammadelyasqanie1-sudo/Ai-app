@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { searchHuggingFaceGGUF } from '../src/lib/huggingFaceOfflineCatalog';
+import { fetchGgufModels, fetchModelFiles, searchHuggingFaceGGUF } from '../src/lib/huggingFaceOfflineCatalog';
 
 describe('Hugging Face offline catalog', () => {
   beforeEach(() => {
@@ -34,6 +34,31 @@ describe('Hugging Face offline catalog', () => {
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain('offset=40');
     expect(result.items).toHaveLength(40);
     expect(result.hasMore).toBe(true);
+  });
+
+  it('exposes cursor pagination through fetchGgufModels', async () => {
+    const rows = Array.from({ length: 30 }, (_, index) => ({ id: 'cursor/model-' + index, downloads: index, tags: ['gguf'] }));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(rows), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const first = await fetchGgufModels({ search: 'cursor-api-test', limit: 30 });
+    expect(first.models).toHaveLength(30);
+    expect(first.nextCursor).toBe('30');
+    const second = await fetchGgufModels({ search: 'cursor-api-test', limit: 30, cursor: first.nextCursor });
+    expect(second.nextCursor).toBe('30');
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('offset=30');
+  });
+
+  it('returns GGUF file sizes and direct download URLs from repository metadata', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([
+      { type: 'file', path: 'Spark-X2.6-Q4_K_M.gguf', size: 1090000000, lfs: { oid: 'a'.repeat(64) } },
+      { type: 'file', path: 'README.md', size: 100 },
+    ]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const files = await fetchModelFiles('AtomicChat/Spark-X2.6-1.7B-GGUF', 'main');
+    expect(files).toHaveLength(1);
+    expect(files[0]?.size).toBe(1090000000);
+    expect(files[0]?.quantization).toBe('Q4_K_M');
+    expect(files[0]?.downloadUrl).toContain('/resolve/main/Spark-X2.6-Q4_K_M.gguf');
   });
 
   it('assigns all supported top-level categories through the catalog classifier', async () => {
