@@ -77,6 +77,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const engineRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => () => { const engine = engineRef.current; engineRef.current = null; if (engine) void engine.unload().catch(() => undefined); }, []);
+
   const copy = dari ? {
     title: 'مرکز هوش مصنوعی آفلاین', subtitle: 'مدل را یک‌بار دانلود کن و در همین دستگاه، بدون اینترنت از آن استفاده کن.',
     runtime: 'وضعیت موتور محلی', compatible: 'این دستگاه از WebGPU پشتیبانی می‌کند.', unsupported: 'این مرورگر یا WebView از WebGPU پشتیبانی نمی‌کند؛ اجرای مدل آفلاین در این دستگاه فعلاً فعال نیست.',
@@ -358,6 +360,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       {viewMode === "chat" && <section className="flex min-h-[480px] min-w-0 flex-col rounded-2xl border p-4">
         <div className="flex items-center gap-2"><MessageSquare size={18}/><div><h2 className="font-bold">{copy.chat}</h2><p className="text-xs opacity-60">{copy.chatHint}</p></div></div>
         <div className="my-3 rounded-xl bg-emerald-500/5 p-3 text-xs text-emerald-700 dark:text-emerald-300">{copy.privacy}</div>
+        {engineRef.current && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-cyan-400/25 bg-cyan-400/5 p-3 text-xs"><strong>{dari ? 'حالت آفلاین — مدل:' : 'Offline Mode — Model:'} {selectedId}</strong><button type="button" onClick={() => setViewMode('models')} className="rounded-lg border px-2.5 py-1.5">{dari ? 'تغییر مدل' : 'Change Model'}</button></div>}
         {!engineRef.current && <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center"><Sparkles size={34} className="opacity-40"/><p className="text-sm opacity-60">{copy.choose}</p><button type="button" onClick={() => setViewMode('models')} className="rounded-xl bg-cyan-500 px-4 py-2.5 text-xs font-bold text-slate-950">{dari ? 'انتخاب یا دانلود مدل' : 'Choose or download a model'}</button></div>}
         {engineRef.current && <div className="flex-1 space-y-3 overflow-y-auto py-3">{messages.map((message,index)=><div key={index} className={'max-w-[92%] whitespace-pre-wrap rounded-2xl p-3 text-sm leading-6 ' + (message.role === 'user' ? 'ms-auto bg-cyan-500/10' : 'me-auto bg-slate-500/10')}>{message.content}</div>)}{chatBusy && <div className="text-xs opacity-60">{dari ? 'در حال تولید پاسخ محلی…' : 'Generating locally…'}</div>}<div ref={chatEndRef}/></div>}
         <form className="mt-3 flex gap-2" onSubmit={event => { event.preventDefault(); void sendMessage(); }}>
