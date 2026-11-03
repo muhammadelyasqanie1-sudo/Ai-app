@@ -396,6 +396,16 @@ export default function App() {
   // Chat message sending & streaming logic
   const handleSendMessage = async (text: string, attachments: ChatAttachment[], baseMessages: AfgMessage[] = messages, toolOptions: Record<string, unknown> = {}) => {
     if (!text.trim() && attachments.length === 0) return;
+    if (attachments.length > 0) {
+      const hasImage = attachments.some((attachment) => /\\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(attachment.name));
+      const selectedDescriptor = modelOptions.find((item) => selectedModel.endsWith(item.id));
+      if (hasImage && !selectedDescriptor?.capabilities?.vision) {
+        window.alert(language === 'dari' ? 'این مدل نمی‌تواند تصویر را بخواند. لطفاً یک مدل دارای قابلیت Vision انتخاب کنید.' : 'This model cannot read images. Please switch to a Vision model.');
+      } else {
+        window.alert(language === 'dari' ? 'بارگذاری فایل هنوز به ذخیره‌سازی و پردازش سرور وصل نشده است.' : 'File uploads are not connected to server storage and processing yet.');
+      }
+      return;
+    }
     // Use server-side automatic selection when no model is selected or the catalog is temporarily unavailable.
     const modelToUse = selectedModel || 'auto';
 
@@ -768,7 +778,7 @@ export default function App() {
         onOpenSettings={() => setCurrentTab('settings')}
         onOpenNavigation={() => setIsSideMenuOpen(true)}
         onOpenTerminal={() => setCurrentTab('terminal')}
-        onClearChat={() => { serverConversationRef.current = null; setMessages([]); setCurrentSessionId('chat-' + Date.now()); }}
+        onClearChat={() => { activeChatAbortRef.current?.abort(); handleNewChat(); }}
         onFindInChat={(query) => setChatFindQuery(query)}
       />
 
