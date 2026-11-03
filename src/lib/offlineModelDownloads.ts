@@ -6,6 +6,8 @@ export type OfflineDownloadState = {
   expectedBytes: number | null;
   downloadedBytes: number;
   expectedSha256: string | null;
+  computedSha256?: string | null;
+  hashVerified?: boolean;
   status: 'paused' | 'downloading' | 'installed' | 'error';
   updatedAt: number;
   error?: string;
@@ -152,7 +154,7 @@ export async function downloadGGUF(options: {
 }): Promise<OfflineDownloadState> {
   const { repoId, fileName } = options;
   const id = repoId + '/' + fileName;
-  if (!/^[^/]+\/[^/]+$/.test(repoId) || !fileName.toLowerCase().endsWith('.gguf')) throw new Error('Invalid GGUF model selection.');
+  if (!/^[^/]+\/[^/]+$/.test(repoId) || !fileName.toLowerCase().endsWith('.gguf') || fileName.split('/').some(part => !part || part === '.' || part === '..')) throw new Error('Invalid GGUF model selection.');
   if (activeTasks.has(id)) throw new Error('This model is already downloading.');
   const controller = new AbortController();
   const task: DownloadTask = { controller, paused: false };
@@ -228,7 +230,8 @@ export async function downloadGGUF(options: {
     await dir.removeEntry(partial);
     const result: OfflineDownloadState = {
       id, repoId, fileName, url: 'https://huggingface.co/' + repoId + '/resolve/main/' + fileName,
-      expectedBytes: downloadedBytes, downloadedBytes, expectedSha256: digest, status: 'installed', updatedAt: Date.now(),
+      expectedBytes: downloadedBytes, downloadedBytes, expectedSha256, computedSha256: digest,
+      hashVerified: Boolean(expectedSha256 && digest === expectedSha256), status: 'installed', updatedAt: Date.now(),
     };
     await saveTask(result);
     emit('installed');
