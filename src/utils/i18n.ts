@@ -42,5 +42,16 @@ export function applyDocumentLocale(language: Language): void {
   const locale = getIntlLocale(language);
   document.documentElement.lang = locale;
   document.documentElement.dir = ['dari','pashto','persian','arabic','urdu'].includes(language) ? 'rtl' : 'ltr';
-  document.title = language === 'dari' ? 'AFG AI — دستیار هوشمند شما' : 'AFG AI — Your Smart AI Assistant';
+  const titles: Record<Language,string> = {
+    dari:'AFG AI — دستیار هوشمند شما', english:'AFG AI — Your Smart AI Assistant',
+    pashto:'AFG AI — ستاسو هوښیار مرستیال', persian:'AFG AI — دستیار هوشمند شما',
+    arabic:'AFG AI — مساعدك الذكي', urdu:'AFG AI — آپ کا ذہین معاون',
+    turkish:'AFG AI — Akıllı Asistanınız', russian:'AFG AI — Ваш умный помощник',
+    french:'AFG AI — Votre assistant intelligent', spanish:'AFG AI — Tu asistente inteligente',
+    german:'AFG AI — Dein intelligenter Assistent', chinese:'AFG AI — 智能助手',
+    hindi:'AFG AI — आपका स्मार्ट सहायक', bengali:'AFG AI — আপনার স্মার্ট সহকারী',
+    indonesian:'AFG AI — Asisten Cerdas Anda', portuguese:'AFG AI — Seu assistente inteligente',
+    japanese:'AFG AI — スマートアシスタント', korean:'AFG AI — 스마트 어시스턴트',
+  };
+  document.title = titles[language];
 }
