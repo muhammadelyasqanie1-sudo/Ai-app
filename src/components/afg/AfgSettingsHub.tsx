@@ -111,24 +111,27 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
     setStatusLoading(true); setError('');
     const next: Record<string,Status> = {};
     try {
-      const [me,cap,gh,flags] = await Promise.all([
+      const [me,cap,gh,featureData] = await Promise.all([
         request('/api/auth/me').catch(()=>({authenticated:false})),
         request('/api/capabilities').catch(()=>({verified:false,capabilities:{}})),
         request('/api/integrations/github/status').catch(()=>({configured:false,linked:false})),
-        request('/api/admin/feature-flags').catch(()=>({flags:[]})),
+        request('/api/features/status').catch(()=>({verified:false,featureFlags:{},integrations:{}})),
       ]);
       setAuthenticated(me.authenticated===true);
       setAdminAllowed(me.authenticated===true && me.user?.role==='admin');
       setGithub({configured:gh.configured===true,linked:gh.linked===true,username:gh.username||''});
-      const flagMap:Record<string,boolean>={};
-      for(const flag of flags.flags||[]) flagMap[flag.flag_key]=flag.enabled===true;
+      const flagMap:Record<string,boolean> = featureData.verified===true ? (featureData.featureFlags||{}) : {};
+      const integrations:Record<string,any> = featureData.verified===true ? (featureData.integrations||{}) : {};
       setFeatureFlags(flagMap);
       const caps=cap.capabilities||{};
       next.models=cap.verified===true?'ready':'setup';
-      next.local=flagMap.local_models===false?'disabled':flagMap.local_models===true?'setup':'unknown';
-      next.voice=flagMap.voice===false?'disabled':(caps['speech-to-text']||caps['text-to-speech'])?'ready':'setup';
+      const localFlag = flagMap.local_models ?? flagMap.offline_models ?? flagMap.offline_learning;
+      next.local=localFlag===false?'disabled':localFlag===true?'ready':'unknown';
+      next.voice=flagMap.voice===false?'disabled':flagMap.voice===true && (caps['speech-to-text']||caps['text-to-speech'])?'ready':(caps['speech-to-text']||caps['text-to-speech'])?'ready':'setup';
       next.github=gh.linked===true?'active':gh.configured===true?'ready':'setup';
-      next.telegram='setup'; next.ftp='setup'; next.mcp='setup'; next.byok=flagMap.byok===false?'disabled':flagMap.byok===true?'setup':'unknown'; next.router='setup';
+      const integrationStatus=(slug:string):Status => integrations[slug]?.active===true?'active':integrations[slug]?.status==='disabled'?'disabled':'setup';
+      next.telegram=integrationStatus('telegram'); next.ftp=integrationStatus('ftp-sftp'); next.mcp=integrationStatus('mcp');
+      next.byok=flagMap.byok===false?'disabled':flagMap.byok===true?'ready':'unknown'; next.router='setup';
       setStatus(next);
       const catalog=await request('/api/models').catch(()=>({models:[]}));
       const rows=Array.isArray(catalog.models)?catalog.models:[];
