@@ -54,6 +54,8 @@ const detectDeviceLanguage = (): Language => {
   const preferred = (navigator.languages?.length ? navigator.languages : [navigator.language])
     .map((tag) => tag.toLowerCase());
   const first = preferred[0] || 'fa';
+  if (first.startsWith('fa-af') || first.startsWith('prs')) return 'dari';
+  if (first.startsWith('fa-ir')) return 'persian';
   const code = first.split('-')[0];
   const languageMap: Record<string, Language> = {
     en:'english', fa:'persian', prs:'dari', ps:'pashto', ar:'arabic', ur:'urdu',
