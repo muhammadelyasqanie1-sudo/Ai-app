@@ -21,6 +21,11 @@ on:
       - 'package.json'
       - '.github/workflows/android-offline-build.yml'
   workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: 'HTTPS origin of the deployed AFG AI API (leave empty to use repository variable VITE_API_BASE_URL)'
+        required: false
+        type: string
 concurrency:
   group: android-offline-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -46,6 +51,8 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Build web assets
+        env:
+          VITE_API_BASE_URL: ${{ inputs.api_base_url || vars.VITE_API_BASE_URL }}
         run: npm run build
       - name: Generate Android project
         run: npx cap add android
