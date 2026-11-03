@@ -35,7 +35,7 @@ The repository contains eight ordered migration files (`0000` through `0007`). M
 
 **PARTIALLY IMPLEMENTED.** Cloudflare Workers AI and an OpenAI-compatible adapter have server-side discovery/health/capability contracts. The provider gateway performs model availability checks and fallback logic. The current adapter registry is static and does not yet provide a complete administrator-managed arbitrary-provider adapter lifecycle. Provider keys are server-side environment variables in the current design.
 
-The OpenAI-compatible adapter contains an optional Gemini-specific automatic configuration path when `GEMINI_API_KEY` is set. This is not required for AFG AI and must not become the default provider. The user's stated deployment constraint is that Gemini must not be the default; Cloudflare and explicitly configured compatible providers remain the preferred route.
+The initial audit found an implicit Gemini-specific fallback in the OpenAI-compatible adapter. This was removed during the live execution milestone: the adapter now requires explicit `OPENAI_COMPAT_BASE_URL` and `OPENAI_COMPAT_API_KEY` configuration and no longer infers a Gemini endpoint or credential. Cloudflare and deliberately configured compatible providers remain the intended route.
 
 ### Offline AI Hub
 
@@ -63,7 +63,7 @@ The OpenAI-compatible adapter contains an optional Gemini-specific automatic con
 
 ### Security, files and persistence
 
-Security foundations include server-side auth, CSRF checks, password hashing dependencies, secret-redaction helper, upload validation helper and request/rate-limit logic. Important incomplete paths remain: file upload/quarantine/scanning is not fully wired; conversation persistence is documented as best-effort and non-idempotent in the existing gap analysis; provider/model-specific rate limits and observability need end-to-end verification; admin roles need stronger granularity. These gaps must not be described as production-ready.
+Security foundations include server-side auth, CSRF checks, password hashing dependencies, secret-redaction helper, upload validation helper and request/rate-limit logic. File upload/quarantine/scanning is not fully wired; provider/model-specific rate limits and observability need end-to-end verification; admin roles need stronger granularity. Conversation message persistence now accepts a client UUID and reuses the existing `messages.id` primary key for idempotent retries; this avoids a schema migration and remains compatible with older clients that omit the key. UI persistence is still best-effort, and no database-backed runtime verification has been performed. These gaps must not be described as production-ready.
 
 ## 4. Git and change-control audit
 
@@ -105,3 +105,19 @@ Security foundations include server-side auth, CSRF checks, password hashing dep
 ## 7. Mission status vocabulary
 
 All major mission areas remain **PARTIALLY IMPLEMENTED**, **BLOCKED BY EXTERNAL REQUIREMENT**, or **NOT IMPLEMENTED** until their complete user journeys pass the repository acceptance criteria and authorized verification. No cross-platform, production-readiness or end-to-end completion claim is made by this baseline report.
+
+
+## 8. Live execution milestone — core persistence and provider defaults
+
+**Date:** 2026-11-03  
+**Branch:** `main`
+
+Changes committed after the baseline audit:
+
+- `src/api/conversations.ts`: accepts an optional UUID idempotency key, inserts it as the existing message primary key, returns the already-created message for an exact retry, rejects a reused ID with different content or an ID owned by another conversation, and keeps message insertion plus conversation timestamp updates in one transaction.
+- `src/App.tsx`: new chat messages use stable UUIDs and reuse the same UUID when saving user and assistant messages. Legacy seed-message IDs are normalized to a generated UUID for their one-time import.
+- `src/providers/openAiCompatible.ts`: removed implicit Gemini endpoint/key inference. The adapter is only configured with explicit `OPENAI_COMPAT_BASE_URL` and `OPENAI_COMPAT_API_KEY` values.
+
+The first implementation draft briefly introduced a schema migration, but source review showed that the existing `messages.id` UUID primary key can provide the idempotency guarantee without changing the database schema. That unnecessary migration was removed before delivery. No migration was applied or is required for this change.
+
+**Verification boundary:** the updated source files were fetched again from GitHub and the expected idempotency, transaction, UUID reuse, and explicit-provider configuration code paths were confirmed by source inspection. No tests, type-check, build, live database query, provider smoke test, APK build, or deployment was run.
