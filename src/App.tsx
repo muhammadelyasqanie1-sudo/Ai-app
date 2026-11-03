@@ -261,7 +261,7 @@ export default function App() {
     serverConversationRef.current = null;
   }, [user.email]);
 
-  const getCsrfHeaders = () => {
+  const getCsrfHeaders = (): Record<string, string> => {
     const token = document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '';
     return token ? { 'X-CSRF-Token': decodeURIComponent(token) } : {};
   };
