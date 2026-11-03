@@ -332,7 +332,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           WHERE id=$1 AND status <> 'deleted' RETURNING id,role,status,deleted_at`,
           [targetId, role ?? null, status ?? null]);
         updatedUser = result.rows[0];
-        if (status === 'suspended' || role !== undefined) {
+        if (status === 'suspended' || status === 'deleted' || role !== undefined) {
           await client.query('UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL',[targetId]);
         }
         await client.query(
@@ -655,18 +655,23 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const started = Date.now();
       await pool.query('SELECT 1');
       const databaseLatencyMs = Date.now() - started;
+      await refreshDatabaseProviderAdapters(true);
       const providers = await Promise.all(getProviderRegistry().map(async (provider) => {
         const adapter = getProviderAdapter(provider.id); const before = Date.now();
         try {
           const config = await adapter?.validateConfig();
-          if (!config?.valid) return { id: provider.id, configured: false, healthy: false, latencyMs: null };
+          if (!config?.valid) return { id: provider.id, configured: false, healthy: false, latencyMs: null, modelCount: 0 };
           const models = await adapter!.listModels();
-          return { id: provider.id, configured: true, healthy: true, modelCount: models.length, latencyMs: Date.now()-before };
-        } catch { return { id: provider.id, configured: true, healthy: false, latencyMs: Date.now()-before }; }
+          return { id: provider.id, configured: true, healthy: models.length>0, modelCount: models.length, latencyMs: Date.now()-before };
+        } catch { return { id: provider.id, configured: true, healthy: false, latencyMs: Date.now()-before, modelCount: 0 }; }
       }));
-      sendAuthJson(res, 200, { database: { healthy: true, latencyMs: databaseLatencyMs },
+      const migration=await pool.query('SELECT version,applied_at FROM schema_migrations ORDER BY applied_at DESC LIMIT 1').catch(()=>({rows:[] as any[]}));
+      sendAuthJson(res, 200, {
+        database: { healthy: true, latencyMs: databaseLatencyMs, lastMigration: migration.rows[0]?.version || null, migrationAppliedAt: migration.rows[0]?.applied_at || null },
         providers, queues: { configured: false, status: 'not_configured' },
-        storage: { r2Configured: Boolean(process.env.R2_BUCKET), kvConfigured: Boolean(process.env.CLOUDFLARE_KV_NAMESPACE_ID || process.env.KV_REST_API_URL) } });
+        storage: { r2Configured: Boolean(process.env.R2_BUCKET), kvConfigured: Boolean(process.env.CLOUDFLARE_KV_NAMESPACE_ID || process.env.KV_REST_API_URL) },
+        app: { version: process.env.APP_VERSION || process.env.RENDER_GIT_COMMIT || process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown' },
+      });
       return true;
     }
 
