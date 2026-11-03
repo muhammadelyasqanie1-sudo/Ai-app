@@ -719,8 +719,8 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const value=body.value;
       if(value===undefined || JSON.stringify(value).length>10000){sendAuthJson(res,400,{error:'Provide a JSON configuration value up to 10 KB.'});return true;}
       const before=await pool.query('SELECT value_json FROM system_config WHERE key=$1',[key]);
-      await pool.query(`INSERT INTO system_config(key,value_json,updated_at) VALUES($1,$2::jsonb,now())
-        ON CONFLICT(key) DO UPDATE SET value_json=EXCLUDED.value_json,updated_at=now()`,[key,JSON.stringify(value)]);
+      await pool.query(`INSERT INTO system_config(key,value_json,updated_by,updated_at) VALUES($1,$2::jsonb,$3,now())
+        ON CONFLICT(key) DO UPDATE SET value_json=EXCLUDED.value_json,updated_by=EXCLUDED.updated_by,updated_at=now()`,[key,JSON.stringify(value),user.id]);
       await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
         [user.id,user.role,'config.update','config',key,before.rows[0]?JSON.stringify(before.rows[0].value_json):null,JSON.stringify(value),JSON.stringify({key})]);
       sendAuthJson(res,200,{key,value});return true;
@@ -967,6 +967,12 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const storedModel=await pool.query('SELECT display_name,context_window,capabilities,verified_at,last_health_ok,enabled,input_cost_per_million,output_cost_per_million,capabilities_override FROM model_catalog WHERE provider_key=$1 AND model_key=$2 LIMIT 1',[providerId,modelId]);
       if ((!descriptor&&!storedModel.rows[0]) || typeof enabled !== 'boolean') {
         sendAuthJson(res,400,{error:'Select a registered model and provide a boolean enabled value.'});return true;
+      }
+      const actualCapabilities=descriptor
+        ? Object.entries(descriptor.capabilities).filter(([,enabled])=>enabled).map(([name])=>name)
+        : (Array.isArray(storedModel.rows[0]?.capabilities)?storedModel.rows[0].capabilities as string[]:[]);
+      if(capabilities!==null&&capabilities.some((name:string)=>!actualCapabilities.includes(name))){
+        sendAuthJson(res,400,{error:'Capability overrides may disable provider capabilities, but cannot invent unsupported capabilities.'});return true;
       }
       const validCost = (value: unknown) => value === null || value === undefined ||
         (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1_000_000);
