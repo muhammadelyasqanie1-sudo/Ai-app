@@ -1,0 +1,36 @@
+name: Android offline hub build
+on:
+  pull_request:
+    paths:
+      - 'src/components/afg/AfgOfflineHubView.tsx'
+      - 'src/lib/offline*.ts'
+      - 'src/lib/huggingFaceOfflineCatalog.ts'
+      - 'plugins/**'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - '.github/workflows/android-offline-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android-debug-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build web assets
+        run: npm run build
+      - name: Generate Android project
+        run: npx cap add android
+      - name: Sync Capacitor plugins and assets
+        run: npx cap sync android
+      - name: Assemble debug APK
+        run: cd android && chmod +x gradlew && ./gradlew assembleDebug
