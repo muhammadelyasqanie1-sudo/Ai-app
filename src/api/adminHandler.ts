@@ -263,12 +263,15 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const status = typeof body.status === 'string' ? body.status : undefined;
       if (!targetId || (role !== undefined && !['user','admin','superadmin'].includes(role)) ||
           (role === 'superadmin' && user.role !== 'superadmin') ||
-          (status !== undefined && !['active','suspended'].includes(status)) ||
+          (status !== undefined && !['active','suspended','deleted'].includes(status)) ||
           (role === undefined && status === undefined)) {
         sendAuthJson(res, 400, { error: 'Provide a user ID and a valid role or status.' }); return true;
       }
-      if (targetId === user.id && (role === 'user' || status === 'suspended')) {
-        sendAuthJson(res, 400, { error: 'You cannot revoke your own administrator access or suspend your own account.' }); return true;
+      if (targetId === user.id && (role === 'user' || status === 'suspended' || status === 'deleted')) {
+        sendAuthJson(res,400,{error:'You cannot remove or suspend your own administrator account.'});return true;
+      }
+      if(status==='deleted'&&user.role!=='superadmin'){
+        sendAuthJson(res,403,{error:'Only a superadmin can soft-delete accounts.'});return true;
       }
       const client = await pool.connect();
       let updatedUser;
@@ -307,8 +310,9 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           }
         }
         const result = await client.query(`
-          UPDATE users SET role=COALESCE($2,role),status=COALESCE($3,status),updated_at=now()
-          WHERE id=$1 AND status <> 'deleted' RETURNING id,role,status`,
+          UPDATE users SET role=COALESCE($2,role),status=COALESCE($3,status),
+            deleted_at=CASE WHEN $3='deleted' THEN now() WHEN $3='active' THEN NULL ELSE deleted_at END,updated_at=now()
+          WHERE id=$1 AND status <> 'deleted' RETURNING id,role,status,deleted_at`,
           [targetId, role ?? null, status ?? null]);
         updatedUser = result.rows[0];
         if (status === 'suspended' || role !== undefined) {
@@ -326,6 +330,22 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         client.release();
       }
       sendAuthJson(res, 200, { user: updatedUser }); return true;
+    }
+
+    const userDetailRoute=pathname.match(/^\\/api\\/admin\\/users\\/([0-9a-f-]{36})$/i);
+    if(req.method==='GET'&&userDetailRoute){
+      const targetId=userDetailRoute[1];
+      const [profile,usage,conversations]=await Promise.all([
+        pool.query(`SELECT u.id,u.email,u.display_name,u.role,u.status,u.created_at,u.deleted_at,
+          (SELECT max(last_seen_at) FROM sessions WHERE user_id=u.id) AS last_login
+          FROM users u WHERE u.id=$1 LIMIT 1`,[targetId]),
+        pool.query(`SELECT COALESCE(sum(tokens_in),0)::bigint AS input_tokens,COALESCE(sum(tokens_out),0)::bigint AS output_tokens,
+          COALESCE(sum(cost_usd),0)::numeric(18,6) AS total_cost,count(*)::int AS request_count
+          FROM usage_records WHERE user_id=$1`,[targetId]),
+        pool.query('SELECT count(*)::int AS total FROM conversations WHERE user_id=$1',[targetId]),
+      ]);
+      if(!profile.rows[0]){sendAuthJson(res,404,{error:'User not found.'});return true;}
+      sendAuthJson(res,200,{user:{...profile.rows[0],usage:usage.rows[0],conversationCount:conversations.rows[0]?.total||0}});return true;
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/overview') {
