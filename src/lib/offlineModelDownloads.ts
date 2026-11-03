@@ -55,6 +55,7 @@ async function downloadGGUFAndroid(options: Parameters<typeof downloadGGUF>[0]):
   }
   const abort = () => { void AFGOfflineModels.cancelDownload({ downloadId }); };
   options.signal?.addEventListener('abort', abort, { once: true });
+  if (options.signal?.aborted) abort();
   try {
     while (true) {
       if (options.signal?.aborted) throw new Error('Android model download was cancelled.');
@@ -217,6 +218,7 @@ export async function downloadGGUF(options: {
   activeTasks.set(id, task);
   const relayAbort = () => controller.abort(options.signal?.reason);
   options.signal?.addEventListener('abort', relayAbort, { once: true });
+  if (options.signal?.aborted) relayAbort();
   const partial = partName(id);
   const target = finalName(id, fileName);
   const expectedBytes = options.expectedBytes && options.expectedBytes > 0 ? options.expectedBytes : null;
