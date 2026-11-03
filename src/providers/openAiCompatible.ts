@@ -68,7 +68,7 @@ export function createOpenAICompatibleAdapter(override?: OpenAICompatibleProvide
 
     async listModels(): Promise<ModelDescriptor[]> {
       const current = readConfig();
-      if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
+      if (!current.baseUrl || !validAuth(current) || !validBaseUrl(current.baseUrl)) {
         throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
       }
       try {
@@ -111,7 +111,7 @@ export function createOpenAICompatibleAdapter(override?: OpenAICompatibleProvide
     async healthCheck(modelId: string): Promise<HealthStatus> {
       const current = readConfig();
       const checkedAt = new Date().toISOString();
-      if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
+      if (!current.baseUrl || !validAuth(current) || !validBaseUrl(current.baseUrl)) {
         return { healthy: false, checkedAt, message: 'Provider not reachable.' };
       }
       try {
@@ -138,7 +138,7 @@ export function createOpenAICompatibleAdapter(override?: OpenAICompatibleProvide
 
     async *streamChat(input: ChatRequest): AsyncIterable<ChatChunk> {
       const current = readConfig();
-      if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
+      if (!current.baseUrl || !validAuth(current) || !validBaseUrl(current.baseUrl)) {
         throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
       }
       let response: Response;
