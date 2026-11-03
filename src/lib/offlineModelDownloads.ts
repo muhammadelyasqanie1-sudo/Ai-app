@@ -27,7 +27,7 @@ export type OfflineDownloadProgress = {
 };
 
 type DownloadListener = (progress: OfflineDownloadProgress) => void;
-type DownloadTask = { controller: AbortController; paused: boolean };
+type DownloadTask = { controller: AbortController; paused: boolean; pause?: () => Promise<void> };
 
 function isAndroidNative(): boolean { return Capacitor.getPlatform() === 'android'; }
 
@@ -57,12 +57,16 @@ async function downloadGGUFAndroid(options: Parameters<typeof downloadGGUF>[0]):
     downloadId = started.downloadId;
   }
   const controller = new AbortController();
-  const task: DownloadTask = { controller, paused: false };
+  let pausePromise: Promise<void> | null = null;
+  const pauseNative = (): Promise<void> => {
+    if (!pausePromise) pausePromise = AFGOfflineModels.pauseDownload({ downloadId }).then(() => undefined);
+    return pausePromise;
+  };
+  const task: DownloadTask = { controller, paused: false, pause: pauseNative };
   activeTasks.set(id, task);
   const relayAbort = () => controller.abort(options.signal?.reason);
   options.signal?.addEventListener('abort', relayAbort, { once: true });
-  const pauseNative = () => { void AFGOfflineModels.pauseDownload({ downloadId }); };
-  controller.signal.addEventListener('abort', pauseNative, { once: true });
+  controller.signal.addEventListener('abort', () => { void pauseNative().catch(() => undefined); }, { once: true });
   try {
     while (true) {
       if (controller.signal.aborted) throw new DOMException(task.paused ? 'Download paused.' : 'Download cancelled.', 'AbortError');
@@ -86,6 +90,7 @@ export async function pauseOfflineDownload(id: string): Promise<void> {
   if (task) {
     task.paused = true;
     task.controller.abort(new DOMException('Download paused by user.', 'AbortError'));
+    if (task.pause) await task.pause();
     return;
   }
   if (isAndroidNative()) {
