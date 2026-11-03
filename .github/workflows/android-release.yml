@@ -7,11 +7,6 @@ on:
         description: 'HTTPS origin of the deployed AFG AI API (leave empty to use repository variable VITE_API_BASE_URL)'
         required: false
         type: string
-    inputs:
-      api_base_url:
-        description: Optional HTTPS AFG AI API base URL
-        required: false
-        type: string
 
 permissions:
   contents: read
