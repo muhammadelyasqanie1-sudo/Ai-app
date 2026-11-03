@@ -3,7 +3,7 @@ import { pool } from './database.ts';
 import { z } from 'zod';
 import { isIP } from 'node:net';
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './auth.ts';
-import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors, refreshDatabaseProviderAdapters } from '../services/providerGateway.ts';
+import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors, refreshDatabaseProviderAdapters, recordModelHealthResult } from '../services/providerGateway.ts';
 import { encryptProviderSecret, providerKeyHint } from '../security/providerVault.ts';
 
 const ALLOWED_FALLBACK_CAPABILITIES = new Set(['text', 'vision', 'imageGen', 'tts', 'stt']);
@@ -720,7 +720,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         return {
           id:row.model_key,providerId:row.provider_key,displayName:row.display_name,description:row.description||'',
           contextWindow:Number(row.context_window)||0,maxOutput:row.max_output||null,pricing:row.pricing_json||null,enabled:Boolean(row.enabled),
-          verifiedAt:descriptor?.verifiedAt || (row.last_health_ok ? row.verified_at : null),
+          verifiedAt:descriptor?.verifiedAt || (row.last_health_ok && row.verified_at && new Date(row.verified_at).getTime()>Date.now()-24*60*60*1000 ? row.verified_at : null),
           lastHealthOk:Boolean(row.last_health_ok),discoveredAt:row.discovered_at,
           capabilities:descriptor?.capabilities || Object.fromEntries(['text','streaming','vision','imageGen','imageEdit','ocr','tts','stt','tools','jsonMode'].map((key)=>[key,caps.includes(key)])),
           inputCostPerMillion:row.input_cost_per_million??null,outputCostPerMillion:row.output_cost_per_million??null,
@@ -759,9 +759,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const started=Date.now();
       let healthy=false,checkedAt=new Date().toISOString();
       try{const result=await adapter.healthCheck(modelId);healthy=result.healthy;checkedAt=result.checkedAt;}catch{healthy=false;}
-      await pool.query(`UPDATE model_catalog SET last_health_ok=$3,verified_at=CASE WHEN $3 THEN $4::timestamptz ELSE NULL END,
-          health_checked_at=$4::timestamptz,updated_at=now() WHERE provider_key=$1 AND model_key=$2`,
-        [providerId,modelId,healthy,checkedAt]);
+      await recordModelHealthResult(providerId,modelId,healthy,checkedAt);
       await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
         [user.id,user.role,'model.health_check','model',providerId+':'+modelId,JSON.stringify({healthy,latencyMs:Date.now()-started})]);
       sendAuthJson(res,healthy?200:502,{providerId,modelId,healthy,verifiedAt:healthy?checkedAt:null,latencyMs:Date.now()-started});return true;
