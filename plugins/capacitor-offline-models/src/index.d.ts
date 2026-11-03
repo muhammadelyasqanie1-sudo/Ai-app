@@ -1,3 +1,4 @@
+import type { PluginListenerHandle } from '@capacitor/core';
 export interface NativeOfflineDownload {
   id: string;
   downloadId: number;
@@ -30,6 +31,9 @@ export interface AFGOfflineModelsPlugin {
   getRuntimeInfo(): Promise<{ available: boolean; engine: string; abi: string; backend: string; reason?: string }>;
   loadModel(options: { path: string; contextSize?: number; threads?: number }): Promise<{ loaded: boolean; path: string; sizeBytes: number }>;
   generate(options: { messages: string; maxTokens?: number }): Promise<{ text: string }>;
+  generateStream(options: { messages: string; maxTokens?: number }): Promise<{ text: string; cancelled: boolean }>;
+  cancelGeneration(): Promise<{ cancelled: boolean }>;
+  addListener(eventName: 'generationToken', listenerFunc: (event: { token: string }) => void): Promise<PluginListenerHandle>;
   unloadModel(): Promise<{ unloaded: boolean }>;
 }
 export const AFGOfflineModels: AFGOfflineModelsPlugin;
