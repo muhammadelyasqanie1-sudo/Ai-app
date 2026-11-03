@@ -4,6 +4,7 @@ import type { Language } from '../../types/afg';
 import { searchHuggingFaceGGUF, getHuggingFaceRepository, formatModelCategory, type HuggingFaceModel, type HuggingFaceRepository } from '../../lib/huggingFaceOfflineCatalog';
 import { assessOfflineModelFit, scanOfflineDevice, type OfflineDeviceProfile, type ModelFit } from '../../lib/offlineDevice';
 import { downloadGGUF, listOfflineDownloads, pauseGGUFDownload, removeOfflineModel, usesNativeOfflineDownloads, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
+import { clearOfflineChatMessages, loadOfflineChatMessages, saveOfflineChatMessages, type OfflineChatMessage } from '../../lib/offlineChatStorage';
 
 type CatalogModel = {
   model_id: string;
@@ -11,7 +12,7 @@ type CatalogModel = {
   low_resource_required?: boolean;
   model?: unknown;
 };
-type ChatMessage = { role: 'user' | 'assistant'; content: string };
+type ChatMessage = OfflineChatMessage;
 type RuntimeState = 'checking' | 'ready' | 'unsupported' | 'error';
 
 const INSTALLED_KEY = 'afg-ai-offline-hub-installed-v1';
@@ -73,6 +74,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messagesModelId, setMessagesModelId] = useState('');
   const [prompt, setPrompt] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
   const engineRef = useRef<any>(null);
@@ -86,7 +88,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     checking: 'در حال بررسی سخت‌افزار…', catalog: 'مدل‌های سازگار', search: 'جست‌وجوی مدل…', install: 'دانلود و نصب', installed: 'ذخیره‌شده در دستگاه', downloading: 'در حال دانلود مدل…',
     minMemory: 'حداقل حافظه گرافیکی', downloadSize: 'حجم تقریبی مخزن مدل', unknownSize: 'اندازه دقیق در دسترس نیست', storage: 'فضای ذخیره‌سازی دستگاه',
     chat: 'گفت‌وگوی آفلاین', chatHint: 'مدل نصب‌شده را بارگذاری کن و بدون اتصال به سرور پیام بده.', choose: 'یک مدل انتخاب کن', load: 'بارگذاری مدل', send: 'ارسال', input: 'پیام خود را بنویس…',
-    noModels: 'مدل سازگاری پیدا نشد.', noInstalled: 'هنوز مدلی نصب نشده است.', loading: 'در حال بارگذاری مدل…', ready: 'مدل آماده است؛ پیام‌ها فقط روی همین دستگاه پردازش می‌شوند.',
+    noModels: 'مدل سازگاری پیدا نشد.', noInstalled: 'هنوز مدلی نصب نشده است.', noOfflineModel: 'هیچ مدل آفلاینی نصب نیست. لطفاً از بخش مدل‌ها یک مدل دانلود کن.', loading: 'در حال بارگذاری مدل…', ready: 'مدل آماده است؛ پیام‌ها فقط روی همین دستگاه پردازش می‌شوند.',
     failed: 'عملیات انجام نشد. فضای خالی و سازگاری دستگاه را بررسی کن.', remove: 'فراموش‌کردن مدل', privacy: 'حریم خصوصی: متن گفتگو به سرور AFG AI ارسال نمی‌شود.',
     source: 'منبع مدل: MLC / WebLLM', limitation: 'این فهرست، مدل‌های از پیش تبدیل‌شده و سازگار با WebLLM را نشان می‌دهد؛ همه فایل‌های GGUF یا همه مدل‌های Hugging Face قابل اجرا نیستند.',
     onlineNeeded: 'برای دانلود اولیه به اینترنت نیاز است. پس از ذخیره موفق، اجرای مدل می‌تواند آفلاین باشد.',
@@ -97,7 +99,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     checking: 'Checking device capabilities…', catalog: 'Compatible models', search: 'Search models…', install: 'Download & install', installed: 'Installed locally', downloading: 'Downloading model…',
     minMemory: 'Minimum GPU memory', downloadSize: 'Approx. repository size', unknownSize: 'Exact size unavailable', storage: 'Device storage',
     chat: 'Offline chat', chatHint: 'Load an installed model and chat without sending requests to a server.', choose: 'Choose a model', load: 'Load model', send: 'Send', input: 'Write a message…',
-    noModels: 'No compatible models found.', noInstalled: 'No models installed yet.', loading: 'Loading model…', ready: 'Model ready. Messages are processed on this device only.',
+    noModels: 'No compatible models found.', noInstalled: 'No models installed yet.', noOfflineModel: 'No offline model installed. Please download a model from the Models section.', loading: 'Loading model…', ready: 'Model ready. Messages are processed on this device only.',
     failed: 'Operation failed. Check free storage and device compatibility.', remove: 'Forget model', privacy: 'Privacy: chat text is not sent to AFG AI servers.',
     source: 'Model source: MLC / WebLLM', limitation: 'This catalog lists pre-converted models compatible with WebLLM. Not every GGUF file or every Hugging Face model can run here.',
     onlineNeeded: 'An internet connection is required for the first download. Once cached, the model can run offline.',
@@ -139,6 +141,20 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   useEffect(() => {
     localStorage.setItem(INSTALLED_KEY, JSON.stringify(installed));
   }, [installed]);
+
+  useEffect(() => {
+    if (!selectedId) { setMessages([]); setMessagesModelId(''); return; }
+    let active = true;
+    setMessagesModelId('');
+    void loadOfflineChatMessages(selectedId).then(history => { if (active) { setMessages(history); setMessagesModelId(selectedId); } }).catch(() => { if (active) setMessagesModelId(selectedId); });
+    if (engineRef.current) { const engine = engineRef.current; engineRef.current = null; void engine.unload().catch(() => undefined); }
+    return () => { active = false; };
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (selectedId && messagesModelId === selectedId) void saveOfflineChatMessages(selectedId, messages).catch(() => undefined);
+  }, [selectedId, messagesModelId, messages]);
+
 
   useEffect(() => {
     if (!models.length || !installed.length) return;
@@ -269,6 +285,10 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     } finally { setBusy(false); setProgress(0); setProgressText(''); }
   }, [busy, runtime, copy, dari, models, device, modelSizes, storage]);
 
+  const clearCurrentOfflineChat = async () => {
+    setMessages([]);
+    await clearOfflineChatMessages(selectedId).catch(() => undefined);
+  };
   const removeMlcModel = async (modelId: string) => {
     try {
       if (selectedId === modelId && engineRef.current) { await engineRef.current.unload(); engineRef.current = null; setMessages([]); }
@@ -362,7 +382,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
         <div className="flex items-center gap-2"><MessageSquare size={18}/><div><h2 className="font-bold">{copy.chat}</h2><p className="text-xs opacity-60">{copy.chatHint}</p></div></div>
         <div className="my-3 rounded-xl bg-emerald-500/5 p-3 text-xs text-emerald-700 dark:text-emerald-300">{copy.privacy}</div>
         {engineRef.current && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-cyan-400/25 bg-cyan-400/5 p-3 text-xs"><strong>{dari ? 'حالت آفلاین — مدل:' : 'Offline Mode — Model:'} {selectedId}</strong><button type="button" onClick={() => setViewMode('models')} className="rounded-lg border px-2.5 py-1.5">{dari ? 'تغییر مدل' : 'Change Model'}</button></div>}
-        {!engineRef.current && <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center"><Sparkles size={34} className="opacity-40"/><p className="text-sm opacity-60">{copy.choose}</p><button type="button" onClick={() => setViewMode('models')} className="rounded-xl bg-cyan-500 px-4 py-2.5 text-xs font-bold text-slate-950">{dari ? 'انتخاب یا دانلود مدل' : 'Choose or download a model'}</button></div>}
+        {!engineRef.current && <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center"><Sparkles size={34} className="opacity-40"/><p className="text-sm opacity-60">{installed.length === 0 ? copy.noOfflineModel : copy.choose}</p><button type="button" onClick={() => setViewMode('models')} className="rounded-xl bg-cyan-500 px-4 py-2.5 text-xs font-bold text-slate-950">{dari ? 'انتخاب یا دانلود مدل' : 'Choose or download a model'}</button></div>}
         {engineRef.current && <div className="flex-1 space-y-3 overflow-y-auto py-3">{messages.map((message,index)=><div key={index} className={'max-w-[92%] whitespace-pre-wrap rounded-2xl p-3 text-sm leading-6 ' + (message.role === 'user' ? 'ms-auto bg-cyan-500/10' : 'me-auto bg-slate-500/10')}>{message.content}</div>)}{chatBusy && <div className="text-xs opacity-60">{dari ? 'در حال تولید پاسخ محلی…' : 'Generating locally…'}</div>}<div ref={chatEndRef}/></div>}
         <form className="mt-3 flex gap-2" onSubmit={event => { event.preventDefault(); void sendMessage(); }}>
           <input value={prompt} onChange={event => setPrompt(event.target.value)} placeholder={copy.input} disabled={!engineRef.current || chatBusy} className="min-w-0 flex-1 rounded-xl border bg-transparent px-3 py-3 text-sm outline-none disabled:opacity-40"/>
