@@ -292,6 +292,18 @@ async function sendEmailCode(email: string, code: string, purpose: 'verify_email
   });
   return response.ok;
 }
+export async function requestAdminPasswordReset(userId:string):Promise<{sent:boolean}>{
+  if(!pool||!process.env.RESEND_API_KEY||!process.env.EMAIL_FROM)return {sent:false};
+  const found=await pool.query("SELECT id,email FROM users WHERE id=$1 AND status='active' AND email_verified=true LIMIT 1",[userId]);
+  const row=found.rows[0];
+  if(!row?.email)return {sent:false};
+  const code=String(randomInt(0,1000000)).padStart(6,'0');
+  await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'password_reset',$2,now()+interval '10 minutes')",[row.id,hashEmailCode(code)]);
+  const sent=await sendEmailCode(String(row.email),code,'password_reset').catch(()=>false);
+  if(sent)await recordAuthSecurityEvent({headers:{},socket:{remoteAddress:'admin-api'}} as unknown as IncomingMessage,row.id,'auth.admin_password_reset_requested','warning');
+  return {sent};
+}
+
 function clearOAuthState(res: ServerResponse) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   const existing = res.getHeader('Set-Cookie');
