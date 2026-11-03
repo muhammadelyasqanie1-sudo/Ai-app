@@ -36,6 +36,7 @@ public class AFGOfflineModelsPlugin extends Plugin {
     private native String nativeGenerate(String messagesJson, int maxTokens);
     private native String nativeGenerateStream(String messagesJson, int maxTokens, Object callback);
     private native void nativeCancelGeneration();
+    private native void nativeResetGeneration();
     private native void nativeUnloadModel();
     private native String nativeGetLastError();
 
@@ -111,6 +112,7 @@ public class AFGOfflineModelsPlugin extends Plugin {
     public void generateStream(PluginCall call) {
         generationCancelled = false;
         if (!NATIVE_RUNTIME_AVAILABLE) { call.reject("The Android llama.cpp runtime is not available in this APK."); return; }
+        nativeResetGeneration();
         final String messages = call.getString("messages", "[]");
         final Integer requestedTokens = call.getInt("maxTokens");
         INFERENCE_EXECUTOR.execute(() -> {
