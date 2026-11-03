@@ -386,7 +386,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     const userPasswordResetRoute=pathname.match(/^\/api\/admin\/users\/([0-9a-f-]{36})\/password-reset$/i);
     if(req.method==='POST'&&userPasswordResetRoute){
       const targetId=userPasswordResetRoute[1];
-      const target=await pool.query('SELECT email FROM users WHERE id=$1 AND status=\\'active\\' LIMIT 1',[targetId]);
+      const target=await pool.query('SELECT email FROM users WHERE id=$1 AND status=\'active\' LIMIT 1',[targetId]);
       if(!target.rows[0]){sendAuthJson(res,404,{error:'Active user not found.'});return true;}
       const result=await requestAdminPasswordReset(targetId);
       await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
@@ -700,10 +700,10 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         FROM error_logs WHERE ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)
           AND ($2::timestamptz IS NULL OR created_at <= $2::timestamptz)
         ORDER BY created_at DESC LIMIT 5000`,[from,to]);
-      const csvCell=(value:unknown)=>'"'+String(value??'').replace(/"/g,'""').replace(/[\\r\\n]+/g,' ').slice(0,2000)+'"';
+      const csvCell=(value:unknown)=>'"'+String(value??'').replace(/"/g,'""').replace(/[\r\n]+/g,' ').slice(0,2000)+'"';
       const header=['request_id','error_code','error_class','message_redacted','metadata_json','created_at'];
       const lines=[header.join(','),...result.rows.map((row)=>header.map((key)=>csvCell(key==='metadata_json'?JSON.stringify(row[key]):row[key])).join(','))];
-      res.statusCode=200;res.setHeader('Content-Type','text/csv; charset=utf-8');res.setHeader('Content-Disposition','attachment; filename="afg-ai-errors.csv"');res.setHeader('Cache-Control','no-store');res.end(lines.join('\\n'));return true;
+      res.statusCode=200;res.setHeader('Content-Type','text/csv; charset=utf-8');res.setHeader('Content-Disposition','attachment; filename="afg-ai-errors.csv"');res.setHeader('Cache-Control','no-store');res.end(lines.join('\n'));return true;
     }
 
     if(req.method==='GET' && pathname==='/api/admin/config'){
