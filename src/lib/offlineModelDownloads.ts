@@ -42,8 +42,9 @@ function mapNativeDownload(item: Awaited<ReturnType<typeof AFGOfflineModels.getD
 
 async function downloadGGUFAndroid(options: Parameters<typeof downloadGGUF>[0]): Promise<OfflineDownloadState> {
   const revision = options.revision || 'main';
+  const id = options.repoId + '/' + options.fileName;
   const url = 'https://huggingface.co/' + options.repoId + '/resolve/' + encodeURIComponent(revision) + '/' + options.fileName.split('/').map(encodeURIComponent).join('/');
-  const existing = (await AFGOfflineModels.listDownloads()).downloads.find(item => item.id === options.repoId + '/' + options.fileName);
+  const existing = (await AFGOfflineModels.listDownloads()).downloads.find(item => item.id === id);
   let downloadId: number;
   if (existing && (existing.status === 'queued' || existing.status === 'downloading' || existing.status === 'paused' || existing.status === 'installed')) {
     downloadId = existing.downloadId;
@@ -54,11 +55,16 @@ async function downloadGGUFAndroid(options: Parameters<typeof downloadGGUF>[0]):
     const started = await AFGOfflineModels.startDownload({ url, repoId: options.repoId, revision, fileName: options.fileName, expectedBytes: options.expectedBytes, expectedSha256: options.expectedSha256 });
     downloadId = started.downloadId;
   }
-  const abort = () => { void AFGOfflineModels.pauseDownload({ downloadId }); };
-  options.signal?.addEventListener('abort', abort, { once: true });
+  const controller = new AbortController();
+  const task: DownloadTask = { controller, paused: false };
+  activeTasks.set(id, task);
+  const relayAbort = () => controller.abort(options.signal?.reason);
+  options.signal?.addEventListener('abort', relayAbort, { once: true });
+  const pauseNative = () => { void AFGOfflineModels.pauseDownload({ downloadId }); };
+  controller.signal.addEventListener('abort', pauseNative, { once: true });
   try {
     while (true) {
-      if (options.signal?.aborted) throw new Error('Android model download was cancelled.');
+      if (controller.signal.aborted) throw new DOMException(task.paused ? 'Download paused.' : 'Download cancelled.', 'AbortError');
       const native = await AFGOfflineModels.getDownloadStatus({ downloadId });
       const state = mapNativeDownload(native);
       const totalBytes = state.expectedBytes;
@@ -67,19 +73,23 @@ async function downloadGGUFAndroid(options: Parameters<typeof downloadGGUF>[0]):
       if (state.status === 'error') throw new Error(state.error || 'Android model download failed.');
       await new Promise(resolve => window.setTimeout(resolve, 1200));
     }
-  } finally { options.signal?.removeEventListener('abort', abort); }
+  } finally {
+    options.signal?.removeEventListener('abort', relayAbort);
+    controller.signal.removeEventListener('abort', pauseNative);
+    if (activeTasks.get(id) === task) activeTasks.delete(id);
+  }
 }
 
 export async function pauseOfflineDownload(id: string): Promise<void> {
-  if (isAndroidNative()) {
-    const item = (await AFGOfflineModels.listDownloads()).downloads.find(download => download.id === id);
-    if (item) await AFGOfflineModels.pauseDownload({ downloadId: item.downloadId });
-    return;
-  }
   const task = activeTasks.get(id);
   if (task) {
     task.paused = true;
     task.controller.abort(new DOMException('Download paused by user.', 'AbortError'));
+    return;
+  }
+  if (isAndroidNative()) {
+    const item = (await AFGOfflineModels.listDownloads()).downloads.find(download => download.id === id);
+    if (item) await AFGOfflineModels.pauseDownload({ downloadId: item.downloadId });
   }
 }
 
