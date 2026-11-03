@@ -16,5 +16,7 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: TypeScript validation
         run: npm run lint
+      - name: Offline SHA-256 regression tests
+        run: npm run test:offline-sha
       - name: Production web build
         run: npm run build
