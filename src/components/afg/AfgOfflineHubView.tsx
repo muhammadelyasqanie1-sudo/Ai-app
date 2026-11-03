@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, ArrowDownToLine, Cpu, HardDrive, MessageSquare, Search, ShieldCheck, Sparkles, Trash2, WifiOff, X } from 'lucide-react';
+import { ArrowDownToLine, Cpu, HardDrive, MessageSquare, Search, ShieldCheck, Sparkles, WifiOff } from 'lucide-react';
 import type { Language } from '../../types/afg';
 
 type CatalogModel = {
@@ -59,7 +59,7 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
     title: 'مرکز هوش مصنوعی آفلاین', subtitle: 'مدل را یک‌بار دانلود کن و در همین دستگاه، بدون اینترنت از آن استفاده کن.',
     runtime: 'وضعیت موتور محلی', compatible: 'این دستگاه از WebGPU پشتیبانی می‌کند.', unsupported: 'این مرورگر یا WebView از WebGPU پشتیبانی نمی‌کند؛ اجرای مدل آفلاین در این دستگاه فعلاً فعال نیست.',
     checking: 'در حال بررسی سخت‌افزار…', catalog: 'مدل‌های سازگار', search: 'جست‌وجوی مدل…', install: 'دانلود و نصب', installed: 'ذخیره‌شده', downloading: 'در حال دانلود مدل…',
-    minMemory: 'حداقل حافظه گرافیکی', downloadSize: 'حجم فایل‌ها', unknownSize: 'حجم دقیق از منبع اعلام نشده', storage: 'فضای ذخیره‌سازی دستگاه',
+    minMemory: 'حداقل حافظه گرافیکی', downloadSize: 'حجم تقریبی مخزن مدل', unknownSize: 'اندازه دقیق در دسترس نیست', storage: 'فضای ذخیره‌سازی دستگاه',
     chat: 'گفت‌وگوی آفلاین', chatHint: 'مدل نصب‌شده را بارگذاری کن و بدون اتصال به سرور پیام بده.', choose: 'یک مدل انتخاب کن', load: 'بارگذاری مدل', send: 'ارسال', input: 'پیام خود را بنویس…',
     noModels: 'مدل سازگاری پیدا نشد.', noInstalled: 'هنوز مدلی نصب نشده است.', loading: 'در حال بارگذاری مدل…', ready: 'مدل آماده است؛ پیام‌ها فقط روی همین دستگاه پردازش می‌شوند.',
     failed: 'عملیات انجام نشد. فضای خالی و سازگاری دستگاه را بررسی کن.', remove: 'فراموش‌کردن مدل', privacy: 'حریم خصوصی: متن گفتگو به سرور AFG AI ارسال نمی‌شود.',
@@ -69,7 +69,7 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
     title: 'Offline AI Hub', subtitle: 'Download a model once, then use it on this device without an internet connection.',
     runtime: 'Local runtime status', compatible: 'This device supports WebGPU.', unsupported: 'This browser or WebView does not support WebGPU. Offline model inference is unavailable on this device for now.',
     checking: 'Checking device capabilities…', catalog: 'Compatible models', search: 'Search models…', install: 'Download & install', installed: 'Cached', downloading: 'Downloading model…',
-    minMemory: 'Minimum GPU memory', downloadSize: 'Model files', unknownSize: 'Exact size not published by source', storage: 'Device storage',
+    minMemory: 'Minimum GPU memory', downloadSize: 'Approx. repository size', unknownSize: 'Exact size unavailable', storage: 'Device storage',
     chat: 'Offline chat', chatHint: 'Load an installed model and chat without sending requests to a server.', choose: 'Choose a model', load: 'Load model', send: 'Send', input: 'Write a message…',
     noModels: 'No compatible models found.', noInstalled: 'No models installed yet.', loading: 'Loading model…', ready: 'Model ready. Messages are processed on this device only.',
     failed: 'Operation failed. Check free storage and device compatibility.', remove: 'Forget model', privacy: 'Privacy: chat text is not sent to AFG AI servers.',
@@ -175,15 +175,6 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
     } finally { setChatBusy(false); }
   };
 
-  const forgetModel = async (modelId: string) => {
-    if (engineRef.current && selectedId === modelId) {
-      try { await engineRef.current.unload(); } catch { /* cache remains intact */ }
-      engineRef.current = null;
-      setMessages([]);
-    }
-    setInstalled(previous => previous.filter(id => id !== modelId));
-  };
-
   const selectedRepo = selected ? getHuggingFaceRepo(selected) : null;
   const exactSize = selectedRepo ? modelSizes[selectedRepo] : undefined;
 
@@ -209,7 +200,7 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
             const isInstalled = installed.includes(model.model_id);
             return <button key={model.model_id} type="button" onClick={() => setSelectedId(model.model_id)} className={'w-full rounded-xl border p-3 text-start transition ' + (active ? 'border-cyan-400 bg-cyan-400/10' : 'hover:border-cyan-400/50')}>
               <div className="flex items-start justify-between gap-2"><span className="break-all text-sm font-semibold">{model.model_id}</span>{isInstalled && <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-600">{copy.installed}</span>}</div>
-              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] opacity-65"><span>{copy.minMemory}: {formatBytes((model.vram_required_MB || 0) * 1024 * 1024)}</span><span>{copy.downloadSize}: {size === undefined ? '…' : formatBytes(size)}</span></div>
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] opacity-65"><span>{copy.minMemory}: {formatBytes((model.vram_required_MB || 0) * 1024 * 1024)}</span><span>{copy.downloadSize}: {size === undefined ? '…' : size === null ? copy.unknownSize : formatBytes(size)}</span></div>
             </button>;
           })}
           {!filtered.length && <p className="p-5 text-center text-sm opacity-60">{copy.noModels}</p>}
@@ -234,7 +225,7 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
           <button type="submit" disabled={!engineRef.current || !prompt.trim() || chatBusy} className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-40">{copy.send}</button>
         </form>
         <div className="mt-3 border-t pt-3"><div className="mb-2 text-xs font-semibold opacity-70">{copy.installed}</div>
-          {installed.length === 0 ? <p className="text-xs opacity-55">{copy.noInstalled}</p> : installed.map(id=><div key={id} className="flex items-center justify-between gap-2 py-1.5 text-xs"><span className="min-w-0 break-all">{id}</span><button type="button" onClick={() => void forgetModel(id)} aria-label={copy.remove} title={copy.remove} className="shrink-0 rounded-lg p-2 text-red-500 hover:bg-red-500/10"><Trash2 size={15}/></button></div>)}
+          {installed.length === 0 ? <p className="text-xs opacity-55">{copy.noInstalled}</p> : installed.map(id=><div key={id} className="flex items-center justify-between gap-2 py-1.5 text-xs"><span className="min-w-0 break-all">{id}</span></div>)}
         </div>
       </section>
     </div>
