@@ -124,7 +124,11 @@ export async function handleConversationsApi(req: IncomingMessage, res: ServerRe
           [parsed.data.clientMessageId,conversationId],
         );
         const previous = existing.rows[0];
-        if (!previous) throw new Error('Idempotent message conflict could not be resolved.');
+        if (!previous) {
+          await client.query('ROLLBACK');
+          reply(res,409,{error:'This message ID is already in use.'});
+          return true;
+        }
         const samePayload = previous.role === parsed.data.role &&
           previous.content === parsed.data.content &&
           previous.model === (parsed.data.model ?? null) &&
