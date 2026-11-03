@@ -23,7 +23,7 @@ import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { ErrorBoundary } from './components/afg/AfgDesignSystem';
 import { applyDocumentLocale } from './utils/i18n';
 import { apiFetch } from './lib/apiClient';
-import { getSavedLanguage, saveLanguage, saveTheme, fromLanguageCode } from './lib/appPreferences';
+import { getSavedLanguage, getSavedTheme, saveLanguage, saveTheme, fromLanguageCode } from './lib/appPreferences';
 
 import type { 
   Language, 
@@ -52,6 +52,7 @@ const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL || '').replace
 
 export default function App() {
   // App State
+  const [preferencesReady, setPreferencesReady] = useState(false);
   const [language, setLanguage] = useState<Language>(() => fromLanguageCode(localStorage.getItem('afg_language')) || 'dari');
   const [hasSelectedLanguage, setHasSelectedLanguage] = useState(() => {
     return fromLanguageCode(localStorage.getItem('afg_language')) !== null;
@@ -99,11 +100,16 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    void getSavedLanguage().then((saved) => {
-      if (!active || !saved) return;
-      setLanguage(saved);
-      setHasSelectedLanguage(true);
-      setIsIntroVisible(true);
+    void Promise.all([getSavedLanguage(), getSavedTheme()]).then(([savedLanguage, savedTheme]) => {
+      if (!active) return;
+      if (savedLanguage) {
+        setLanguage(savedLanguage);
+        setHasSelectedLanguage(true);
+        setIsIntroVisible(true);
+      }
+      if (savedTheme) setTheme(savedTheme);
+    }).finally(() => {
+      if (active) setPreferencesReady(true);
     });
     return () => { active = false; };
   }, []);
@@ -563,6 +569,10 @@ export default function App() {
     setMessages([]);
     setCurrentTab('chat');
   };
+
+  if (!preferencesReady) {
+    return <div className="flex min-h-screen items-center justify-center bg-[#060b18] text-cyan-300"><span className="animate-pulse text-xl font-black tracking-[0.25em]">AFG AI</span></div>;
+  }
 
   if (!hasSelectedLanguage) {
     return <AfgLanguageModal isOpen={true} language={null} onSelectLanguage={handleSetLanguage} />;
