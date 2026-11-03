@@ -127,17 +127,19 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerate(
         }
 
         const char * model_template = llama_model_chat_template(g_model, nullptr);
+        if (model_template == nullptr) model_template = "chatml";
         std::string prompt;
         std::vector<char> prompt_buffer(std::max<size_t>(4096, total_chars * 4 + 2048));
-        int32_t prompt_size = llama_chat_apply_template(
-            model_template, chat.data(), chat.size(), true,
-            prompt_buffer.data(), static_cast<int32_t>(prompt_buffer.size()));
-        if (prompt_size < 0 && model_template != nullptr) {
-            prompt_size = llama_chat_apply_template(
-                "chatml", chat.data(), chat.size(), true,
-                prompt_buffer.data(), static_cast<int32_t>(prompt_buffer.size()));
+        int32_t prompt_size = llama_chat_apply_template(model_template, chat.data(), chat.size(), true, prompt_buffer.data(), static_cast<int32_t>(prompt_buffer.size()));
+        if (prompt_size < 0) {
+            model_template = "chatml";
+            prompt_size = llama_chat_apply_template(model_template, chat.data(), chat.size(), true, prompt_buffer.data(), static_cast<int32_t>(prompt_buffer.size()));
         }
-        if (prompt_size < 0 || static_cast<size_t>(prompt_size) > prompt_buffer.size()) {
+        if (prompt_size > 0 && static_cast<size_t>(prompt_size) >= prompt_buffer.size()) {
+            prompt_buffer.resize(static_cast<size_t>(prompt_size) + 1);
+            prompt_size = llama_chat_apply_template(model_template, chat.data(), chat.size(), true, prompt_buffer.data(), static_cast<int32_t>(prompt_buffer.size()));
+        }
+        if (prompt_size <= 0 || static_cast<size_t>(prompt_size) > prompt_buffer.size()) {
             g_last_error = "The model chat template is not supported by this llama.cpp build.";
             return nullptr;
         }
@@ -160,10 +162,14 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerate(
         tokens.resize(static_cast<size_t>(token_count));
 
         llama_memory_clear(llama_get_memory(g_context), true);
-        llama_batch prompt_batch = llama_batch_get_one(tokens.data(), token_count);
-        if (llama_decode(g_context, prompt_batch) < 0) {
-            g_last_error = "llama.cpp failed while processing the prompt.";
-            return nullptr;
+        const int32_t prompt_batch_size = static_cast<int32_t>(std::min<uint32_t>(llama_n_batch(g_context), 512));
+        for (int32_t offset = 0; offset < token_count; offset += prompt_batch_size) {
+            const int32_t count = std::min(prompt_batch_size, token_count - offset);
+            llama_batch prompt_batch = llama_batch_get_one(tokens.data() + offset, count);
+            if (llama_decode(g_context, prompt_batch) < 0) {
+                g_last_error = "llama.cpp failed while processing the prompt.";
+                return nullptr;
+            }
         }
 
         const int32_t vocab_size = llama_vocab_n_tokens(g_vocab);
