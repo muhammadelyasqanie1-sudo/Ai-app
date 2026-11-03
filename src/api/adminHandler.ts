@@ -495,6 +495,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       let policy;
       try {
         await client.query('BEGIN');
+        const beforePolicy=await client.query('SELECT id,scope_type,scope_key,requests,window_seconds,enabled FROM rate_limit_policies WHERE scope_type=$1 AND scope_key=$2 LIMIT 1',[scopeType,scopeKey]);
         const result = await client.query(`INSERT INTO rate_limit_policies(scope_type,scope_key,requests,window_seconds,enabled,updated_by)
           VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(scope_type,scope_key) DO UPDATE SET
           requests=EXCLUDED.requests,window_seconds=EXCLUDED.window_seconds,enabled=EXCLUDED.enabled,
@@ -502,8 +503,10 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           RETURNING id,scope_type,scope_key,requests,window_seconds,enabled,updated_at`,
           [scopeType,scopeKey,requests,windowSeconds,enabled,user.id]);
         policy = result.rows[0];
-        await client.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
-          [user.id,'rate_limit.update','rate_limit',scopeType+':'+scopeKey,JSON.stringify({requests,windowSeconds,enabled})]);
+        await client.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+          [user.id,user.role,'rate_limit.update','rate_limit',scopeType+':'+scopeKey,
+            beforePolicy.rows[0]?JSON.stringify(beforePolicy.rows[0]):null,JSON.stringify(policy),
+            JSON.stringify({requests,windowSeconds,enabled})]);
         await client.query('COMMIT');
       } catch (error) {
         await client.query('ROLLBACK');
@@ -525,14 +528,17 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         sendAuthJson(res, 400, { error: 'A valid feature flag key and boolean enabled value are required.' }); return true;
       }
       const description = typeof body.description === 'string' ? body.description.trim().slice(0,300) : '';
+      const previousFlag=await pool.query('SELECT flag_key,enabled,description FROM feature_flags WHERE flag_key=$1 LIMIT 1',[body.key]);
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        await client.query(`INSERT INTO feature_flags(flag_key,enabled,description,updated_by) VALUES($1,$2,$3,$4)
+        const updatedFlag=await client.query(`INSERT INTO feature_flags(flag_key,enabled,description,updated_by) VALUES($1,$2,$3,$4)
           ON CONFLICT(flag_key) DO UPDATE SET enabled=EXCLUDED.enabled,description=EXCLUDED.description,
-          updated_by=EXCLUDED.updated_by,updated_at=now()`,[body.key,body.enabled,description,user.id]);
-        await client.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
-          [user.id,'feature_flag.update','feature_flag',body.key,JSON.stringify({enabled:body.enabled})]);
+          updated_by=EXCLUDED.updated_by,updated_at=now() RETURNING flag_key,enabled,description`,[body.key,body.enabled,description,user.id]);
+        await client.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+          [user.id,user.role,'feature_flag.update','feature_flag',body.key,
+            previousFlag.rows[0]?JSON.stringify(previousFlag.rows[0]):null,JSON.stringify(updatedFlag.rows[0]),
+            JSON.stringify({enabled:body.enabled})]);
         await client.query('COMMIT');
       } catch (error) {
         await client.query('ROLLBACK');
@@ -787,8 +793,8 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         ON CONFLICT(provider_key,model_key) DO NOTHING RETURNING provider_key,model_key,display_name,enabled`,
         [providerId,modelId,displayName,contextWindow]);
       if(!created.rows[0]){sendAuthJson(res,409,{error:'This model is already registered.'});return true;}
-      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
-        [user.id,user.role,'model.manual.create','model',providerId+':'+modelId,JSON.stringify({displayName,contextWindow})]);
+      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+        [user.id,user.role,'model.manual.create','model',providerId+':'+modelId,null,JSON.stringify(created.rows[0]),JSON.stringify({displayName,contextWindow})]);
       sendAuthJson(res,201,{model:created.rows[0],enabled:false,verifiedAt:null});return true;
     }
 
@@ -813,10 +819,10 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const providerId=typeof body.providerId==='string'?body.providerId:'';
       const modelId=typeof body.modelId==='string'?body.modelId:'';
       if(!providerId||!modelId){sendAuthJson(res,400,{error:'Provider and model IDs are required.'});return true;}
-      const deleted=await pool.query('DELETE FROM model_catalog WHERE provider_key=$1 AND model_key=$2 RETURNING model_key',[providerId,modelId]);
+      const deleted=await pool.query('DELETE FROM model_catalog WHERE provider_key=$1 AND model_key=$2 RETURNING *',[providerId,modelId]);
       if(!deleted.rows[0]){sendAuthJson(res,404,{error:'Model not found.'});return true;}
-      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
-        [user.id,user.role,'model.delete','model',providerId+':'+modelId,JSON.stringify({})]);
+      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+        [user.id,user.role,'model.delete','model',providerId+':'+modelId,JSON.stringify(deleted.rows[0]),null,JSON.stringify({})]);
       sendAuthJson(res,200,{deleted:true,providerId,modelId});return true;
     }
 
@@ -831,7 +837,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const providerId = typeof body.providerId === 'string' ? body.providerId : '';
       const enabled = body.enabled;
       const provider = getProviderRegistry().find((item) => item.id === providerId);
-      const catalogProvider = await pool.query('SELECT slug,display_name FROM providers WHERE slug=$1 LIMIT 1',[providerId]);
+      const catalogProvider = await pool.query('SELECT slug,display_name,enabled,kind FROM providers WHERE slug=$1 LIMIT 1',[providerId]);
       if ((!provider && !catalogProvider.rows[0]) || typeof enabled !== 'boolean') {
         sendAuthJson(res,400,{error:'A registered provider ID and boolean enabled value are required.'});return true;
       }
@@ -839,6 +845,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+        const previousProvider=await client.query('SELECT slug,display_name,enabled,kind,base_url FROM providers WHERE slug=$1 LIMIT 1',[providerId]);
         await client.query('UPDATE providers SET enabled=$2,updated_at=now() WHERE slug=$1',[providerId,enabled]);
         await client.query(
           `INSERT INTO provider_configs (provider_key, display_name, enabled)
@@ -847,8 +854,10 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           [providerId, displayName, enabled],
         );
         await client.query(
-          'INSERT INTO audit_logs (actor_user_id, action, target_type, target_id, metadata) VALUES ($1, $2, $3, $4, $5)',
-          [user.id, 'provider.toggle', 'provider', providerId, JSON.stringify({ enabled })],
+          'INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+          [user.id,user.role,'provider.toggle','provider',providerId,
+            previousProvider.rows[0]?JSON.stringify(previousProvider.rows[0]):JSON.stringify({enabled:catalogProvider.rows[0]?.enabled??null}),
+            JSON.stringify({slug:providerId,displayName,enabled}),JSON.stringify({enabled})],
         );
         await client.query('COMMIT');
       } catch (error) {
@@ -874,7 +883,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         sendAuthJson(res, 400, { error: 'Invalid model capability override.' }); return true;
       }
       const descriptor = (await getVerifiedModelDescriptors()).find((model) => model.providerId === providerId && model.id === modelId);
-      const storedModel=await pool.query('SELECT display_name,context_window,capabilities,verified_at,last_health_ok FROM model_catalog WHERE provider_key=$1 AND model_key=$2 LIMIT 1',[providerId,modelId]);
+      const storedModel=await pool.query('SELECT display_name,context_window,capabilities,verified_at,last_health_ok,enabled,input_cost_per_million,output_cost_per_million,capabilities_override FROM model_catalog WHERE provider_key=$1 AND model_key=$2 LIMIT 1',[providerId,modelId]);
       if ((!descriptor&&!storedModel.rows[0]) || typeof enabled !== 'boolean') {
         sendAuthJson(res,400,{error:'Select a registered model and provide a boolean enabled value.'});return true;
       }
@@ -907,9 +916,12 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
             enabled, descriptor?.contextWindow ?? Number(storedModel.rows[0].context_window) ?? 0, inputCost ?? null, outputCost ?? null,
             descriptor?.verifiedAt ?? null, Boolean(descriptor?.verifiedAt), capabilities],
         );
+        const updatedModel=await client.query('SELECT display_name,context_window,capabilities,enabled,verified_at,last_health_ok,input_cost_per_million,output_cost_per_million,capabilities_override FROM model_catalog WHERE provider_key=$1 AND model_key=$2',[providerId,modelId]);
         await client.query(
-          'INSERT INTO audit_logs (actor_user_id, action, target_type, target_id, metadata) VALUES ($1, $2, $3, $4, $5)',
-          [user.id, 'model.update', 'model', `${providerId}:${modelId}`, JSON.stringify({ enabled, inputCostPerMillion: inputCost ?? null, outputCostPerMillion: outputCost ?? null })],
+          'INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+          [user.id,user.role,'model.update','model',`${providerId}:${modelId}`,
+            storedModel.rows[0]?JSON.stringify(storedModel.rows[0]):null,JSON.stringify(updatedModel.rows[0]),
+            JSON.stringify({enabled,inputCostPerMillion:inputCost??null,outputCostPerMillion:outputCost??null})],
         );
         await client.query('COMMIT');
       } catch (error) {
@@ -943,6 +955,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         sendAuthJson(res, 400, { error: 'Fallback entries must be enabled, discovered models with the selected capability. Use providerId::modelId.' });
         return true;
       }
+      const previousFallback=await pool.query('SELECT capability,ordered_models FROM provider_fallback_chains WHERE capability=$1 LIMIT 1',[capability]);
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
@@ -953,8 +966,10 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           [capability, JSON.stringify(uniqueModels), user.id],
         );
         await client.query(
-          'INSERT INTO audit_logs (actor_user_id, action, target_type, target_id, metadata) VALUES ($1, $2, $3, $4, $5)',
-          [user.id, 'fallback.update', 'capability', capability, JSON.stringify({ orderedModels: uniqueModels })],
+          'INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+          [user.id,user.role,'fallback.update','capability',capability,
+            previousFallback.rows[0]?JSON.stringify(previousFallback.rows[0]):null,
+            JSON.stringify({capability,orderedModels:uniqueModels}),JSON.stringify({orderedModels:uniqueModels})],
         );
         await client.query('COMMIT');
       } catch (error) {
