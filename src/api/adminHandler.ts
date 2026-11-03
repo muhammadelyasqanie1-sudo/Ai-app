@@ -438,7 +438,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       await refreshCustomProviderRegistry(true);
       const registered = getProviderRegistry();
       const settings = await pool.query('SELECT provider_key, enabled, display_name FROM provider_configs');
-      const customRows = await pool.query('SELECT kind,display_name,enabled,api_format,priority,streaming_supported FROM providers WHERE is_custom=true ORDER BY priority,display_name');
+      const customRows = await pool.query('SELECT kind,display_name,enabled,api_format,priority,streaming_supported,(config_encrypted IS NOT NULL AND config_encrypted <> '') AS credentials_stored FROM providers WHERE is_custom=true ORDER BY priority,display_name');
       const registry = [...registered];
       for (const row of customRows.rows) {
         if (!registry.some((provider) => provider.id === row.kind)) {
@@ -459,7 +459,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           configMessage: config?.valid ? null : (custom && !adapter ? 'Stored credentials cannot be decrypted. Check the backend encryption key.' : (config?.message || 'Provider configuration unavailable.')),
           ...(custom ? { apiFormat: custom.api_format, priority: custom.priority, streamingSupported: custom.streaming_supported } : {}),
           custom: Boolean(custom),
-          credentialsStored: Boolean(custom),
+          credentialsStored: Boolean(custom?.credentials_stored),
         };
       }));
       sendAuthJson(res, 200, { providers });
