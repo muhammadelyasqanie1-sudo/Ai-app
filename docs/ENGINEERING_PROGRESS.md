@@ -332,3 +332,12 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 - `npm run i18n:check`: passed.
 - `npm run build`: passed.
 - Android workflow for the latest PR head was still running; no Android claim is needed for this backend change.
+
+
+## Milestone 14 — Evidence-based platform support matrix
+
+**Status:** IMPLEMENTED AND REVIEWED AS DOCUMENTATION
+
+- Added `docs/PLATFORM_SUPPORT_MATRIX.md` to distinguish verified CI evidence from partial implementation and unsupported platform targets.
+- Explicitly records Android debug APK build evidence, Web/PWA limitations, WebLLM versus GGUF runtime boundaries, read-only terminal scope, provider scope, database/Supabase state, and current language coverage.
+- No unsupported iOS, Windows, macOS, Linux, live Supabase, or Render capability is represented as complete.
