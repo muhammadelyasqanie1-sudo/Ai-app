@@ -136,3 +136,28 @@
 ### Next action
 
 - Continue reviewing admin mutation paths and backend authorization. Revisit database success logging only through a supported, approved write operation; do not bypass the safety gate.
+
+
+## Milestone 5 — Audit-atomic provider, model and fallback administration
+
+**Status:** IMPLEMENTED BUT NOT VERIFIED
+
+### Completed
+
+- Provider enable/disable changes and their audit records now share one database transaction.
+- Model enablement, capability/pricing metadata changes and their audit records now share one transaction.
+- Provider fallback-chain changes and their audit records now share one transaction.
+- An audit insert failure now rolls back the corresponding provider/model/fallback mutation.
+
+### Files changed
+
+- `src/api/adminHandler.ts`
+
+### Verification
+
+- Source-level review confirms explicit BEGIN/COMMIT/ROLLBACK boundaries for provider, model and fallback updates.
+- No database tests, type-check, build or deployment was run.
+
+### Next action
+
+- Review the remaining admin routes for authorization and data-exposure issues; then continue with backend reliability and model routing gaps.
