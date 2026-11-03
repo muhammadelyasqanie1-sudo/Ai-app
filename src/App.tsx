@@ -116,12 +116,13 @@ export default function App() {
 
   // Sync RTL and Dark Mode with DOM
   useEffect(() => {
-    if (!hasSelectedLanguage) return;
+    if (!preferencesReady || !hasSelectedLanguage) return;
     applyDocumentLocale(language);
     void saveLanguage(language);
-  }, [language, hasSelectedLanguage]);
+  }, [language, hasSelectedLanguage, preferencesReady]);
 
   useEffect(() => {
+    if (!preferencesReady) return;
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const applyTheme = () => {
       const resolved = theme === 'system' ? (media.matches ? 'dark' : 'light') : theme;
@@ -133,7 +134,7 @@ export default function App() {
     void saveTheme(theme);
     if (theme === 'system') media.addEventListener('change', applyTheme);
     return () => media.removeEventListener('change', applyTheme);
-  }, [theme]);
+  }, [theme, preferencesReady]);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/capabilities`)
