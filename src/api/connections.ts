@@ -51,7 +51,8 @@ async function tcpProbe(host: string, port: number): Promise<void> {
   const isPrivate = (address:string) => {
     if (address.includes(':')) {
       const value=address.toLowerCase();
-      return value==='::1'||value==='::'||value.startsWith('fc')||value.startsWith('fd')||value.startsWith('fe80:')||value.startsWith('::ffff:127.')||value.startsWith('::ffff:10.');
+      if(value.startsWith('::ffff:')) return isPrivate(value.slice(7));
+      return value==='::1'||value==='::'||value.startsWith('fc')||value.startsWith('fd')||value.startsWith('fe80:');
     }
     const parts=address.split('.').map(Number);
     return parts.length!==4||parts[0]===0||parts[0]===10||parts[0]===127||parts[0]>=224||
