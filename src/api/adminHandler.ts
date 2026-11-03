@@ -173,7 +173,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
 
 
 
-    const keyRoute = pathname.match(/^\\/api\\/admin\\/providers\\/([a-z0-9-]+)\\/keys(?:\\/rotate)?$/);
+    const keyRoute = pathname.match(/^\/api\/admin\/providers\/([a-z0-9-]+)\/keys(?:\/rotate)?$/);
     if (keyRoute && ((req.method==='PUT' && !pathname.endsWith('/rotate')) || (req.method==='POST' && pathname.endsWith('/rotate')))) {
       if (user.role !== 'superadmin') { sendAuthJson(res,403,{error:'Superadmin access is required to manage provider keys.'}); return true; }
       const providerSlug=keyRoute[1];
@@ -210,7 +210,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       sendAuthJson(res,200,{providerId:providerSlug,alias,keyHint:hint,status:'active'});return true;
     }
 
-    const discoverRoute=pathname.match(/^\\/api\\/admin\\/providers\\/([a-z0-9-]+)\\/discover-models$/);
+    const discoverRoute=pathname.match(/^\/api\/admin\/providers\/([a-z0-9-]+)\/discover-models$/);
     if(req.method==='POST' && discoverRoute){
       const providerId=discoverRoute[1];
       await refreshDatabaseProviderAdapters(true);
@@ -383,7 +383,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       sendAuthJson(res, 200, { user: updatedUser }); return true;
     }
 
-    const userPasswordResetRoute=pathname.match(/^\\/api\\/admin\\/users\\/([0-9a-f-]{36})\\/password-reset$/i);
+    const userPasswordResetRoute=pathname.match(/^\/api\/admin\/users\/([0-9a-f-]{36})\/password-reset$/i);
     if(req.method==='POST'&&userPasswordResetRoute){
       const targetId=userPasswordResetRoute[1];
       const target=await pool.query('SELECT email FROM users WHERE id=$1 AND status=\\'active\\' LIMIT 1',[targetId]);
@@ -394,7 +394,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       sendAuthJson(res,200,{requested:true,sent:result.sent,message:result.sent?'Password reset instructions were emailed.':'Password reset email could not be sent; verify email and mail configuration.'});return true;
     }
 
-    const userDetailRoute=pathname.match(/^\\/api\\/admin\\/users\\/([0-9a-f-]{36})$/i);
+    const userDetailRoute=pathname.match(/^\/api\/admin\/users\/([0-9a-f-]{36})$/i);
     if(req.method==='GET'&&userDetailRoute){
       const targetId=userDetailRoute[1];
       const [profile,usage,conversations]=await Promise.all([
@@ -618,9 +618,9 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       sendAuthJson(res, 200, { key: body.key, enabled: body.enabled }); return true;
     }
 
-    if (req.method === 'POST' && (pathname === '/api/admin/providers/test' || /^\\/api\\/admin\\/providers\\/[a-z0-9-]+\\/test$/.test(pathname))) {
+    if (req.method === 'POST' && (pathname === '/api/admin/providers/test' || /^\/api\/admin\/providers\/[a-z0-9-]+\/test$/.test(pathname))) {
       const body = await readJsonBody(req,4000);
-      const routeId=pathname.match(/^\\/api\\/admin\\/providers\\/([a-z0-9-]+)\\/test$/)?.[1];
+      const routeId=pathname.match(/^\/api\/admin\/providers\/([a-z0-9-]+)\/test$/)?.[1];
       const providerId=routeId || (typeof body.providerId==='string'?body.providerId:'');
       if(!providerId){sendAuthJson(res,400,{error:'Provider ID is required.'});return true;}
       await refreshDatabaseProviderAdapters(true);
@@ -732,7 +732,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       sendAuthJson(res,200,{sessions:result.rows});return true;
     }
 
-    const revokeSession=pathname.match(/^\\/api\\/admin\\/sessions\\/([0-9a-f-]{36})$/i);
+    const revokeSession=pathname.match(/^\/api\/admin\/sessions\/([0-9a-f-]{36})$/i);
     if(req.method==='DELETE' && revokeSession){
       const beforeSession=await pool.query('SELECT id,user_id,created_at,last_seen_at,expires_at FROM sessions WHERE id=$1 AND revoked_at IS NULL LIMIT 1',[revokeSession[1]]);
       const result=await pool.query('UPDATE sessions SET revoked_at=now() WHERE id=$1 AND revoked_at IS NULL RETURNING id,user_id,revoked_at',[revokeSession[1]]);
