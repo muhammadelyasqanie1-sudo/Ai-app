@@ -227,7 +227,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   const tokenEstimate = Math.ceil(charCount / 4);
 
   return (
-    <div className="w-full max-w-4xl mx-auto relative px-2 sm:px-4">
+    <div className="afg-composer-shell w-full max-w-4xl mx-auto relative px-2 sm:px-4">
       
       {/* Hidden File Inputs */}
       <input
@@ -295,7 +295,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
       )}
 
       {/* Model picker stays with the composer so the active model is always visible. */}
-      <div className="flex items-center justify-between gap-2 px-3 py-2 mb-2 rounded-2xl bg-[#08112b]/90 border border-cyan-500/30">
+      <div className="afg-model-chip flex items-center justify-between gap-2 px-3 py-1.5 mb-2 rounded-full border">
         <div className="flex min-w-0 flex-wrap items-center gap-2"><span className="text-xs text-cyan-300 font-semibold">{language === 'dari' ? 'مدل هوش مصنوعی' : 'AI model'}</span>{(planMode || thinkingLevel !== 'standard') && <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-1 text-[9px] font-semibold text-cyan-200">{planMode ? (language === 'dari' ? 'برنامه‌ریزی' : 'Plan mode') : '🧠 ' + thinkingLevel}</span>}<span className="hidden sm:inline rounded-full border border-slate-500/30 px-2 py-1 text-[9px] text-slate-400">{permissionLevel.toUpperCase()}</span></div>
         <select
           value={selectedModel}
