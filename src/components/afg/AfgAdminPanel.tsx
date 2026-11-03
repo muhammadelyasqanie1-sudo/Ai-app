@@ -62,6 +62,8 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [customProviderUrl,setCustomProviderUrl] = useState('');
   const [customProviderKey,setCustomProviderKey] = useState('');
   const [customProviderAuth,setCustomProviderAuth] = useState('bearer');
+  const [customProviderPriority,setCustomProviderPriority] = useState('100');
+  const [customProviderTimeout,setCustomProviderTimeout] = useState('30000');
   const [models,setModels] = useState<ModelRow[]>([]);
   const [users,setUsers] = useState<UserRow[]>([]);
   const [overview,setOverview] = useState<Overview|null>(null);
@@ -161,7 +163,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     try {
       const result=await api('/api/admin/providers/custom',{method:'POST',body:JSON.stringify({
         providerId:customProviderId,displayName:customProviderName,baseUrl:customProviderUrl,
-        apiKey:customProviderKey,authMethod:customProviderAuth,apiFormat:'openai_chat_completions',enabled:false
+        apiKey:customProviderKey,authMethod:customProviderAuth,priority:Number(customProviderPriority),timeoutMs:Number(customProviderTimeout),apiFormat:'openai_chat_completions',enabled:false
       })});
       setCustomProviderKey('');
       setNotice(result.message||'Encrypted provider configuration saved.');
@@ -262,6 +264,8 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
           <label className="text-xs text-slate-400 sm:col-span-2">Base URL<input className={field+' mt-1'} value={customProviderUrl} onChange={e=>setCustomProviderUrl(e.target.value)} placeholder="https://api.example.com/v1"/></label>
           <label className="text-xs text-slate-400">Credential<input type="password" autoComplete="new-password" className={field+' mt-1'} value={customProviderKey} onChange={e=>setCustomProviderKey(e.target.value)} placeholder="Stored encrypted"/></label>
           <label className="text-xs text-slate-400">Authentication<select className={field+' mt-1'} value={customProviderAuth} onChange={e=>setCustomProviderAuth(e.target.value)}><option value="bearer">Bearer token</option><option value="api-key-header">API key header</option><option value="none">No authentication</option></select></label>
+          <label className="text-xs text-slate-400">Priority (lower first)<input type="number" min="0" max="10000" className={field+' mt-1'} value={customProviderPriority} onChange={e=>setCustomProviderPriority(e.target.value)}/></label>
+          <label className="text-xs text-slate-400">Request timeout (ms)<input type="number" min="1000" max="180000" className={field+' mt-1'} value={customProviderTimeout} onChange={e=>setCustomProviderTimeout(e.target.value)}/></label>
         </div>
         <button className={primary+' mt-4 flex items-center gap-2'} disabled={!customProviderId.startsWith('custom-')||!customProviderName.trim()||!customProviderUrl.trim()||(customProviderAuth!=='none'&&!customProviderKey.trim())||loading} onClick={()=>void saveCustomProvider()}><Plus className="h-4 w-4"/>Save encrypted provider</button>
       </div>
