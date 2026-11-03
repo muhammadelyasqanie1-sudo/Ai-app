@@ -19,6 +19,7 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import androidx.work.WorkManager;
+import androidx.work.WorkInfo;
 
 @CapacitorPlugin(name = "AFGOfflineModels")
 public class AFGOfflineModelsPlugin extends Plugin {
@@ -245,15 +246,34 @@ public class AFGOfflineModelsPlugin extends Plugin {
         int id = rawId.intValue();
         JSONObject meta = AFGDownloadStore.get(getContext(), id);
         if (meta == null) { call.reject("Model download was not found."); return; }
-        WorkManager.getInstance(getContext()).cancelUniqueWork(AFGModelDownloadService.workName(id));
-        File part = new File(meta.optString("partPath", ""));
-        long bytes = part.isFile() ? part.length() : 0L;
-        AFGDownloadStore.update(getContext(), id, "status", "paused");
-        AFGDownloadStore.update(getContext(), id, "downloadedBytes", bytes);
-        JSObject result = new JSObject();
-        result.put("paused", true);
-        result.put("downloadedBytes", bytes);
-        call.resolve(result);
+        new Thread(() -> {
+            try {
+                WorkManager manager = WorkManager.getInstance(getContext());
+                String workName = AFGModelDownloadService.workName(id);
+                manager.cancelUniqueWork(workName).getResult().get(10, java.util.concurrent.TimeUnit.SECONDS);
+                long deadline = System.currentTimeMillis() + 8000L;
+                while (System.currentTimeMillis() < deadline) {
+                    java.util.List<WorkInfo> infos = manager.getWorkInfosForUniqueWork(workName).get(2, java.util.concurrent.TimeUnit.SECONDS);
+                    boolean stopped = infos.isEmpty();
+                    for (WorkInfo info : infos) {
+                        WorkInfo.State state = info.getState();
+                        if (state != WorkInfo.State.CANCELLED && state != WorkInfo.State.SUCCEEDED && state != WorkInfo.State.FAILED) stopped = false;
+                    }
+                    if (stopped) break;
+                    Thread.sleep(50L);
+                }
+                File part = new File(meta.optString("partPath", ""));
+                long bytes = part.isFile() ? part.length() : 0L;
+                AFGDownloadStore.update(getContext(), id, "status", "paused");
+                AFGDownloadStore.update(getContext(), id, "downloadedBytes", bytes);
+                JSObject result = new JSObject();
+                result.put("paused", true);
+                result.put("downloadedBytes", bytes);
+                call.resolve(result);
+            } catch (Exception error) {
+                call.reject("Unable to pause the model download safely.", error);
+            }
+        }, "afg-download-pause").start();
     }
 
     @PluginMethod
