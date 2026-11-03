@@ -6,6 +6,8 @@ import { assessOfflineModelFit, scanOfflineDevice, type OfflineDeviceProfile, ty
 import { downloadGGUF, listOfflineDownloads, pauseGGUFDownload, removeOfflineModel, resumeOfflineDownload, usesNativeOfflineDownloads, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
 import { clearOfflineChatMessages, loadOfflineChatMessages, saveOfflineChatMessages, type OfflineChatMessage } from '../../lib/offlineChatStorage';
 import { generateNativeLlamaResponse, getNativeLlamaRuntimeInfo, loadNativeLlamaModel, unloadNativeLlamaModel } from '../../lib/offlineLlamaRuntime';
+import { recordOfflineDiagnostic } from '../../lib/offlineDiagnostics';
+import { recordOfflineMetric } from '../../lib/offlineMetrics';
 
 type CatalogModel = {
   model_id: string;
@@ -228,7 +230,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     const timer = window.setTimeout(() => {
       void searchHuggingFaceGGUF({ query, format: hfFormat, page: 0, sort: 'downloads', direction: 'desc', signal: controller.signal })
         .then(result => { setHfModels(result.items); setHfPage(0); setHfHasMore(result.hasMore); })
-        .catch(error => { if (!controller.signal.aborted) setHfError(error instanceof Error ? error.message : 'Catalog unavailable'); })
+        .catch(error => { if (!controller.signal.aborted) { setHfError(error instanceof Error ? error.message : 'Catalog unavailable'); void recordOfflineDiagnostic({ code: 'catalog_error' }).catch(() => undefined); } })
         .finally(() => { if (!controller.signal.aborted) setHfBusy(false); });
     }, 350);
     return () => { window.clearTimeout(timer); controller.abort(); };
@@ -239,7 +241,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     const controller = new AbortController(); setHfRepository(null);
     void getHuggingFaceRepository(hfSelected, controller.signal, selectedHfModel?.sha || 'main')
       .then(repository => { setHfRepository(repository); setHfQuantization(pendingGgufPathRef.current || repository.ggufFiles[0]?.path || ''); pendingGgufPathRef.current = ''; })
-      .catch(error => { if (!controller.signal.aborted) setHfError(error instanceof Error ? error.message : 'Repository metadata unavailable'); });
+      .catch(error => { if (!controller.signal.aborted) { setHfError(error instanceof Error ? error.message : 'Repository metadata unavailable'); void recordOfflineDiagnostic({ code: 'catalog_error', modelId: hfSelected }).catch(() => undefined); } });
     return () => controller.abort();
   }, [hfSelected, selectedHfModel?.sha]);
 
@@ -249,11 +251,18 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     if (!file) return;
     const id = hfSelected + '/' + file.path;
     setGgufBusyId(id);
+    const startedAt = Date.now();
+    void recordOfflineMetric({ name: 'download_started', modelId: hfSelected, bytes: file.size }).catch(() => undefined);
     try {
-      await downloadGGUF({ repoId: hfSelected, fileName: file.path, revision: hfRepository.revision, expectedBytes: file.size, expectedSha256: file.sha256, onProgress: progress => setGgufProgress(previous => ({ ...previous, [id]: progress })) });
+      const downloaded = await downloadGGUF({ repoId: hfSelected, fileName: file.path, revision: hfRepository.revision, expectedBytes: file.size, expectedSha256: file.sha256, onProgress: progress => setGgufProgress(previous => ({ ...previous, [id]: progress })) });
+      void recordOfflineMetric({ name: 'download_completed', modelId: hfSelected, bytes: downloaded.downloadedBytes, durationMs: Date.now() - startedAt }).catch(() => undefined);
       setGgufTasks(await listOfflineDownloads());
-    } catch (error) { setHfError(error instanceof Error ? error.message : 'GGUF download failed.'); }
-    finally { setGgufBusyId(''); setGgufTasks(await listOfflineDownloads().catch(() => [])); }
+    } catch (error) {
+      const checksumFailure = error instanceof Error && /sha-?256|checksum|integrity/i.test(error.message);
+      void recordOfflineMetric({ name: checksumFailure ? 'checksum_failed' : 'download_failed', modelId: hfSelected, durationMs: Date.now() - startedAt }).catch(() => undefined);
+      void recordOfflineDiagnostic({ code: checksumFailure ? 'checksum_error' : 'download_error', modelId: hfSelected }).catch(() => undefined);
+      setHfError(error instanceof Error ? error.message : 'GGUF download failed.');
+    } finally { setGgufBusyId(''); setGgufTasks(await listOfflineDownloads().catch(() => [])); }
   };
   const removeGguf = async (id: string) => {
     if (selectedId === id && engineRef.current) { const engine = engineRef.current; engineRef.current = null; engineModelIdRef.current = ''; setActiveOfflineModelLabel(''); await engine.unload().catch(() => undefined); }
@@ -267,7 +276,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     try { const nextPage = hfPage + 1; const result = await searchHuggingFaceGGUF({ query, format: hfFormat, page: nextPage });
       setHfModels(previous => [...previous, ...result.items.filter(item => !previous.some(old => old.id === item.id))]);
       setHfPage(nextPage); setHfHasMore(result.hasMore);
-    } catch (error) { setHfError(error instanceof Error ? error.message : 'Catalog unavailable'); } finally { setHfBusy(false); }
+    } catch (error) { void recordOfflineDiagnostic({ code: 'catalog_error' }).catch(() => undefined); setHfError(error instanceof Error ? error.message : 'Catalog unavailable'); } finally { setHfBusy(false); }
   };
   const selected = useMemo(() => models.find(model => model.model_id === selectedId) || null, [models, selectedId]);
   const recommendedModels = useMemo(() => device ? models.filter(model => assessOfflineModelFit(model.vram_required_MB || 0, device) === 'recommended').slice(0, 5) : [], [models, device]);
