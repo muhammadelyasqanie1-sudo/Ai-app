@@ -7,6 +7,7 @@ import { getCapabilitySnapshot, getImageStudioSnapshot, getFileAssistantSnapshot
 import { authenticateRequest, handleAuthApi, verifyCsrf } from './auth.ts';
 import { createHash } from 'crypto';
 import { handleAdminApi } from './adminHandler.ts';
+import { handleConnectionsApi } from './connections.ts';
 import { handleResearchApi } from './research.ts';
 import { handleVoiceApi } from './voice.ts';
 import { handleProductivityApi } from './productivity.ts';
@@ -177,6 +178,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     if (await handleAccountApi(req, res, pathname)) return;
     if (await handleConversationsApi(req, res, pathname)) return;
     if (await handleTerminalApi(req, res, pathname, requestId)) return;
+    if (await handleConnectionsApi(req, res, pathname)) return;
     if (await handleProductivityApi(req, res, pathname)) return;
     if (await handleAdminApi(req, res, pathname)) return;
 
@@ -184,6 +186,11 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
       const flag = await pool.query("SELECT enabled FROM feature_flags WHERE flag_key='research' LIMIT 1").catch(() => ({ rows: [] as any[] }));
       if (flag.rows[0] && flag.rows[0].enabled === false) {
         sendJson(res, 503, { error: 'Research is temporarily disabled by the administrator.', feature: 'research' }, requestId);
+        return;
+      }
+      const integration = await pool.query("SELECT enabled,status,last_check_ok FROM integrations WHERE slug='web-search' LIMIT 1").catch(() => ({ rows: [] as any[] }));
+      if (integration.rows[0] && !(integration.rows[0].enabled && integration.rows[0].status === 'active' && integration.rows[0].last_check_ok === true)) {
+        sendJson(res, 503, { error: 'Web Search integration is not enabled and health-verified by an administrator.', feature: 'web-search' }, requestId);
         return;
       }
     }
