@@ -66,9 +66,9 @@ The `.github/workflows/android-release.yml` workflow is manually dispatched. It 
 
 The API server reads provider credentials only on the server. Configure the required provider credentials in the hosting service's environment settings. For Cloudflare Workers AI, use `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. Do not add provider API keys to `VITE_*` variables or the Android application.
 
-For database-backed accounts and conversations, configure `DATABASE_URL` and apply the repository database migrations. Google sign-in is enabled only when `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `APP_ORIGIN` are configured. Email/password registration and verification require `RESEND_API_KEY` and `EMAIL_FROM`.
+For database-backed accounts and conversations, configure `DATABASE_URL`, set `DATABASE_SSL=require` for the Supabase pooler, then run `npm run db:migrate`. The initial schema is tracked as `database/migrations/001_initial_schema.sql`; the migration runner records checksums and applies each migration once. Google sign-in is enabled only when `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `APP_ORIGIN` are configured. Email/password registration and verification require `RESEND_API_KEY` and `EMAIL_FROM`.
 
-For a mobile build that should connect to a deployed API, set the optional `VITE_API_BASE_URL` input in the APK workflow to the HTTPS API origin. If omitted, the app uses its same-origin API path; a standalone APK will not magically have a remote server at its own origin.
+For a mobile build that should connect to a deployed API, set the optional `api_base_url` input in the APK workflow or define the repository Actions variable `VITE_API_BASE_URL` to the HTTPS API origin (for example, the Render service origin). If omitted, the app uses its same-origin API path; a standalone APK will not magically have a remote server at its own origin.
 
 ## Offline model limitations
 
