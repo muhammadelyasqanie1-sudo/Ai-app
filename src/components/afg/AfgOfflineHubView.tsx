@@ -100,7 +100,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     failed: 'عملیات انجام نشد. فضای خالی و سازگاری دستگاه را بررسی کن.', remove: 'فراموش‌کردن مدل', privacy: 'حریم خصوصی: متن گفتگو به سرور AFG AI ارسال نمی‌شود.',
     source: 'منبع مدل: MLC / WebLLM', limitation: 'این فهرست، مدل‌های از پیش تبدیل‌شده و سازگار با WebLLM را نشان می‌دهد؛ همه فایل‌های GGUF یا همه مدل‌های Hugging Face قابل اجرا نیستند.',
     onlineNeeded: 'برای دانلود اولیه به اینترنت نیاز است. پس از ذخیره موفق، اجرای مدل می‌تواند آفلاین باشد.',
-    deviceTitle: 'اسکن هوشمند دستگاه', deviceUnknown: 'در حال بررسی مشخصات…', deviceRam: 'حافظه RAM (تخمینی)', deviceCpu: 'هسته‌های پردازنده', deviceGpu: 'پردازنده گرافیکی', deviceStorage: 'فضای قابل استفاده', devicePlatform: 'سیستم و دستگاه', recommended: 'پیشنهادشده', limited: 'با محدودیت', incompatible: 'ناسازگار', allModels: 'همه', privacyScan: 'اسکن فقط مشخصات سخت‌افزاری و قابلیت‌های مرورگر را بررسی می‌کند.', rescan: 'اسکن دوباره',
+    deviceTitle: 'اسکن هوشمند دستگاه', deviceUnknown: 'در حال بررسی مشخصات…', deviceRam: 'حافظه RAM کل', deviceAvailableRam: 'RAM آزاد فعلی', deviceCpu: 'هسته‌های پردازنده', deviceGpu: 'پردازنده گرافیکی', deviceStorage: 'فضای قابل استفاده', devicePlatform: 'سیستم و دستگاه', recommended: 'پیشنهادشده', limited: 'با محدودیت', incompatible: 'ناسازگار', allModels: 'همه', privacyScan: 'اسکن فقط مشخصات سخت‌افزاری و قابلیت‌های مرورگر را بررسی می‌کند.', rescan: 'اسکن دوباره',
   } : {
     title: 'Offline AI Hub', subtitle: 'Download a model once, then use it on this device without an internet connection.',
     runtime: 'Local runtime status', compatible: 'This device supports WebGPU.', unsupported: 'This browser or WebView does not support WebGPU. Offline model inference is unavailable on this device for now.',
@@ -111,7 +111,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     failed: 'Operation failed. Check free storage and device compatibility.', remove: 'Forget model', privacy: 'Privacy: chat text is not sent to AFG AI servers.',
     source: 'Model source: MLC / WebLLM', limitation: 'This catalog lists pre-converted models compatible with WebLLM. Not every GGUF file or every Hugging Face model can run here.',
     onlineNeeded: 'An internet connection is required for the first download. Once cached, the model can run offline.',
-    deviceTitle: 'Smart device scan', deviceUnknown: 'Checking device details…', deviceRam: 'RAM (estimate)', deviceCpu: 'CPU cores', deviceGpu: 'Graphics processor', deviceStorage: 'Available storage', devicePlatform: 'Platform & device', recommended: 'Recommended', limited: 'Limited', incompatible: 'Incompatible', allModels: 'All', privacyScan: 'The scan checks hardware capabilities and browser-provided information only.', rescan: 'Rescan device',
+    deviceTitle: 'Smart device scan', deviceUnknown: 'Checking device details…', deviceRam: 'Total RAM', deviceAvailableRam: 'Available RAM', deviceCpu: 'CPU cores', deviceGpu: 'Graphics processor', deviceStorage: 'Available storage', devicePlatform: 'Platform & device', recommended: 'Recommended', limited: 'Limited', incompatible: 'Incompatible', allModels: 'All', privacyScan: 'The scan checks hardware capabilities and browser-provided information only.', rescan: 'Rescan device',
   };
 
   useEffect(() => {
