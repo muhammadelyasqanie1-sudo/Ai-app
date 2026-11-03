@@ -143,3 +143,10 @@ Provider toggles, model configuration changes and fallback-chain updates now exe
 - `src/api/database.ts` now emits `SUCCESS SUPABASE_DATABASE_CONNECTED` only after a real successful `SELECT 1` through the configured pool. It emits once per process. This is source-reviewed but not live-connection verified.
 - `.env.example` no longer advertises implicit Gemini selection; provider setup is explicitly opt-in.
 - No database credentials were introduced, and no migration/deployment was performed.
+
+
+### Model routing safety update
+
+- Manual model requests are pinned and fail closed when the selected model is not healthy; they are no longer silently replaced.
+- Auto mode uses only the administrator-configured ordered fallback model IDs for subsequent failover. The IDs must resolve to enabled, recently verified text-streaming models.
+- Source reviewed only; CI/runtime verification pending.
