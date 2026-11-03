@@ -19,6 +19,7 @@ const messageSchema = z.object({
   content: z.string().min(1).max(50_000),
   model: z.string().trim().min(1).max(300).nullable().optional(),
   status: z.enum(['complete','failed']).optional(),
+  clientMessageId: z.string().uuid().optional(),
 }).strict();
 
 function reply(res: ServerResponse, status: number, body: Record<string, unknown>) {
@@ -102,24 +103,55 @@ export async function handleConversationsApi(req: IncomingMessage, res: ServerRe
     if (!parsed?.success) { reply(res,400,{error:'Provide a valid user or assistant message.'}); return true; }
     const client = await pool.connect();
     let savedMessage;
+    let created = true;
     try {
       await client.query('BEGIN');
       const result = await client.query(
-        `INSERT INTO messages(conversation_id,role,content,model,status)
-         VALUES($1,$2,$3,$4,$5)
+        `INSERT INTO messages(conversation_id,role,content,model,status,client_message_id)
+         VALUES($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (conversation_id,client_message_id)
+           WHERE client_message_id IS NOT NULL
+         DO NOTHING
          RETURNING id,role,content,model,status,created_at AS "createdAt"`,
-        [conversationId,parsed.data.role,parsed.data.content,parsed.data.model ?? null,parsed.data.status || 'complete'],
+        [conversationId,parsed.data.role,parsed.data.content,parsed.data.model ?? null,parsed.data.status || 'complete',parsed.data.clientMessageId ?? null],
       );
-      await client.query('UPDATE conversations SET updated_at=now() WHERE id=$1 AND user_id=$2',[conversationId,user.id]);
+      if (result.rows.length) {
+        savedMessage = result.rows[0];
+      } else if (parsed.data.clientMessageId) {
+        const existing = await client.query(
+          `SELECT id,role,content,model,status,created_at AS "createdAt"
+             FROM messages
+            WHERE conversation_id=$1 AND client_message_id=$2
+            LIMIT 1`,
+          [conversationId,parsed.data.clientMessageId],
+        );
+        const previous = existing.rows[0];
+        if (!previous) throw new Error('Idempotent message conflict could not be resolved.');
+        const samePayload = previous.role === parsed.data.role &&
+          previous.content === parsed.data.content &&
+          previous.model === (parsed.data.model ?? null) &&
+          previous.status === (parsed.data.status || 'complete');
+        if (!samePayload) {
+          await client.query('ROLLBACK');
+          reply(res,409,{error:'This message ID was already used for different message content.'});
+          return true;
+        }
+        savedMessage = previous;
+        created = false;
+      } else {
+        throw new Error('Message insert returned no row without an idempotency key.');
+      }
+      if (created) {
+        await client.query('UPDATE conversations SET updated_at=now() WHERE id=$1 AND user_id=$2',[conversationId,user.id]);
+      }
       await client.query('COMMIT');
-      savedMessage = result.rows[0];
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
     } finally {
       client.release();
     }
-    reply(res,201,{message:savedMessage}); return true;
+    reply(res,created ? 201 : 200,{message:savedMessage,duplicate:!created}); return true;
   }
   if (subresource) { reply(res,405,{error:'Method not allowed.'}); return true; }
 
