@@ -1,10 +1,37 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
+import { z } from 'zod';
+import { isIP } from 'node:net';
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './auth.ts';
 import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors, refreshDatabaseProviderAdapters } from '../services/providerGateway.ts';
 import { encryptProviderSecret, providerKeyHint } from '../security/providerVault.ts';
 
 const ALLOWED_FALLBACK_CAPABILITIES = new Set(['text', 'vision', 'imageGen', 'tts', 'stt']);
+const customProviderInput = z.object({
+  slug: z.string().trim().toLowerCase().min(2).max(48).regex(/^[a-z0-9][a-z0-9-]+$/),
+  displayName: z.string().trim().min(1).max(80),
+  baseUrl: z.string().trim().url().max(500),
+  protocol: z.literal('openai-compatible').optional(),
+}).strict();
+const providerKeyInput = z.object({
+  apiKey: z.string().trim().min(8).max(8192),
+  alias: z.literal('default').optional(),
+}).strict();
+const manualModelInput = z.object({
+  providerId: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9-]{1,47}$/),
+  modelId: z.string().trim().min(1).max(300).regex(/^[a-zA-Z0-9@][a-zA-Z0-9._:/-]{0,299}$/),
+  displayName: z.string().trim().max(160).optional(),
+  contextWindow: z.number().int().min(0).max(10_000_000).optional(),
+}).strict();
+function safeCustomProviderUrl(raw: string): boolean {
+  try {
+    const parsed = new URL(raw);
+    const host = parsed.hostname.toLowerCase();
+    if (parsed.username || parsed.password || parsed.hash || host === 'localhost' || host.endsWith('.localhost') ||
+        host.endsWith('.local') || host.endsWith('.internal') || isIP(host)) return false;
+    return parsed.protocol === 'https:';
+  } catch { return false; }
+}
 
 async function requireAdmin(req: IncomingMessage, res: ServerResponse) {
   const user = await authenticateRequest(req);
@@ -84,14 +111,42 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       }))}); return true;
     }
 
+    if(req.method==='POST' && pathname==='/api/admin/providers/custom'){
+      const body=await readJsonBody(req,8000);
+      const parsed=customProviderInput.safeParse(body);
+      if(!parsed.success||!safeCustomProviderUrl(parsed.data.baseUrl)){
+        sendAuthJson(res,400,{error:'Provide a valid slug, display name, and public HTTPS OpenAI-compatible API base URL.'});return true;
+      }
+      const {slug,displayName,baseUrl}=parsed.data;
+      const client=await pool.connect();
+      try{
+        await client.query('BEGIN');
+        const created=await client.query(`INSERT INTO providers(kind,display_name,enabled,slug,base_url,config_json,source)
+          VALUES('custom',$1,false,$2,$3,$4::jsonb,'custom')
+          RETURNING id,slug,kind,display_name,base_url,enabled,config_json,source,created_at`,
+          [displayName,slug,baseUrl,JSON.stringify({protocol:'openai-compatible',requires_key:true,custom:true})]);
+        await client.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
+          [user.id,user.role,'provider.custom.create','provider',created.rows[0].id,JSON.stringify({slug,displayName,baseUrl,protocol:'openai-compatible'})]);
+        await client.query('COMMIT');
+        sendAuthJson(res,201,{provider:created.rows[0]});return true;
+      }catch(error){
+        await client.query('ROLLBACK');
+        if((error as {code?:string})?.code==='23505'){sendAuthJson(res,409,{error:'A provider with this slug already exists.'});return true;}
+        throw error;
+      }finally{client.release();}
+    }
+
+
+
     const keyRoute = pathname.match(/^\\/api\\/admin\\/providers\\/([a-z0-9-]+)\\/keys(?:\\/rotate)?$/);
     if (keyRoute && ((req.method==='PUT' && !pathname.endsWith('/rotate')) || (req.method==='POST' && pathname.endsWith('/rotate'))) {
       if (user.role !== 'superadmin') { sendAuthJson(res,403,{error:'Superadmin access is required to manage provider keys.'}); return true; }
       const providerSlug=keyRoute[1];
       const body=await readJsonBody(req,10000);
-      const secret=typeof body.apiKey==='string' ? body.apiKey.trim() : '';
-      const alias=typeof body.alias==='string' && /^[a-zA-Z0-9_-]{1,64}$/.test(body.alias) ? body.alias : 'default';
-      if(secret.length<8 || secret.length>8192){sendAuthJson(res,400,{error:'A provider API key between 8 and 8192 characters is required.'});return true;}
+      const parsedKey=providerKeyInput.safeParse(body);
+      if(!parsedKey.success){sendAuthJson(res,400,{error:'Provide a valid provider API key. Only the default key alias is currently supported.'});return true;}
+      const secret=parsedKey.data.apiKey;
+      const alias='default';
       const provider=await pool.query('SELECT id,slug FROM providers WHERE slug=$1 LIMIT 1',[providerSlug]);
       if(!provider.rows[0]){sendAuthJson(res,404,{error:'Provider not found.'});return true;}
       let encrypted:string;
@@ -604,14 +659,12 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
 
     if(req.method==='POST' && pathname==='/api/admin/models/manual'){
       const body=await readJsonBody(req,8000);
-      const providerId=typeof body.providerId==='string'?body.providerId.trim().toLowerCase():'';
-      const modelId=typeof body.modelId==='string'?body.modelId.trim():'';
-      const displayName=typeof body.displayName==='string'&&body.displayName.trim()?body.displayName.trim().slice(0,160):modelId;
-      const contextWindow=Number(body.contextWindow||0);
-      if(!/^[a-z0-9][a-z0-9-]{1,47}$/.test(providerId)||!modelId||modelId.length>300||
-        !/^[a-zA-Z0-9@][a-zA-Z0-9._:/-]{0,299}$/.test(modelId)||!Number.isInteger(contextWindow)||contextWindow<0||contextWindow>10000000){
-        sendAuthJson(res,400,{error:'Provide a valid provider slug, exact model ID, and context window.'});return true;
-      }
+      const parsed=manualModelInput.safeParse(body);
+      if(!parsed.success){sendAuthJson(res,400,{error:'Provide a valid provider slug, exact model ID, and context window.'});return true;}
+      const providerId=parsed.data.providerId;
+      const modelId=parsed.data.modelId;
+      const displayName=parsed.data.displayName||modelId;
+      const contextWindow=parsed.data.contextWindow||0;
       const provider=await pool.query('SELECT id FROM providers WHERE slug=$1 LIMIT 1',[providerId]);
       const legacy=await pool.query('SELECT 1 FROM provider_configs WHERE provider_key=$1 LIMIT 1',[providerId]);
       if(!provider.rows[0]&&!legacy.rows[0]){sendAuthJson(res,404,{error:'Provider is not registered.'});return true;}
