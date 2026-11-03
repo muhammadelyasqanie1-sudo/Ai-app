@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
 import { z } from 'zod';
 import { isIP } from 'node:net';
-import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf, verifyUserPassword } from './auth.ts';
+import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf, verifyUserPassword, requestAdminPasswordReset } from './auth.ts';
 import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors, refreshDatabaseProviderAdapters, recordModelHealthResult } from '../services/providerGateway.ts';
 import { encryptProviderSecret, providerKeyHint } from '../security/providerVault.ts';
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
@@ -349,6 +349,17 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         client.release();
       }
       sendAuthJson(res, 200, { user: updatedUser }); return true;
+    }
+
+    const userPasswordResetRoute=pathname.match(/^\\/api\\/admin\\/users\\/([0-9a-f-]{36})\\/password-reset$/i);
+    if(req.method==='POST'&&userPasswordResetRoute){
+      const targetId=userPasswordResetRoute[1];
+      const target=await pool.query('SELECT email FROM users WHERE id=$1 AND status=\\'active\\' LIMIT 1',[targetId]);
+      if(!target.rows[0]){sendAuthJson(res,404,{error:'Active user not found.'});return true;}
+      const result=await requestAdminPasswordReset(targetId);
+      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+        [user.id,user.role,'user.password_reset.request','user',targetId,JSON.stringify({passwordReset:'not_requested'}),JSON.stringify({passwordReset:result.sent?'email_queued':'not_sent'}),JSON.stringify({deliveryConfigured:Boolean(process.env.RESEND_API_KEY&&process.env.EMAIL_FROM)})]);
+      sendAuthJson(res,200,{requested:true,sent:result.sent,message:result.sent?'Password reset instructions were emailed.':'Password reset email could not be sent; verify email and mail configuration.'});return true;
     }
 
     const userDetailRoute=pathname.match(/^\\/api\\/admin\\/users\\/([0-9a-f-]{36})$/i);
