@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyOfflineModel, isOfflineModelCategory, OFFLINE_MODEL_CATEGORIES } from '../src/lib/offlineModelCategories';
+import { classifyOfflineModel, isOfflineModelCategory, OFFLINE_MODEL_CATEGORIES, LEARNING_SUBCATEGORIES } from '../src/lib/offlineModelCategories';
 
 describe('offline model categories', () => {
   it('classifies education subcategories and the parent learning category', () => {
@@ -9,8 +9,9 @@ describe('offline model categories', () => {
   });
 
   it('keeps science as an independent category and learning subcategory', () => {
-    expect(classifyOfflineModel(['science', 'physics'], null)).toEqual(['science', 'learning']);
+    expect(classifyOfflineModel(['science', 'physics'], null)).toEqual(['science']);
     expect(OFFLINE_MODEL_CATEGORIES).toContain('science');
+    expect(LEARNING_SUBCATEGORIES).toEqual(['english', 'robotics', 'mathematics', 'science']);
   });
 
   it('classifies coding, creative and general independently', () => {
