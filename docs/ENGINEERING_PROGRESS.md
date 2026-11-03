@@ -309,3 +309,16 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 
 - Locale, web-check and Android workflows were queued/in progress while the new database TLS regression test was added.
 - The new test script is wired into the web-check workflow; its result is pending.
+
+
+## Live CI result — Supabase TLS PR #10
+
+**PR:** https://github.com/muhammadelyasqanie1-sudo/Ai-app/pull/10
+
+- TypeScript validation: passed.
+- New database configuration regression test (`npm run test:database-config`): passed.
+- Offline SHA-256 regression tests: passed.
+- Locale dictionary validation: passed.
+- Production web build: passed.
+- Latest Android workflow was queued/pending; Android build is not required to validate this backend-only TLS change and no Android compatibility claim is made from it.
+- No live Supabase TLS connection was established; the tests validate host detection/policy only.
