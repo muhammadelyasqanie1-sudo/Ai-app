@@ -21,6 +21,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
     "lucide-react": "^0.546.0",
+    "@mlc-ai/web-llm": "^0.2.87",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "vite": "^8.3.0",
@@ -39,7 +40,8 @@
     "highlight.js": "^11.11.1",
     "bcryptjs": "^3.0.2",
     "argon2": "^0.44.0",
-    "zod": "^4.1.12"
+    "zod": "^4.1.12",
+    "@afg-ai/capacitor-device-info": "file:plugins/capacitor-device-info"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

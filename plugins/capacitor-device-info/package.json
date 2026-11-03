@@ -1,0 +1,20 @@
+{
+  "name": "@afg-ai/capacitor-device-info",
+  "version": "1.0.0",
+  "description": "Privacy-preserving Android hardware information bridge for AFG AI",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "files": [
+    "src",
+    "android"
+  ],
+  "peerDependencies": {
+    "@capacitor/core": "^8.0.0"
+  },
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  },
+  "type": "module"
+}

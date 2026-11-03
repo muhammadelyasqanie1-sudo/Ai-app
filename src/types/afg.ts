@@ -9,6 +9,7 @@ export type TabType =
   | 'tools' 
   | 'terminal'
   | 'offline-learning'
+  | 'offline-ai-hub'
   | 'history'
   | 'settings' 
   | 'admin';

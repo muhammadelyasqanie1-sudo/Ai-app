@@ -15,6 +15,7 @@ import { AfgSettingsView } from './components/afg/AfgSettingsView';
 import { AfgAdminPanel } from './components/afg/AfgAdminPanel';
 import { AfgTerminalView } from './components/afg/AfgTerminalView';
 import { AfgOfflineView } from './components/afg/AfgOfflineView';
+import { AfgOfflineHubView } from './components/afg/AfgOfflineHubView';
 import { AfgSideMenu } from './components/afg/AfgSideMenu';
 import { AfgLanguageModal } from './components/afg/AfgLanguageModal';
 import { AfgCinematicIntro } from './components/afg/AfgCinematicIntro';
@@ -634,6 +635,8 @@ export default function App() {
         {currentTab === 'terminal' && <AfgTerminalView language={language} />}
 
         {currentTab === 'offline-learning' && <AfgOfflineView language={language} />}
+
+        {currentTab === 'offline-ai-hub' && <AfgOfflineHubView language={language} />}
 
         {currentTab === 'history' && (
           <AfgHistoryView
