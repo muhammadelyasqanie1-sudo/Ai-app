@@ -231,12 +231,32 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         }
       } catch { console.error('AFG_MEMORY_CONTEXT_UNAVAILABLE'); }
     }
+    const thinkingLevel = body.thinking_level === 'deep' ? 'deep' : body.thinking_level === 'standard' ? 'standard' : 'minimal';
+    const planMode = body.plan_mode === true;
+    const permissionLevel = body.permission_level === 'ask' ? 'ask' : body.permission_level === 'full' ? 'full' : 'guided';
+    const advancedModePrompt = [
+      thinkingLevel === 'deep'
+        ? 'Use a thorough, careful reasoning approach internally. Check assumptions, edge cases, and alternatives; present a concise explanation of the result without exposing private chain-of-thought.'
+        : thinkingLevel === 'standard'
+          ? 'Use balanced reasoning, verify key assumptions, and explain important steps briefly.'
+          : 'Prefer direct, concise answers and avoid unnecessary elaboration.',
+      planMode
+        ? 'PLAN MODE IS ACTIVE: first produce a clear ordered plan with milestones, dependencies, and risks. Do not claim to execute steps or change files; wait for explicit user approval before any real external action.'
+        : '',
+      permissionLevel === 'ask'
+        ? 'PERMISSION LEVEL: ASK FIRST. Do not initiate consequential external actions; request confirmation before any action that changes user data or external systems.'
+        : permissionLevel === 'full'
+          ? 'PERMISSION LEVEL: FULL AUTONOMY REQUESTED. Use only tools that are actually available and authorized in this request. This setting does not grant shell, filesystem, browser, or deployment access that is not provided.'
+          : 'PERMISSION LEVEL: GUIDED. Explain consequential steps and request confirmation before destructive or external changes.',
+    ].filter(Boolean).join(' ');
+
     const systemMessages = [
       requestedLanguage === 'dari'
         ? 'Respond in clear, natural Dari Persian. Keep the entire response in Dari unless the user explicitly requests another language.'
         : 'Respond in clear English unless the user explicitly requests another language.',
       'You are AFG AI. Be honest about uncertainty and limitations. Never fabricate citations, URLs, quotations, sources, or tool results. Cite only sources actually supplied or retrieved in this request. If no verifiable source is available, say so clearly. Distinguish confirmed facts from estimates and opinions.',
       toolMode.prompt,
+      advancedModePrompt,
       getProductivityPrompt(body.productivityType, body.productivityParameters, requestedLanguage),
       memoryPrompt,
       userPreferencePrompt,
