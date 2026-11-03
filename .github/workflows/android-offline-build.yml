@@ -24,6 +24,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Install native build tools
+        run: sdkmanager 'cmake;3.31.6' 'ndk;29.0.13113456'
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Build web assets
