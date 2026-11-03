@@ -11,7 +11,7 @@ const customProviderInput = z.object({
   slug: z.string().trim().toLowerCase().min(2).max(48).regex(/^[a-z0-9][a-z0-9-]+$/),
   displayName: z.string().trim().min(1).max(80),
   baseUrl: z.string().trim().url().max(500),
-  protocol: z.literal('openai-compatible').optional(),
+  protocol: z.enum(['openai-compatible','anthropic-messages']).optional(),
 }).strict();
 const providerKeyInput = z.object({
   apiKey: z.string().trim().min(8).max(8192),
@@ -126,15 +126,16 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         sendAuthJson(res,400,{error:'Provide a valid slug, display name, and public HTTPS OpenAI-compatible API base URL.'});return true;
       }
       const {slug,displayName,baseUrl}=parsed.data;
+      const protocol=parsed.data.protocol||'openai-compatible';
       const client=await pool.connect();
       try{
         await client.query('BEGIN');
         const created=await client.query(`INSERT INTO providers(kind,display_name,enabled,slug,base_url,config_json,source)
           VALUES('custom',$1,false,$2,$3,$4::jsonb,'custom')
           RETURNING id,slug,kind,display_name,base_url,enabled,config_json,source,created_at`,
-          [displayName,slug,baseUrl,JSON.stringify({protocol:'openai-compatible',requires_key:true,custom:true})]);
+          [displayName,slug,baseUrl,JSON.stringify({protocol,requires_key:true,custom:true})]);
         await client.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
-          [user.id,user.role,'provider.custom.create','provider',created.rows[0].id,JSON.stringify({slug,displayName,baseUrl,protocol:'openai-compatible'})]);
+          [user.id,user.role,'provider.custom.create','provider',created.rows[0].id,JSON.stringify({slug,displayName,baseUrl,protocol})]);
         await client.query('COMMIT');
         sendAuthJson(res,201,{provider:created.rows[0]});return true;
       }catch(error){
