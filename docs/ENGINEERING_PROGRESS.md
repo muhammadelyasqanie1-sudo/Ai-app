@@ -352,3 +352,16 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 - Locale validation: passed.
 - Production web build: passed.
 - This validates compilation and asset inclusion only. Browser install prompts, icon rendering on different launchers, and iOS home-screen behavior remain unverified.
+
+
+## Milestone 15 — Private file library foundation
+
+**Status:** IMPLEMENTED IN SOURCE; DEPLOYMENT CONFIGURATION AND SCANNER PENDING
+
+- Added authenticated, CSRF-protected `/api/files` list/upload/delete routes scoped to the signed-in owner.
+- Uploads are limited to 15 MB each, 100 files and 100 MB per account; extension and file signatures are checked before writing.
+- Files are written outside the public web root with generated names and restrictive filesystem permissions; metadata includes a SHA-256 digest.
+- Added migration `0010_private_file_quarantine.sql` and a Settings Hub file library UI.
+- Uploads remain quarantined. No download, document parsing, or AI ingestion endpoint is exposed until malware scanning and safe extraction are integrated. Chat attachment upload remains disabled.
+- Render must mount a private persistent disk and set `AFG_UPLOAD_QUARANTINE_DIR` to its absolute mount path. Apply database migrations before using the library.
+- No build, tests, migration, deployment, or live storage operation was run for this milestone.
