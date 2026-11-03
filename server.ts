@@ -15,7 +15,17 @@ app.disable('x-powered-by');
 const PORT = process.env.PORT || 3000;
 const production = process.env.NODE_ENV === 'production';
 const canonicalOrigin = (process.env.APP_ORIGIN || '').split(',')[0].trim().replace(/\/+$/, '');
-const connectSources = new Set(["'self'", 'https://accounts.google.com', 'https://huggingface.co']);
+const connectSources = new Set([
+  "'self'",
+  'https://accounts.google.com',
+  'https://huggingface.co',
+  'https://cdn-lfs.huggingface.co',
+  'https://cdn-lfs-us-1.huggingface.co',
+  'https://cdn-lfs-eu-1.huggingface.co',
+  'https://cas-bridge.xethub.hf.co',
+  'https://cas-server.xethub.hf.co',
+  'https://transfer.xethub.hf.co',
+]);
 for (const candidate of [process.env.VITE_API_BASE_URL || '']) {
   try { connectSources.add(new URL(candidate).origin); } catch { /* ignore invalid optional origins */ }
 }
