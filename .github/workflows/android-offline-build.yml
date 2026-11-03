@@ -10,6 +10,9 @@ on:
       - 'package.json'
       - '.github/workflows/android-offline-build.yml'
   workflow_dispatch:
+concurrency:
+  group: android-offline-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
