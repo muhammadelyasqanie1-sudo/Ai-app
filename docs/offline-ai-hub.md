@@ -17,9 +17,9 @@
 ## Platform and runtime limitations
 
 - Web inference requires HTTPS (or localhost), WebGPU, a compatible browser/GPU driver, and enough GPU memory and storage.
-- The Android native bridge improves hardware identification only. It does **not** yet provide a native inference engine.
+- Android includes a native llama.cpp JNI CPU runtime compiled for `arm64-v8a` only, plus Android DownloadManager-based model downloads and SHA-256 verification when a trusted expected digest is available.
 - Android inference currently still depends on WebGPU inside Android System WebView. Android 10 and older WebViews commonly lack WebGPU; on those devices the hub must show an unsupported status rather than pretend the model can run.
-- To support older Android devices, a separate native llama.cpp or MLC runtime is still required, including JNI/C++ integration, GGUF/MLC model handling, background downloads, cancellation/resume, checksum verification, storage management, and device-specific benchmarking. That native inference engine is not included in this branch.
+- Android native generation currently returns a complete response rather than token streaming, exposes no in-generation cancellation or sampler controls, and clamps context size to 512–4096 tokens and CPU threads to 1–4. Manual pause/resume for Android DownloadManager transfers is not exposed; the system handles network interruptions and automatic retry. Only `arm64-v8a` is packaged.
 - Web pages cannot reliably read exact physical RAM, dedicated GPU VRAM, exact device model, or the phone's true free disk space. Browser values are estimates and are labelled as such.
 - The catalog is limited to models pre-converted for WebLLM/MLC. It is not an index of every Hugging Face model and does not mean arbitrary GGUF files can execute.
 - Model repository sizes are estimates, not guaranteed exact download totals. The runtime controls the actual artifact set.
