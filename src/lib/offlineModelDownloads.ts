@@ -76,6 +76,7 @@ async function downloadGGUFAndroid(options: Parameters<typeof downloadGGUF>[0]):
       options.onProgress?.({ downloadedBytes: state.downloadedBytes, totalBytes, percent: totalBytes ? Math.min(100, Math.floor(state.downloadedBytes / totalBytes * 100)) : null, status: state.status });
       if (state.status === 'installed') return state;
       if (state.status === 'error') throw new Error(state.error || 'Android model download failed.');
+      if (state.status === 'paused') throw new DOMException('Android model download is paused.', 'AbortError');
       await new Promise(resolve => window.setTimeout(resolve, 1200));
     }
   } finally {
