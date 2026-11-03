@@ -236,6 +236,35 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
       return;
     }
 
+    if (req.method === 'GET' && pathname === '/api/system/features') {
+      const snapshot = await getCapabilitySnapshot();
+      let flags: Record<string, boolean> = {};
+      let githubConnected = false;
+      if (pool) {
+        try {
+          const result = await pool.query('SELECT flag_key,enabled FROM feature_flags');
+          flags = Object.fromEntries(result.rows.map((row: any) => [String(row.flag_key), row.enabled === true]));
+        } catch { /* Missing feature flag table means optional features remain disabled. */ }
+        try {
+          const github = await pool.query("SELECT enabled,status,last_check_ok FROM integrations WHERE slug='github' LIMIT 1");
+          githubConnected = Boolean(github.rows[0]?.enabled && github.rows[0]?.status === 'active' && github.rows[0]?.last_check_ok === true);
+        } catch { githubConnected = false; }
+      }
+      sendJson(res, 200, {
+        features: {
+          voice_stt_enabled: flags.voice === true && snapshot.capabilities?.['speech-to-text'] === true,
+          terminal_exec_enabled: flags.terminal_exec_enabled === true,
+          github_connected: githubConnected,
+          web_preview_enabled: false,
+          file_upload_enabled: false,
+          dual_planning_enabled: false,
+          undo_file_changes_enabled: false,
+        },
+        verified: snapshot.verified === true,
+      }, requestId);
+      return;
+    }
+
     if (req.method === 'GET' && pathname === '/api/models') {
       const catalog = await getProviderModelCatalog();
       sendJson(res, catalog.status, catalog.body, requestId);
