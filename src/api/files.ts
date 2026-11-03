@@ -4,7 +4,7 @@ import { unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { pool } from './database.ts';
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './auth.ts';
-import { MAX_UPLOAD_BYTES, quarantineUpload } from '../security/upload.ts';
+import { ensureQuarantineDirectory, MAX_UPLOAD_BYTES, quarantineUpload } from '../security/upload.ts';
 
 const MIME_BY_EXTENSION: Record<string,string> = {
   '.pdf':'application/pdf','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg',
@@ -31,7 +31,9 @@ export async function handleFilesApi(req:IncomingMessage,res:ServerResponse,path
   if (req.method !== 'GET' && !verifyCsrf(req)) { reply(res,403,{error:'CSRF validation failed.'}); return true; }
 
   if (pathname === '/api/files/status' && req.method === 'GET') {
-    reply(res,200,{verified:true,privateStorageConfigured:Boolean(process.env.AFG_UPLOAD_QUARANTINE_DIR && path.isAbsolute(process.env.AFG_UPLOAD_QUARANTINE_DIR)),scannerConfigured:false,aiIngestionEnabled:false,maxUploadBytes:MAX_UPLOAD_BYTES}); return true;
+    let privateStorageConfigured = false;
+    try { await ensureQuarantineDirectory(); privateStorageConfigured = true; } catch { /* Keep uploads disabled until the private disk is valid. */ }
+    reply(res,200,{verified:true,privateStorageConfigured,scannerConfigured:false,aiIngestionEnabled:false,maxUploadBytes:MAX_UPLOAD_BYTES}); return true;
   }
 
   if (pathname === '/api/files' && req.method === 'GET') {
