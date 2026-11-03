@@ -196,6 +196,7 @@ export async function downloadGGUF(options: {
     const handle = await dir.getFileHandle(partial, { create: true });
     const reader = response.body.getReader();
     let downloadedBytes = offset;
+    let lastPersistedBytes = offset;
     const sha = new Sha256();
     // Re-read a partial file before opening its writer so hashing sees committed bytes.
     if (offset) {
@@ -215,6 +216,10 @@ export async function downloadGGUF(options: {
       await writable.write(item.value);
       sha.update(item.value);
       downloadedBytes += item.value.length;
+      if (downloadedBytes - lastPersistedBytes >= 8 * 1024 * 1024) {
+        await saveTask({ id, repoId, fileName, revision, url: modelUrl, expectedBytes: totalBytes, downloadedBytes, expectedSha256, status: 'downloading', updatedAt: Date.now() });
+        lastPersistedBytes = downloadedBytes;
+      }
       emit('downloading');
     }
     await writable.close();
