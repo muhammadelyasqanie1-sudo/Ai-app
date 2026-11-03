@@ -8,7 +8,7 @@ import type { Language } from '../../types/afg';
 import { getIntlLocale } from '../../utils/i18n';
 
 interface AfgAdminPanelProps { language: Language; }
-type Tab = 'overview'|'users'|'providers'|'models'|'usage'|'limits'|'health'|'flags'|'audit'|'security';
+type Tab = 'overview'|'users'|'staff'|'providers'|'models'|'usage'|'limits'|'health'|'flags'|'audit'|'security';
 type ProviderRow = { id:string; displayName:string; enabled:boolean; configured:boolean; configMessage?:string|null };
 type ModelRow = {
   id:string; providerId:string; displayName:string; description?:string; contextWindow:number;
@@ -23,12 +23,13 @@ type Overview = { usage:any[]; requests:any; users:any; storage:any };
 const API = ((import.meta as any).env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const NAV: {id:Tab;labelEn:string;labelFa:string;icon:any}[] = [
   {id:'overview',labelEn:'Overview',labelFa:'نمای کلی',icon:LayoutDashboard},{id:'users',labelEn:'Users',labelFa:'کاربران',icon:Users},
-  {id:'providers',labelEn:'Providers',labelFa:'ارائه‌دهندگان',icon:Network},{id:'models',labelEn:'Models & Routing',labelFa:'مدل‌ها و مسیریابی',icon:Cpu},
+  {id:'providers',labelEn:'Providers',labelFa:'ارائه‌دهندگان',icon:Network},{id:'staff',labelEn:'Staff & Permissions',labelFa:'کارکنان و دسترسی‌ها',icon:ShieldCheck},{id:'models',labelEn:'Models & Routing',labelFa:'مدل‌ها و مسیریابی',icon:Cpu},
   {id:'usage',labelEn:'Usage & Errors',labelFa:'مصرف و خطاها',icon:Activity},{id:'limits',labelEn:'Rate Limits',labelFa:'محدودیت درخواست',icon:Gauge},
   {id:'health',labelEn:'Storage & Health',labelFa:'ذخیره‌سازی و سلامت',icon:HardDrive},{id:'flags',labelEn:'Flags & Announcements',labelFa:'امکانات و اطلاعیه‌ها',icon:Flag},
   {id:'audit',labelEn:'Audit Log',labelFa:'گزارش رویدادها',icon:ClipboardList},{id:'security',labelEn:'Security Events',labelFa:'رویدادهای امنیتی',icon:ShieldAlert},
 ];
 const CAPABILITIES = ['text','streaming','vision','imageGen','imageEdit','ocr','tts','stt','tools','jsonMode'];
+const STAFF_PERMISSIONS = ['providers:read','providers:manage','models:read','models:manage','routing:read','routing:manage','users:read','users:manage','users:suspend','audit:read','security:read','security:manage','dashboard:read','usage:read','system:read','settings:read','settings:manage','subscriptions:read','subscriptions:manage','notifications:broadcast'];
 
 function csrfCookie(): string {
   const match = document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='));
@@ -57,6 +58,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [displayName,setDisplayName] = useState('AFG AI Administrator');
   const [showBootstrap,setShowBootstrap] = useState(false);
   const [providers,setProviders] = useState<ProviderRow[]>([]);
+  const [staffRoles,setStaffRoles] = useState<any[]>([]);
   const [models,setModels] = useState<ModelRow[]>([]);
   const [users,setUsers] = useState<UserRow[]>([]);
   const [overview,setOverview] = useState<Overview|null>(null);
@@ -87,13 +89,13 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     try {
       const paths = ['/api/admin/providers','/api/admin/models','/api/admin/fallbacks','/api/admin/users',
         '/api/admin/overview','/api/admin/requests','/api/admin/security-events','/api/admin/audit',
-        '/api/admin/rate-limits','/api/admin/feature-flags'];
+        '/api/admin/rate-limits','/api/admin/feature-flags','/api/admin/staff/roles'];
       const values = await Promise.all(paths.map((path)=>api(path)));
       setProviders(values[0].providers||[]); setModels(values[1].models||[]);
       setFallbacks(values[2].fallbacks||[]); setUsers(values[3].users||[]);
       setOverview(values[4]); setRequests(values[5].requests||[]);
       setSecurity(values[6].events||[]); setAudit(values[7].events||[]);
-      setPolicies(values[8].policies||[]); setFlags(values[9].flags||[]);
+      setPolicies(values[8].policies||[]); setFlags(values[9].flags||[]); setStaffRoles(values[10].roles||[]);
       setAuthenticated(true); return true;
     } catch(err) {
       setError(err instanceof Error?err.message:'Could not load admin dashboard.');
@@ -132,6 +134,14 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     setError('');
     try{await api('/api/admin/users',{method:'PATCH',body:JSON.stringify({userId:user.id,...patch})});setNotice('User access updated.');await loadAdminData();}
     catch(err){setError(err instanceof Error?err.message:'User update failed.');}
+  };
+  const saveStaffRole=async(role:any)=>{
+    setError('');
+    try {
+      await api('/api/admin/staff/roles',{method:'PATCH',body:JSON.stringify({role:role.name,permissions:role.permissions_json||{}})});
+      setNotice('Staff permissions saved.');
+      await loadAdminData();
+    } catch(err) { setError(err instanceof Error?err.message:'Could not save staff permissions.'); }
   };
   const patchModel=async(model:ModelRow,patch:Record<string,any>)=>{
     setError('');
@@ -233,6 +243,11 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
         {['user','admin','super_admin','provider_manager','model_manager','support_staff','moderator','analyst','read_only_staff'].map(role=><option key={role} value={role}>{role.replaceAll('_',' ')}</option>)}
       </select></div></td></tr>)}</tbody></table>{!filteredUsers.length&&<p className="py-8 text-center text-sm text-slate-500">No users found.</p>}</div>
     </div>}
+
+    {tab==='staff'&&<div className="space-y-4"><div className={panel}><h2 className="text-lg font-bold text-white">Staff roles and permissions</h2><p className="my-2 text-xs text-slate-500">Permissions are enforced by the backend. Only root administrators can change staff permission maps. User, Administrator and Super Administrator roles are protected.</p>
+      <div className="space-y-4">{staffRoles.filter(role=>!['user','admin','super_admin'].includes(role.name)).map(role=><div key={role.name} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"><div className="mb-3 flex items-center justify-between gap-3"><h3 className="font-bold text-white">{role.name.replaceAll('_',' ')}</h3><button className={primary} onClick={()=>void saveStaffRole(role)}>Save permissions</button></div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{STAFF_PERMISSIONS.map(permission=><label key={permission} className="flex items-center gap-2 rounded-lg border border-slate-800 px-2 py-2 text-[11px] text-slate-300"><input type="checkbox" checked={role.permissions_json?.[permission]===true} onChange={event=>setStaffRoles(previous=>previous.map(item=>item.name===role.name?{...item,permissions_json:{...(item.permissions_json||{}),[permission]:event.target.checked}}:item))}/>{permission}</label>)}</div></div>)}</div>
+      {!staffRoles.some(role=>!['user','admin','super_admin'].includes(role.name))&&<p className="py-6 text-center text-sm text-slate-500">Staff roles appear after migration 0008 is applied.</p>}
+    </div></div>}
 
     {tab==='providers'&&<div className={panel}><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">Provider control</h2><p className="text-xs text-slate-500">Only credential presence is shown. Secret values are never returned.</p></div><button className={primary+' flex items-center gap-2'} onClick={()=>void discoverModels()}><Play className="h-4 w-4"/>Discover models</button></div>
       <div className="grid gap-3 md:grid-cols-2">{providers.map(p=><div key={p.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-bold text-white">{p.displayName}</h3><p className="mt-1 text-xs text-slate-500">{p.id}</p></div><span className={p.configured?'text-emerald-300':'text-amber-300'}>{p.configured?'Configured':'Missing credentials'}</span></div><div className="mt-4 flex flex-wrap gap-2"><button className={secondary+' flex items-center gap-2'} onClick={()=>void testProvider(p)}><Play className="h-3.5 w-3.5"/>Test connection</button><button className={secondary+' flex items-center gap-2'} onClick={()=>void api('/api/admin/providers',{method:'PATCH',body:JSON.stringify({providerId:p.id,enabled:!p.enabled})}).then(loadAdminData).catch(e=>setError(e.message))}><Power className="h-3.5 w-3.5"/>{p.enabled?'Disable':'Enable'}</button></div></div>)}</div>
