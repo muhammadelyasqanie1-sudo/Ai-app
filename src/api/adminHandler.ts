@@ -1,7 +1,30 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
 import { z } from 'zod';
-import { isIP } from 'node:net';
+import { BlockList, isIP } from 'node:net';
+import { lookup } from 'node:dns/promises';
+
+const privateNetworkBlockList = new BlockList();
+for(const [subnet,prefix] of [
+  ['0.0.0.0',8],['10.0.0.0',8],['100.64.0.0',10],['127.0.0.0',8],['169.254.0.0',16],
+  ['172.16.0.0',12],['192.0.0.0',24],['192.0.2.0',24],['192.168.0.0',16],
+  ['198.18.0.0',15],['198.51.100.0',24],['203.0.113.0',24],['224.0.0.0',4],['240.0.0.0',4],
+] as const) privateNetworkBlockList.addSubnet(subnet,prefix,'ipv4');
+for(const [subnet,prefix] of [
+  ['::',128],['::1',128],['::ffff:0:0',96],['64:ff9b::',96],['100::',64],
+  ['2001:db8::',32],['fc00::',7],['fe80::',10],['ff00::',8],
+] as const) privateNetworkBlockList.addSubnet(subnet,prefix,'ipv6');
+function isPublicRoutableAddress(address:string):boolean{
+  const family=isIP(address);
+  if(family===0)return false;
+  if(family===4)return !privateNetworkBlockList.check(address,'ipv4');
+  if(address.toLowerCase().startsWith('::ffff:')){
+    const mapped=address.slice(7);
+    if(isIP(mapped)===4)return !privateNetworkBlockList.check(mapped,'ipv4');
+  }
+  return !privateNetworkBlockList.check(address,'ipv6');
+}
+
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf, verifyUserPassword, requestAdminPasswordReset } from './auth.ts';
 import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors, refreshDatabaseProviderAdapters, recordModelHealthResult } from '../services/providerGateway.ts';
 import { encryptProviderSecret, providerKeyHint } from '../security/providerVault.ts';
@@ -25,13 +48,15 @@ const manualModelInput = z.object({
   displayName: z.string().trim().max(160).optional(),
   contextWindow: z.number().int().min(0).max(10_000_000).optional(),
 }).strict();
-function safeCustomProviderUrl(raw: string): boolean {
+async function safeCustomProviderUrl(raw: string): Promise<boolean> {
   try {
     const parsed = new URL(raw);
     const host = parsed.hostname.toLowerCase();
-    if (parsed.username || parsed.password || parsed.hash || host === 'localhost' || host.endsWith('.localhost') ||
-        host.endsWith('.local') || host.endsWith('.internal') || isIP(host)) return false;
-    return parsed.protocol === 'https:';
+    if (parsed.protocol!=='https:' || parsed.username || parsed.password || parsed.hash ||
+        host==='localhost' || host.endsWith('.localhost') || host.endsWith('.local') ||
+        host.endsWith('.internal') || isIP(host)) return false;
+    const addresses=await lookup(host,{all:true,verbatim:true});
+    return addresses.length>0 && addresses.every(result=>isPublicRoutableAddress(result.address));
   } catch { return false; }
 }
 
