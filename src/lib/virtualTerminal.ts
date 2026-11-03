@@ -309,7 +309,9 @@ export function runVirtualCommand(command: string, cwd: string, currentFs: Virtu
     if (name === 'head' || name === 'tail') {
       const countIndex = args.indexOf('-n');
       const count = countIndex >= 0 ? Math.max(1, Math.min(100, Number.parseInt(args[countIndex + 1] || '10', 10) || 10)) : 10;
-      const targetArgs = args.filter((_, index) => index !== countIndex && index !== countIndex + 1);
+      const targetArgs = countIndex >= 0
+        ? args.filter((_, index) => index !== countIndex && index !== countIndex + 1)
+        : args;
       const targetArg = targetArgs[targetArgs.length - 1];
       if (!targetArg) return fail(name + ': missing file operand');
       const target = normalizePath(targetArg, cwd);
