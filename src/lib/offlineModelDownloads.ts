@@ -173,7 +173,7 @@ export async function downloadGGUF(options: {
   try {
     dir = await modelDirectory();
     const previousTask = await getOfflineDownload(id);
-    if (previousTask?.revision && previousTask.revision !== revision) await dir.removeEntry(partial).catch(() => undefined);
+    if (previousTask && previousTask.revision !== revision) await dir.removeEntry(partial).catch(() => undefined);
     let offset = await getFileSize(dir, partial);
     const modelUrl = 'https://huggingface.co/' + repoId + '/resolve/' + encodeURIComponent(revision) + '/' + fileName.split('/').map(encodeURIComponent).join('/');
     await saveTask({ id, repoId, fileName, revision, url: modelUrl, expectedBytes, downloadedBytes: offset, expectedSha256, status: 'downloading', updatedAt: Date.now() });
