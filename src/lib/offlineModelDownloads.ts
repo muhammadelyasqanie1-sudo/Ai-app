@@ -385,8 +385,8 @@ export async function downloadGGUF(options: {
   }
 }
 
-export function pauseGGUFDownload(id: string): void {
-  void pauseOfflineDownload(id);
+export function pauseGGUFDownload(id: string): Promise<void> {
+  return pauseOfflineDownload(id);
 }
 
 export async function removeOfflineModel(id: string): Promise<void> {
