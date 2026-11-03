@@ -1,0 +1,74 @@
+name: Build signed AFG AI Android release
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: Optional HTTPS AFG AI API base URL
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build web application
+        env:
+          VITE_API_BASE_URL: ${{ inputs.api_base_url }}
+        run: npm run build
+
+      - name: Generate Android project
+        run: npx cap add android
+
+      - name: Sync Android assets and plugins
+        run: npx cap sync android
+
+      - name: Configure release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then echo "Missing GitHub secret: $name"; exit 1; fi
+          done
+          mkdir -p android/app
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release-keystore.jks
+          echo "ANDROID_KEYSTORE_PATH=$GITHUB_WORKSPACE/android/app/release-keystore.jks" >> "$GITHUB_ENV"
+          node scripts/configure-android-release.mjs
+
+      - name: Build signed release APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+
+      - name: Upload signed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AFG-AI-Signed-Android-Release
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 30
