@@ -97,7 +97,10 @@ public class AFGOfflineModelsPlugin extends Plugin {
                     hashVerified = !expectedSha.isEmpty() && expectedSha.equalsIgnoreCase(computedSha);
                     if (!expectedSha.isEmpty() && !hashVerified) {
                         file.delete();
-                        dm.remove(id);
+                        meta.put("computedSha256", computedSha);
+                        meta.put("hashVerified", false);
+                        meta.put("integrityError", true);
+                        saveMetadata(id, meta);
                         state = "error";
                         error = "SHA-256 verification failed. The corrupted model was deleted.";
                     } else {
@@ -106,6 +109,10 @@ public class AFGOfflineModelsPlugin extends Plugin {
                         saveMetadata(id, meta);
                         state = "installed";
                     }
+                } else if (!expectedSha.isEmpty() && !expectedSha.equalsIgnoreCase(computedSha)) {
+                    file.delete();
+                    state = "error";
+                    error = "SHA-256 verification failed. The corrupted model was deleted.";
                 } else {
                     state = "installed";
                 }
@@ -126,7 +133,8 @@ public class AFGOfflineModelsPlugin extends Plugin {
             result.put("fileName", meta.optString("fileName", ""));
             result.put("status", state);
             result.put("downloadedBytes", downloaded);
-            result.put("expectedBytes", total > 0 ? total : meta.optLong("expectedBytes", -1));
+            long knownBytes = total > 0 ? total : meta.optLong("expectedBytes", -1);
+            result.put("expectedBytes", knownBytes > 0 ? knownBytes : null);
             result.put("expectedSha256", expectedSha.isEmpty() ? null : expectedSha);
             result.put("computedSha256", computedSha.isEmpty() ? null : computedSha);
             result.put("hashVerified", hashVerified);
@@ -146,7 +154,8 @@ public class AFGOfflineModelsPlugin extends Plugin {
             String revision = call.getString("revision", "main");
             String fileName = call.getString("fileName", "");
             String expectedSha = call.getString("expectedSha256", "");
-            long expectedBytes = call.getLong("expectedBytes", -1L);
+            Long expectedBytesValue = call.getLong("expectedBytes");
+            long expectedBytes = expectedBytesValue == null ? -1L : expectedBytesValue;
             Uri uri = Uri.parse(url);
             if (!"https".equalsIgnoreCase(uri.getScheme()) || !"huggingface.co".equalsIgnoreCase(uri.getHost())) {
                 call.reject("Only HTTPS Hugging Face model downloads are allowed."); return;
@@ -164,7 +173,7 @@ public class AFGOfflineModelsPlugin extends Plugin {
             request.setMimeType("application/octet-stream");
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
             request.setAllowedOverMetered(true);
-            request.setDestinationUri(Uri.fromFile(destination));
+            request.setDestinationInExternalFilesDir(getContext(), Environment.DIRECTORY_DOWNLOADS, "afg-ai-models/" + safeName);
             long id = manager().enqueue(request);
 
             JSONObject meta = new JSONObject();
