@@ -274,3 +274,26 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 
 - Locale and web-check workflows were queued at the time of this update.
 - Bundle-size comparison and production build result are pending.
+
+
+## Milestone 11 — Correct GGUF runtime availability messaging
+
+**Status:** IMPLEMENTED BUT NOT VERIFIED
+
+### Problem found
+
+- The Offline AI Hub always displayed a warning that the llama.cpp runtime still needed to be integrated whenever a GGUF file was installed, even when the Android native runtime was detected as available and load controls were enabled.
+
+### Change
+
+- The warning now appears only when GGUF files are installed and the native runtime is unavailable.
+- The message describes the actual condition: runtime unavailable in this build or on this device.
+
+### Files changed
+
+- `src/components/afg/AfgOfflineHubView.tsx`
+
+### Verification
+
+- Source-level review confirms the warning is gated by `!nativeRuntimeAvailable`.
+- PR CI and an Android device runtime test are pending. No inference execution is claimed from this copy fix.
