@@ -6,6 +6,7 @@ import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors } 
 const ALLOWED_FALLBACK_CAPABILITIES = new Set(['text', 'vision', 'imageGen', 'tts', 'stt']);
 
 function requiredAdminPermission(method: string, pathname: string): string | null {
+  if (method === 'POST' && pathname.startsWith('/api/admin/providers/')) return 'providers:manage';
   const route = method + ' ' + pathname;
   const permissions: Record<string, string> = {
     'GET /api/admin/subscription-plans': 'subscriptions:read',
