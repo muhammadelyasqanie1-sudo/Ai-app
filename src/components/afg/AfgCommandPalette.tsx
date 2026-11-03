@@ -178,7 +178,7 @@ export const AfgCommandPalette: React.FC<AfgCommandPaletteProps> = (props) => {
 
         {!submenu && (
           <>
-            <label className="afg-command-search"><Search size={17}/><input ref={inputRef} value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && query.startsWith('/')) runCommand(query); }} placeholder={dari ? 'جستجو یا تایپ دستور...' : 'Search actions or type a command...'} /><kbd>ESC</kbd></label>
+            <label className="afg-command-search"><Search size={17}/><input ref={inputRef} value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { if (query.startsWith('/')) runCommand(query); else if (query.trim()) { onFindInChat(query.trim()); onClose(); } } }} placeholder={dari ? 'جستجو یا تایپ دستور...' : 'Search current chat or type a command...'} /><kbd>ESC</kbd></label>
             {query.startsWith('/') ? (
               <div className="afg-command-group"><div className="afg-command-section">{dari ? 'دستورات' : 'COMMANDS'}</div>{['/new','/history','/settings','/find',...(features.terminal_exec_enabled?['/terminal']:[])].filter((item)=>item.includes(query.toLowerCase())).map((item)=><button key={item} className="afg-command-choice" onClick={()=>runCommand(item)}>{item}<ChevronRight size={16}/></button>)}</div>
             ) : (
@@ -197,11 +197,11 @@ export const AfgCommandPalette: React.FC<AfgCommandPaletteProps> = (props) => {
                   {action(<Brain size={18}/>,dari?'سطح تفکر':'Thinking level',thinkingLevel.toUpperCase(),()=>{setQuery('');setSubmenu('thinking');})}
                   {action(<Shield size={18}/>,dari?'سطح دسترسی':'Permission level',permissionLevel.toUpperCase(),()=>{setQuery('');setSubmenu('permission');})}
                   {action(<Search size={18}/>,dari?'جستجو در گفتگو':'Find in chat',dari?'جستجوی متن همین گفتگو':'Search text in this conversation',()=>{setQuery('');setSubmenu('find');})}
-                  {action(<MessageSquare size={18}/>,dari?'زمینه و محدودیت‌ها':'Context & limits',contextWindow>0?`${tokenCount.toLocaleString()} / ${contextWindow.toLocaleString()} tokens · ${contextPercent}%`:`${tokenCount.toLocaleString()} estimated tokens · model limit unavailable`,()=>{},<span className="afg-command-meter"><i style={{width:contextPercent+'%'}}/></span>,true)}
+                  <div className="afg-command-action" aria-live="polite"><span className="afg-command-icon"><MessageSquare size={18}/></span><span className="afg-command-label"><b>{dari?'زمینه و محدودیت‌ها':'Context & limits'}</b><small>{contextWindow>0?`${tokenCount.toLocaleString()} / ${contextWindow.toLocaleString()} tokens · ${contextPercent}%`:`${tokenCount.toLocaleString()} estimated tokens · model limit unavailable`}</small></span><span className="afg-command-meter"><i style={{width:contextPercent+'%'}}/></span></div>
                 </div>
                 <div className="afg-command-group">
                   <div className="afg-command-section">{dari?'ابزارهای توسعه':'DEVELOPER TOOLS'}</div>
-                  {features.terminal_exec_enabled && action(<Terminal size={18}/>,dari?'ترمینل':'Terminal',dari?'ترمینل فعال‌شده توسط مدیر':'Admin-enabled terminal',()=>{onOpenTerminal();onClose();})}
+                  {features.terminal_exec_enabled && action(<Terminal size={18}/>,dari?'ترمینل':'Terminal',dari?'ترمینل فقط‌خواندنی فعال‌شده توسط مدیر':'Admin-enabled read-only terminal',()=>{onOpenTerminal();onClose();})}
                   {features.web_preview_enabled && action(<MonitorPlay size={18}/>,'Web preview','Active local preview session',()=>{})}
                   {action(<Undo2 size={18}/>,dari?'بازگردانی تغییرات فایل':'Undo file changes',features.undo_file_changes_enabled?'Restore last AI file edit':(dari?'در این گفتگو تغییری در فایل ثبت نشده':'No reversible AI file edits in this session'),()=>{},<Lock size={15}/>,!features.undo_file_changes_enabled)}
                 </div>
