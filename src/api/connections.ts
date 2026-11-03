@@ -173,7 +173,7 @@ export async function handleConnectionsApi(req: IncomingMessage,res: ServerRespo
       if(typeof body.enabled!=='boolean'){sendAuthJson(res,400,{error:'enabled must be boolean.'});return true;}
       const result=await pool.query(`UPDATE integrations SET enabled=$2,
         status=CASE WHEN $2 THEN 'active' ELSE 'disabled' END,updated_at=now()
-        WHERE slug=$1 AND ($2=false OR (status='active' AND last_check_ok=true AND last_checked_at IS NOT NULL))
+        WHERE slug=$1 AND ($2=false OR (status IN ('active','disabled') AND last_check_ok=true AND last_checked_at IS NOT NULL))
         RETURNING slug,enabled,status`,[slug,body.enabled]);
       if(!result.rows[0]){sendAuthJson(res,409,{error:'Connection cannot be enabled before a successful health check.'});return true;}
       sendAuthJson(res,200,{integration:result.rows[0]});return true;
@@ -191,11 +191,19 @@ export async function handleConnectionsApi(req: IncomingMessage,res: ServerRespo
       const name=String(body.name||'').trim(),command=String(body.command||'').trim();
       const args=body.args??[],env=body.env??{};
       if(!name||name.length>100||!command||command.length>300||!Array.isArray(args)||args.length>32||args.some((x:any)=>typeof x!=='string'||x.length>500)||!env||typeof env!=='object'||Array.isArray(env)){sendAuthJson(res,400,{error:'Invalid MCP server configuration.'});return true;}
-      const result=await pool.query(`INSERT INTO mcp_servers(name,command,args_json,env_json,status,last_error)
-        VALUES($1,$2,$3::jsonb,'{}'::jsonb,'stopped','Sandbox runtime not configured; process not started.')
-        RETURNING id,name,command,args_json,status,last_ping_at,last_error,created_at`,[name,command,JSON.stringify(args)]);
-      // Environment values are deliberately not persisted here; store secrets as integration credentials after adding a dedicated MCP credential flow.
-      sendAuthJson(res,201,{server:result.rows[0],warning:'Saved configuration only. Env values were not stored; Start is fail-closed until an isolated sandbox runtime is provisioned.'});return true;
+      const envEntries=Object.entries(env).filter(([key,value])=>/^[A-Z_][A-Z0-9_]{0,63}$/.test(key)&&typeof value==='string'&&value.length<=4000) as [string,string][];
+      if(Object.keys(env).length!==envEntries.length){sendAuthJson(res,400,{error:'MCP environment variables must use valid uppercase names and string values (max 4 KB each).'});return true;}
+      const client=await pool.connect();
+      try{
+        await client.query('BEGIN');
+        const created=await client.query(`INSERT INTO mcp_servers(name,command,args_json,env_json,status,last_error)
+          VALUES($1,$2,$3::jsonb,'{}'::jsonb,'stopped','Sandbox runtime not configured; process not started.')
+          RETURNING id,name,command,args_json,status,last_ping_at,last_error,created_at`,[name,command,JSON.stringify(args)]);
+        for(const [key,value] of envEntries) await client.query(`INSERT INTO mcp_server_credentials(server_id,credential_key,credential_value_encrypted)
+          VALUES($1,$2,$3)`,[created.rows[0].id,key,encryptSecret(value)]);
+        await client.query('COMMIT');
+        sendAuthJson(res,201,{server:created.rows[0],encryptedEnvironmentVariables:envEntries.length,warning:'Saved securely. Start remains blocked until an isolated sandbox runtime is provisioned.'});return true;
+      }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
     }
     if (req.method==='PATCH' && pathname==='/api/admin/connections/mcp') {
       const body=await readJsonBody(req,3000);const id=String(body.id||'');
