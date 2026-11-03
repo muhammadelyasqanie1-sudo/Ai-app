@@ -2,17 +2,38 @@ import type { ChatChunk, ChatRequest, ChatProviderAdapter, ConfigStatus, HealthS
 import { ProviderAdapterError } from './providerTypes.ts';
 
 type OpenAIModel = { id?: string; name?: string; description?: string; context_length?: number; context_window?: number };
+export interface OpenAICompatibleProviderConfig {
+  baseUrl: string;
+  apiKey?: string;
+  id: string;
+  displayName: string;
+  authMethod?: 'bearer' | 'api-key-header' | 'none';
+  authHeaderName?: string;
+  defaultHeaders?: Record<string, string>;
+  timeoutMs?: number;
+}
 const CAPABILITIES: CapabilityFlags = {
   text: true, streaming: true, vision: false, imageGen: false, imageEdit: false, ocr: false,
   tts: false, stt: false, tools: false, jsonMode: false,
 };
 
-function config() {
+function config(): OpenAICompatibleProviderConfig {
   const baseUrl = (process.env.OPENAI_COMPAT_BASE_URL?.trim() || '').replace(/\/+$/, '');
   const apiKey = process.env.OPENAI_COMPAT_API_KEY?.trim() || '';
   const id = process.env.OPENAI_COMPAT_PROVIDER_ID?.trim() || 'openai-compatible';
   const displayName = process.env.OPENAI_COMPAT_DISPLAY_NAME?.trim() || 'OpenAI-compatible provider';
-  return { baseUrl, apiKey, id, displayName };
+  return { baseUrl, apiKey, id, displayName, authMethod: 'bearer', timeoutMs: 30000 };
+}
+
+function requestHeaders(current: OpenAICompatibleProviderConfig, accept: string): Record<string, string> {
+  const headers: Record<string, string> = { ...(current.defaultHeaders || {}), Accept: accept };
+  const key = current.apiKey?.trim() || '';
+  if (current.authMethod === 'api-key-header') {
+    headers[current.authHeaderName || 'api-key'] = key;
+  } else if (current.authMethod !== 'none' && key) {
+    headers.Authorization = 'Bearer ' + key;
+  }
+  return headers;
 }
 
 function validBaseUrl(value: string): boolean {
@@ -23,16 +44,21 @@ function validBaseUrl(value: string): boolean {
   } catch { return false; }
 }
 
-export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
-  const initial = config();
+export function createOpenAICompatibleAdapter(override?: OpenAICompatibleProviderConfig): ChatProviderAdapter {
+  const initial = override || config();
+  const readConfig = () => override || config();
+  const validAuth = (current: OpenAICompatibleProviderConfig) =>
+    current.authMethod === 'none' || Boolean(current.apiKey?.trim());
+  const timeout = (current: OpenAICompatibleProviderConfig) =>
+    Math.min(180000, Math.max(1000, Number(current.timeoutMs) || 30000));
   return {
     id: initial.id,
     key: initial.id,
     displayName: initial.displayName,
 
     async validateConfig(): Promise<ConfigStatus> {
-      const current = config();
-      if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
+      const current = readConfig();
+      if (!current.baseUrl || !validAuth(current) || !validBaseUrl(current.baseUrl)) {
         return { valid: false, message: 'Set a valid HTTPS OPENAI_COMPAT_BASE_URL and server-side OPENAI_COMPAT_API_KEY.' };
       }
       return { valid: true };
@@ -41,14 +67,14 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
     capabilities(_modelId: string): CapabilityFlags { return { ...CAPABILITIES }; },
 
     async listModels(): Promise<ModelDescriptor[]> {
-      const current = config();
+      const current = readConfig();
       if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
         throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
       }
       try {
         const response = await fetch(current.baseUrl + '/models', {
-          headers: { Authorization: 'Bearer ' + current.apiKey, Accept: 'application/json' },
-          signal: AbortSignal.timeout(12_000),
+          headers: requestHeaders(current, 'application/json'),
+          signal: AbortSignal.timeout(Math.min(timeout(current), 12000)),
         });
         if (!response.ok) {
           console.error('AI_PROVIDER_MODEL_DISCOVERY_FAILED', JSON.stringify({ provider: current.id, status: response.status }));
@@ -83,7 +109,7 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
     },
 
     async healthCheck(modelId: string): Promise<HealthStatus> {
-      const current = config();
+      const current = readConfig();
       const checkedAt = new Date().toISOString();
       if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
         return { healthy: false, checkedAt, message: 'Provider not reachable.' };
@@ -93,8 +119,8 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
         // probe consumes quota and can rate-limit the real user's first chat request.
         const response = await fetch(current.baseUrl + '/models/' + encodeURIComponent(modelId), {
           method: 'GET',
-          headers: { Authorization: 'Bearer ' + current.apiKey, Accept: 'application/json' },
-          signal: AbortSignal.timeout(12_000),
+          headers: requestHeaders(current, 'application/json'),
+          signal: AbortSignal.timeout(Math.min(timeout(current), 12000)),
         });
         if (!response.ok) {
           console.warn('AI_PROVIDER_HEALTH_CHECK_FAILED', JSON.stringify({ provider: current.id, model: modelId, status: response.status }));
@@ -111,7 +137,7 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
     },
 
     async *streamChat(input: ChatRequest): AsyncIterable<ChatChunk> {
-      const current = config();
+      const current = readConfig();
       if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
         throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
       }
@@ -119,9 +145,9 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
       try {
         response = await fetch(current.baseUrl + '/chat/completions', {
           method: 'POST',
-          headers: { Authorization: 'Bearer ' + current.apiKey, 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+          headers: { ...requestHeaders(current, 'text/event-stream'), 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: input.model, messages: input.messages, stream: true }),
-          signal: input.signal ? AbortSignal.any([AbortSignal.timeout(90_000), input.signal]) : AbortSignal.timeout(90_000),
+          signal: input.signal ? AbortSignal.any([AbortSignal.timeout(timeout(current)), input.signal]) : AbortSignal.timeout(90_000),
         });
       } catch (error) {
         console.error('AI_PROVIDER_CHAT_CONNECTION_ERROR', JSON.stringify({ provider: current.id, model: input.model, error: error instanceof Error ? error.message : 'unknown_error' }));
