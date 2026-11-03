@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
 import { authenticateRequest, readJsonBody } from './auth.ts';
 
-type User = { id: string; role: 'user' | 'admin'; status: string };
+type User = { id: string; role: string; status: string };
 type Auth = { user: User; tokenId: string | null; scopes: string[] };
 
 function send(res: ServerResponse, status: number, body: Record<string, unknown>, requestId: string) {
@@ -43,10 +43,10 @@ async function authenticateTerminal(req: IncomingMessage): Promise<Auth | null> 
   }
   const user = await authenticateRequest(req);
   if (!user || user.status !== 'active') return null;
-  return { user, tokenId: null, scopes: user.role === 'admin' ? ['*'] : ['terminal.read'] };
+  return { user, tokenId: null, scopes: ['admin','super_admin'].includes(user.role) ? ['*'] : ['terminal.read'] };
 }
 function hasScope(auth: Auth, scope: string) {
-  return auth.user.role === 'admin' || auth.scopes.includes('*') || auth.scopes.includes(scope);
+  return ['admin','super_admin'].includes(auth.user.role) || auth.scopes.includes('*') || auth.scopes.includes(scope);
 }
 function parseBearer(req: IncomingMessage) { return (req.headers.authorization || '').startsWith('Bearer afg_cli_'); }
 
