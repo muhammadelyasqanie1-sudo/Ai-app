@@ -343,8 +343,8 @@ export async function downloadGGUF(options: {
         await saveTask({ id, repoId, fileName, revision, url: modelUrl, expectedBytes: totalBytes, downloadedBytes, expectedSha256, etag: currentEtag, status: 'downloading', updatedAt: Date.now() });
         lastPersistedBytes = downloadedBytes;
         writable = await handle.createWritable({ keepExistingData: true });
-        await writable.seek(downloadedBytes);
         activeWritable = writable;
+        await writable.seek(downloadedBytes);
       }
       emit('downloading');
     }
