@@ -1,3 +1,7 @@
+-- Existing installations may already have the canonical user_settings table from migration 0001.
+-- Add the locale column explicitly so this migration is safe for both fresh and upgraded databases.
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS locale text NOT NULL DEFAULT 'dari' CHECK (locale IN ('dari','english'));
+
 CREATE TABLE IF NOT EXISTS user_settings (
   user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   locale text NOT NULL DEFAULT 'dari' CHECK (locale IN ('dari','english')),
