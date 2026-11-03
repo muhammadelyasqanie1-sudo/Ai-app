@@ -1,0 +1,46 @@
+.afg-command-backdrop{position:fixed;inset:0;z-index:120;display:flex;align-items:flex-start;justify-content:center;padding:clamp(18px,7vh,72px) 16px 20px;background:rgba(2,6,14,.64);backdrop-filter:blur(9px);animation:afg-command-fade .15s ease-out}
+.afg-command-panel{width:min(100%,590px);max-height:min(82vh,760px);overflow:auto;border:1px solid rgba(34,211,238,.2);border-radius:22px;background:linear-gradient(160deg,rgba(13,27,47,.98),rgba(5,10,21,.985));color:#e8f5fb;box-shadow:0 28px 100px rgba(0,0,0,.58),0 0 55px rgba(13,242,255,.08);animation:afg-command-scale .15s ease-out;overscroll-behavior:contain}
+.afg-command-heading{display:flex;align-items:center;justify-content:space-between;padding:19px 20px 14px;border-bottom:1px solid rgba(148,163,184,.12)}
+.afg-command-heading h2{margin:4px 0 0;font-size:19px;font-weight:750;letter-spacing:-.025em}
+.afg-command-kicker{font:600 9px 'Space Grotesk',sans-serif;letter-spacing:.2em;color:#58cbd9}
+.afg-command-close{display:grid;place-items:center;width:36px;height:36px;border:1px solid #ffffff18;border-radius:12px;background:#ffffff08;color:#9eb5c7}
+.afg-command-search{display:flex;align-items:center;gap:10px;margin:14px 16px 10px;padding:0 13px;height:47px;border:1px solid rgba(34,211,238,.27);border-radius:13px;background:rgba(3,10,22,.72);color:#7ddde9}
+.afg-command-search input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:#effaff;font-size:13px}
+.afg-command-search input::placeholder{color:#71889b}
+.afg-command-search kbd{padding:3px 6px;border:1px solid #ffffff20;border-radius:5px;color:#849cad;font-size:9px}
+.afg-command-group{padding:8px 12px 3px}
+.afg-command-section{padding:5px 8px 8px;color:#66899f;font:600 9px 'Space Grotesk',sans-serif;letter-spacing:.17em}
+.afg-command-action{display:flex;align-items:center;gap:12px;width:100%;min-height:53px;padding:8px 10px;border:0;border-radius:12px;background:transparent;color:#d9e9f1;text-align:start;transition:background .14s ease}
+.afg-command-action:hover:not(:disabled){background:rgba(13,242,255,.075)}
+.afg-command-action:disabled{cursor:not-allowed;opacity:.55}
+.afg-command-icon{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border:1px solid #0df2ff24;border-radius:10px;background:#0df2ff0b;color:#6bdde8}
+.afg-command-label{display:grid;gap:2px;flex:1;min-width:0}
+.afg-command-label b{font-size:12px;font-weight:650}
+.afg-command-label small{overflow:hidden;color:#8199aa;font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.afg-command-right{display:flex;align-items:center;justify-content:center;min-width:22px;color:#7e9aac}
+.afg-command-switch{width:27px;height:16px;border-radius:99px;background:#33485b;box-shadow:inset 0 0 0 1px #ffffff14}
+.afg-command-meter{width:58px;height:4px;overflow:hidden;border-radius:9px;background:#ffffff16}
+.afg-command-meter i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,#7c4dff,#0df2ff)}
+.afg-command-bottom{border-top:1px solid #ffffff12;margin-top:7px;padding-top:10px}
+.afg-command-footer{display:flex;justify-content:space-between;gap:12px;padding:12px 20px;border-top:1px solid #ffffff12;color:#638196;font:500 9px 'Space Grotesk',sans-serif;letter-spacing:.1em}
+.afg-command-submenu{padding:12px 16px 17px}
+.afg-command-choice{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:55px;padding:9px 12px;border:0;border-radius:11px;background:transparent;color:#e5f5fa;text-align:start}
+.afg-command-choice:hover{background:#0df2ff0c}
+.afg-command-choice>span{display:grid;gap:3px}
+.afg-command-choice b{font-size:13px;font-weight:650}
+.afg-command-choice small{font-size:10px;color:#829aac}
+.afg-command-choice>svg{color:#0df2ff}
+.afg-command-note{margin:10px 2px;color:#7893a6;font-size:10px;line-height:1.65}
+.afg-command-primary{width:100%;height:42px;margin-top:8px;border:1px solid #0df2ff66;border-radius:11px;background:linear-gradient(100deg,#087f91,#173b79);color:white;font-size:12px;font-weight:700}
+.afg-command-primary:disabled{opacity:.4}
+@keyframes afg-command-fade{from{opacity:0}to{opacity:1}}
+@keyframes afg-command-scale{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+@media(max-width:640px){
+ .afg-command-backdrop{align-items:flex-end;padding:0;background:rgba(2,6,14,.58)}
+ .afg-command-panel{width:100%;max-height:min(88dvh,820px);border-radius:23px 23px 0 0;padding-bottom:max(10px,env(safe-area-inset-bottom));animation:afg-command-sheet .18s cubic-bezier(.2,.75,.25,1)}
+ .afg-command-heading{padding:17px 18px 12px}
+ .afg-command-group{padding-inline:10px}
+ .afg-command-action{min-height:51px}
+}
+@keyframes afg-command-sheet{from{opacity:.75;transform:translateY(24px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(prefers-reduced-motion:reduce){.afg-command-backdrop,.afg-command-panel{animation:none}}
