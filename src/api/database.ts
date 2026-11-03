@@ -1,7 +1,12 @@
 import { Pool } from 'pg';
 
 const connectionString = process.env.DATABASE_URL?.trim();
-const sslMode = process.env.DATABASE_SSL;
+const sslMode = process.env.DATABASE_SSL?.trim().toLowerCase();
+let databaseHostname = '';
+try { databaseHostname = connectionString ? new URL(connectionString).hostname.toLowerCase() : ''; } catch { /* pg reports malformed connection strings through the health check. */ }
+const isSupabasePostgres = /(^|\\.)supabase\\.(co|com)$/.test(databaseHostname);
+// Supabase Postgres requires TLS. Local and non-Supabase connections remain configurable.
+const useDatabaseTls = sslMode === 'require' || (!sslMode && isSupabasePostgres);
 
 export const databaseConfigured = Boolean(connectionString);
 
@@ -13,7 +18,7 @@ export const pool = connectionString
       max: Number(process.env.DATABASE_POOL_MAX || 5),
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
-      ...(sslMode === 'require' ? { ssl: { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false' } } : {}),
+      ...(useDatabaseTls ? { ssl: { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false' } } : {}),
     })
   : null;
 
