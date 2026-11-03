@@ -135,8 +135,8 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           VALUES('custom',$1,false,$2,$3,$4::jsonb,'custom')
           RETURNING id,slug,kind,display_name,base_url,enabled,config_json,source,created_at`,
           [displayName,slug,baseUrl,JSON.stringify({protocol,requires_key:true,custom:true})]);
-        await client.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
-          [user.id,user.role,'provider.custom.create','provider',created.rows[0].id,JSON.stringify({slug,displayName,baseUrl,protocol})]);
+        await client.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+          [user.id,user.role,'provider.custom.create','provider',created.rows[0].id,null,JSON.stringify(created.rows[0]),JSON.stringify({slug,displayName,baseUrl,protocol})]);
         await client.query('COMMIT');
         sendAuthJson(res,201,{provider:created.rows[0]});return true;
       }catch(error){
@@ -167,6 +167,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         sendAuthJson(res,503,{error:'Provider key vault is not configured. Set PROVIDER_KEYS_MASTER_KEY to a 32-byte base64 or 64-character hex key.'});return true;
       }
       const hint=providerKeyHint(secret);
+      const previousKey=await pool.query('SELECT key_hint,status,rotated_at FROM provider_keys WHERE provider_id=$1 AND alias=$2 LIMIT 1',[provider.rows[0].id,alias]);
       const client=await pool.connect();
       try{
         await client.query('BEGIN');
@@ -174,8 +175,10 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           VALUES($1,$2,$3,$4,'active',CASE WHEN $5 THEN now() ELSE NULL END)
           ON CONFLICT(provider_id,alias) DO UPDATE SET key_encrypted=EXCLUDED.key_encrypted,key_hint=EXCLUDED.key_hint,status='active',rotated_at=now()`,
           [provider.rows[0].id,alias,encrypted,hint,pathname.endsWith('/rotate')]);
-        await client.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
-          [user.id,user.role,pathname.endsWith('/rotate')?'provider.key.rotate':'provider.key.set','provider',providerSlug,JSON.stringify({alias,keyHint:hint})]);
+        await client.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+          [user.id,user.role,pathname.endsWith('/rotate')?'provider.key.rotate':'provider.key.set','provider',providerSlug,
+            previousKey.rows[0]?JSON.stringify({keyHint:previousKey.rows[0].key_hint,status:previousKey.rows[0].status,rotatedAt:previousKey.rows[0].rotated_at}):null,
+            JSON.stringify({keyHint:hint,status:'active'}),JSON.stringify({alias})]);
         await client.query('COMMIT');
       }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
       await refreshDatabaseProviderAdapters(true);
@@ -191,6 +194,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const config=await adapter.validateConfig();
       if(!config.valid){sendAuthJson(res,409,{error:'Provider credentials are not configured.'});return true;}
       const discovered=await adapter.listModels();
+      const existingCount=await pool.query('SELECT count(*)::int AS total FROM model_catalog WHERE provider_key=$1',[providerId]);
       const client=await pool.connect();
       try{
         await client.query('BEGIN');
@@ -207,8 +211,10 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
             [providerId,model.id,model.displayName,model.description,
               Object.entries(model.capabilities).filter(([,enabled])=>enabled).map(([name])=>name),model.contextWindow,model.maxOutput||null,model.pricing?JSON.stringify(model.pricing):null,model.pricing?.inputPerMillion??null,model.pricing?.outputPerMillion??null]);
         }
-        await client.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
-          [user.id,user.role,'provider.models.discover','provider',providerId,JSON.stringify({discovered:discovered.length})]);
+        await client.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+          [user.id,user.role,'provider.models.discover','provider',providerId,
+            JSON.stringify({registeredModels:Number(existingCount.rows[0]?.total||0)}),
+            JSON.stringify({discoveredModels:discovered.length,enabledByDefault:false}),JSON.stringify({discovered:discovered.length})]);
         await client.query('COMMIT');
       }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
       sendAuthJson(res,200,{providerId,discovered:discovered.length,enabledByDefault:false});return true;
