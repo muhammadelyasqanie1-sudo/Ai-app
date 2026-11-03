@@ -14,6 +14,17 @@ import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { ErrorBoundary } from './components/afg/AfgDesignSystem';
 import { applyDocumentLocale } from './utils/i18n';
 import { apiFetch } from './lib/apiClient';
+import type { 
+  Language, 
+  Theme, 
+  TabType, 
+  UserProfile, 
+  AfgMessage, 
+  ChatAttachment, 
+  AfgChatSession,
+  AfgCapabilitySnapshot,
+  AfgModelOption,
+} from './types/afg';
 
 const LazyAfgOfflineHubView = React.lazy(() =>
   import('./components/afg/AfgOfflineHubView').then((module) => ({ default: module.AfgOfflineHubView })),
@@ -27,17 +38,6 @@ const LazyAfgAdminPanel = React.lazy(() => import('./components/afg/AfgAdminPane
 const LazyAfgTerminalView = React.lazy(() => import('./components/afg/AfgTerminalView').then((module) => ({ default: module.AfgTerminalView })));
 const LazyAfgOfflineView = React.lazy(() => import('./components/afg/AfgOfflineView').then((module) => ({ default: module.AfgOfflineView })));
 
-import type { 
-  Language, 
-  Theme, 
-  TabType, 
-  UserProfile, 
-  AfgMessage, 
-  ChatAttachment, 
-  AfgChatSession,
-  AfgCapabilitySnapshot,
-  AfgModelOption,
-} from './types/afg';
 
 const DEFAULT_USER: UserProfile = {
   name: 'Guest',
