@@ -43,7 +43,8 @@
     "argon2": "^0.44.0",
     "zod": "^4.1.12",
     "@afg-ai/capacitor-device-info": "file:plugins/capacitor-device-info",
-    "@afg-ai/capacitor-offline-models": "file:plugins/capacitor-offline-models"
+    "@afg-ai/capacitor-offline-models": "file:plugins/capacitor-offline-models",
+    "@capacitor/preferences": "8.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
