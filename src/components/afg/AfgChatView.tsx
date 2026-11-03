@@ -16,12 +16,18 @@ import {
   Square,
   Pencil,
   GitBranch,
-  Trash2
+  Trash2,
+  Code2,
+  FolderSearch,
+  Globe,
+  FilePlus2,
+  SlidersHorizontal
 } from 'lucide-react';
 import { AfgBrainLogo } from './AfgBrainLogo';
 import { AfgChatInputCapsule } from './AfgChatInputCapsule';
 import { MarkdownRenderer } from '../MarkdownRenderer';
 import type { Language, AfgMessage, ChatAttachment, UserProfile, AfgCapabilityKey, AfgModelOption } from '../../types/afg';
+import type { AfgSystemFeatures } from './AfgCommandPalette';
 import { translations } from '../../utils/afgTranslations';
 import { getIntlLocale } from '../../utils/i18n';
 
@@ -42,6 +48,12 @@ interface AfgChatViewProps {
   selectedModel: string;
   onSelectModel: (model: string) => void;
   capabilities: Record<AfgCapabilityKey, boolean>;
+  thinkingLevel: 'minimal' | 'standard' | 'deep';
+  planMode: boolean;
+  permissionLevel: 'ask' | 'guided' | 'full';
+  systemFeatures: AfgSystemFeatures;
+  findQuery: string;
+  onOpenCommandPalette: () => void;
 }
 
 export const AfgChatView: React.FC<AfgChatViewProps> = ({
@@ -61,6 +73,12 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   selectedModel,
   onSelectModel,
   capabilities,
+  thinkingLevel,
+  planMode,
+  permissionLevel,
+  systemFeatures,
+  findQuery,
+  onOpenCommandPalette,
 }) => {
   const t = translations[language];
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -76,6 +94,16 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   const [expandedThoughts, setExpandedThoughts] = useState<Record<string, boolean>>({});
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
+
+  useEffect(() => {
+    if (!findQuery.trim()) return;
+    const needle = findQuery.toLocaleLowerCase();
+    const target = Array.from(document.querySelectorAll<HTMLElement>('[data-afg-message]')).find((node) => (node.innerText || '').toLocaleLowerCase().includes(needle));
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target?.classList.add('afg-chat-search-hit');
+    const timer = window.setTimeout(() => target?.classList.remove('afg-chat-search-hit'), 1800);
+    return () => window.clearTimeout(timer);
+  }, [findQuery, messages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
@@ -143,7 +171,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
     <div style={{ maxWidth: "var(--afg-chat-width, 64rem)" }} className="afg-chat-view flex h-[calc(100dvh-5.25rem)] min-h-0 flex-col mx-auto w-full px-2 sm:px-4">
       
       {/* Top Session Status Bar */}
-      <div className="afg-chat-statusbar flex items-center justify-between py-2 px-3 border-b border-cyan-900/30 mb-2">
+      <div className="afg-chat-statusbar sticky top-0 z-20 flex items-center justify-between py-2 px-3 border-b border-cyan-900/30 mb-2 bg-inherit/90 backdrop-blur-xl">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
             <Bot className="w-4 h-4 text-cyan-400" />
@@ -158,6 +186,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
             </p>
           </div>
         </div>
+        <div className="flex items-center gap-1.5">{(planMode || thinkingLevel !== 'standard') && <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-1 text-[9px] font-semibold text-cyan-200">{planMode ? (language === 'dari' ? 'برنامه‌ریزی' : 'Plan mode') : '🧠 ' + thinkingLevel}</span>}<button type="button" onClick={onOpenCommandPalette} className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-2 text-[10px] font-semibold text-cyan-200 hover:bg-cyan-500/20">{language === 'dari' ? 'منوی سریع' : 'Quick menu'} <span className="opacity-60">⌘K</span></button></div>
         {isLoading && <button onClick={onStop} className="flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300"><Square className="w-3 h-3" />{language === 'dari' ? 'توقف' : 'Stop'}</button>}
       </div>
 
@@ -172,12 +201,8 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
             </div>
 
             <div>
-              <h2 className="afg-chat-welcome-title text-2xl font-black text-white">
-                {t.brandName}
-              </h2>
-              <p className="text-sm text-cyan-300 font-medium mt-1">
-                {t.brandTagline} • {t.brandMotto}
-              </p>
+              <h2 className="afg-chat-welcome-title text-2xl font-black text-white">{language === 'dari' ? 'امروز چه چیزی می‌خواهید بسازید؟' : 'What do you want to build?'}</h2>
+              <p className="text-sm text-cyan-300 font-medium mt-2">{language === 'dari' ? 'با یک ایده شروع کنید یا پروژه تازه‌ای بسازید.' : 'Start with an idea or create a new project.'}</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full text-start">
@@ -187,8 +212,9 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                   onClick={() => onSendMessage(prompt, [])}
                   className="afg-prompt-card p-3 rounded-2xl bg-slate-900/70 hover:bg-cyan-950/40 border border-cyan-900/50 hover:border-cyan-500/50 text-xs text-start text-slate-300 hover:text-cyan-200 transition-all group shadow-md"
                 >
-                  <span className="font-semibold block mb-0.5 group-hover:text-cyan-300">
-                    💡 {language === 'dari' ? 'پیشنهاد' : 'Suggestion'} {idx + 1}
+                  <span className="flex items-center gap-2 font-semibold mb-1 group-hover:text-cyan-300">
+                    {idx === 0 ? <Code2 className="h-4 w-4 text-cyan-400"/> : idx === 1 ? <FolderSearch className="h-4 w-4 text-cyan-400"/> : idx === 2 ? <Globe className="h-4 w-4 text-cyan-400"/> : <FilePlus2 className="h-4 w-4 text-cyan-400"/>}
+                    <span>{language === 'dari' ? 'پیشنهاد' : 'Try this'}</span><ChevronDown className="ms-auto h-3 w-3 -rotate-90 opacity-50"/>
                   </span>
                   <span className="line-clamp-2 text-[11px] text-slate-400">
                     {prompt}
@@ -397,7 +423,13 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
           selectedModel={selectedModel}
           onSelectModel={onSelectModel}
           modelsLoading={isLoading}
-          speechToTextAvailable={capabilities['speech-to-text']}
+          speechToTextAvailable={capabilities['speech-to-text'] && systemFeatures.voice_stt_enabled}
+          fileUploadEnabled={systemFeatures.file_upload_enabled}
+          isLoading={isLoading}
+          onStop={onStop}
+          thinkingLevel={thinkingLevel}
+          planMode={planMode}
+          permissionLevel={permissionLevel}
         />
       </div>
 
