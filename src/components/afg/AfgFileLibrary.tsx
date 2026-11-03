@@ -12,16 +12,22 @@ export const AfgFileLibrary:React.FC<{language:Language}>=({language})=>{
   const [files,setFiles]=useState<StoredFile[]>([]);
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
+  const [storageReady,setStorageReady]=useState(false);
   const [message,setMessage]=useState('');
   const [error,setError]=useState('');
   const picker=useRef<HTMLInputElement>(null);
   const load=useCallback(async()=>{
     setLoading(true);setError('');
     try{
-      const response=await fetch(API+'/api/files',{credentials:'include',cache:'no-store'});
+      const [response,statusResponse]=await Promise.all([
+        fetch(API+'/api/files',{credentials:'include',cache:'no-store'}),
+        fetch(API+'/api/files/status',{credentials:'include',cache:'no-store'}),
+      ]);
       const data=await response.json().catch(()=>({}));
+      const status=await statusResponse.json().catch(()=>({}));
       if(!response.ok)throw new Error(data.error||'Could not load private files.');
       setFiles(Array.isArray(data.files)?data.files:[]);
+      setStorageReady(statusResponse.ok&&status.privateStorageConfigured===true);
     }catch(e){setError(e instanceof Error?e.message:'Could not load files.');}
     finally{setLoading(false);}
   },[]);
@@ -63,11 +69,12 @@ export const AfgFileLibrary:React.FC<{language:Language}>=({language})=>{
       <div className="flex items-center gap-2 text-cyan-200"><ShieldCheck className="h-5 w-5"/><strong>{fa?'کتابخانه خصوصی فایل‌ها':'Private file library'}</strong></div>
       <p className="text-xs leading-5 text-slate-300">{fa?'فایل‌ها خارج از پوشه عمومی و با نام تصادفی ذخیره می‌شوند. تا زمان اتصال اسکنر امنیتی، فایل‌ها در قرنطینه می‌مانند و هوش مصنوعی نمی‌تواند محتوای آن‌ها را بخواند.':'Files are stored outside the public web root under generated names. Until a security scanner is connected, uploads remain quarantined and cannot be read by AI.'}</p>
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" disabled={busy} onClick={()=>picker.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-50"><UploadCloud className="h-4 w-4"/>{busy?(fa?'در حال انجام…':'Working…'):(fa?'بارگذاری فایل':'Upload file')}</button>
+        <button type="button" disabled={busy||!storageReady} onClick={()=>picker.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-50"><UploadCloud className="h-4 w-4"/>{busy?(fa?'در حال انجام…':'Working…'):(fa?'بارگذاری فایل':'Upload file')}</button>
         <button type="button" disabled={loading||busy} onClick={()=>void load()} className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300"><RefreshCw className="h-4 w-4"/>{fa?'تازه‌سازی':'Refresh'}</button>
         <input ref={picker} type="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv" className="hidden" onChange={e=>void upload(e.target.files?.[0])}/>
       </div>
       <p className="text-[11px] text-slate-500">{fa?'حداکثر ۱۵ مگابایت · PDF، PNG، JPG، GIF، WebP، TXT و CSV':'15 MB max · PDF, PNG, JPG, GIF, WebP, TXT and CSV'}</p>
+      {!storageReady&&<p className="text-xs text-amber-200">{fa?'ذخیره‌سازی خصوصی روی سرور تنظیم نشده است؛ مدیر باید دیسک پایدار و مسیر AFG_UPLOAD_QUARANTINE_DIR را پیکربندی کند.':'Private storage is not configured. An administrator must mount a persistent disk and set AFG_UPLOAD_QUARANTINE_DIR.'}</p>}
     </div>
     {error&&<p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-200"><AlertTriangle className="mr-1 inline h-4 w-4"/>{error}</p>}
     {message&&<p role="status" className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-200">{message}</p>}
