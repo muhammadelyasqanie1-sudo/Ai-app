@@ -7,15 +7,25 @@ const CAPABILITIES: CapabilityFlags = {
   tts: false, stt: false, tools: false, jsonMode: false,
 };
 
-function config() {
-  const geminiKey = process.env.GEMINI_API_KEY?.trim();
-  const baseUrl = (process.env.OPENAI_COMPAT_BASE_URL?.trim() ||
-    (geminiKey ? 'https://generativelanguage.googleapis.com/v1beta/openai' : '')).replace(/\/+$/, '');
-  const apiKey = process.env.OPENAI_COMPAT_API_KEY?.trim() || geminiKey;
-  const id = process.env.OPENAI_COMPAT_PROVIDER_ID?.trim() || (geminiKey ? 'gemini-openai-compatible' : 'openai-compatible');
-  const displayName = process.env.OPENAI_COMPAT_DISPLAY_NAME?.trim() || (geminiKey ? 'Google Gemini' : 'OpenAI-compatible provider');
-  return { baseUrl, apiKey, id, displayName };
-}
+type OpenAICompatibleOptions = {
+  envPrefix?: string;
+  defaultId?: string;
+  defaultDisplayName?: string;
+  healthByCatalog?: boolean;
+  reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+};
+
+export function createOpenAICompatibleAdapter(options: OpenAICompatibleOptions = {}): ChatProviderAdapter {
+  const prefix = options.envPrefix || 'OPENAI_COMPAT';
+  function config() {
+    const geminiKey = prefix === 'OPENAI_COMPAT' ? process.env.GEMINI_API_KEY?.trim() : undefined;
+    const baseUrl = (process.env[`${prefix}_BASE_URL`]?.trim() ||
+      (geminiKey ? 'https://generativelanguage.googleapis.com/v1beta/openai' : '')).replace(/\\/+$/, '');
+    const apiKey = process.env[`${prefix}_API_KEY`]?.trim() || geminiKey;
+    const id = process.env[`${prefix}_PROVIDER_ID`]?.trim() || (geminiKey ? 'gemini-openai-compatible' : (options.defaultId || 'openai-compatible'));
+    const displayName = process.env[`${prefix}_DISPLAY_NAME`]?.trim() || (geminiKey ? 'Google Gemini' : (options.defaultDisplayName || 'OpenAI-compatible provider'));
+    return { baseUrl, apiKey, id, displayName };
+  }
 
 function validBaseUrl(value: string): boolean {
   try {
@@ -93,17 +103,24 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
       try {
         // Validate model access without generating tokens. A completion-based health
         // probe consumes quota and can rate-limit the real user's first chat request.
-        const response = await fetch(current.baseUrl + '/models/' + encodeURIComponent(modelId), {
-          method: 'GET',
-          headers: { Authorization: 'Bearer ' + current.apiKey, Accept: 'application/json' },
-          signal: AbortSignal.timeout(12_000),
-        });
+        const response = await fetch(
+          options.healthByCatalog ? current.baseUrl + '/models' : current.baseUrl + '/models/' + encodeURIComponent(modelId),
+          {
+            method: 'GET',
+            headers: { Authorization: 'Bearer ' + current.apiKey, Accept: 'application/json' },
+            signal: AbortSignal.timeout(12_000),
+          },
+        );
         if (!response.ok) {
           console.warn('AI_PROVIDER_HEALTH_CHECK_FAILED', JSON.stringify({ provider: current.id, model: modelId, status: response.status }));
           return { healthy: false, checkedAt, message: 'Provider not reachable.' };
         }
-        const payload = await response.json() as { id?: string; object?: string; error?: unknown };
-        return response.ok && typeof payload.id === 'string' && !payload.error
+        const payload = await response.json() as { id?: string; object?: string; error?: unknown; data?: Array<{ id?: string }> };
+        const catalogContainsModel = Array.isArray(payload.data) && payload.data.some((item) => item.id === modelId);
+        const healthy = options.healthByCatalog
+          ? catalogContainsModel
+          : typeof payload.id === 'string' && !payload.error;
+        return healthy
           ? { healthy: true, checkedAt }
           : { healthy: false, checkedAt, message: 'Provider not reachable.' };
       } catch (error) {
@@ -121,7 +138,12 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
       try {
         response = await fetch(current.baseUrl + '/chat/completions', {
           method: 'POST',
-          headers: { Authorization: 'Bearer ' + current.apiKey, 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+          headers: {
+            Authorization: 'Bearer ' + current.apiKey,
+            'Content-Type': 'application/json',
+            Accept: 'text/event-stream',
+            ...(options.reasoningEffort ? { 'X-Reasoning-Effort': options.reasoningEffort, 'X-Show-Reasoning': 'false' } : {}),
+          },
           body: JSON.stringify({ model: input.model, messages: input.messages, stream: true }),
           signal: input.signal ? AbortSignal.any([AbortSignal.timeout(90_000), input.signal]) : AbortSignal.timeout(90_000),
         });
