@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, FolderOpen, Command, Github, ListChecks, Brain, Shield,
   Terminal, MonitorPlay, Undo2, Settings, History, Trash2, Download,
-  X, ChevronRight, Check, Lock, Layers, MessageSquare, Zap, Plus,
+  X, ChevronRight, Check, Lock, Layers, MessageSquare, Plus,
 } from 'lucide-react';
 import type { AfgMessage, Language } from '../../types/afg';
+import './AfgCommandPalette.css';
 
 export interface AfgSystemFeatures {
   voice_stt_enabled: boolean;
