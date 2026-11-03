@@ -29,7 +29,7 @@ This is a source-level audit only. The GitHub connector does not expose a local 
 
 **PARTIALLY IMPLEMENTED.** The application uses a direct PostgreSQL connection via `DATABASE_URL` and the Node `pg` pool. No Supabase JS client or Supabase-specific integration file was found. Supabase can provide the PostgreSQL database, but its project URL and API key are not interchangeable with the PostgreSQL connection string. A real connection is only confirmed by `checkDatabase()` executing `SELECT 1`; environment-variable presence alone is not proof.
 
-The repository contains seven ordered migration files (`0000` through `0007` is the current inventory; confirm exact count from the tree before applying). Migrations are not run during this mission without separate approval. Production migration state and live connectivity are unknown.
+The repository contains eight ordered migration files (`0000` through `0007`). Migrations are not run during this mission without separate approval. Production migration state and live connectivity are unknown.
 
 ### Providers and model routing
 
