@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Terminal, Play, Plus, Search, Copy, Trash2, FolderUp, Download,
+  Terminal, Play, Plus, Search, Copy, Trash2, FolderUp,
   ShieldCheck, ChevronDown, Clock3, XCircle, RefreshCw, FileCode2,
 } from 'lucide-react';
 import { apiUrl, apiFetch } from '../../lib/apiClient';
