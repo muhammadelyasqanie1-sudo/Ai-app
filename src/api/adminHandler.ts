@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './auth.ts';
-import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors } from '../services/providerGateway.ts';
+import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors, refreshCustomProviderRegistry } from '../services/providerGateway.ts';
+import { encryptProviderConfig } from '../services/providerSecrets.ts';
 
 const ALLOWED_FALLBACK_CAPABILITIES = new Set(['text', 'vision', 'imageGen', 'tts', 'stt']);
 
@@ -279,7 +280,91 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       sendAuthJson(res, 200, { key: body.key, enabled: body.enabled }); return true;
     }
 
+    if (req.method === 'POST' && pathname === '/api/admin/providers/custom') {
+      const body = await readJsonBody(req, 16000);
+      const providerId = typeof body.providerId === 'string' ? body.providerId.trim() : '';
+      const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0,100) : '';
+      const baseUrlText = typeof body.baseUrl === 'string' ? body.baseUrl.trim() : '';
+      const apiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
+      const apiFormat = body.apiFormat === undefined ? 'openai_chat_completions' : body.apiFormat;
+      const authMethod = body.authMethod === undefined ? 'bearer' : body.authMethod;
+      const authHeaderName = typeof body.authHeaderName === 'string' ? body.authHeaderName.trim() : 'api-key';
+      const timeoutMs = body.timeoutMs === undefined ? 30000 : Number(body.timeoutMs);
+      const priority = body.priority === undefined ? 100 : Number(body.priority);
+      const enabled = body.enabled === true;
+      let baseUrl: URL;
+      try { baseUrl = new URL(baseUrlText); } catch { sendAuthJson(res, 400, { error: 'A valid provider base URL is required.' }); return true; }
+      const localHttp = process.env.NODE_ENV !== 'production' && baseUrl.protocol === 'http:' &&
+        ['localhost','127.0.0.1'].includes(baseUrl.hostname);
+      if (!/^custom-[a-z0-9][a-z0-9-]{1,48}$/.test(providerId) || !displayName ||
+          (baseUrl.protocol !== 'https:' && !localHttp) || baseUrl.username || baseUrl.password || baseUrl.search || baseUrl.hash ||
+          apiFormat !== 'openai_chat_completions' || !['bearer','api-key-header','none'].includes(authMethod) ||
+          (authMethod !== 'none' && !apiKey) || apiKey.length > 4096 ||
+          (authMethod === 'api-key-header' && !/^[A-Za-z0-9-]{1,80}$/.test(authHeaderName)) ||
+          !Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 180000 ||
+          !Number.isInteger(priority) || priority < 0 || priority > 10000) {
+        sendAuthJson(res, 400, { error: 'Invalid provider configuration. Only HTTPS OpenAI-compatible chat-completions endpoints are supported.' });
+        return true;
+      }
+      const defaultHeaders = body.defaultHeaders === undefined ? {} : body.defaultHeaders;
+      if (!defaultHeaders || typeof defaultHeaders !== 'object' || Array.isArray(defaultHeaders) ||
+          Object.entries(defaultHeaders).length > 12 ||
+          Object.entries(defaultHeaders).some(([key,value]) => !/^[A-Za-z0-9-]{1,80}$/.test(key) ||
+            typeof value !== 'string' || value.length > 1000 || /[\\r\\n]/.test(value))) {
+        sendAuthJson(res, 400, { error: 'Default headers must be a small object of safe header names and string values.' });
+        return true;
+      }
+      let encrypted: string;
+      try {
+        encrypted = encryptProviderConfig({
+          baseUrl: baseUrl.toString().replace(/\\/+$/, ''),
+          apiKey,
+          authHeaderName,
+          defaultHeaders,
+        });
+      } catch {
+        sendAuthJson(res, 503, { error: 'Custom provider storage is unavailable. Configure AFG_PROVIDER_SECRET_ENCRYPTION_KEY as a base64-encoded 32-byte key.' });
+        return true;
+      }
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const saved = await client.query(
+          `INSERT INTO providers(kind,display_name,config_encrypted,enabled,api_format,auth_method,priority,request_timeout_ms,streaming_supported,is_custom)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8,true,true)
+           ON CONFLICT(kind) DO UPDATE SET display_name=EXCLUDED.display_name,config_encrypted=EXCLUDED.config_encrypted,
+             enabled=EXCLUDED.enabled,api_format=EXCLUDED.api_format,auth_method=EXCLUDED.auth_method,
+             priority=EXCLUDED.priority,request_timeout_ms=EXCLUDED.request_timeout_ms,streaming_supported=true,updated_at=now()
+           WHERE providers.is_custom=true RETURNING kind,display_name,enabled`,
+          [providerId,displayName,encrypted,enabled,apiFormat,authMethod,priority,timeoutMs],
+        );
+        if (!saved.rows[0]) {
+          await client.query('ROLLBACK');
+          sendAuthJson(res, 409, { error: 'That provider identifier is already reserved.' });
+          return true;
+        }
+        await client.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+          [user.id,'provider.custom.create','provider',providerId,JSON.stringify({displayName,apiFormat,authMethod,enabled,priority,timeoutMs})]);
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+      await refreshCustomProviderRegistry(true);
+      const adapter = getProviderAdapter(providerId);
+      const configStatus = await adapter?.validateConfig();
+      sendAuthJson(res, 201, {
+        provider: { id: providerId, displayName, enabled, configured: Boolean(configStatus?.valid), custom: true, credentialsStored: true },
+        connectionTest: 'not_run',
+        message: 'Provider configuration was encrypted and saved. Run the provider connection test to discover models.',
+      });
+      return true;
+    }
+
     if (req.method === 'POST' && pathname === '/api/admin/providers/test') {
+      await refreshCustomProviderRegistry(true);
       const body = await readJsonBody(req, 4000);
       const provider = getProviderRegistry().find((item) => item.id === body.providerId);
       if (!provider) { sendAuthJson(res, 400, { error: 'Unknown provider.' }); return true; }
@@ -352,19 +437,25 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/providers') {
+      await refreshCustomProviderRegistry(true);
       const registry = getProviderRegistry();
       const settings = await pool.query('SELECT provider_key, enabled, display_name FROM provider_configs');
+      const customRows = await pool.query('SELECT kind,display_name,enabled,api_format,priority,streaming_supported FROM providers WHERE is_custom=true ORDER BY priority,display_name');
       const byId = new Map(settings.rows.map((row) => [row.provider_key, row]));
       const providers = await Promise.all(registry.map(async (provider) => {
         const setting = byId.get(provider.id);
         const adapter = getProviderAdapter(provider.id);
         const config = await adapter?.validateConfig();
+        const custom = customRows.rows.find((row) => row.kind === provider.id);
         return {
           id: provider.id,
           displayName: provider.displayName,
-          enabled: setting ? Boolean(setting.enabled) : true,
+          enabled: custom ? Boolean(custom.enabled) : (setting ? Boolean(setting.enabled) : true),
           configured: Boolean(config?.valid),
           configMessage: config?.valid ? null : (config?.message || 'Provider configuration unavailable.'),
+          ...(custom ? { apiFormat: custom.api_format, priority: custom.priority, streamingSupported: custom.streaming_supported } : {}),
+          custom: Boolean(custom),
+          credentialsStored: Boolean(custom),
         };
       }));
       sendAuthJson(res, 200, { providers });
@@ -403,9 +494,19 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const body = await readJsonBody(req);
       const providerId = typeof body.providerId === 'string' ? body.providerId : '';
       const enabled = body.enabled;
+      await refreshCustomProviderRegistry(true);
       const provider = getProviderRegistry().find((item) => item.id === providerId);
       if (!provider || typeof enabled !== 'boolean') {
         sendAuthJson(res, 400, { error: 'A registered provider ID and boolean enabled value are required.' });
+        return true;
+      }
+      if (providerId.startsWith('custom-')) {
+        const updated = await pool.query('UPDATE providers SET enabled=$2,updated_at=now() WHERE kind=$1 AND is_custom=true RETURNING kind,enabled', [providerId,enabled]);
+        if (!updated.rows[0]) { sendAuthJson(res, 404, { error: 'Custom provider not found.' }); return true; }
+        await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+          [user.id,'provider.toggle','provider',providerId,JSON.stringify({enabled,custom:true})]);
+        await refreshCustomProviderRegistry(true);
+        sendAuthJson(res, 200, { providerId, enabled, custom:true });
         return true;
       }
       const client = await pool.connect();
