@@ -198,7 +198,30 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   }, [models, installed.length]);
 
 
-  useEffect(() => { void listOfflineDownloads().then(setGgufTasks).catch(() => undefined); }, []);
+  useEffect(() => {
+    let active = true;
+    void listOfflineDownloads().then(tasks => {
+      if (!active) return;
+      setGgufTasks(tasks);
+      if (usesNativeOfflineDownloads()) {
+        const running = tasks.find(task => task.status === 'downloading');
+        if (running) {
+          setGgufBusyId(running.id);
+          void resumeOfflineDownload(running.id, progress => {
+            if (active) setGgufProgress(previous => ({ ...previous, [running.id]: progress }));
+          }).catch(error => {
+            if (active) setHfError(error instanceof Error ? error.message : 'Could not reconnect to the background download.');
+          }).finally(() => {
+            if (active) {
+              setGgufBusyId('');
+              void listOfflineDownloads().then(setGgufTasks).catch(() => undefined);
+            }
+          });
+        }
+      }
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
