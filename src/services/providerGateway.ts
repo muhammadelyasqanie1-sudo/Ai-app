@@ -4,7 +4,30 @@ import { createOllamaAdapter } from '../providers/ollama.ts';
 import { createOpenAICompatibleAdapter } from '../providers/openAiCompatible.ts';
 import { gptOssProxy } from '../providers/gptOssProxy.ts';
 import { pool } from '../api/database.ts';
-import { isIP } from 'node:net';
+import { BlockList, isIP } from 'node:net';
+import { lookup } from 'node:dns/promises';
+
+const providerPrivateNetworks = new BlockList();
+for(const [subnet,prefix] of [
+  ['0.0.0.0',8],['10.0.0.0',8],['100.64.0.0',10],['127.0.0.0',8],['169.254.0.0',16],
+  ['172.16.0.0',12],['192.0.0.0',24],['192.0.2.0',24],['192.168.0.0',16],
+  ['198.18.0.0',15],['198.51.100.0',24],['203.0.113.0',24],['224.0.0.0',4],['240.0.0.0',4],
+] as const) providerPrivateNetworks.addSubnet(subnet,prefix,'ipv4');
+for(const [subnet,prefix] of [
+  ['::',128],['::1',128],['::ffff:0:0',96],['64:ff9b::',96],['100::',64],
+  ['2001:db8::',32],['fc00::',7],['fe80::',10],['ff00::',8],
+] as const) providerPrivateNetworks.addSubnet(subnet,prefix,'ipv6');
+function isPublicProviderAddress(address:string):boolean{
+  const family=isIP(address);
+  if(family===0)return false;
+  if(family===4)return !providerPrivateNetworks.check(address,'ipv4');
+  if(address.toLowerCase().startsWith('::ffff:')){
+    const mapped=address.slice(7);
+    if(isIP(mapped)===4)return !providerPrivateNetworks.check(mapped,'ipv4');
+  }
+  return !providerPrivateNetworks.check(address,'ipv6');
+}
+
 import { decryptProviderSecret } from '../security/providerVault.ts';
 import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescriptor, CapabilityFlags } from '../providers/providerTypes.ts';
 
@@ -39,8 +62,12 @@ export async function refreshDatabaseProviderAdapters(force = false): Promise<vo
         const baseUrl = String(row.base_url);
         const parsed = new URL(baseUrl);
         if (!['https:','http:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.hash ||
-            (parsed.protocol === 'https:' && (isIP(parsed.hostname)||parsed.hostname==='localhost'||parsed.hostname.endsWith('.local')||parsed.hostname.endsWith('.internal')))||
+            (parsed.protocol === 'https:' && (isIP(parsed.hostname)||parsed.hostname==='localhost'||parsed.hostname.endsWith('.localhost')||parsed.hostname.endsWith('.local')||parsed.hostname.endsWith('.internal')))||
             (parsed.protocol === 'http:' && (process.env.NODE_ENV==='production'||!['localhost','127.0.0.1'].includes(parsed.hostname)))) continue;
+        if(parsed.protocol==='https:'){
+          const resolved=await lookup(parsed.hostname,{all:true,verbatim:true});
+          if(!resolved.length||resolved.some(entry=>!isPublicProviderAddress(entry.address)))continue;
+        }
         const providerConfig=(row.config_json&&typeof row.config_json==='object')?row.config_json as Record<string,unknown>:{};
         if (String(row.kind) === 'anthropic' || providerConfig.protocol === 'anthropic-messages') {
           next.push(createAnthropicAdapter({id:String(row.slug),displayName:String(row.display_name),baseUrl,apiKey}));
