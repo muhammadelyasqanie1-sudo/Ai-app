@@ -104,6 +104,7 @@ export default function App() {
     },
   });
   const [initialPromptForChat, setInitialPromptForChat] = useState<string | undefined>(undefined);
+  const [announcements, setAnnouncements] = useState<Array<{id:string;title:string;body:string;created_at:string}>>([]);
 
   // Modals state
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
@@ -129,6 +130,13 @@ export default function App() {
     if (theme === 'system') media.addEventListener('change', applyTheme);
     return () => media.removeEventListener('change', applyTheme);
   }, [theme]);
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/announcements`,{cache:'no-store'})
+      .then(async response=>response.ok?response.json():null)
+      .then(data=>setAnnouncements(Array.isArray(data?.announcements)?data.announcements:[]))
+      .catch(()=>setAnnouncements([]));
+  }, []);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/capabilities`)
@@ -624,6 +632,7 @@ export default function App() {
             onChangeTab={setCurrentTab}
             onStartChatWithPrompt={handleStartChatWithPrompt}
             capabilities={capabilitySnapshot.capabilities}
+            announcements={announcements}
           />
         )}
 
