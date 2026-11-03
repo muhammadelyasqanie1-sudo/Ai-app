@@ -7,6 +7,17 @@ ALTER TABLE providers ADD COLUMN IF NOT EXISTS config_json jsonb NOT NULL DEFAUL
 ALTER TABLE providers ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'system'
   CHECK (source IN ('system','custom'));
 ALTER TABLE providers ADD COLUMN IF NOT EXISTS last_error_code text;
+-- Backfill stable URLs for pre-existing legacy provider rows before adding the slug constraint.
+UPDATE providers p
+SET slug=lower(regexp_replace(p.kind,'[^a-zA-Z0-9-]+','-','g'))
+WHERE p.slug IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM providers other
+    WHERE other.slug=lower(regexp_replace(p.kind,'[^a-zA-Z0-9-]+','-','g'))
+  );
+UPDATE providers p
+SET slug=lower(regexp_replace(p.kind,'[^a-zA-Z0-9-]+','-','g'))||'-'||left(p.id::text,8)
+WHERE p.slug IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS providers_slug_unique_idx ON providers(slug);
 
 CREATE TABLE IF NOT EXISTS provider_keys (
