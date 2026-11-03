@@ -28,3 +28,10 @@ The chat API classifies failures as `network`, `auth`, `rate_limit`, `provider_5
 ## Release note
 
 The text-chat path now has the core reliability controls, but this is **not yet a global guarantee for all AI calls**. Do not advertise the full contract as complete until voice and future image/video generation endpoints use the same reliability layer and the project has been verified with tests.
+
+
+## Model selection and fallback safety
+
+- A manually selected model is pinned to its exact provider/model identity. If it is unavailable or not recently verified, the request fails with a clear error rather than silently switching models.
+- Auto mode selects an initial healthy model using configured selection/pricing data. Subsequent failover is restricted to the ordered model IDs configured by an administrator for that capability.
+- Fallback candidates must still be enabled, recently health-verified, and support the requested text-streaming capability. If no valid fallback policy is available, AFG AI does not silently try arbitrary providers.
