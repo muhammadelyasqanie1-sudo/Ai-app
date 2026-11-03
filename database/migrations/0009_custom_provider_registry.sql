@@ -10,9 +10,18 @@ ALTER TABLE providers ADD COLUMN IF NOT EXISTS is_custom boolean NOT NULL DEFAUL
 CREATE INDEX IF NOT EXISTS providers_enabled_priority_idx
   ON providers(enabled,priority,display_name);
 
-ALTER TABLE providers ADD CONSTRAINT providers_api_format_check
-  CHECK(api_format IN ('openai_chat_completions')) NOT VALID;
-ALTER TABLE providers ADD CONSTRAINT providers_auth_method_check
-  CHECK(auth_method IN ('bearer','api-key-header','none')) NOT VALID;
-ALTER TABLE providers ADD CONSTRAINT providers_timeout_check
-  CHECK(request_timeout_ms BETWEEN 1000 AND 180000) NOT VALID;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='providers_api_format_check') THEN
+    ALTER TABLE providers ADD CONSTRAINT providers_api_format_check
+      CHECK(api_format IN ('openai_chat_completions')) NOT VALID;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='providers_auth_method_check') THEN
+    ALTER TABLE providers ADD CONSTRAINT providers_auth_method_check
+      CHECK(auth_method IN ('bearer','api-key-header','none')) NOT VALID;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='providers_timeout_check') THEN
+    ALTER TABLE providers ADD CONSTRAINT providers_timeout_check
+      CHECK(request_timeout_ms BETWEEN 1000 AND 180000) NOT VALID;
+  END IF;
+END $$;
