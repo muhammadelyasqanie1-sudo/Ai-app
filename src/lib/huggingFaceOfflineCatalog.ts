@@ -121,6 +121,10 @@ export async function searchHuggingFaceGGUF(options: {
   return result;
 }
 
+export function getPrimaryGgufFile(repository: HuggingFaceRepository) {
+  return repository.ggufFiles.find(file => /Q4_K_M/i.test(file.name)) || repository.ggufFiles[0] || null;
+}
+
 export async function getHuggingFaceRepository(repoId: string, signal?: AbortSignal, revision = 'main'): Promise<HuggingFaceRepository> {
   if (!/^[^/]+\/[^/]+$/.test(repoId)) throw new Error('Invalid Hugging Face repository ID.');
   const cacheKey = 'tree:' + repoId + ':' + revision;
