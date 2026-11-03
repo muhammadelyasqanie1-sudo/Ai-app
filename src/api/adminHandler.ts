@@ -435,9 +435,15 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
 
     if (req.method === 'GET' && pathname === '/api/admin/providers') {
       await refreshCustomProviderRegistry(true);
-      const registry = getProviderRegistry();
+      const registered = getProviderRegistry();
       const settings = await pool.query('SELECT provider_key, enabled, display_name FROM provider_configs');
       const customRows = await pool.query('SELECT kind,display_name,enabled,api_format,priority,streaming_supported FROM providers WHERE is_custom=true ORDER BY priority,display_name');
+      const registry = [...registered];
+      for (const row of customRows.rows) {
+        if (!registry.some((provider) => provider.id === row.kind)) {
+          registry.push({ id: row.kind, displayName: row.display_name, key: row.kind });
+        }
+      }
       const byId = new Map(settings.rows.map((row) => [row.provider_key, row]));
       const providers = await Promise.all(registry.map(async (provider) => {
         const setting = byId.get(provider.id);
@@ -449,7 +455,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           displayName: provider.displayName,
           enabled: custom ? Boolean(custom.enabled) : (setting ? Boolean(setting.enabled) : true),
           configured: Boolean(config?.valid),
-          configMessage: config?.valid ? null : (config?.message || 'Provider configuration unavailable.'),
+          configMessage: config?.valid ? null : (custom && !adapter ? 'Stored credentials cannot be decrypted. Check the backend encryption key.' : (config?.message || 'Provider configuration unavailable.')),
           ...(custom ? { apiFormat: custom.api_format, priority: custom.priority, streamingSupported: custom.streaming_supported } : {}),
           custom: Boolean(custom),
           credentialsStored: Boolean(custom),
