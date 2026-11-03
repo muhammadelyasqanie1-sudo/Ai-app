@@ -227,15 +227,27 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           !Number.isInteger(windowSeconds) || windowSeconds < 1 || windowSeconds > 86400) {
         sendAuthJson(res, 400, { error: 'Invalid rate-limit policy.' }); return true;
       }
-      const result = await pool.query(`INSERT INTO rate_limit_policies(scope_type,scope_key,requests,window_seconds,enabled,updated_by)
-        VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(scope_type,scope_key) DO UPDATE SET
-        requests=EXCLUDED.requests,window_seconds=EXCLUDED.window_seconds,enabled=EXCLUDED.enabled,
-        updated_by=EXCLUDED.updated_by,updated_at=now()
-        RETURNING id,scope_type,scope_key,requests,window_seconds,enabled,updated_at`,
-        [scopeType,scopeKey,requests,windowSeconds,enabled,user.id]);
-      await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
-        [user.id,'rate_limit.update','rate_limit',scopeType+':'+scopeKey,JSON.stringify({requests,windowSeconds,enabled})]);
-      sendAuthJson(res, 200, { policy: result.rows[0] }); return true;
+      const client = await pool.connect();
+      let policy;
+      try {
+        await client.query('BEGIN');
+        const result = await client.query(`INSERT INTO rate_limit_policies(scope_type,scope_key,requests,window_seconds,enabled,updated_by)
+          VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(scope_type,scope_key) DO UPDATE SET
+          requests=EXCLUDED.requests,window_seconds=EXCLUDED.window_seconds,enabled=EXCLUDED.enabled,
+          updated_by=EXCLUDED.updated_by,updated_at=now()
+          RETURNING id,scope_type,scope_key,requests,window_seconds,enabled,updated_at`,
+          [scopeType,scopeKey,requests,windowSeconds,enabled,user.id]);
+        policy = result.rows[0];
+        await client.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+          [user.id,'rate_limit.update','rate_limit',scopeType+':'+scopeKey,JSON.stringify({requests,windowSeconds,enabled})]);
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+      sendAuthJson(res, 200, { policy }); return true;
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/feature-flags') {
@@ -249,11 +261,21 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         sendAuthJson(res, 400, { error: 'A valid feature flag key and boolean enabled value are required.' }); return true;
       }
       const description = typeof body.description === 'string' ? body.description.trim().slice(0,300) : '';
-      await pool.query(`INSERT INTO feature_flags(flag_key,enabled,description,updated_by) VALUES($1,$2,$3,$4)
-        ON CONFLICT(flag_key) DO UPDATE SET enabled=EXCLUDED.enabled,description=EXCLUDED.description,
-        updated_by=EXCLUDED.updated_by,updated_at=now()`,[body.key,body.enabled,description,user.id]);
-      await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
-        [user.id,'feature_flag.update','feature_flag',body.key,JSON.stringify({enabled:body.enabled})]);
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(`INSERT INTO feature_flags(flag_key,enabled,description,updated_by) VALUES($1,$2,$3,$4)
+          ON CONFLICT(flag_key) DO UPDATE SET enabled=EXCLUDED.enabled,description=EXCLUDED.description,
+          updated_by=EXCLUDED.updated_by,updated_at=now()`,[body.key,body.enabled,description,user.id]);
+        await client.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+          [user.id,'feature_flag.update','feature_flag',body.key,JSON.stringify({enabled:body.enabled})]);
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
       sendAuthJson(res, 200, { key: body.key, enabled: body.enabled }); return true;
     }
 
