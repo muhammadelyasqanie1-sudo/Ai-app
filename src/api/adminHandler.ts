@@ -146,6 +146,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     }
 
     if(req.method==='POST' && pathname==='/api/admin/providers/custom'){
+      if(user.role!=='superadmin'){sendAuthJson(res,403,{error:'Only a superadmin can register custom provider endpoints.'});return true;}
       const body=await readJsonBody(req,8000);
       const parsed=customProviderInput.safeParse(body);
       if(!parsed.success||!safeCustomProviderUrl(parsed.data.baseUrl)){
