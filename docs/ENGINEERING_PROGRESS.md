@@ -352,3 +352,13 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 - Locale validation: passed.
 - Production web build: passed.
 - This validates compilation and asset inclusion only. Browser install prompts, icon rendering on different launchers, and iOS home-screen behavior remain unverified.
+
+
+## Milestone 15 — Backend staff RBAC foundation
+
+- Added migration `0008_staff_rbac_foundation.sql` with explicit permission maps for super administrator, provider manager, model manager, support staff, moderator, analyst, and read-only staff.
+- The migration preserves existing `user` and `admin` assignments, expands the user-role constraint, and does not execute automatically.
+- Admin API routes now resolve required permissions on the server from the canonical `roles.permissions_json` table; frontend role claims are not trusted.
+- User role changes validate against registered roles. Staff-role assignment and revocation are restricted to root administrators; account suspension is permission-gated; the last active root administrator is protected.
+- Authentication and terminal role types accept registered role names while preserving administrator-only elevated terminal scopes.
+- Staff-facing dashboard navigation and dedicated staff invitation/notes workflows remain separate follow-up work. No database migration has been run.
