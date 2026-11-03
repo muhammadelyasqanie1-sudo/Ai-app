@@ -2,7 +2,6 @@ import { cloudflareWorkersAi } from '../providers/cloudflareWorkersAi.ts';
 import { createOpenAICompatibleAdapter } from '../providers/openAiCompatible.ts';
 import { gptOssProxy } from '../providers/gptOssProxy.ts';
 import { pool } from '../api/database.ts';
-import { createOpenAICompatibleAdapter } from '../providers/openAiCompatible.ts';
 import { decryptProviderSecret } from '../security/providerVault.ts';
 import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescriptor, CapabilityFlags } from '../providers/providerTypes.ts';
 
@@ -12,7 +11,7 @@ let databaseProviderRegistry: ChatProviderAdapter[] = [];
 let databaseProviderRefreshAt = 0;
 const DATABASE_PROVIDER_REFRESH_MS = 15_000;
 
-async function refreshDatabaseProviderAdapters(force = false): Promise<void> {
+export async function refreshDatabaseProviderAdapters(force = false): Promise<void> {
   if (!pool || (!force && Date.now() - databaseProviderRefreshAt < DATABASE_PROVIDER_REFRESH_MS)) return;
   databaseProviderRefreshAt = Date.now();
   try {
@@ -24,7 +23,7 @@ async function refreshDatabaseProviderAdapters(force = false): Promise<void> {
         ORDER BY p.slug`);
     const next: ChatProviderAdapter[] = [];
     for (const row of result.rows) {
-      if (!row.enabled || !row.key_encrypted || !row.base_url) continue;
+      if (!row.key_encrypted || !row.base_url) continue;
       if (!['custom','deepseek','openai','google','openrouter'].includes(String(row.kind))) continue;
       try {
         const apiKey = decryptProviderSecret(String(row.key_encrypted));
