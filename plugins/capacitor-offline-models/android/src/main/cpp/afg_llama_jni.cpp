@@ -91,7 +91,6 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerateStream(
     JNIEnv * env, jobject, jstring jmessages, jint max_tokens, jobject callback) {
     std::lock_guard<std::mutex> lock(g_mutex);
     g_last_error.clear();
-    g_cancel_requested.store(false, std::memory_order_release);
     if (callback == nullptr) { g_last_error = "A native streaming callback is required."; return nullptr; }
     jclass callback_class = env->GetObjectClass(callback);
     if (callback_class == nullptr) { g_last_error = "Unable to resolve the streaming callback."; return nullptr; }
@@ -230,6 +229,11 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerateStream(
         g_last_error = "Unknown native inference error.";
         return nullptr;
     }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeResetGeneration(JNIEnv *, jobject) {
+    g_cancel_requested.store(false, std::memory_order_release);
 }
 
 extern "C" JNIEXPORT void JNICALL
