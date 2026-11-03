@@ -388,6 +388,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/system-health') {
+      await refreshCustomProviderRegistry(true);
       const started = Date.now();
       await pool.query('SELECT 1');
       const databaseLatencyMs = Date.now() - started;
