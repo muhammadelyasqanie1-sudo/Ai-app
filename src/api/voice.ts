@@ -46,6 +46,10 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
   const path = new URL(req.url || '/', 'http://localhost').pathname;
   if (path !== '/api/voice/transcribe' && path !== '/api/voice/synthesize' && path !== '/api/voice/voices') return false;
   const requestId = randomUUID();
+  if(pool){
+    const flag=await pool.query("SELECT enabled FROM feature_flags WHERE flag_key IN ('voice_enabled','voice') ORDER BY CASE flag_key WHEN 'voice_enabled' THEN 0 ELSE 1 END LIMIT 1").catch(()=>({rows:[] as any[]}));
+    if(!flag.rows[0]||flag.rows[0].enabled!==true){reply(res,503,{available:false,error:'Voice is disabled by the administrator.'},requestId);return true;}
+  }
   const user = await authenticateRequest(req);
   if (!user) { reply(res,401,{available:false,error:'Sign in is required to use Voice features.'},requestId); return true; }
   if (!['GET','HEAD','OPTIONS'].includes(req.method || 'GET') && !verifyCsrf(req)) { reply(res,403,{available:false,error:'CSRF validation failed.'},requestId); return true; }

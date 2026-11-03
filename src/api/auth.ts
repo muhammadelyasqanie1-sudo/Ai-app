@@ -13,7 +13,7 @@ export interface AuthenticatedUser {
   id: string;
   email: string;
   displayName: string;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'superadmin';
   status: 'active' | 'suspended' | 'deleted';
   defaultModel: string | null;
 }
@@ -115,11 +115,11 @@ export function ensureCsrfCookie(req: IncomingMessage, res: ServerResponse): voi
   res.setHeader('Set-Cookie', values);
 }
 
-export function setSessionCookies(res: ServerResponse, sessionToken: string, csrfToken: string) {
+export function setSessionCookies(res: ServerResponse, sessionToken: string, csrfToken: string, maxAgeSeconds = Math.floor(SESSION_TTL_MS / 1000)) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   res.setHeader('Set-Cookie', [
-    `afg_session=${encodeURIComponent(sessionToken)}; ${cookieOptions()}; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
-    `afg_csrf=${encodeURIComponent(csrfToken)}; Path=/; SameSite=Lax${secure}; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
+    `afg_session=${encodeURIComponent(sessionToken)}; ${cookieOptions()}; Max-Age=${maxAgeSeconds}`,
+    `afg_csrf=${encodeURIComponent(csrfToken)}; Path=/; SameSite=Lax${secure}; Max-Age=${maxAgeSeconds}`,
   ]);
 }
 
@@ -172,7 +172,7 @@ export async function authenticateRequest(req: IncomingMessage): Promise<Authent
     id: row.id,
     email: row.email || '',
     displayName: row.display_name || '',
-    role: row.role === 'admin' ? 'admin' : 'user',
+    role: row.role === 'superadmin' ? 'superadmin' : row.role === 'admin' ? 'admin' : 'user',
     status: row.status,
     defaultModel: row.default_model || null,
   };
@@ -185,16 +185,26 @@ export function verifyCsrf(req: IncomingMessage): boolean {
   return timingSafeEqual(Buffer.from(jar.afg_csrf), Buffer.from(header));
 }
 
+export async function verifyUserPassword(userId:string,password:string):Promise<boolean>{
+  if(!pool||!password||password.length>256)return false;
+  const result=await pool.query('SELECT password_hash FROM users WHERE id=$1 AND status=\'active\' LIMIT 1',[userId]);
+  const encoded=result.rows[0]?.password_hash;
+  if(typeof encoded!=='string'||!encoded)return false;
+  return verifyPassword(password,encoded);
+}
+
 export async function createSession(userId: string, res: ServerResponse): Promise<void> {
   if (!pool) throw new Error('Database is not configured.');
   const sessionToken = randomBytes(32).toString('base64url');
   const csrfToken = randomBytes(32).toString('base64url');
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  const roleResult = await pool.query('SELECT role FROM users WHERE id=$1 LIMIT 1',[userId]);
+  const isAdministrator = ['admin','superadmin'].includes(String(roleResult.rows[0]?.role || ''));
+  const expiresAt = new Date(Date.now() + (isAdministrator ? 8 * 60 * 60 * 1000 : SESSION_TTL_MS));
   await pool.query(
     'INSERT INTO sessions (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
     [userId, hash(sessionToken), expiresAt],
   );
-  setSessionCookies(res, sessionToken, csrfToken);
+  setSessionCookies(res, sessionToken, csrfToken, isAdministrator ? 8 * 60 * 60 : Math.floor(SESSION_TTL_MS / 1000));
 }
 
 export async function destroySession(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -209,7 +219,8 @@ export function sendAuthJson(res: ServerResponse, status: number, body: Record<s
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
-  res.end(JSON.stringify(body));
+  const requestId = res.getHeader('X-Request-Id');
+  res.end(JSON.stringify({ ...body, ...(typeof requestId === 'string' ? { requestId } : {}) }));
 }
 
 export async function readJsonBody(req: IncomingMessage, maxBytes = 16_384): Promise<Record<string, unknown>> {
@@ -281,6 +292,18 @@ async function sendEmailCode(email: string, code: string, purpose: 'verify_email
   });
   return response.ok;
 }
+export async function requestAdminPasswordReset(userId:string):Promise<{sent:boolean}>{
+  if(!pool||!process.env.RESEND_API_KEY||!process.env.EMAIL_FROM)return {sent:false};
+  const found=await pool.query("SELECT id,email FROM users WHERE id=$1 AND status='active' AND email_verified=true LIMIT 1",[userId]);
+  const row=found.rows[0];
+  if(!row?.email)return {sent:false};
+  const code=String(randomInt(0,1000000)).padStart(6,'0');
+  await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'password_reset',$2,now()+interval '10 minutes')",[row.id,hashEmailCode(code)]);
+  const sent=await sendEmailCode(String(row.email),code,'password_reset').catch(()=>false);
+  if(sent)await recordAuthSecurityEvent({headers:{},socket:{remoteAddress:'admin-api'}} as unknown as IncomingMessage,row.id,'auth.admin_password_reset_requested','warning');
+  return {sent};
+}
+
 function clearOAuthState(res: ServerResponse) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   const existing = res.getHeader('Set-Cookie');
@@ -503,7 +526,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         await client.query('BEGIN');
         // Serialize first-admin creation so concurrent requests cannot create multiple administrators.
         await client.query("SELECT pg_advisory_xact_lock(hashtext('afg-ai:admin-bootstrap'))");
-        const existingAdmins = await client.query("SELECT 1 FROM users WHERE role = 'admin' AND status = 'active' LIMIT 1");
+        const existingAdmins = await client.query("SELECT 1 FROM users WHERE role IN ('admin','superadmin') AND status = 'active' LIMIT 1");
         if (existingAdmins.rows.length) {
           await client.query('ROLLBACK');
           sendAuthJson(res, 409, { error: 'An active administrator already exists. Bootstrap is permanently closed.' });
@@ -520,13 +543,13 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         }
         if (existingUser.rows[0]) {
           const promoted = await client.query(
-            "UPDATE users SET display_name=$2,password_hash=$3,role='admin',email_verified=true,updated_at=now() WHERE id=$1 RETURNING id",
+            "UPDATE users SET display_name=$2,password_hash=$3,role='superadmin',email_verified=true,updated_at=now() WHERE id=$1 RETURNING id",
             [existingUser.rows[0].id,displayName,passwordHash],
           );
           adminUserId = promoted.rows[0].id;
         } else {
           const created = await client.query(
-            "INSERT INTO users (email,display_name,password_hash,role,email_verified) VALUES ($1,$2,$3,'admin',true) RETURNING id",
+            "INSERT INTO users (email,display_name,password_hash,role,email_verified) VALUES ($1,$2,$3,'superadmin',true) RETURNING id",
             [email,displayName,passwordHash],
           );
           adminUserId = created.rows[0].id;

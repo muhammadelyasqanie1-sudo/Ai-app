@@ -1,7 +1,14 @@
 import type { ChatChunk, ChatRequest, ChatProviderAdapter, ConfigStatus, HealthStatus, ModelDescriptor, CapabilityFlags } from './providerTypes.ts';
 import { ProviderAdapterError } from './providerTypes.ts';
 
-type OpenAIModel = { id?: string; name?: string; description?: string; context_length?: number; context_window?: number };
+type OpenAIModel = {
+  id?: string; name?: string; description?: string; context_length?: number; context_window?: number;
+  max_output_tokens?: number; top_provider?: { max_completion_tokens?: number };
+  pricing?: { prompt?: string|number; completion?: string|number };
+  architecture?: { input_modalities?: string[]; output_modalities?: string[] };
+  supported_parameters?: string[];
+};
+type OpenAIModelsPage = { data?: OpenAIModel[]; has_more?: boolean; last_id?: string };
 const CAPABILITIES: CapabilityFlags = {
   text: true, streaming: true, vision: false, imageGen: false, imageEdit: false, ocr: false,
   tts: false, stt: false, tools: false, jsonMode: false,
@@ -23,15 +30,26 @@ function validBaseUrl(value: string): boolean {
   } catch { return false; }
 }
 
-export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
-  const initial = config();
+export interface OpenAICompatibleAdapterOptions {
+  id: string;
+  displayName: string;
+  baseUrl: string;
+  apiKey: string;
+}
+
+export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterOptions): ChatProviderAdapter {
+  const currentConfig = () => options ? {
+    id: options.id, displayName: options.displayName,
+    baseUrl: options.baseUrl.replace(/\/+$/, ''), apiKey: options.apiKey,
+  } : config();
+  const initial = currentConfig();
   return {
     id: initial.id,
     key: initial.id,
     displayName: initial.displayName,
 
     async validateConfig(): Promise<ConfigStatus> {
-      const current = config();
+      const current = currentConfig();
       if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
         return { valid: false, message: 'Set a valid HTTPS OPENAI_COMPAT_BASE_URL and server-side OPENAI_COMPAT_API_KEY.' };
       }
@@ -41,40 +59,67 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
     capabilities(_modelId: string): CapabilityFlags { return { ...CAPABILITIES }; },
 
     async listModels(): Promise<ModelDescriptor[]> {
-      const current = config();
+      const current = currentConfig();
       if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
         throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
       }
       try {
-        const response = await fetch(current.baseUrl + '/models', {
-          headers: { Authorization: 'Bearer ' + current.apiKey, Accept: 'application/json' },
-          signal: AbortSignal.timeout(12_000),
-        });
-        if (!response.ok) {
-          console.error('AI_PROVIDER_MODEL_DISCOVERY_FAILED', JSON.stringify({ provider: current.id, status: response.status }));
-          throw new ProviderAdapterError('Provider model discovery failed.', response.status >= 400 && response.status < 500 ? response.status : 502, 'model_catalog_failed');
+        const all: OpenAIModel[] = [];
+        let after: string | undefined;
+        let pages = 0;
+        while (pages++ < 50) {
+          const url = new URL(current.baseUrl + '/models');
+          url.searchParams.set('limit', '100');
+          if (after) url.searchParams.set('after', after);
+          const response = await fetch(url, {
+            headers: { Authorization: 'Bearer ' + current.apiKey, Accept: 'application/json' },
+            signal: AbortSignal.timeout(15_000), redirect: 'error',
+          });
+          if (!response.ok) {
+            console.error('AI_PROVIDER_MODEL_DISCOVERY_FAILED', JSON.stringify({ provider: current.id, status: response.status }));
+            throw new ProviderAdapterError('Provider model discovery failed.', response.status >= 400 && response.status < 500 ? response.status : 502, 'model_catalog_failed');
+          }
+          const payload = await response.json() as OpenAIModelsPage;
+          if (!Array.isArray(payload.data)) throw new ProviderAdapterError('Provider returned an invalid model catalog.', 502, 'invalid_model_catalog');
+          all.push(...payload.data);
+          if (payload.has_more !== true) break;
+          const next = payload.last_id || payload.data[payload.data.length - 1]?.id;
+          if (!next || next === after) throw new ProviderAdapterError('Provider pagination did not advance.', 502, 'model_pagination_invalid');
+          after = next;
         }
-        const payload = await response.json() as { data?: OpenAIModel[] };
-        if (!Array.isArray(payload.data)) throw new ProviderAdapterError('Provider returned an invalid model catalog.', 502, 'invalid_model_catalog');
-        const geminiChatModels = new Set(['gemini-3.8-flash', 'gemini-3.5-flash-lite']);
-        const listedModels = payload.data.filter((model) => typeof model.id === 'string' && /^[a-zA-Z0-9@][a-zA-Z0-9._:/-]{0,299}$/.test(model.id));
-        // Gemini exposes many modalities and preview endpoints through /models. Keep the
-        // chat catalog to Google's currently recommended stable text models to avoid
-        // presenting image/audio/retired models as chat choices.
-        const usableModels = current.id === 'gemini-openai-compatible'
-          ? listedModels.filter((model) => geminiChatModels.has(model.id || ''))
-          : listedModels;
-        return usableModels
-          .map((model) => ({
+        if (pages > 50) throw new ProviderAdapterError('Provider model catalog exceeded the pagination safety limit.', 502, 'model_catalog_too_large');
+        const unique = all.filter((model, index) => typeof model.id === 'string' &&
+          /^[a-zA-Z0-9@][a-zA-Z0-9._:/-]{0,299}$/.test(model.id) &&
+          all.findIndex((candidate) => candidate.id === model.id) === index);
+        return unique.map((model) => {
+          const inputModalities = model.architecture?.input_modalities || [];
+          const outputModalities = model.architecture?.output_modalities || [];
+          const parameters = model.supported_parameters || [];
+          const promptPrice = Number(model.pricing?.prompt);
+          const completionPrice = Number(model.pricing?.completion);
+          return {
             id: model.id as string,
             providerId: current.id,
             displayName: model.name || model.id as string,
-            description: model.description || 'Model discovered from the configured OpenAI-compatible provider.',
+            description: model.description || 'Model discovered from the configured provider catalog.',
             contextWindow: Number.isFinite(model.context_window) ? Number(model.context_window) : (Number.isFinite(model.context_length) ? Number(model.context_length) : 0),
-            capabilities: this.capabilities(model.id as string),
-            enabled: true,
-            verifiedAt: null,
-          }));
+            maxOutput: Number(model.max_output_tokens || model.top_provider?.max_completion_tokens || 0) || undefined,
+            pricing: {
+              inputPerMillion: Number.isFinite(promptPrice) ? promptPrice * 1_000_000 : null,
+              outputPerMillion: Number.isFinite(completionPrice) ? completionPrice * 1_000_000 : null,
+              currency: 'USD',
+            },
+            capabilities: {
+              text: true, streaming: true,
+              vision: inputModalities.includes('image'),
+              imageGen: outputModalities.includes('image'),
+              imageEdit: false, ocr: false, tts: outputModalities.includes('audio'),
+              stt: inputModalities.includes('audio'), tools: parameters.includes('tools'),
+              jsonMode: parameters.includes('response_format') || parameters.includes('structured_outputs'),
+            },
+            enabled: true, verifiedAt: null,
+          };
+        });
       } catch (error) {
         if (error instanceof ProviderAdapterError) throw error;
         console.error('AI_PROVIDER_MODEL_DISCOVERY_ERROR', JSON.stringify({ provider: current.id, error: error instanceof Error ? error.message : 'unknown_error' }));
@@ -83,27 +128,28 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
     },
 
     async healthCheck(modelId: string): Promise<HealthStatus> {
-      const current = config();
+      const current = currentConfig();
       const checkedAt = new Date().toISOString();
       if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
         return { healthy: false, checkedAt, message: 'Provider not reachable.' };
       }
       try {
-        // Validate model access without generating tokens. A completion-based health
-        // probe consumes quota and can rate-limit the real user's first chat request.
-        const response = await fetch(current.baseUrl + '/models/' + encodeURIComponent(modelId), {
-          method: 'GET',
-          headers: { Authorization: 'Bearer ' + current.apiKey, Accept: 'application/json' },
-          signal: AbortSignal.timeout(12_000),
+        // Prove actual inference access with a one-token probe; a models-list
+        // endpoint alone does not prove that the selected model can generate.
+        const response = await fetch(current.baseUrl + '/chat/completions', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + current.apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ model: modelId, messages: [{ role: 'user', content: 'Reply with OK.' }], max_tokens: 1, stream: false }),
+          signal: AbortSignal.timeout(15_000), redirect: 'error',
         });
         if (!response.ok) {
           console.warn('AI_PROVIDER_HEALTH_CHECK_FAILED', JSON.stringify({ provider: current.id, model: modelId, status: response.status }));
-          return { healthy: false, checkedAt, message: 'Provider not reachable.' };
+          return { healthy: false, checkedAt, message: 'Provider inference probe failed.' };
         }
-        const payload = await response.json() as { id?: string; object?: string; error?: unknown };
-        return response.ok && typeof payload.id === 'string' && !payload.error
+        const payload = await response.json() as { choices?: unknown[]; error?: unknown };
+        return Array.isArray(payload.choices) && payload.choices.length > 0 && !payload.error
           ? { healthy: true, checkedAt }
-          : { healthy: false, checkedAt, message: 'Provider not reachable.' };
+          : { healthy: false, checkedAt, message: 'Provider inference probe failed.' };
       } catch (error) {
         console.error('AI_PROVIDER_HEALTH_CHECK_ERROR', JSON.stringify({ provider: current.id, model: modelId, error: error instanceof Error ? error.message : 'unknown_error' }));
         return { healthy: false, checkedAt, message: 'Provider not reachable.' };
@@ -111,7 +157,7 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
     },
 
     async *streamChat(input: ChatRequest): AsyncIterable<ChatChunk> {
-      const current = config();
+      const current = currentConfig();
       if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
         throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
       }
@@ -121,7 +167,7 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
           method: 'POST',
           headers: { Authorization: 'Bearer ' + current.apiKey, 'Content-Type': 'application/json', Accept: 'text/event-stream' },
           body: JSON.stringify({ model: input.model, messages: input.messages, stream: true }),
-          signal: input.signal ? AbortSignal.any([AbortSignal.timeout(90_000), input.signal]) : AbortSignal.timeout(90_000),
+          signal: input.signal ? AbortSignal.any([AbortSignal.timeout(90_000), input.signal]) : AbortSignal.timeout(90_000), redirect: 'error',
         });
       } catch (error) {
         console.error('AI_PROVIDER_CHAT_CONNECTION_ERROR', JSON.stringify({ provider: current.id, model: input.model, error: error instanceof Error ? error.message : 'unknown_error' }));

@@ -1,26 +1,120 @@
 import { cloudflareWorkersAi } from '../providers/cloudflareWorkersAi.ts';
+import { createAnthropicAdapter } from '../providers/anthropic.ts';
+import { createOllamaAdapter } from '../providers/ollama.ts';
 import { createOpenAICompatibleAdapter } from '../providers/openAiCompatible.ts';
 import { gptOssProxy } from '../providers/gptOssProxy.ts';
 import { pool } from '../api/database.ts';
+import { BlockList, isIP } from 'node:net';
+import { lookup } from 'node:dns/promises';
+
+const providerPrivateNetworks = new BlockList();
+for(const [subnet,prefix] of [
+  ['0.0.0.0',8],['10.0.0.0',8],['100.64.0.0',10],['127.0.0.0',8],['169.254.0.0',16],
+  ['172.16.0.0',12],['192.0.0.0',24],['192.0.2.0',24],['192.168.0.0',16],
+  ['198.18.0.0',15],['198.51.100.0',24],['203.0.113.0',24],['224.0.0.0',4],['240.0.0.0',4],
+] as const) providerPrivateNetworks.addSubnet(subnet,prefix,'ipv4');
+for(const [subnet,prefix] of [
+  ['::',128],['::1',128],['::ffff:0:0',96],['64:ff9b::',96],['100::',64],
+  ['2001:db8::',32],['fc00::',7],['fe80::',10],['ff00::',8],
+] as const) providerPrivateNetworks.addSubnet(subnet,prefix,'ipv6');
+function isPublicProviderAddress(address:string):boolean{
+  const family=isIP(address);
+  if(family===0)return false;
+  if(family===4)return !providerPrivateNetworks.check(address,'ipv4');
+  if(address.toLowerCase().startsWith('::ffff:')){
+    const mapped=address.slice(7);
+    if(isIP(mapped)===4)return !providerPrivateNetworks.check(mapped,'ipv4');
+  }
+  return !providerPrivateNetworks.check(address,'ipv6');
+}
+
+import { decryptProviderSecret } from '../security/providerVault.ts';
 import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescriptor, CapabilityFlags } from '../providers/providerTypes.ts';
 
 const openAICompatible = createOpenAICompatibleAdapter();
-const providerRegistry: ChatProviderAdapter[] = [cloudflareWorkersAi, openAICompatible, gptOssProxy];
+const cloudflareCatalogAdapter = { ...cloudflareWorkersAi, id: 'cloudflare', key: 'cloudflare' } as ChatProviderAdapter;
+// The database seed uses the canonical `cloudflare` slug. Keep one registry entry so
+// discovery and the user model picker do not duplicate every Workers AI model.
+const staticProviderRegistry: ChatProviderAdapter[] = [cloudflareCatalogAdapter, openAICompatible, gptOssProxy];
+let databaseProviderRegistry: ChatProviderAdapter[] = [];
+let databaseProviderRefreshAt = 0;
+const DATABASE_PROVIDER_REFRESH_MS = 15_000;
+
+export async function refreshDatabaseProviderAdapters(force = false): Promise<void> {
+  if (!pool || (!force && Date.now() - databaseProviderRefreshAt < DATABASE_PROVIDER_REFRESH_MS)) return;
+  databaseProviderRefreshAt = Date.now();
+  try {
+    const result = await pool.query(`SELECT p.slug,p.display_name,p.base_url,p.kind,p.enabled,
+          pk.key_encrypted,pk.status AS key_status,p.config_json
+        FROM providers p
+        LEFT JOIN provider_keys pk ON pk.provider_id=p.id AND pk.alias='default' AND pk.status='active'
+        WHERE p.source='custom' OR p.kind IN ('openai_compat','anthropic','ollama')
+        ORDER BY p.slug`);
+    const next: ChatProviderAdapter[] = [];
+    for (const row of result.rows) {
+      if (String(row.kind) === 'ollama') {
+        const localBase = process.env.OLLAMA_BASE_URL?.trim() || String(row.base_url || 'http://127.0.0.1:11434');
+        next.push(createOllamaAdapter(String(row.slug),String(row.display_name),localBase));
+        continue;
+      }
+      if (!row.key_encrypted || !row.base_url) continue;
+      if (!['custom','openai_compat','anthropic'].includes(String(row.kind))) continue;
+      try {
+        const apiKey = decryptProviderSecret(String(row.key_encrypted));
+        const baseUrl = String(row.base_url);
+        const parsed = new URL(baseUrl);
+        if (!['https:','http:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.hash ||
+            (parsed.protocol === 'https:' && (isIP(parsed.hostname)||parsed.hostname==='localhost'||parsed.hostname.endsWith('.localhost')||parsed.hostname.endsWith('.local')||parsed.hostname.endsWith('.internal')))||
+            (parsed.protocol === 'http:' && (process.env.NODE_ENV==='production'||!['localhost','127.0.0.1'].includes(parsed.hostname)))) continue;
+        if(parsed.protocol==='https:'){
+          const resolved=await lookup(parsed.hostname,{all:true,verbatim:true});
+          if(!resolved.length||resolved.some(entry=>!isPublicProviderAddress(entry.address)))continue;
+        }
+        const providerConfig=(row.config_json&&typeof row.config_json==='object')?row.config_json as Record<string,unknown>:{};
+        if (String(row.kind) === 'anthropic' || providerConfig.protocol === 'anthropic-messages') {
+          next.push(createAnthropicAdapter({id:String(row.slug),displayName:String(row.display_name),baseUrl,apiKey}));
+        } else {
+          next.push(createOpenAICompatibleAdapter({
+            id: String(row.slug), displayName: String(row.display_name), baseUrl, apiKey,
+          }));
+        }
+      } catch {
+        console.error('AI_PROVIDER_RUNTIME_CONFIGURATION_INVALID', JSON.stringify({ provider: String(row.slug) }));
+      }
+    }
+    databaseProviderRegistry = next;
+  } catch {
+    // A not-yet-applied migration should not make the pre-existing environment adapters disappear.
+    databaseProviderRegistry = [];
+  }
+}
+
+function allProviderAdapters(): ChatProviderAdapter[] {
+  const map = new Map<string, ChatProviderAdapter>();
+  for (const provider of [...staticProviderRegistry, ...databaseProviderRegistry]) map.set(provider.id, provider);
+  return [...map.values()];
+}
 const HEALTH_TTL_MS = 5 * 60 * 1000;
 const healthCache = new Map<string, { healthy: boolean; checkedAt: string }>();
 
 export function getProviderRegistry(): Array<Pick<ChatProviderAdapter, 'id' | 'key' | 'displayName'>> {
-  return providerRegistry.map(({ id, key, displayName }) => ({ id, key, displayName }));
+  return allProviderAdapters().map(({ id, key, displayName }) => ({ id, key, displayName }));
 }
 
 export function getProviderAdapter(providerId: string): ChatProviderAdapter | undefined {
-  return providerRegistry.find((provider) => provider.id === providerId);
+  // Backward compatibility for model references persisted before the provider slug
+  // was normalized to `cloudflare`.
+  if (providerId === 'cloudflare-workers-ai') return cloudflareCatalogAdapter;
+  return allProviderAdapters().find((provider) => provider.id === providerId);
 }
 
 async function isProviderEnabled(providerId: string): Promise<boolean> {
   if (!pool) return true;
+  const canonicalProviderId = providerId === 'cloudflare-workers-ai' ? 'cloudflare' : providerId;
   try {
-    const result = await pool.query('SELECT enabled FROM provider_configs WHERE provider_key = $1 LIMIT 1', [providerId]);
+    const catalog = await pool.query('SELECT enabled FROM providers WHERE slug = $1 LIMIT 1', [canonicalProviderId]);
+    if (catalog.rows.length) return Boolean(catalog.rows[0].enabled);
+    const result = await pool.query('SELECT enabled FROM provider_configs WHERE provider_key = $1 LIMIT 1', [canonicalProviderId]);
     return result.rows.length ? Boolean(result.rows[0].enabled) : true;
   } catch (error) {
     // An uninitialized optional catalog must not disable a configured AI provider.
@@ -77,7 +171,7 @@ async function syncDiscoveredModels(provider: ChatProviderAdapter, models: Model
     await pool.query(
       `INSERT INTO model_catalog
         (provider_key, model_key, display_name, capabilities, enabled, context_window)
-       VALUES ($1, $2, $3, $4, true, $5)
+       VALUES ($1, $2, $3, $4, false, $5)
        ON CONFLICT (provider_key, model_key) DO UPDATE SET
          display_name = EXCLUDED.display_name,
          capabilities = COALESCE(model_catalog.capabilities_override, EXCLUDED.capabilities),
@@ -133,6 +227,18 @@ async function verifyModel(provider: ChatProviderAdapter, model: ModelDescriptor
   return { ...model, verifiedAt: health.healthy ? health.checkedAt : null };
 }
 
+export function invalidateProviderHealth(providerId:string):void{
+  for(const key of healthCache.keys())if(key.startsWith(providerId+':'))healthCache.delete(key);
+}
+
+export async function recordModelHealthResult(providerId:string,modelId:string,healthy:boolean,checkedAt=new Date().toISOString()):Promise<void>{
+  healthCache.set(`${providerId}:${modelId}`,{healthy,checkedAt});
+  if(!pool)return;
+  await pool.query(`UPDATE model_catalog SET last_health_ok=$3,verified_at=CASE WHEN $3 THEN $4::timestamptz ELSE NULL END,
+    health_checked_at=$4::timestamptz,updated_at=now() WHERE provider_key=$1 AND model_key=$2`,
+    [providerId,modelId,healthy,checkedAt]);
+}
+
 async function applyCapabilityOverrides(providerId: string, models: ModelDescriptor[]): Promise<ModelDescriptor[]> {
   if (!pool || !models.length) return models;
   let result;
@@ -157,8 +263,9 @@ async function applyCapabilityOverrides(providerId: string, models: ModelDescrip
 }
 
 export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> {
+  await refreshDatabaseProviderAdapters();
   const verified: ModelDescriptor[] = [];
-  for (const provider of providerRegistry) {
+  for (const provider of allProviderAdapters()) {
     let configValid = false;
     try { configValid = (await provider.validateConfig()).valid; } catch { configValid = false; }
     let providerEnabled = true;
@@ -268,7 +375,16 @@ export async function getVerifiedProviderCatalog(): Promise<ProviderCatalog> {
   }
 }
 
+async function isFeatureFlagEnabled(key:string, fallback=false):Promise<boolean>{
+  if(!pool)return fallback;
+  try{
+    const result=await pool.query('SELECT enabled FROM feature_flags WHERE flag_key=$1 LIMIT 1',[key]);
+    return result.rows[0]?Boolean(result.rows[0].enabled):fallback;
+  }catch{return false;}
+}
+
 export async function getImageStudioSnapshot() {
+  if(!(await isFeatureFlagEnabled('image_generation_enabled',false)))return {available:false,providers:[],message:'Image generation is disabled by the administrator.'};
   const descriptors = await getVerifiedModelDescriptors();
   const providers = descriptors.filter((model) =>
     isRecentAndHealthy(model) && model.capabilities.imageGen &&
@@ -307,17 +423,23 @@ export async function getFileAssistantSnapshot() {
 export async function getCapabilitySnapshot() {
   const descriptors = await getVerifiedModelDescriptors();
   const selectable = descriptors.filter(isRecentAndHealthy);
+  const [chatEnabled,researchEnabled,voiceEnabled,imageGenerationEnabled] = await Promise.all([
+    isFeatureFlagEnabled('chat',true),
+    isFeatureFlagEnabled('web_research_enabled',false),
+    isFeatureFlagEnabled('voice_enabled',false),
+    isFeatureFlagEnabled('image_generation_enabled',false),
+  ]);
   const capabilities: Record<AfgCapability, boolean> = {
-    chat: selectable.some((model) => model.capabilities.text && model.capabilities.streaming),
+    chat: chatEnabled && selectable.some((model) => model.capabilities.text && model.capabilities.streaming),
     vision: selectable.some((model) => model.capabilities.vision && Boolean(getProviderAdapter(model.providerId)?.analyzeImage)),
     ocr: selectable.some((model) => model.capabilities.ocr && Boolean(getProviderAdapter(model.providerId)?.analyzeImage)),
     'image-edit': selectable.some((model) => model.capabilities.imageEdit && Boolean(getProviderAdapter(model.providerId)?.editImage)),
-    'image-generation': selectable.some((model) => model.capabilities.imageGen && Boolean(getProviderAdapter(model.providerId)?.generateImage)),
+    'image-generation': imageGenerationEnabled && selectable.some((model) => model.capabilities.imageGen && Boolean(getProviderAdapter(model.providerId)?.generateImage)),
     'video-generation': false,
     'file-processing': false,
-    'speech-to-text': selectable.some((model) => model.capabilities.stt && Boolean(getProviderAdapter(model.providerId)?.transcribe)),
-    'text-to-speech': selectable.some((model) => model.capabilities.tts && Boolean(getProviderAdapter(model.providerId)?.synthesize)),
-    research: Boolean(process.env.TAVILY_API_KEY),
+    'speech-to-text': voiceEnabled && selectable.some((model) => model.capabilities.stt && Boolean(getProviderAdapter(model.providerId)?.transcribe)),
+    'text-to-speech': voiceEnabled && selectable.some((model) => model.capabilities.tts && Boolean(getProviderAdapter(model.providerId)?.synthesize)),
+    research: researchEnabled && Boolean(process.env.TAVILY_API_KEY),
   };
 
   return {
