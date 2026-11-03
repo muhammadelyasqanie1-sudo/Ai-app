@@ -33,6 +33,7 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { description: 'Toggle sidebar', keys: ['Ctrl', 'Shift', 'S'] },
       { description: 'Search chats', keys: ['Ctrl', 'K'] },
       { description: 'Open keyboard shortcuts', keys: ['Ctrl', '/'] },
+      { description: 'Open AFG AI Terminal', keys: ['Ctrl', 'Shift', 'T'] },
       { description: 'Open settings', keys: ['Ctrl', ','] },
       { description: 'Close modals or menus', keys: ['Esc'] },
     ],
