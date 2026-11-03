@@ -20,7 +20,7 @@ export async function refreshCustomProviderRegistry(force = false): Promise<void
     for (const row of result.rows) {
       if (typeof row.config_encrypted !== 'string' || !row.config_encrypted) continue;
       try {
-        const stored = decryptProviderConfig(row.config_encrypted);
+        const stored = decryptProviderConfig(row.config_encrypted, String(row.kind));
         const providerConfig: OpenAICompatibleProviderConfig = {
           id: String(row.kind),
           displayName: String(row.display_name),
