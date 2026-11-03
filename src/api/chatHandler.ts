@@ -6,6 +6,7 @@ import { buildToolModePrompt } from '../services/toolModes.ts';
 import { getProductivityPrompt } from './productivity.ts';
 import { authenticateRequest } from './auth.ts';
 import { pool } from './database.ts';
+import { redactSecret } from '../security/providerVault.ts';
 import { ChatRequestSchema } from '../../packages/shared/src/schemas';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
@@ -137,6 +138,10 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
   let requestUserId: string | null = null;
   let activeModelId = '';
   const rateLimitedModels = new Set<string>();
+  let usageProviderId = '';
+  let usageModelId = '';
+  let estimatedInputTokens = 0;
+  let streamedOutputCharacters = 0;
   const classifyError = (error: unknown): string => {
     if (timedOut || (error instanceof Error && error.name === 'TimeoutError')) return 'timeout';
     if (abortController.signal.aborted) return 'network';
@@ -149,6 +154,39 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       if (error.status >= 400) return 'invalid_request';
     }
     return 'network';
+  };
+  const persistUsage = async (status:'success'|'error'|'timeout') => {
+    if(!pool)return;
+    const tokensIn=estimatedInputTokens;
+    const tokensOut=Math.ceil(streamedOutputCharacters/4);
+    const latency=Date.now()-startedAt;
+    const [providerKey,modelKey]=usageProviderId && usageModelId ? [usageProviderId,usageModelId] : [null,null];
+    try{
+      let cost:number|null=null;
+      if(providerKey&&modelKey){
+        const price=await pool.query('SELECT input_cost_per_million,output_cost_per_million FROM model_catalog WHERE provider_key=$1 AND model_key=$2 LIMIT 1',[providerKey,modelKey]);
+        if(price.rows[0]&&price.rows[0].input_cost_per_million!==null&&price.rows[0].output_cost_per_million!==null){
+          cost=(tokensIn*Number(price.rows[0].input_cost_per_million)+tokensOut*Number(price.rows[0].output_cost_per_million))/1000000;
+        }
+      }
+      await pool.query(`INSERT INTO usage_records(user_id,model_id,provider_key,model_key,request_id,tokens_in,tokens_out,cost_usd,latency_ms,status,token_count_source)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'estimated')`,
+        [requestUserId,providerKey&&modelKey?providerKey+'::'+modelKey:null,providerKey,modelKey,id,tokensIn,tokensOut,cost,latency,status]);
+      if(providerKey)await pool.query(`UPDATE provider_keys k SET last_used_at=now() FROM providers p WHERE p.id=k.provider_id AND p.slug=$1 AND k.status='active'`,[providerKey]).catch(()=>{});
+    }catch{console.warn('AFG_USAGE_RECORD_WRITE_FAILED',JSON.stringify({requestId:id}));}
+  };
+  const persistError = async (error:unknown) => {
+    if(!pool)return;
+    const classified=classifyError(error);
+    const errorClass=['network','auth','rate_limit','provider_5xx','invalid_request','content_policy','timeout'].includes(classified)
+      ? classified : classified==='unavailable_model'?'unavailable':'unknown';
+    const code=error instanceof ProviderAdapterError?redactSecret(error.code).slice(0,64):'request_failed';
+    try{
+      await pool.query(`INSERT INTO error_logs(request_id,user_id,model_id,provider_key,error_code,error_class,message_redacted,metadata_json)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
+        [id,requestUserId,usageModelId||null,usageProviderId||null,code,errorClass,
+          'AI request failed ('+errorClass+').',JSON.stringify({latencyMs:Date.now()-startedAt})]);
+    }catch{console.warn('AFG_ERROR_RECORD_WRITE_FAILED',JSON.stringify({requestId:id}));}
   };
 
   try {
@@ -263,6 +301,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     ].filter(Boolean);
 
     const upstreamMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
+    estimatedInputTokens = Math.ceil(messages.reduce((total,message)=>total+message.content.length,0)/4);
     if (systemMessages.join('\n\n').trim()) {
       upstreamMessages.push({ role: 'system', content: systemMessages.join('\n\n') });
     }
@@ -302,6 +341,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       }
     } });
     const { providerId, modelId, stream } = prepared;
+    usageProviderId = providerId;
+    usageModelId = modelId;
     activeModelId = modelId;
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
@@ -320,9 +361,12 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       for await (const chunk of stream) {
         if (!chunk.content) continue;
         emittedContent = true;
+        streamedOutputCharacters += chunk.content.length;
         res.write(`data: ${JSON.stringify({ type: 'content', text: chunk.content })}\n\n`);
       }
       if (!emittedContent) {
+        await persistUsage('error');
+        await persistError(new ProviderAdapterError('Empty response.',502,'empty_response'));
         console.warn('AI_CHAT_EMPTY_RESPONSE', JSON.stringify({
           requestId: id, selectedModel: activeModelId,
           userId: requestUserId, latencyMs: Date.now() - startedAt,
@@ -331,6 +375,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         res.end();
         return;
       }
+      await persistUsage('success');
       console.info('AI_CHAT_COMPLETED', JSON.stringify({
         requestId: id, selectedModel: activeModelId || (prepared.providerId + '::' + prepared.modelId),
         userId: requestUserId, outcome: 'success', latencyMs: Date.now() - startedAt,
@@ -339,6 +384,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       res.write('data: [DONE]\n\n');
       res.end();
     } catch (error) {
+      await persistUsage(timedOut?'timeout':'error');
+      await persistError(error);
       const streamErrorCode = classifyError(error);
       const streamRetryable = !['invalid_request','content_policy','auth','rate_limit'].includes(streamErrorCode);
       console.error('AI_PROVIDER_STREAM_FAILED', JSON.stringify({
@@ -363,6 +410,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       }
     }
   } catch (error) {
+    await persistUsage(timedOut?'timeout':'error');
+    await persistError(error);
     const providerError = error instanceof ProviderAdapterError ? error : null;
     console.error('AI_CHAT_REQUEST_FAILED', JSON.stringify({
       requestId: id,

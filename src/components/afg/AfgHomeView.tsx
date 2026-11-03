@@ -28,6 +28,7 @@ interface AfgHomeViewProps {
   onChangeTab: (tab: TabType) => void;
   onStartChatWithPrompt?: (prompt: string) => void;
   capabilities: Record<AfgCapabilityKey, boolean>;
+  announcements?: Array<{id:string;title:string;body:string;created_at:string}>;
 }
 
 export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
@@ -36,6 +37,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
   onChangeTab,
   onStartChatWithPrompt,
   capabilities,
+  announcements = [],
 }) => {
   const t = translations[language];
   const [quickQuery, setQuickQuery] = useState('');
@@ -136,6 +138,13 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
 
   return (
     <div className="afg-home-view w-full max-w-6xl mx-auto px-4 py-4 sm:py-8 space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+      {announcements.length > 0 && <section aria-label={language === 'dari' ? 'اطلاعیه‌های AFG AI' : 'AFG AI announcements'} className="space-y-2">
+        {announcements.map(item => <article key={item.id} className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-xs font-bold text-cyan-300"><Sparkles className="h-4 w-4"/>{language === 'dari' ? 'اطلاعیه AFG AI' : 'AFG AI announcement'}</div>
+          <h2 className="mt-2 text-sm font-bold text-white">{item.title}</h2>
+          <p className="mt-1 whitespace-pre-wrap text-sm text-slate-300">{item.body}</p>
+        </article>)}
+      </section>}
       
       {/* Hero Welcome Card with Afghan Landmark Illustration Backdrop (Screenshot 2 & 3) */}
       <div className="afg-home-hero relative overflow-hidden rounded-3xl border p-5 sm:p-8">

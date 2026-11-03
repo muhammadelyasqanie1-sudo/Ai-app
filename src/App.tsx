@@ -118,6 +118,16 @@ export default function App() {
   const [permissionLevel, setPermissionLevel] = useState<'ask' | 'guided' | 'full'>(() => (localStorage.getItem('afg_permission_level') as any) || 'guided');
   const [chatFindQuery, setChatFindQuery] = useState('');
   const [systemFeatures, setSystemFeatures] = useState<AfgSystemFeatures>({ voice_stt_enabled:false, terminal_exec_enabled:false, github_connected:false, web_preview_enabled:false, file_upload_enabled:false, dual_planning_enabled:false, undo_file_changes_enabled:false });
+  const [announcements, setAnnouncements] = useState<Array<{id:string;title:string;body:string;created_at:string}>>([]);
+
+  useEffect(() => {
+    let active = true;
+    fetch(API_BASE_URL + '/api/announcements', { credentials: 'include', cache: 'no-store' })
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((data) => { if (active) setAnnouncements(Array.isArray(data?.announcements) ? data.announcements : []); })
+      .catch(() => { if (active) setAnnouncements([]); });
+    return () => { active = false; };
+  }, []);
 
   // Modals state
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
@@ -668,6 +678,7 @@ export default function App() {
             onChangeTab={setCurrentTab}
             onStartChatWithPrompt={handleStartChatWithPrompt}
             capabilities={capabilitySnapshot.capabilities}
+            announcements={announcements}
           />
         )}
 
