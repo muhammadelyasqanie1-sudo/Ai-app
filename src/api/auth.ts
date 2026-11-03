@@ -187,7 +187,7 @@ export function verifyCsrf(req: IncomingMessage): boolean {
 
 export async function verifyUserPassword(userId:string,password:string):Promise<boolean>{
   if(!pool||!password||password.length>256)return false;
-  const result=await pool.query('SELECT password_hash FROM users WHERE id=$1 AND status=\\'active\\' LIMIT 1',[userId]);
+  const result=await pool.query('SELECT password_hash FROM users WHERE id=$1 AND status=\'active\' LIMIT 1',[userId]);
   const encoded=result.rows[0]?.password_hash;
   if(typeof encoded!=='string'||!encoded)return false;
   return verifyPassword(password,encoded);
