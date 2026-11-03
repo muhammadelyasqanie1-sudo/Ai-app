@@ -1,0 +1,113 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap');
+
+.afg-boot-screen{--void:#05060a;--cyan:#0df2ff;--violet:#7c4dff;--amber:#ffb86b;position:relative;isolation:isolate;display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;gap:0;width:100%;height:100vh;height:100dvh;min-height:100svh;overflow:hidden;padding:clamp(15px,2.7vh,30px) clamp(16px,4vw,58px) max(18px,env(safe-area-inset-bottom));background:radial-gradient(ellipse at 50% 48%,#101d31 0%,#080c17 38%,var(--void) 76%);color:#f5f7fa;font-family:'Space Grotesk','Noto Sans Arabic',sans-serif}
+.afg-boot-screen[dir=rtl]{font-family:'Noto Sans Arabic','Space Grotesk',sans-serif}
+.afg-boot-canvas{position:absolute;inset:0;z-index:-1;pointer-events:none}
+.afg-boot-grain{position:absolute;inset:0;z-index:5;pointer-events:none;opacity:.035;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E")}
+.afg-boot-vignette{position:absolute;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(ellipse at center,transparent 35%,rgba(0,0,0,.55) 100%)}
+.afg-boot-header{position:relative;z-index:4;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;min-height:72px}
+.afg-boot-wordmark{display:grid;grid-template-columns:42px auto;grid-template-rows:26px 13px;align-items:center;column-gap:10px;font-size:1.05rem;font-weight:700;letter-spacing:.18em}
+.afg-boot-mark{grid-row:1/3;display:grid;place-items:center;width:40px;height:40px;border:1px solid #0df2ff66;border-radius:13px;color:var(--cyan);font-size:1.25rem;box-shadow:0 0 24px #0df2ff20,inset 0 0 18px #0df2ff12}
+.afg-boot-wordmark b{color:var(--cyan)}
+.afg-boot-wordmark small{font-size:.48rem;font-weight:500;letter-spacing:.2em;color:#688398}
+.afg-boot-status{display:flex;align-items:center;gap:9px;min-height:34px;padding:7px 12px;border:1px solid #0df2ff30;border-radius:99px;background:#081521bd;box-shadow:0 0 24px #0df2ff0c;backdrop-filter:blur(18px);font:500 .58rem 'Space Grotesk',sans-serif;letter-spacing:.09em;color:#a7bdca;white-space:nowrap}
+.afg-boot-status>i,.afg-boot-eyebrow i,.afg-boot-core-label i{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 12px var(--cyan)}
+.afg-boot-status b{font-size:.52rem;color:#8efaff}
+.afg-boot-status em{font-style:normal;color:var(--amber);font-variant-numeric:tabular-nums}
+.afg-boot-status.state-offline>i{background:#ffb86b;box-shadow:0 0 10px #ffb86b}
+.afg-boot-grid{position:absolute;z-index:-1;left:-30%;width:160%;height:31%;pointer-events:none;opacity:.26;background-image:linear-gradient(#0df2ff26 1px,transparent 1px),linear-gradient(90deg,#0df2ff26 1px,transparent 1px);background-size:52px 52px;mask-image:linear-gradient(transparent,#000 35%,#000 75%,transparent)}
+.afg-boot-grid-ceiling{top:-14%;transform:perspective(500px) rotateX(-63deg);transform-origin:top center;animation:boot-grid-drift 16s linear infinite}
+.afg-boot-grid-floor{bottom:-17%;transform:perspective(520px) rotateX(64deg);transform-origin:bottom center;animation:boot-grid-drift 12s linear infinite reverse}
+.afg-boot-beams{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.afg-boot-beams i{position:absolute;bottom:0;width:1px;height:38%;background:linear-gradient(transparent,#0df2ff88,transparent);opacity:0;animation:boot-beam 5.4s ease-in-out infinite}
+.afg-boot-beams i:nth-child(1){left:17%;animation-delay:-1s}.afg-boot-beams i:nth-child(2){left:34%;animation-delay:-3s}.afg-boot-beams i:nth-child(3){left:67%;animation-delay:-2s}.afg-boot-beams i:nth-child(4){left:82%;animation-delay:-4s}.afg-boot-beams i:nth-child(5){left:52%;animation-delay:-.5s}
+.afg-boot-scene{position:relative;align-self:stretch;justify-self:center;width:min(100%,1080px);height:100%;min-height:0;perspective:1100px;transform-style:preserve-3d}
+.afg-boot-orbit{position:absolute;left:50%;top:49%;width:min(52vw,580px);height:min(21vw,220px);border:1px solid #0df2ff2c;border-radius:50%;transform:translate(-50%,-50%) rotateX(68deg) rotateZ(-14deg);box-shadow:0 0 32px #0df2ff0c,inset 0 0 25px #7c4dff0c;pointer-events:none}
+.afg-boot-orbit:after{content:"";position:absolute;inset:13%;border:1px dashed #7c4dff55;border-radius:50%}
+.afg-boot-orbit.orbit-neural{animation:boot-orbit-a 20s linear infinite}
+.afg-boot-orbit.orbit-core{width:min(67vw,730px);height:min(27vw,280px);transform:translate(-50%,-50%) rotateX(72deg) rotateY(24deg);border-color:#7c4dff40;animation:boot-orbit-b 28s linear infinite reverse}
+.afg-boot-orbit.orbit-node{width:min(43vw,460px);height:min(17vw,180px);transform:translate(-50%,-50%) rotateX(61deg) rotateY(-34deg) rotateZ(52deg);border-style:dotted;animation:boot-orbit-c 36s linear infinite}
+.afg-boot-panel{position:absolute;z-index:3;display:grid;gap:5px;min-width:166px;padding:13px 15px;border:1px solid #0df2ff42;border-radius:13px;background:linear-gradient(140deg,#12283ac9,#090f1edb);box-shadow:0 18px 55px #0008,inset 0 1px #ffffff15,0 0 26px #0df2ff0d;backdrop-filter:blur(18px);transform-style:preserve-3d;animation:boot-panel-float 7s ease-in-out infinite}
+.afg-boot-panel:after{content:"";position:absolute;inset:5px;border:1px solid #ffffff08;border-radius:9px;pointer-events:none}
+.afg-boot-panel small{font:500 .5rem 'Space Grotesk',sans-serif;letter-spacing:.18em;color:#66899e}
+.afg-boot-panel strong{font-size:.78rem;font-weight:600;color:#e7fbff}
+.afg-boot-panel-value{font:700 .85rem 'Space Grotesk',sans-serif;letter-spacing:.04em;color:#91faff}
+.afg-boot-panel-value i{font-size:.5rem;font-style:normal;color:var(--cyan)}
+.afg-boot-panel-value.amber{color:var(--amber);font-variant-numeric:tabular-nums}
+.afg-boot-panel-caption{font-size:.58rem;color:#7995a7}
+.panel-neural{left:4%;top:23%;transform:rotateY(15deg) rotateX(5deg);animation-delay:-1.5s}
+.panel-core{right:4%;top:19%;transform:rotateY(-15deg) rotateX(5deg);animation-delay:-3.2s}
+.panel-node{right:13%;bottom:8%;transform:rotateY(-10deg) rotateX(-5deg);animation-delay:-4.6s}
+.afg-boot-core-label{position:absolute;left:50%;top:80%;display:flex;align-items:center;gap:8px;transform:translateX(-50%);font:500 .52rem 'Space Grotesk',sans-serif;letter-spacing:.22em;color:#63869a;white-space:nowrap}
+.afg-boot-copy{position:relative;z-index:4;align-self:end;text-align:center;margin:0 auto 17px;width:100%;animation:boot-copy-in 1s .35s both}
+.afg-boot-eyebrow{display:flex;justify-content:center;align-items:center;gap:12px;margin:0 0 8px;color:#82a8bb;font-size:.63rem;letter-spacing:.2em}
+.afg-boot-eyebrow i{width:4px;height:4px}
+.afg-boot-copy h1{margin:0;font-size:clamp(2.3rem,6.5vw,5.5rem);line-height:1.02;font-weight:700;letter-spacing:-.065em;text-shadow:0 0 40px #0df2ff22;overflow:hidden}
+.afg-boot-copy h1 span{display:inline-block;animation:boot-mask-reveal .8s .25s both}
+.afg-boot-copy h1 em{display:inline-block;font-style:normal;background:linear-gradient(100deg,#f5f7fa 0%,#72f6ff 35%,#b59aff 72%,#f5f7fa 100%);background-size:220% auto;color:transparent;background-clip:text;-webkit-background-clip:text;animation:boot-mask-reveal .8s .42s both,boot-shimmer 6s 2s linear infinite}
+.afg-boot-tagline{margin:11px 0 0;color:#8ca9ba;font-size:clamp(.76rem,1.5vw,.95rem);letter-spacing:.035em}
+.afg-boot-footer{position:relative;z-index:4;width:min(100%,600px);justify-self:center}
+.afg-boot-progress-meta{display:flex;justify-content:space-between;gap:12px;margin-bottom:8px;color:#7594a8;font-size:.63rem}
+.afg-boot-progress-meta b{color:var(--cyan);font-variant-numeric:tabular-nums}
+.afg-boot-progress{height:3px;overflow:hidden;border-radius:8px;background:#a4d7e51c;box-shadow:0 0 14px #0df2ff0c}
+.afg-boot-progress i{display:block;height:100%;border-radius:8px;background:linear-gradient(90deg,#7c4dff,#0df2ff);box-shadow:0 0 16px #0df2ff;transition:width .45s ease}
+.afg-boot-footer-row{display:flex;justify-content:space-between;gap:10px;margin-top:10px;color:#506d81;font:500 .48rem 'Space Grotesk',sans-serif;letter-spacing:.14em}
+.afg-boot-enter{display:flex;align-items:center;justify-content:center;gap:18px;width:min(100%,280px);min-height:50px;margin:19px auto 0;padding:12px 20px;border:1px solid #0df2ff8a;border-radius:14px;background:linear-gradient(105deg,#087f91,#173b79);color:white;font-size:.85rem;font-weight:700;letter-spacing:.025em;box-shadow:0 0 30px #0df2ff25,inset 0 1px #ffffff2c;transition:transform .25s,box-shadow .25s,border-color .25s}
+.afg-boot-enter:not(:disabled){animation:boot-cta-pulse 2.8s ease-in-out infinite}
+.afg-boot-enter:not(:disabled):hover{transform:translateY(-2px) scale(1.025);box-shadow:0 0 40px #0df2ff55,0 12px 30px #0005}
+.afg-boot-enter:disabled{opacity:.55;cursor:wait}
+.afg-boot-enter b{font-size:1.1rem;color:#a9fbff}
+@keyframes boot-grid-drift{to{background-position:0 104px,104px 0}}
+@keyframes boot-beam{0%,75%,100%{opacity:0;transform:scaleY(.15)}82%{opacity:.55;transform:scaleY(1)}}
+@keyframes boot-orbit-a{to{rotate:360deg}}
+@keyframes boot-orbit-b{to{rotate:-360deg}}
+@keyframes boot-orbit-c{to{rotate:360deg}}
+@keyframes boot-panel-float{0%,100%{translate:0 0}50%{translate:0 -10px}}
+@keyframes boot-copy-in{from{opacity:0;translate:0 18px}to{opacity:1;translate:0 0}}
+@keyframes boot-mask-reveal{from{clip-path:inset(0 100% 0 0);filter:blur(8px)}to{clip-path:inset(0 0 0 0);filter:blur(0)}}
+@keyframes boot-shimmer{to{background-position:220% center}}
+@keyframes boot-cta-pulse{0%,100%{box-shadow:0 0 24px #0df2ff20}50%{box-shadow:0 0 38px #0df2ff52}}
+@media(max-width:700px){
+ .afg-boot-screen{padding:14px 14px max(15px,env(safe-area-inset-bottom));grid-template-rows:auto minmax(0,1fr) auto auto}
+ .afg-boot-header{min-height:58px;align-items:flex-start}
+ .afg-boot-wordmark{grid-template-columns:34px auto;grid-template-rows:21px 11px;column-gap:8px;font-size:.88rem}
+ .afg-boot-mark{width:33px;height:33px;border-radius:10px}
+ .afg-boot-wordmark small{font-size:.39rem}
+ .afg-boot-status{gap:5px;min-height:29px;padding:6px 8px;font-size:.45rem}
+ .afg-boot-status b{font-size:.43rem}
+ .afg-boot-scene{width:100%;min-height:0}
+ .afg-boot-orbit{width:88vw;height:34vw}
+ .afg-boot-orbit.orbit-core{width:105vw;height:43vw}
+ .afg-boot-orbit.orbit-node{width:74vw;height:29vw}
+ .afg-boot-panel{min-width:0;width:122px;padding:9px 10px;gap:4px;border-radius:10px}
+ .afg-boot-panel strong{font-size:.66rem}
+ .afg-boot-panel small{font-size:.42rem}
+ .afg-boot-panel-value{font-size:.72rem}
+ .afg-boot-panel-caption{font-size:.51rem}
+ .panel-neural{left:-1%;top:28%;transform:scale(.88) rotateY(12deg)}
+ .panel-core{right:-1%;top:25%;transform:scale(.88) rotateY(-12deg)}
+ .panel-node{right:50%;bottom:7%;transform:translateX(50%) scale(.88)}
+ .afg-boot-core-label{top:77%;font-size:.43rem}
+ .afg-boot-copy{margin-bottom:13px}
+ .afg-boot-copy h1{font-size:clamp(2.15rem,10vw,3.6rem)}
+ .afg-boot-tagline{font-size:.76rem}
+ .afg-boot-footer{width:100%}
+ .afg-boot-footer-row{font-size:.4rem;letter-spacing:.08em}
+ .afg-boot-enter{min-height:48px;margin-top:14px}
+}
+@media(max-height:700px){
+ .afg-boot-screen{padding-block:9px max(10px,env(safe-area-inset-bottom))}
+ .afg-boot-header{min-height:47px}
+ .afg-boot-copy{margin-bottom:8px}
+ .afg-boot-copy h1{font-size:clamp(1.9rem,5vw,3.2rem)}
+ .afg-boot-tagline{margin-top:5px}
+ .afg-boot-enter{min-height:42px;margin-top:10px}
+ .afg-boot-panel{padding:8px 10px}
+}
+@media(prefers-reduced-motion:reduce){
+ .afg-boot-screen *, .afg-boot-screen *:before,.afg-boot-screen *:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+ .afg-boot-grid{opacity:.18}
+ .afg-boot-copy h1 span,.afg-boot-copy h1 em{clip-path:none;filter:none}
+ .afg-boot-enter:not(:disabled){box-shadow:0 0 26px #0df2ff38}
+}
+.afg-boot-screen.is-reduced .afg-boot-orbit{animation:none}
