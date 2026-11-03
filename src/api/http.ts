@@ -13,6 +13,7 @@ import { handleProductivityApi } from './productivity.ts';
 import { handleAccountApi } from './account.ts';
 import { handleConversationsApi } from './conversations.ts';
 import { handleTerminalApi } from './terminal.ts';
+import { redactSecret } from '../security/providerVault.ts';
 
 type ApiRequest = IncomingMessage & { originalUrl?: string };
 
@@ -101,6 +102,16 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
         'INSERT INTO admin_request_events(request_id,method,route,status_code,duration_ms,classification) VALUES($1,$2,$3,$4,$5,$6)',
         [requestId, req.method || 'GET', pathname.slice(0,240), res.statusCode, durationMs, classification],
       ).catch(() => {});
+      if(res.statusCode>=400){
+        const errorClass=res.statusCode===401||res.statusCode===403?'auth':
+          res.statusCode===429?'rate_limit':res.statusCode===408||res.statusCode===504?'timeout':
+          res.statusCode===400||res.statusCode===413?'invalid_request':
+          res.statusCode>=500?'provider_5xx':'unknown';
+        void pool.query(`INSERT INTO error_logs(request_id,error_code,error_class,message_redacted,metadata_json)
+          VALUES($1,$2,$3,$4,$5::jsonb)`,
+          [requestId,'http_'+res.statusCode,errorClass,redactSecret('Request failed ('+errorClass+').'),
+            JSON.stringify({method:req.method||'GET',route:pathname.slice(0,240),status:res.statusCode,durationMs})]).catch(()=>{});
+      }
       if (res.statusCode === 401 || res.statusCode === 403 || res.statusCode >= 500) {
         void pool.query(
           'INSERT INTO security_events(event_type,severity,request_id,metadata) VALUES($1,$2,$3,$4::jsonb)',
