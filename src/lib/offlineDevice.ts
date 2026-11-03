@@ -111,7 +111,6 @@ export function assessOfflineModelFit(requiredGpuMB: number, device: OfflineDevi
     if (requiredGpuMB > conservativeBudgetMB) return 'incompatible';
     if (requiredGpuMB > device.memoryGiB * 1024 * 0.2) return 'limited';
   }
-  if (device.storageFreeBytes !== null && requiredBytes > device.storageFreeBytes * 0.8) return 'incompatible';
   if (device.memoryGiB === null || device.storageFreeBytes === null) return 'limited';
   return 'recommended';
 }
