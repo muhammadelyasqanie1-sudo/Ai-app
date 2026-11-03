@@ -23,15 +23,26 @@ function validBaseUrl(value: string): boolean {
   } catch { return false; }
 }
 
-export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
-  const initial = config();
+export interface OpenAICompatibleAdapterOptions {
+  id: string;
+  displayName: string;
+  baseUrl: string;
+  apiKey: string;
+}
+
+export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterOptions): ChatProviderAdapter {
+  const currentConfig = () => options ? {
+    id: options.id, displayName: options.displayName,
+    baseUrl: options.baseUrl.replace(/\\/+$/, ''), apiKey: options.apiKey,
+  } : config();
+  const initial = currentConfig();
   return {
     id: initial.id,
     key: initial.id,
     displayName: initial.displayName,
 
     async validateConfig(): Promise<ConfigStatus> {
-      const current = config();
+      const current = currentConfig();
       if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
         return { valid: false, message: 'Set a valid HTTPS OPENAI_COMPAT_BASE_URL and server-side OPENAI_COMPAT_API_KEY.' };
       }
@@ -89,21 +100,22 @@ export function createOpenAICompatibleAdapter(): ChatProviderAdapter {
         return { healthy: false, checkedAt, message: 'Provider not reachable.' };
       }
       try {
-        // Validate model access without generating tokens. A completion-based health
-        // probe consumes quota and can rate-limit the real user's first chat request.
-        const response = await fetch(current.baseUrl + '/models/' + encodeURIComponent(modelId), {
-          method: 'GET',
-          headers: { Authorization: 'Bearer ' + current.apiKey, Accept: 'application/json' },
-          signal: AbortSignal.timeout(12_000),
+        // Prove actual inference access with a one-token probe; a models-list
+        // endpoint alone does not prove that the selected model can generate.
+        const response = await fetch(current.baseUrl + '/chat/completions', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + current.apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ model: modelId, messages: [{ role: 'user', content: 'Reply with OK.' }], max_tokens: 1, stream: false }),
+          signal: AbortSignal.timeout(15_000),
         });
         if (!response.ok) {
           console.warn('AI_PROVIDER_HEALTH_CHECK_FAILED', JSON.stringify({ provider: current.id, model: modelId, status: response.status }));
-          return { healthy: false, checkedAt, message: 'Provider not reachable.' };
+          return { healthy: false, checkedAt, message: 'Provider inference probe failed.' };
         }
-        const payload = await response.json() as { id?: string; object?: string; error?: unknown };
-        return response.ok && typeof payload.id === 'string' && !payload.error
+        const payload = await response.json() as { choices?: unknown[]; error?: unknown };
+        return Array.isArray(payload.choices) && payload.choices.length > 0 && !payload.error
           ? { healthy: true, checkedAt }
-          : { healthy: false, checkedAt, message: 'Provider not reachable.' };
+          : { healthy: false, checkedAt, message: 'Provider inference probe failed.' };
       } catch (error) {
         console.error('AI_PROVIDER_HEALTH_CHECK_ERROR', JSON.stringify({ provider: current.id, model: modelId, error: error instanceof Error ? error.message : 'unknown_error' }));
         return { healthy: false, checkedAt, message: 'Provider not reachable.' };
