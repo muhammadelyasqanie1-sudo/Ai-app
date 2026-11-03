@@ -82,7 +82,7 @@ The Supabase project URL or publishable/anon key is **not** a replacement for `D
 
 ### Database status
 
-<badge>BLOCKED BY EXTERNAL REQUIREMENT</badge> The live Supabase database has no application tables and no migration history. The repository contains an ordered migration runner and SQL migrations, but they have not been applied. Do not run them against production until the intended schema, connection method, backup/recovery plan and migration order have been reviewed and the owner explicitly authorizes execution.
+**BLOCKED BY EXTERNAL REQUIREMENT** The live Supabase database has no application tables and no migration history. The repository contains an ordered migration runner and SQL migrations, but they have not been applied. Do not run them against production until the intended schema, connection method, backup/recovery plan and migration order have been reviewed and the owner explicitly authorizes execution.
 
 **Immediate database work:** compare every checked-in migration against the intended current schema; confirm Render's `DATABASE_URL` is set without exposing its value; validate TLS/connection method; establish a backup/restore plan; then request explicit approval before applying migrations. After an actual application-side connection succeeds, emit `SUCCESS SUPABASE_DATABASE_CONNECTED`; never emit it based only on environment-variable presence or an independent dashboard connection.
 
