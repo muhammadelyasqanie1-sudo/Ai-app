@@ -146,6 +146,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     if (!selectedId) { setMessages([]); setMessagesModelId(''); return; }
     let active = true;
     setMessagesModelId('');
+    setMessages([]);
     void loadOfflineChatMessages(selectedId).then(history => { if (active) { setMessages(history); setMessagesModelId(selectedId); } }).catch(() => { if (active) setMessagesModelId(selectedId); });
     if (engineRef.current) { const engine = engineRef.current; engineRef.current = null; void engine.unload().catch(() => undefined); }
     return () => { active = false; };
@@ -379,7 +380,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       </section>}
 
       {viewMode === "chat" && <section className="flex min-h-[480px] min-w-0 flex-col rounded-2xl border p-4">
-        <div className="flex items-center gap-2"><MessageSquare size={18}/><div><h2 className="font-bold">{copy.chat}</h2><p className="text-xs opacity-60">{copy.chatHint}</p></div></div>
+        <div className="flex items-center gap-2"><MessageSquare size={18}/><div><h2 className="font-bold">{copy.chat}</h2><p className="text-xs opacity-60">{copy.chatHint}</p></div><button type="button" onClick={() => void clearCurrentOfflineChat()} disabled={!messages.length} className="ms-auto rounded-lg border px-2.5 py-1.5 text-[10px] disabled:opacity-40">{dari ? "پاک‌کردن گفتگو" : "Clear chat"}</button></div>
         <div className="my-3 rounded-xl bg-emerald-500/5 p-3 text-xs text-emerald-700 dark:text-emerald-300">{copy.privacy}</div>
         {engineRef.current && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-cyan-400/25 bg-cyan-400/5 p-3 text-xs"><strong>{dari ? 'حالت آفلاین — مدل:' : 'Offline Mode — Model:'} {selectedId}</strong><button type="button" onClick={() => setViewMode('models')} className="rounded-lg border px-2.5 py-1.5">{dari ? 'تغییر مدل' : 'Change Model'}</button></div>}
         {!engineRef.current && <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center"><Sparkles size={34} className="opacity-40"/><p className="text-sm opacity-60">{installed.length === 0 ? copy.noOfflineModel : copy.choose}</p><button type="button" onClick={() => setViewMode('models')} className="rounded-xl bg-cyan-500 px-4 py-2.5 text-xs font-bold text-slate-950">{dari ? 'انتخاب یا دانلود مدل' : 'Choose or download a model'}</button></div>}
