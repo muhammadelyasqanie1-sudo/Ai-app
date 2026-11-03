@@ -429,7 +429,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     const userDetailRoute=pathname.match(/^\/api\/admin\/users\/([0-9a-f-]{36})$/i);
     if(req.method==='GET'&&userDetailRoute){
       const targetId=userDetailRoute[1];
-      const [profile,usage,conversations]=await Promise.all([
+      const [profile,usage,conversations,activity]=await Promise.all([
         pool.query(`SELECT u.id,u.email,u.display_name,u.role,u.status,u.created_at,u.deleted_at,
           (SELECT max(last_seen_at) FROM sessions WHERE user_id=u.id) AS last_login
           FROM users u WHERE u.id=$1 LIMIT 1`,[targetId]),
@@ -437,9 +437,11 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           COALESCE(sum(cost_usd),0)::numeric(18,6) AS total_cost,count(*)::int AS request_count
           FROM usage_records WHERE user_id=$1`,[targetId]),
         pool.query('SELECT count(*)::int AS total FROM conversations WHERE user_id=$1',[targetId]),
+        pool.query(`SELECT id,request_id,provider_key,model_key,tokens_in,tokens_out,cost_usd,latency_ms,status,created_at
+          FROM usage_records WHERE user_id=$1 ORDER BY created_at DESC LIMIT 25`,[targetId]),
       ]);
       if(!profile.rows[0]){sendAuthJson(res,404,{error:'User not found.'});return true;}
-      sendAuthJson(res,200,{user:{...profile.rows[0],usage:usage.rows[0],conversationCount:conversations.rows[0]?.total||0}});return true;
+      sendAuthJson(res,200,{user:{...profile.rows[0],usage:usage.rows[0],conversationCount:conversations.rows[0]?.total||0,activity:activity.rows}});return true;
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/overview') {
