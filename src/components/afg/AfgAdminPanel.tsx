@@ -57,6 +57,11 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [displayName,setDisplayName] = useState('AFG AI Administrator');
   const [showBootstrap,setShowBootstrap] = useState(false);
   const [providers,setProviders] = useState<ProviderRow[]>([]);
+  const [customProviderId,setCustomProviderId] = useState('');
+  const [customProviderName,setCustomProviderName] = useState('');
+  const [customProviderUrl,setCustomProviderUrl] = useState('');
+  const [customProviderKey,setCustomProviderKey] = useState('');
+  const [customProviderAuth,setCustomProviderAuth] = useState('bearer');
   const [models,setModels] = useState<ModelRow[]>([]);
   const [users,setUsers] = useState<UserRow[]>([]);
   const [overview,setOverview] = useState<Overview|null>(null);
@@ -150,6 +155,20 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       setNotice(`${provider.displayName}: connected · ${result.discoveredModels} models · ${result.latencyMs} ms`);
       await loadAdminData();
     }catch(err){setNotice('');setError(err instanceof Error?err.message:'Provider test failed.');}
+  };
+  const saveCustomProvider=async()=>{
+    setError('');setNotice('');
+    try {
+      const result=await api('/api/admin/providers/custom',{method:'POST',body:JSON.stringify({
+        providerId:customProviderId,displayName:customProviderName,baseUrl:customProviderUrl,
+        apiKey:customProviderKey,authMethod:customProviderAuth,apiFormat:'openai_chat_completions',enabled:false
+      })});
+      setCustomProviderKey('');
+      setNotice(result.message||'Encrypted provider configuration saved.');
+      await loadAdminData();
+    } catch(err) {
+      setError(err instanceof Error?err.message:'Could not save custom provider.');
+    }
   };
   const discoverModels=async()=>{
     setLoading(true);setError('');
