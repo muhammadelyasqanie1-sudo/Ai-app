@@ -173,6 +173,10 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerateStream(
         llama_memory_clear(llama_get_memory(g_context), true);
         const int32_t prompt_batch_size = static_cast<int32_t>(std::min<uint32_t>(llama_n_batch(g_context), 512));
         for (int32_t offset = 0; offset < token_count; offset += prompt_batch_size) {
+            if (g_cancel_requested.load(std::memory_order_acquire)) {
+                env->DeleteLocalRef(callback_class);
+                return env->NewStringUTF("");
+            }
             const int32_t count = std::min(prompt_batch_size, token_count - offset);
             llama_batch prompt_batch = llama_batch_get_one(tokens.data() + offset, count);
             if (llama_decode(g_context, prompt_batch) < 0) {
