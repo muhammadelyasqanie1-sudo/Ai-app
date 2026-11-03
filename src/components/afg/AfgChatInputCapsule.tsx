@@ -66,6 +66,14 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
       else localStorage.removeItem('afg_chat_draft_v1');
     } catch { /* Draft persistence is best-effort when device storage is unavailable. */ }
   }, [inputText]);
+  useEffect(() => {
+    const clearPrivateDraft = () => {
+      setInputText('');
+      try { localStorage.removeItem('afg_chat_draft_v1'); } catch { /* Ignore unavailable storage. */ }
+    };
+    window.addEventListener('afg-signout', clearPrivateDraft);
+    return () => window.removeEventListener('afg-signout', clearPrivateDraft);
+  }, []);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [voiceEnabled,setVoiceEnabled]=useState(()=>localStorage.getItem('afg_voice_enabled')!=='false');
