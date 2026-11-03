@@ -335,6 +335,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     }
     if (fit === 'incompatible') { setRuntimeMessage(dari ? 'این مدل با قابلیت‌های شناسایی‌شده دستگاه سازگار نیست.' : 'This model is incompatible with the detected device capabilities.'); return; }
     setBusy(true); setProgress(0); setProgressText(isDownload ? copy.downloading : copy.loading);
+    const modelOperationStartedAt = Date.now();
+    if (isDownload) void recordOfflineMetric({ name: 'download_started', modelId }).catch(() => undefined);
     try {
       if (engineRef.current) {
         try { await engineRef.current.unload(); } catch { /* continue with a fresh engine */ }
@@ -351,6 +353,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       });
       engineRef.current = engine;
       nativeEngineRef.current = false;
+      if (isDownload) void recordOfflineMetric({ name: 'download_completed', modelId, durationMs: Date.now() - modelOperationStartedAt }).catch(() => undefined);
       engineModelIdRef.current = modelId;
       setActiveOfflineModelLabel(modelId);
       setInstalled(previous => previous.includes(modelId) ? previous : [...previous, modelId]);
@@ -362,7 +365,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       }
     } catch (error) {
       const outOfMemory = /out of memory|allocation failed|cannot allocate/i.test(error instanceof Error ? error.message : '');
-      void recordOfflineDiagnostic({ code: outOfMemory ? 'out_of_memory' : 'model_load_error', modelId }).catch(() => undefined);
+      if (isDownload) void recordOfflineMetric({ name: outOfMemory ? 'out_of_memory' : 'download_failed', modelId, durationMs: Date.now() - modelOperationStartedAt }).catch(() => undefined);
+      void recordOfflineDiagnostic({ code: outOfMemory ? 'out_of_memory' : isDownload ? 'download_error' : 'model_load_error', modelId }).catch(() => undefined);
       setRuntimeMessage(error instanceof Error ? error.message : copy.failed);
     } finally { setBusy(false); setProgress(0); setProgressText(''); }
   }, [busy, runtime, webGpuAvailable, copy, dari, models, device, modelSizes, storage]);
