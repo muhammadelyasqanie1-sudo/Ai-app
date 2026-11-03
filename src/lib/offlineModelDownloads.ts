@@ -1,3 +1,6 @@
+import { Capacitor } from '@capacitor/core';
+import { AFGOfflineModels } from '@afg-ai/capacitor-offline-models';
+
 export type OfflineDownloadState = {
   id: string;
   repoId: string;
@@ -24,6 +27,39 @@ export type OfflineDownloadProgress = {
 type DownloadListener = (progress: OfflineDownloadProgress) => void;
 type DownloadTask = { controller: AbortController; paused: boolean };
 
+function isAndroidNative(): boolean { return Capacitor.getPlatform() === 'android'; }
+
+function mapNativeDownload(item: Awaited<ReturnType<typeof AFGOfflineModels.getDownloadStatus>>): OfflineDownloadState {
+  return {
+    id: item.id, repoId: item.repoId, fileName: item.fileName, revision: item.revision,
+    url: 'https://huggingface.co/' + item.repoId + '/resolve/' + item.revision + '/' + item.fileName,
+    expectedBytes: item.expectedBytes, downloadedBytes: item.downloadedBytes, expectedSha256: item.expectedSha256,
+    computedSha256: item.computedSha256, hashVerified: item.hashVerified, status: item.status,
+    updatedAt: Date.now(), error: item.error,
+  };
+}
+
+async function downloadGGUFAndroid(options: Parameters<typeof downloadGGUF>[0]): Promise<OfflineDownloadState> {
+  const revision = options.revision || 'main';
+  const url = 'https://huggingface.co/' + options.repoId + '/resolve/' + encodeURIComponent(revision) + '/' + options.fileName.split('/').map(encodeURIComponent).join('/');
+  const started = await AFGOfflineModels.startDownload({ url, repoId: options.repoId, revision, fileName: options.fileName, expectedBytes: options.expectedBytes, expectedSha256: options.expectedSha256 });
+  const abort = () => { void AFGOfflineModels.cancelDownload({ downloadId: started.downloadId }); };
+  options.signal?.addEventListener('abort', abort, { once: true });
+  try {
+    while (true) {
+      if (options.signal?.aborted) throw new Error('Android model download was cancelled.');
+      const native = await AFGOfflineModels.getDownloadStatus({ downloadId: started.downloadId });
+      const state = mapNativeDownload(native);
+      const totalBytes = state.expectedBytes;
+      options.onProgress?.({ downloadedBytes: state.downloadedBytes, totalBytes, percent: totalBytes ? Math.min(100, Math.floor(state.downloadedBytes / totalBytes * 100)) : null, status: state.status });
+      if (state.status === 'installed') return state;
+      if (state.status === 'error') throw new Error(state.error || 'Android model download failed.');
+      await new Promise(resolve => window.setTimeout(resolve, 1200));
+    }
+  } finally { options.signal?.removeEventListener('abort', abort); }
+}
+
+export const usesNativeOfflineDownloads = isAndroidNative;
 const DB_NAME = 'afg-ai-offline-downloads';
 const STORE = 'tasks';
 const ROOT_DIR = 'afg-ai-models';
@@ -60,6 +96,7 @@ async function saveTask(task: OfflineDownloadState): Promise<void> {
 }
 
 export async function listOfflineDownloads(): Promise<OfflineDownloadState[]> {
+  if (isAndroidNative()) { const result = await AFGOfflineModels.listDownloads(); return result.downloads.map(mapNativeDownload).sort((a,b) => b.updatedAt - a.updatedAt); }
   const db = await openDb();
   const result = await new Promise<OfflineDownloadState[]>((resolve, reject) => {
     const request = db.transaction(STORE, 'readonly').objectStore(STORE).getAll();
@@ -71,6 +108,7 @@ export async function listOfflineDownloads(): Promise<OfflineDownloadState[]> {
 }
 
 export async function getOfflineDownload(id: string): Promise<OfflineDownloadState | null> {
+  if (isAndroidNative()) return (await listOfflineDownloads()).find(item => item.id === id) || null;
   const db = await openDb();
   const result = await new Promise<OfflineDownloadState | null>((resolve, reject) => {
     const request = db.transaction(STORE, 'readonly').objectStore(STORE).get(id);
@@ -157,6 +195,7 @@ export async function downloadGGUF(options: {
   const { repoId, fileName } = options;
   const revision = options.revision || 'main';
   const id = repoId + '/' + fileName;
+  if (isAndroidNative()) return downloadGGUFAndroid(options);
   if (!/^[^/]+\/[^/]+$/.test(repoId) || !fileName.toLowerCase().endsWith('.gguf') || fileName.split('/').some(part => !part || part === '.' || part === '..')) throw new Error('Invalid GGUF model selection.');
   if (activeTasks.has(id)) throw new Error('This model is already downloading.');
   const controller = new AbortController();
@@ -267,11 +306,13 @@ export async function downloadGGUF(options: {
 }
 
 export function pauseGGUFDownload(id: string): void {
+  if (isAndroidNative()) return; // Android DownloadManager retries/resumes interrupted transfers in the background.
   const task = activeTasks.get(id);
   if (task) { task.paused = true; task.controller.abort('paused by user'); }
 }
 
 export async function removeOfflineModel(id: string): Promise<void> {
+  if (isAndroidNative()) { const item = await getOfflineDownload(id); if (item) { const native = (await AFGOfflineModels.listDownloads()).downloads.find(entry => entry.id === id); if (native) await AFGOfflineModels.deleteModel({ downloadId: native.downloadId }); } return; }
   const dir = await modelDirectory();
   const task = await getOfflineDownload(id);
   if (!task) return;
@@ -288,6 +329,7 @@ export async function removeOfflineModel(id: string): Promise<void> {
 }
 
 export async function getInstalledModelFile(id: string): Promise<File | null> {
+  if (isAndroidNative()) return null; // Native inference runtimes consume the private file path from the Android plugin.
   const task = await getOfflineDownload(id);
   if (!task || task.status !== 'installed') return null;
   const dir = await modelDirectory();
