@@ -1,8 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@capacitor/core', () => ({ Capacitor: { getPlatform: () => 'web' } }));
+const nativeMocks = vi.hoisted(() => ({
+  addListener: vi.fn(),
+  generateStream: vi.fn(),
+  cancelGeneration: vi.fn(),
+  removeListener: vi.fn(),
+}));
 
-import { getNativeLlamaRuntimeInfo, loadNativeLlamaModel } from '../src/lib/offlineLlamaRuntime';
+vi.mock('@capacitor/core', () => ({ Capacitor: { getPlatform: () => 'android' } }));
+vi.mock('@afg-ai/capacitor-offline-models', () => ({
+  AFGOfflineModels: {
+    addListener: nativeMocks.addListener,
+    generateStream: nativeMocks.generateStream,
+    cancelGeneration: nativeMocks.cancelGeneration,
+    getRuntimeInfo: vi.fn(async () => ({ available: true, engine: 'llama.cpp', abi: 'arm64-v8a', backend: 'CPU' })),
+    loadModel: vi.fn(),
+    unloadModel: vi.fn(),
+  },
+}));
+
+import { getNativeLlamaRuntimeInfo, loadNativeLlamaModel, streamNativeLlamaResponse } from '../src/lib/offlineLlamaRuntime';
 
 describe('offline llama runtime', () => {
   it('reports native inference unavailable on web', async () => {
