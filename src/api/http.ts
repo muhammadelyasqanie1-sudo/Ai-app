@@ -38,7 +38,7 @@ async function enforceAdminConfiguredRateLimits(req: IncomingMessage, res: Serve
   if (!pool || !pathname.startsWith('/api/') || ['/api/health','/api/ready'].includes(pathname)) return false;
   // Guest requests have no authenticated identity or subscription policy. Avoid
   // querying session tables for them so public chat remains available during DB setup.
-  if (!/(?:^|;)\\s*afg_session=/.test(req.headers.cookie || '')) return false;
+  if (!/(?:^|;)\s*afg_session=/.test(req.headers.cookie || '')) return false;
   let account: Awaited<ReturnType<typeof authenticateRequest>> = null;
   try { account = await authenticateRequest(req); } catch {
     sendJson(res,503,{error:'Authentication checks are temporarily unavailable.'},requestId);
