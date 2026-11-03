@@ -115,11 +115,11 @@ export function ensureCsrfCookie(req: IncomingMessage, res: ServerResponse): voi
   res.setHeader('Set-Cookie', values);
 }
 
-export function setSessionCookies(res: ServerResponse, sessionToken: string, csrfToken: string) {
+export function setSessionCookies(res: ServerResponse, sessionToken: string, csrfToken: string, maxAgeSeconds = Math.floor(SESSION_TTL_MS / 1000)) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   res.setHeader('Set-Cookie', [
-    `afg_session=${encodeURIComponent(sessionToken)}; ${cookieOptions()}; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
-    `afg_csrf=${encodeURIComponent(csrfToken)}; Path=/; SameSite=Lax${secure}; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
+    `afg_session=${encodeURIComponent(sessionToken)}; ${cookieOptions()}; Max-Age=${maxAgeSeconds}`,
+    `afg_csrf=${encodeURIComponent(csrfToken)}; Path=/; SameSite=Lax${secure}; Max-Age=${maxAgeSeconds}`,
   ]);
 }
 
@@ -185,6 +185,14 @@ export function verifyCsrf(req: IncomingMessage): boolean {
   return timingSafeEqual(Buffer.from(jar.afg_csrf), Buffer.from(header));
 }
 
+export async function verifyUserPassword(userId:string,password:string):Promise<boolean>{
+  if(!pool||!password||password.length>256)return false;
+  const result=await pool.query('SELECT password_hash FROM users WHERE id=$1 AND status=\\'active\\' LIMIT 1',[userId]);
+  const encoded=result.rows[0]?.password_hash;
+  if(typeof encoded!=='string'||!encoded)return false;
+  return verifyPassword(password,encoded);
+}
+
 export async function createSession(userId: string, res: ServerResponse): Promise<void> {
   if (!pool) throw new Error('Database is not configured.');
   const sessionToken = randomBytes(32).toString('base64url');
@@ -196,7 +204,7 @@ export async function createSession(userId: string, res: ServerResponse): Promis
     'INSERT INTO sessions (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
     [userId, hash(sessionToken), expiresAt],
   );
-  setSessionCookies(res, sessionToken, csrfToken);
+  setSessionCookies(res, sessionToken, csrfToken, isAdministrator ? 8 * 60 * 60 : Math.floor(SESSION_TTL_MS / 1000));
 }
 
 export async function destroySession(req: IncomingMessage, res: ServerResponse): Promise<void> {
