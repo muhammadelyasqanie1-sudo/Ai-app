@@ -135,6 +135,18 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     localStorage.setItem(INSTALLED_KEY, JSON.stringify(installed));
   }, [installed]);
 
+  useEffect(() => {
+    if (!models.length || !installed.length) return;
+    let active = true;
+    void import('@mlc-ai/web-llm').then(async ({ hasModelInCache, prebuiltAppConfig }) => {
+      const appConfig = { ...prebuiltAppConfig, cacheBackend: 'indexeddb' as const };
+      const checks = await Promise.all(installed.map(async id => [id, await hasModelInCache(id, appConfig)] as const));
+      if (active) setInstalled(previous => previous.filter(id => checks.some(([checkedId, cached]) => checkedId === id && cached)));
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [models, installed.length]);
+
+
   useEffect(() => { void listOfflineDownloads().then(setGgufTasks).catch(() => undefined); }, []);
 
   useEffect(() => {
@@ -251,6 +263,14 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     } finally { setBusy(false); setProgress(0); setProgressText(''); }
   }, [busy, runtime, copy, dari, models, device, modelSizes, storage]);
 
+  const removeMlcModel = async (modelId: string) => {
+    try {
+      if (selectedId === modelId && engineRef.current) { await engineRef.current.unload(); engineRef.current = null; setMessages([]); }
+      const { deleteModelAllInfoInCache, prebuiltAppConfig } = await import('@mlc-ai/web-llm');
+      await deleteModelAllInfoInCache(modelId, { ...prebuiltAppConfig, cacheBackend: 'indexeddb' });
+      setInstalled(previous => previous.filter(id => id !== modelId));
+    } catch (error) { setRuntimeMessage(error instanceof Error ? error.message : copy.failed); }
+  };
   const sendMessage = async () => {
     const text = prompt.trim();
     if (!text || !engineRef.current || chatBusy) return;
@@ -333,7 +353,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
           <button type="submit" disabled={!engineRef.current || !prompt.trim() || chatBusy} className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-40">{copy.send}</button>
         </form>
         <div className="mt-3 border-t pt-3"><div className="mb-2 text-xs font-semibold opacity-70">{copy.installed}</div>
-          {installed.length === 0 ? <p className="text-xs opacity-55">{copy.noInstalled}</p> : installed.map(id=><div key={id} className="flex items-center justify-between gap-2 py-1.5 text-xs"><span className="min-w-0 break-all">{id}</span></div>)}
+          {installed.length === 0 ? <p className="text-xs opacity-55">{copy.noInstalled}</p> : installed.map(id=><div key={id} className="flex items-center justify-between gap-2 py-1.5 text-xs"><span className="min-w-0 break-all">{id}</span><button type="button" onClick={() => void removeMlcModel(id)} className="shrink-0 rounded-lg border px-2 py-1 text-[10px]">{dari ? 'حذف' : 'Delete'}</button></div>)}
         </div>
       </section>}
 
