@@ -36,6 +36,9 @@ public class AFGDeviceInfoPlugin extends Plugin {
             result.put("cpuCores", Runtime.getRuntime().availableProcessors());
             result.put("memoryGiB", memory.totalMem > 0
                     ? Math.round((memory.totalMem / 1073741824.0) * 10.0) / 10.0 : 0);
+            result.put("availableMemoryGiB", memory.availMem > 0
+                    ? Math.round((memory.availMem / 1073741824.0) * 10.0) / 10.0 : 0);
+            result.put("lowMemory", memory.lowMemory);
             // App-scoped filesystem availability; Android does not expose a universal free-space figure.
             result.put("storageFreeBytes", storage.getAvailableBytes());
             call.resolve(result);

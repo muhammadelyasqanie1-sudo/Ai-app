@@ -112,8 +112,8 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     if (req.method === 'PATCH' && pathname === '/api/admin/users') {
       const body = await readJsonBody(req, 8000);
       const targetId = typeof body.userId === 'string' ? body.userId : '';
-      const role = body.role;
-      const status = body.status;
+      const role = typeof body.role === 'string' ? body.role : undefined;
+      const status = typeof body.status === 'string' ? body.status : undefined;
       if (!targetId || (role !== undefined && !['user','admin'].includes(role)) ||
           (status !== undefined && !['active','suspended'].includes(status)) ||
           (role === undefined && status === undefined)) {
@@ -183,7 +183,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
 
     if (req.method === 'PATCH' && pathname === '/api/admin/rate-limits') {
       const body = await readJsonBody(req, 8000);
-      const scopeType = body.scopeType;
+      const scopeType = typeof body.scopeType === 'string' ? body.scopeType : '';
       const scopeKey = typeof body.scopeKey === 'string' ? body.scopeKey.trim().slice(0,180) : '';
       const requests = Number(body.requests), windowSeconds = Number(body.windowSeconds);
       const enabled = body.enabled !== false;

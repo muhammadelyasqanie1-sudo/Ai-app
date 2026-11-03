@@ -261,7 +261,7 @@ export default function App() {
     serverConversationRef.current = null;
   }, [user.email]);
 
-  const getCsrfHeaders = () => {
+  const getCsrfHeaders = (): Record<string, string> => {
     const token = document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '';
     return token ? { 'X-CSRF-Token': decodeURIComponent(token) } : {};
   };
@@ -580,6 +580,7 @@ export default function App() {
         onOpenSettings={() => setCurrentTab('settings')}
         onOpenMenu={() => setIsSideMenuOpen(true)}
         onNewChat={handleNewChat}
+        onOpenModels={() => setCurrentTab('offline-models')}
       />
 
       {/* Main Content Area */}
@@ -636,7 +637,9 @@ export default function App() {
 
         {currentTab === 'offline-learning' && <AfgOfflineView language={language} />}
 
-        {currentTab === 'offline-ai-hub' && <AfgOfflineHubView language={language} />}
+        {currentTab === 'offline-ai-hub' && <AfgOfflineHubView language={language} initialView="chat" />}
+        {currentTab === 'offline-chat' && <AfgOfflineHubView language={language} initialView="chat" />}
+        {currentTab === 'offline-models' && <AfgOfflineHubView language={language} initialView="models" />}
 
         {currentTab === 'history' && (
           <AfgHistoryView
