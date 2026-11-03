@@ -59,9 +59,15 @@ describe('offline llama runtime', () => {
     expect(remove).toHaveBeenCalledTimes(1);
   });
 
-  it('calls native cancel when the AbortSignal fires', async () => {
+  it('calls native cancel when the AbortSignal fires during generation', async () => {
     const controller = new AbortController();
-    nativeMocks.generateStream.mockResolvedValue({ text: '', cancelled: true });
+    let resolveGeneration: ((value: { text: string; cancelled: boolean }) => void) | undefined;
+    let markStarted: (() => void) | undefined;
+    const started = new Promise<void>(resolve => { markStarted = resolve; });
+    nativeMocks.generateStream.mockImplementation(() => {
+      markStarted?.();
+      return new Promise(resolve => { resolveGeneration = resolve; });
+    });
     const pending = streamNativeLlamaResponse(
       [{ role: 'user', content: 'Stop' }],
       64,
@@ -69,9 +75,11 @@ describe('offline llama runtime', () => {
       controller.signal,
     );
 
+    await started;
     controller.abort();
-    await expect(pending).resolves.toEqual({ text: '', cancelled: true });
     expect(nativeMocks.cancelGeneration).toHaveBeenCalledTimes(1);
+    resolveGeneration?.({ text: '', cancelled: true });
+    await expect(pending).resolves.toEqual({ text: '', cancelled: true });
   });
 
   it('rejects a signal that was already aborted before native inference', async () => {
