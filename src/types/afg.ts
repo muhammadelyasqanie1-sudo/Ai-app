@@ -10,6 +10,8 @@ export type TabType =
   | 'terminal'
   | 'offline-learning'
   | 'offline-ai-hub'
+  | 'offline-chat'
+  | 'offline-models'
   | 'history'
   | 'settings' 
   | 'admin';
