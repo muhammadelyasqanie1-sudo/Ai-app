@@ -176,6 +176,12 @@ export function AfgTerminalView({ language }: { language: Language }) {
   }, []);
 
   useEffect(() => {
+    if (showTokens && signedIn && serverAvailable) {
+      void loadTokens().catch(() => setError(dari ? 'فهرست توکن‌ها بارگذاری نشد.' : 'Could not load CLI tokens.'));
+    }
+  }, [showTokens, signedIn, serverAvailable, loadTokens, dari]);
+
+  useEffect(() => {
     if (session && serverAvailable) {
       void loadAudit(session).catch(() => setError(dari ? 'تاریخچه نشست بارگذاری نشد.' : 'Could not load session history.'));
     }
