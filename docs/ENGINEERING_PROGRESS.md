@@ -107,3 +107,32 @@
 ### Next action
 
 - Continue reviewing admin mutations and the current role model; determine the safest additive path for granular staff permissions without weakening the existing admin gate or requiring an unapproved production migration.
+
+
+## Milestone 4 — Atomic audit records for admin configuration
+
+**Status:** IMPLEMENTED BUT NOT VERIFIED
+
+### Completed
+
+- Rate-limit policy updates now commit with their audit event in one transaction.
+- Feature-flag updates now commit with their audit event in one transaction.
+- A failed audit insert rolls back the associated configuration mutation rather than leaving an unaudited change.
+
+### Files changed
+
+- `src/api/adminHandler.ts`
+
+### Verification
+
+- Source-level review confirms transaction boundaries around both mutations and their audit inserts.
+- No database transaction test, test suite, type-check, build or deployment was run.
+
+### Blocker encountered
+
+- An attempted source update to `src/api/database.ts` to emit `SUCCESS SUPABASE_DATABASE_CONNECTED` only after a successful `SELECT 1` was blocked by the GitHub write tool's safety gate with: `This tool call was blocked by OpenAI's safety checks. Please double check what you are sending.`
+- The root cause is unknown. No retry or alternate write path was attempted. The file remains unchanged; Supabase connection logging is therefore still not implemented by this mission.
+
+### Next action
+
+- Continue reviewing admin mutation paths and backend authorization. Revisit database success logging only through a supported, approved write operation; do not bypass the safety gate.
