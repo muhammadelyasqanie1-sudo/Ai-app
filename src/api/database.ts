@@ -5,6 +5,8 @@ const sslMode = process.env.DATABASE_SSL;
 
 export const databaseConfigured = Boolean(connectionString);
 
+let databaseConnectionAnnounced = false;
+
 export const pool = connectionString
   ? new Pool({
       connectionString,
@@ -19,6 +21,10 @@ export async function checkDatabase() {
   if (!pool) return { configured: false, connected: false, message: 'DATABASE_URL is not configured' };
   try {
     await pool.query('SELECT 1');
+    if (!databaseConnectionAnnounced) {
+      console.info('SUCCESS SUPABASE_DATABASE_CONNECTED');
+      databaseConnectionAnnounced = true;
+    }
     return { configured: true, connected: true };
   } catch {
     console.error('DATABASE_HEALTH_CHECK_FAILED');
