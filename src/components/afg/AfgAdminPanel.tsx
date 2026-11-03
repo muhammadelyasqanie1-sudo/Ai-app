@@ -300,19 +300,38 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     {loading&&<div className="h-1 overflow-hidden rounded-full bg-slate-800"><div className="h-full w-1/3 animate-pulse rounded-full bg-cyan-400"/></div>}
 
     {tab==='overview'&&<div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {stat('Total users',overview?.users?.total,'Registered accounts',Users)}
-        {stat('Active users',overview?.users?.active,'Accounts currently active',Activity)}
-        {stat('Requests · 24h',overview?.requests?.total,'Observed API requests',Activity)}
-        {stat('Server errors · 24h',overview?.requests?.server_errors,'HTTP 5xx responses',AlertTriangle)}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+        {stat('Active users today',overview?.dashboard?.activeUsersToday,'Users with an AI request today',Users)}
+        {stat('AI requests today',overview?.dashboard?.aiRequestsToday,'Recorded model requests',Activity)}
+        {stat('Error rate',overview?.dashboard?.errorRatePercent==null?'—':Number(overview.dashboard.errorRatePercent).toFixed(2)+'%','Failed AI requests today',AlertTriangle)}
+        {stat('Average latency',overview?.dashboard?.averageLatencyMs==null?'—':fmt(overview.dashboard.averageLatencyMs)+' ms','AI request average',Gauge)}
+        {stat("Today's cost",overview?.dashboard?.todayCostUsd==null?'—':'$'+Number(overview.dashboard.todayCostUsd).toFixed(4),'Recorded model cost · USD',HardDrive)}
       </div>
-      <div className="grid gap-4 xl:grid-cols-3">
-        <div className={panel+' xl:col-span-2'}><div className="mb-4 flex items-center justify-between"><h2 className="font-bold text-white">Request & token activity</h2><span className="text-[11px] text-slate-500">Last 14 days · UTC</span></div>
-          <div className="flex h-44 items-end gap-2 border-b border-slate-800 pb-2">{(overview?.usage||[]).map((item:any,i:number)=>{const max=Math.max(1,...(overview?.usage||[]).map((x:any)=>Number(x.requests)));const h=Math.max(3,Number(item.requests)/max*100);return <div key={i} className="flex h-full min-w-0 flex-1 flex-col justify-end gap-1"><div title={`${item.requests} requests · ${fmt(item.tokens)} tokens`} style={{height:h+'%'}} className="w-full rounded-t-md bg-gradient-to-t from-cyan-700 to-cyan-300"/><span className="truncate text-center text-[9px] text-slate-500">{new Intl.DateTimeFormat(locale,{day:'numeric',month:'short'}).format(new Date(item.day))}</span></div>;})}{!overview?.usage?.length&&<p className="m-auto text-xs text-slate-500">No usage events recorded yet.</p>}</div>
+      <div className={panel}>
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold text-white">Urgent system alerts</h2><p className="text-xs text-slate-500">Derived from current provider, model, usage and error records.</p></div><button className={secondary} onClick={()=>void loadAdminData()}>Refresh alerts</button></div>
+        {(overview?.dashboard?.alerts||[]).length>0?<div className="mt-3 grid gap-2 md:grid-cols-2">{overview.dashboard.alerts.map((alert:any,i:number)=><div key={alert.kind+i} className={'rounded-xl border p-3 '+(alert.severity==='critical'?'border-red-500/30 bg-red-500/5':'border-amber-500/30 bg-amber-500/5')}>
+          <div className="flex items-center justify-between gap-2"><b className={alert.severity==='critical'?'text-red-300':'text-amber-300'}>{alert.kind.replace(/_/g,' ')}</b><span className="text-[10px] text-slate-500">{alert.count??''}</span></div><p className="mt-1 text-xs text-slate-300">{alert.message}</p>
+        </div>)}</div>:<p className="mt-4 text-sm text-emerald-300">No urgent alerts recorded.</p>}
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <div className={panel}><h2 className="mb-3 font-bold text-white">Requests by provider · 24h</h2>
+          {(overview?.dashboard?.requestsByProvider||[]).map((item:any)=>{const max=Math.max(1,...(overview?.dashboard?.requestsByProvider||[]).map((v:any)=>Number(v.requests)));return <div key={item.provider_key||'unknown'} className="mb-3"><div className="mb-1 flex justify-between text-xs"><span className="text-slate-300">{item.provider_key||'Unknown provider'}</span><span className="text-slate-400">{fmt(item.requests)} · ${Number(item.cost_usd||0).toFixed(4)}</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-cyan-400" style={{width:(Number(item.requests)/max*100)+'%'}}/></div></div>})}
+          {!(overview?.dashboard?.requestsByProvider||[]).length&&<p className="text-xs text-slate-500">No provider usage recorded for this period.</p>}
         </div>
-        <div className={panel}><h2 className="font-bold text-white">Platform snapshot</h2><div className="mt-4 space-y-4 text-sm"><div className="flex justify-between"><span className="text-slate-400">Suspended accounts</span><b className="text-white">{fmt(overview?.users?.suspended)}</b></div><div className="flex justify-between"><span className="text-slate-400">Client errors · 24h</span><b className="text-white">{fmt(overview?.requests?.client_errors)}</b></div><div className="flex justify-between"><span className="text-slate-400">API successes · 24h</span><b className="text-emerald-300">{fmt(overview?.requests?.successful)}</b></div><div className="flex justify-between"><span className="text-slate-400">Database</span><b className="text-white">{overview?.storage?'Connected':'Unknown'}</b></div></div></div>
+        <div className={panel}><h2 className="mb-3 font-bold text-white">Errors by class · 24h</h2>
+          {(overview?.dashboard?.errorsByClass||[]).map((item:any)=>{const max=Math.max(1,...(overview?.dashboard?.errorsByClass||[]).map((v:any)=>Number(v.errors)));return <div key={item.error_class} className="mb-3"><div className="mb-1 flex justify-between text-xs"><span className="text-slate-300">{item.error_class}</span><span className="text-slate-400">{fmt(item.errors)}</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-rose-400" style={{width:(Number(item.errors)/max*100)+'%'}}/></div></div>})}
+          {!(overview?.dashboard?.errorsByClass||[]).length&&<p className="text-xs text-slate-500">No classified errors recorded for this period.</p>}
+        </div>
       </div>
-      <div className={panel}><h2 className="mb-3 font-bold text-white">Recent API errors</h2><RequestTable rows={requests.filter(r=>r.status_code>=400).slice(0,8)} language={language}/></div>
+      <div className={panel}><h2 className="mb-3 font-bold text-white">Latency percentiles · 24h</h2><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {['p50','p95','p99'].map(key=><div key={key} className="rounded-xl bg-slate-900 p-3"><p className="text-xs uppercase text-slate-500">{key}</p><b className="text-xl text-white">{fmt(overview?.dashboard?.latency?.[key])} ms</b></div>)}
+        <div className="rounded-xl bg-slate-900 p-3"><p className="text-xs text-slate-500">Daily budget limit</p><b className="text-xl text-white">{Number(overview?.dashboard?.dailyCostThresholdUsd||0)>0?'$'+Number(overview.dashboard.dailyCostThresholdUsd).toFixed(2):'Not set'}</b></div>
+      </div></div>
+      <div className={panel}><h2 className="mb-3 font-bold text-white">Platform snapshot</h2><div className="grid gap-3 sm:grid-cols-3 text-sm">
+        <div><span className="text-slate-400">Registered users</span><p className="text-lg font-bold text-white">{fmt(overview?.users?.total)}</p></div>
+        <div><span className="text-slate-400">Suspended accounts</span><p className="text-lg font-bold text-white">{fmt(overview?.users?.suspended)}</p></div>
+        <div><span className="text-slate-400">Database size</span><p className="text-lg font-bold text-white">{overview?.storage?.database_bytes?fmt(Number(overview.storage.database_bytes)/1048576)+' MB':'—'}</p></div>
+      </div></div>
     </div>}
 
     {tab==='users'&&<div className={panel}><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">User management</h2><p className="text-xs text-slate-500">Suspend access, revoke sessions, and assign roles.</p></div><div className="relative w-full sm:w-72"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500"/><input className={field+' pl-9'} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search email or user ID"/></div></div>
