@@ -88,11 +88,6 @@ async function getFileSize(dir: FileSystemDirectoryHandle, name: string): Promis
   try { return (await (await dir.getFileHandle(name)).getFile()).size; } catch { return 0; }
 }
 
-async function writeChunk(handle: FileSystemFileHandle, offset: number, chunk: Uint8Array): Promise<void> {
-  const writable = await handle.createWritable({ keepExistingData: true });
-  try { await writable.seek(offset); await writable.write(chunk); await writable.close(); }
-  catch (error) { await writable.abort().catch(() => undefined); throw error; }
-}
 
 /** Incremental SHA-256 so multi-gigabyte models are never loaded into one ArrayBuffer. */
 class Sha256 {
@@ -164,13 +159,15 @@ export async function downloadGGUF(options: {
   activeTasks.set(id, task);
   const relayAbort = () => controller.abort(options.signal?.reason);
   options.signal?.addEventListener('abort', relayAbort, { once: true });
-  const dir = await modelDirectory();
   const partial = partName(id);
   const target = finalName(id, fileName);
   const expectedBytes = options.expectedBytes && options.expectedBytes > 0 ? options.expectedBytes : null;
   const expectedSha256 = options.expectedSha256?.toLowerCase() || null;
+  let activeWritable: FileSystemWritableFileStream | null = null;
   try {
+    const dir = await modelDirectory();
     let offset = await getFileSize(dir, partial);
+    await saveTask({ id, repoId, fileName, url: 'https://huggingface.co/' + repoId + '/resolve/main/' + fileName, expectedBytes, downloadedBytes: offset, expectedSha256, status: 'downloading', updatedAt: Date.now() });
     let response = await fetch('https://huggingface.co/' + encodeURIComponent(repoId).replace('%2F','/') + '/resolve/main/' + fileName.split('/').map(encodeURIComponent).join('/'), {
       headers: offset ? { Range: 'bytes=' + offset + '-' } : {},
       signal: controller.signal,
@@ -189,6 +186,9 @@ export async function downloadGGUF(options: {
     const totalBytes = Number.isFinite(totalFromRange) && totalFromRange! > 0 ? totalFromRange : expectedBytes;
     const handle = await dir.getFileHandle(partial, { create: true });
     const reader = response.body.getReader();
+    const writable = await handle.createWritable({ keepExistingData: true });
+    activeWritable = writable;
+    await writable.seek(offset);
     let downloadedBytes = offset;
     const sha = new Sha256();
     // Resumed files are re-read to ensure the final digest covers every byte.
@@ -203,11 +203,13 @@ export async function downloadGGUF(options: {
     while (true) {
       const item = await reader.read();
       if (item.done) break;
-      await writeChunk(handle, downloadedBytes, item.value);
+      await writable.write(item.value);
       sha.update(item.value);
       downloadedBytes += item.value.length;
       emit('downloading');
     }
+    await writable.close();
+    activeWritable = null;
     if (totalBytes && downloadedBytes !== totalBytes) throw new Error('Downloaded file size does not match the expected size.');
     const digest = sha.digest();
     if (expectedSha256 && digest !== expectedSha256) {
@@ -231,6 +233,7 @@ export async function downloadGGUF(options: {
     emit('installed');
     return result;
   } catch (error) {
+    if (activeWritable) await activeWritable.close().catch(() => undefined);
     const paused = task.paused || controller.signal.aborted;
     const current = await getFileSize(dir, partial).catch(() => 0);
     const result: OfflineDownloadState = {
