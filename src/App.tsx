@@ -19,6 +19,7 @@ import { AfgOfflineHubView } from './components/afg/AfgOfflineHubView';
 import { AfgSideMenu } from './components/afg/AfgSideMenu';
 import { AfgLanguageModal } from './components/afg/AfgLanguageModal';
 import { AfgCinematicIntro } from './components/afg/AfgCinematicIntro';
+import { AfgAuthGate } from './components/afg/AfgAuthGate';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { ErrorBoundary } from './components/afg/AfgDesignSystem';
 import { applyDocumentLocale } from './utils/i18n';
@@ -59,10 +60,8 @@ export default function App() {
     const saved = localStorage.getItem('afg_language');
     return saved === 'dari' || saved === 'english';
   });
-  const [isIntroVisible, setIsIntroVisible] = useState(() => {
-    const saved = localStorage.getItem('afg_language');
-    return saved === 'dari' || saved === 'english';
-  });
+  const [isIntroVisible, setIsIntroVisible] = useState(() => localStorage.getItem('afg_intro_seen') !== 'true');
+  const [hasEnteredApp, setHasEnteredApp] = useState(() => localStorage.getItem('afg_entry_mode') === 'guest');
 
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('afg_theme');
@@ -236,6 +235,8 @@ export default function App() {
         .then((data) => {
           if (data?.authenticated && data.user) {
             wasAuthenticatedRef.current = true;
+            setHasEnteredApp(true);
+            localStorage.setItem('afg_entry_mode', 'account');
             setUser({ name: data.user.displayName || 'User', nameEn: data.user.displayName || 'User', email: data.user.email || '', avatar: '', isPremium: false, tier: 'Free' });
             fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const saved=prefs?.preferences; if(saved?.appearance&&['light','dark','neon','system'].includes(saved.appearance))setTheme(saved.appearance); if((saved?.locale||saved?.language)&&['dari','english'].includes(saved.locale||saved.language)){if(localeChangedThisSession.current){const chosen=localStorage.getItem('afg_language')==='english'?'english':'dari';const csrf=document.cookie.split('; ').find((item)=>item.startsWith('afg_csrf='))?.slice('afg_csrf='.length)||'';void fetch(API_BASE_URL+'/api/account/locale',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(csrf)},body:JSON.stringify({locale:chosen})}).catch(()=>console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));}else{setLanguage(saved.locale==='english'||saved.language==='english'?'english':'dari');setHasSelectedLanguage(true);localStorage.setItem('afg_language',saved.locale==='english'||saved.language==='english'?'english':'dari');}} document.documentElement.style.fontSize=String(saved?.font_size||14)+'px'; const accentMap:Record<string,string>={cyan:'#00e5ff',blue:'#3b82f6',violet:'#8b5cf6',emerald:'#10b981',rose:'#f43f5e'}; document.documentElement.style.setProperty('--accent-cyan',accentMap[saved?.accent_color]||accentMap.cyan); document.documentElement.dataset.afgDensity=saved?.density||'comfortable'; document.documentElement.dataset.afgChatWidth=saved?.chat_width||'comfortable'; document.documentElement.classList.toggle('afg-reduce-motion',saved?.animations_enabled===false); localStorage.setItem('afg_voice_enabled',String(saved?.voice_enabled!==false)); window.dispatchEvent(new Event('afg-voice-preference-change')); if(saved?.auto_select_model===false){setSelectedModel('auto');return;} const model=saved?.default_model; if(typeof model==='string'&&model)setSelectedModel(model); }).catch(() => {});
           } else {
@@ -321,7 +322,7 @@ export default function App() {
     localeChangedThisSession.current = true;
     setLanguage(nextLanguage);
     setHasSelectedLanguage(true);
-    setIsIntroVisible(true);
+    setIsIntroVisible(false);
     localStorage.setItem('afg_language', nextLanguage);
     applyDocumentLocale(nextLanguage);
     fetch(API_BASE_URL + '/api/auth/me', { credentials: 'include' }).then((response) => response.ok ? response.json() : null).then((authData) => {
@@ -563,12 +564,16 @@ export default function App() {
     setCurrentTab('chat');
   };
 
+  if (isIntroVisible) {
+    return <AfgCinematicIntro language={language} onComplete={() => { localStorage.setItem('afg_intro_seen', 'true'); setIsIntroVisible(false); }} />;
+  }
+
   if (!hasSelectedLanguage) {
     return <AfgLanguageModal isOpen={true} language={null} onSelectLanguage={handleSetLanguage} />;
   }
 
-  if (isIntroVisible) {
-    return <AfgCinematicIntro language={language} onComplete={() => setIsIntroVisible(false)} />;
+  if (!hasEnteredApp) {
+    return <AfgAuthGate language={language} onContinueGuest={() => { localStorage.setItem('afg_entry_mode', 'guest'); setHasEnteredApp(true); }} onAuthenticated={() => { localStorage.setItem('afg_entry_mode', 'account'); setHasEnteredApp(true); window.dispatchEvent(new Event('afg-auth-change')); }} />;
   }
 
   return (
