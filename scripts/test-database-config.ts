@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { shouldUseDatabaseTls } from '../src/api/database.ts';
+import { shouldUseDatabaseTls } from '../src/api/databaseTls.ts';
 
 assert.equal(
   shouldUseDatabaseTls('postgresql://user:pass@db.qasnhpozreaqfbdgbsbg.supabase.co:5432/postgres'),
