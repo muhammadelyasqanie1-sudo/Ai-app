@@ -383,6 +383,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           (SELECT count(*)::bigint FROM conversations) AS conversations`),
         pool.query(`SELECT count(*)::int AS ai_requests, count(*) FILTER(WHERE status<>'success')::int AS errors,
           COALESCE(sum(cost_usd),0)::numeric(18,6) AS cost_usd,
+          count(*) FILTER(WHERE cost_usd IS NOT NULL)::int AS priced_requests,count(*) FILTER(WHERE cost_usd IS NULL)::int AS unpriced_requests,
           COALESCE(sum(tokens_in),0)::bigint AS input_tokens,COALESCE(sum(tokens_out),0)::bigint AS output_tokens,
           count(DISTINCT user_id) FILTER(WHERE user_id IS NOT NULL)::int AS active_request_users
           FROM usage_records WHERE created_at>=date_trunc('day',now())`),
@@ -409,13 +410,17 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const dailyThreshold=Number(threshold.rows[0]?.value||0);
       const totalRequests=Number(today.rows[0]?.ai_requests||0);
       const errorCount=Number(today.rows[0]?.errors||0);
+      const pricedRequests=Number(today.rows[0]?.priced_requests||0);
+      const unpricedRequests=Number(today.rows[0]?.unpriced_requests||0);
+      const costCoveragePercent=totalRequests?pricedRequests/totalRequests*100:0;
       const errorRate=totalRequests?errorCount/totalRequests*100:0;
       const alertItems:Array<{kind:string;severity:string;message:string;count?:number}>=[];
       if(Number(providerHealth.rows[0]?.down||0)>0)alertItems.push({kind:'providers_down',severity:'critical',message:'One or more enabled providers failed their last health check.',count:Number(providerHealth.rows[0].down)});
       if(Number(unverified.rows[0]?.total||0)>0)alertItems.push({kind:'models_unverified',severity:'warning',message:'Enabled models require a recent successful verification.',count:Number(unverified.rows[0].total)});
       if(Number(expiredKeys.rows[0]?.total||0)>0)alertItems.push({kind:'keys_expired',severity:'warning',message:'One or more provider keys are marked expired.',count:Number(expiredKeys.rows[0].total)});
       if(errorRate>5)alertItems.push({kind:'error_rate',severity:'critical',message:'AI request error rate is above 5%.',count:Number(errorRate.toFixed(2))});
-      if(dailyThreshold>0&&todayCost>dailyThreshold)alertItems.push({kind:'daily_cost',severity:'critical',message:'Daily AI cost is above the configured budget threshold.'});
+      if(dailyThreshold>0&&todayCost>dailyThreshold)alertItems.push({kind:'daily_cost',severity:'critical',message:'Known daily AI cost is above the configured budget threshold.'});
+      if(unpricedRequests>0)alertItems.push({kind:'cost_incomplete',severity:'warning',message:'Some requests have no published pricing; displayed cost is a partial known-cost total.',count:unpricedRequests});
       for(const row of problemModels.rows)alertItems.push({kind:'problem_model',severity:'critical',message:'Model has more than 10 errors in the last five minutes: '+row.model_id,count:Number(row.errors)});
       sendAuthJson(res,200,{
         usage:usage.rows,requests:requests.rows[0],users:users.rows,
@@ -426,7 +431,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           averageLatencyMs:Number(latency.rows[0]?.average_ms||0),
           latency:{p50:Number(latency.rows[0]?.p50||0),p95:Number(latency.rows[0]?.p95||0),p99:Number(latency.rows[0]?.p99||0)},
           requestsByProvider:requestsByProvider.rows,errorsByClass:errorsByClass.rows,
-          dailyCostThresholdUsd:dailyThreshold,alerts:alertItems,
+          dailyCostThresholdUsd:dailyThreshold,costCoveragePercent:Number(costCoveragePercent.toFixed(1)),pricedRequests,unpricedRequests,alerts:alertItems,
         },
         storage:{...storage.rows[0],r2Configured:Boolean(process.env.R2_BUCKET&&(process.env.R2_ACCESS_KEY_ID||process.env.CLOUDFLARE_R2_ACCESS_KEY_ID)),kvConfigured:Boolean(process.env.CLOUDFLARE_KV_NAMESPACE_ID||process.env.KV_REST_API_URL)}
       });return true;
@@ -567,7 +572,8 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           FROM usage_records ${clause} ORDER BY created_at DESC LIMIT 500`,values),
         pool.query(`SELECT COALESCE(sum(tokens_in),0)::bigint AS input_tokens,COALESCE(sum(tokens_out),0)::bigint AS output_tokens,
           COALESCE(sum(cost_usd),0)::numeric(18,6) AS cost_usd,COALESCE(avg(latency_ms),0)::numeric(12,2) AS avg_latency_ms,
-          count(*)::int AS requests,count(*) FILTER(WHERE status<>'success')::int AS errors
+          count(*)::int AS requests,count(*) FILTER(WHERE status<>'success')::int AS errors,
+          count(*) FILTER(WHERE cost_usd IS NOT NULL)::int AS priced_requests,count(*) FILTER(WHERE cost_usd IS NULL)::int AS unpriced_requests
           FROM usage_records ${clause}`,values),
       ]);
       sendAuthJson(res,200,{records:rows.rows,summary:summary.rows[0]});return true;
