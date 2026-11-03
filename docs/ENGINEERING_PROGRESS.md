@@ -77,3 +77,33 @@
 ### Next action
 
 - Continue backend security review: inspect administrator mutations for last-admin lockout and ensure sensitive user/role changes have consistent transactional audit records.
+
+
+## Milestone 3 — Last-active-administrator protection
+
+**Status:** IMPLEMENTED BUT NOT VERIFIED
+
+### Completed
+
+- Administrator role/status mutations now run in one PostgreSQL transaction.
+- The same transaction-scoped advisory lock used by first-admin bootstrap serializes privileged admin lifecycle changes.
+- The API counts active administrators before demoting or suspending an active administrator and rejects an operation that would remove the final active administrator.
+- Session revocation and the audit-log insert now occur in the same transaction as the user role/status update.
+- Removed the now-unused session helper import.
+
+### Files changed
+
+- `src/api/adminHandler.ts`
+
+### Verification
+
+- Source-level review confirms the shared advisory lock, target-row lock, last-admin count guard, transactional session revocation and audit insert.
+- No live database/concurrency test, test suite, type-check, build or deployment was run.
+
+### Problem discovered and fixed
+
+- An administrator could previously demote or suspend the final active administrator, potentially locking the entire deployment out of the admin control plane. The server now rejects that transition.
+
+### Next action
+
+- Continue reviewing admin mutations and the current role model; determine the safest additive path for granular staff permissions without weakening the existing admin gate or requiring an unapproved production migration.
