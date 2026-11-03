@@ -5,6 +5,7 @@ import { isIP } from 'node:net';
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf, verifyUserPassword } from './auth.ts';
 import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors, refreshDatabaseProviderAdapters, recordModelHealthResult } from '../services/providerGateway.ts';
 import { encryptProviderSecret, providerKeyHint } from '../security/providerVault.ts';
+import { ProviderAdapterError } from '../providers/providerTypes.ts';
 
 const ALLOWED_FALLBACK_CAPABILITIES = new Set(['text', 'vision', 'imageGen', 'tts', 'stt']);
 const customProviderInput = z.object({
@@ -534,7 +535,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const providerRow=await pool.query('SELECT slug,display_name,enabled,kind FROM providers WHERE slug=$1 LIMIT 1',[providerId]);
       const adapter=getProviderAdapter(providerId);
       if(!providerRow.rows[0]&&!adapter){sendAuthJson(res,404,{error:'Provider not found.'});return true;}
-      const started=Date.now();let configured=false,connected=false,discoveredModels=0,probeModel:string|null=null;
+      const started=Date.now();let configured=false,connected=false,discoveredModels=0,probeModel:string|null=null,providerFailureStatus:number|null=null;
       try{
         const config=await adapter?.validateConfig();configured=Boolean(config?.valid);
         if(configured&&adapter){
@@ -543,10 +544,13 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           if(probeModel){const probe=await adapter.healthCheck(probeModel);connected=probe.healthy;}
           else connected=false;
         }
-      }catch{connected=false;}
+      }catch(error){connected=false;if(error instanceof ProviderAdapterError)providerFailureStatus=error.status;}
       const latencyMs=Date.now()-started;
       if(providerRow.rows[0])await pool.query('UPDATE providers SET last_health_at=now(),last_health_ok=$2,last_error_code=$3,updated_at=now() WHERE slug=$1',
         [providerId,connected,connected?null:(configured?'provider_probe_failed':'credentials_missing')]);
+      await pool.query(`UPDATE provider_keys k SET last_used_at=now(),status=CASE WHEN $3 THEN 'invalid' ELSE 'active' END
+        FROM providers p WHERE p.id=k.provider_id AND p.slug=$1 AND k.alias='default' AND k.status IN ('active','invalid')`,
+        [providerId,connected,providerFailureStatus===401||providerFailureStatus===403]).catch(()=>{});
       await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
         [user.id,user.role,'provider.connection_test','provider',providerId,JSON.stringify({configured,connected,discoveredModels,probeModel,latencyMs})]);
       sendAuthJson(res,connected?200:502,{providerId,configured,connected,discoveredModels,probeModel,latencyMs,
