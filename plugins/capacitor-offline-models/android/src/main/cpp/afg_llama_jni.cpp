@@ -51,8 +51,6 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeLoadModel(
 
     llama_model_params model_params = llama_model_default_params();
     model_params.n_gpu_layers = 0;
-    model_params.use_mmap = true;
-    model_params.use_mlock = false;
     g_model = llama_model_load_from_file(path.c_str(), model_params);
     if (!g_model) {
         g_last_error = "llama.cpp could not load this GGUF model. Check its architecture and file integrity.";
