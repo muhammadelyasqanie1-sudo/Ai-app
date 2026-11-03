@@ -48,6 +48,9 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const [hfModels, setHfModels] = useState<HuggingFaceModel[]>([]);
   const [hfFormat, setHfFormat] = useState<'gguf' | 'all'>('gguf');
   const [sparkModels, setSparkModels] = useState<HuggingFaceModel[]>([]);
+  const [sparkBusy, setSparkBusy] = useState(true);
+  const [sparkError, setSparkError] = useState('');
+  const [sparkRetry, setSparkRetry] = useState(0);
   const [hfRecommended, setHfRecommended] = useState<Array<{ model: HuggingFaceModel; filePath: string; fileSize: number; fit: 'recommended' | 'limited' }>>([]);
   const [hfCategories, setHfCategories] = useState<string[]>([]);
   const [hfPage, setHfPage] = useState(0);
@@ -225,12 +228,24 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
 
   useEffect(() => {
     const controller = new AbortController();
+    setSparkBusy(true);
+    setSparkError('');
     void searchHuggingFaceGGUF({ query: 'Spark-X2.6-1.7B-GGUF', page: 0, sort: 'downloads', direction: 'desc', signal: controller.signal })
       .then(result => result.items.length ? result : searchHuggingFaceGGUF({ query: 'Spark-X2.6', page: 0, sort: 'downloads', direction: 'desc', signal: controller.signal }))
-      .then(result => setSparkModels(result.items))
-      .catch(() => { if (!controller.signal.aborted) setSparkModels([]); });
+      .then(result => {
+        if (controller.signal.aborted) return;
+        setSparkModels(result.items);
+        if (!result.items.length) setSparkError(dari ? 'مخزن Spark X2.6 در فهرست عمومی پیدا نشد.' : 'No public Spark X2.6 GGUF repository was returned by Hugging Face.');
+      })
+      .catch(error => {
+        if (!controller.signal.aborted) {
+          setSparkModels([]);
+          setSparkError(error instanceof Error ? error.message : 'Spark catalog unavailable.');
+        }
+      })
+      .finally(() => { if (!controller.signal.aborted) setSparkBusy(false); });
     return () => controller.abort();
-  }, []);
+  }, [sparkRetry, dari]);
   useEffect(() => {
     if (!device || !hfModels.length) { setHfRecommended([]); return; }
     let active = true;
@@ -593,7 +608,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       <div className="flex items-center gap-2 rounded-xl border px-3"><Search size={17}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={dari ? 'جست‌وجو؛ مثلاً Spark-X2.6' : 'Search models — e.g. Spark-X2.6'} className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none"/></div>
       <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setHfFormat('gguf')} className={'rounded-full border px-3 py-1.5 text-xs ' + (hfFormat === 'gguf' ? 'border-cyan-400 bg-cyan-400/10' : 'opacity-65')}>GGUF</button><button type="button" onClick={() => setHfFormat('all')} className={'rounded-full border px-3 py-1.5 text-xs ' + (hfFormat === 'all' ? 'border-cyan-400 bg-cyan-400/10' : 'opacity-65')}>{dari ? 'همه فرمت‌های مدل زبانی' : 'All language-model formats'}</button></div>
       {hfError && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs"><span className="min-w-0 flex-1">{hfError}</span><button type="button" onClick={() => setHfRetry(value => value + 1)} className="shrink-0 rounded-lg border border-current/20 px-3 py-1.5 font-semibold">{dari ? 'تلاش دوباره' : 'Retry'}</button></div>}{hfBusy && <p role="status" aria-live="polite" className="flex items-center gap-2 text-xs opacity-70"><LoaderCircle size={15} className="animate-spin" aria-hidden="true"/>{dari ? 'در حال دریافت مدل‌ها از Hugging Face…' : 'Loading models from Hugging Face…'}</p>}
-      <section className="space-y-3 rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-3"><div><h3 className="font-bold">{dari ? 'پیشنهاد ویژه: Spark X2.6' : 'Featured: Spark X2.6'}</h3><p className="mt-1 text-xs opacity-65">{dari ? 'نتایج زنده از Hugging Face' : 'Live results from Hugging Face'}</p></div><div className="grid gap-2 sm:grid-cols-2">{sparkModels.map(model => <button key={model.id} type="button" onClick={() => setHfSelected(model.id)} className={'rounded-xl border p-3 text-start ' + (hfSelected === model.id ? 'border-cyan-400 bg-cyan-400/10' : '')}><div className="break-all text-sm font-semibold">{model.id}</div><div className="mt-1 text-[11px] opacity-60">↓ {model.downloads.toLocaleString()} · ♥ {model.likes.toLocaleString()}</div></button>)}</div>{!sparkModels.length && <p className="text-xs opacity-60">{dari ? 'در حال دریافت نتایج Spark…' : 'Loading Spark results…'}</p>}</section>
+      <section className="space-y-3 rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-3"><div><h3 className="font-bold">{dari ? 'پیشنهاد ویژه: Spark X2.6' : 'Featured: Spark X2.6'}</h3><p className="mt-1 text-xs opacity-65">{dari ? 'نتایج زنده از Hugging Face' : 'Live results from Hugging Face'}</p></div><div className="grid gap-2 sm:grid-cols-2">{sparkModels.map(model => <button key={model.id} type="button" onClick={() => setHfSelected(model.id)} className={'rounded-xl border p-3 text-start ' + (hfSelected === model.id ? 'border-cyan-400 bg-cyan-400/10' : '')}><div className="break-all text-sm font-semibold">{model.id}</div><div className="mt-1 text-[11px] opacity-60">↓ {model.downloads.toLocaleString()} · ♥ {model.likes.toLocaleString()}</div></button>)}</div>{sparkBusy && <p role="status" className="flex items-center gap-2 text-xs opacity-60"><LoaderCircle size={14} className="animate-spin"/>{dari ? 'در حال دریافت نتایج Spark…' : 'Loading Spark results…'}</p>}{sparkError && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 text-xs"><span>{sparkError}</span><button type="button" onClick={() => setSparkRetry(value => value + 1)} className="rounded-lg border px-3 py-1.5">{dari ? 'تلاش دوباره' : 'Retry Spark search'}</button></div>}</section>
       {hfRecommended.length > 0 && <div className="space-y-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3"><div className="text-sm font-bold">{dari ? 'پیشنهاد برای دستگاه شما' : 'Recommended for your device'}</div><div className="grid gap-2 sm:grid-cols-3">{hfRecommended.map(item => <button key={item.model.id} type="button" onClick={() => { pendingGgufPathRef.current = item.filePath; setHfSelected(item.model.id); }} className="rounded-lg border bg-slate-500/5 p-2 text-start"><div className="break-all text-xs font-semibold">{item.model.id}</div><div className="mt-1 text-[10px] opacity-65">{formatBytes(item.fileSize)} · {item.fit === 'recommended' ? copy.recommended : copy.limited}</div></button>)}</div></div>}      <div className="flex flex-wrap gap-1.5"><button type="button" onClick={() => setHfCategories([])} className={'rounded-full border px-3 py-1.5 text-[11px] ' + (!hfCategories.length ? 'border-cyan-400 bg-cyan-400/10' : 'opacity-65')}>{dari ? 'همه مدل‌ها' : 'All Models'}</button>{['coding','learning','english','robotics','mathematics','science','general','creative'].map(category => <button key={category} type="button" onClick={() => setHfCategories(previous => previous.includes(category) ? previous.filter(item => item !== category) : [...previous, category])} className={'rounded-full border px-3 py-1.5 text-[11px] ' + (hfCategories.includes(category) ? 'border-cyan-400 bg-cyan-400/10' : 'opacity-65')}>{category}</button>)}</div>
       <div className="grid gap-2 sm:grid-cols-2">{hfModels.filter(model => !hfCategories.length || hfCategories.some(category => formatModelCategory(model.tags, model.pipeline_tag, model.id).includes(category) || (category === 'science' && model.tags.some(tag => /science|physics|chemistry|biology/i.test(tag))))).map(model => { const recommendation = hfRecommended.find(item => item.model.id === model.id); const categories = formatModelCategory(model.tags, model.pipeline_tag, model.id); return <button key={model.id} type="button" onClick={() => setHfSelected(model.id)} className={'rounded-xl border p-3 text-start ' + (hfSelected === model.id ? 'border-cyan-400 bg-cyan-400/10' : '')}><div className="break-all text-sm font-semibold">{model.id}</div><div className="mt-1 text-[10px] opacity-60">{model.id.split('/')[0]} · {categories.join(' / ')}</div><div className="mt-2 flex gap-3 text-[11px] opacity-65"><span>↓ {model.downloads.toLocaleString()}</span><span>♥ {model.likes.toLocaleString()}</span><span>{model.pipeline_tag || 'General'}</span></div>{recommendation && <div className="mt-2 text-[10px] font-semibold text-emerald-700">{formatBytes(recommendation.fileSize)} · {recommendation.fit === 'recommended' ? copy.recommended : copy.limited}</div>}</button>; })}</div>
       {!hfModels.length && !hfBusy && <div role="status" className="space-y-2 rounded-xl border border-dashed p-5 text-center"><p className="text-sm font-semibold">{dari ? 'مدلی پیدا نشد.' : 'No models found.'}</p><p className="text-xs opacity-65">{dari ? 'نام مدل یا فیلتر را تغییر بده؛ می‌توانی مدل‌های Spark را هم جست‌وجو کنی.' : 'Try a different model name or search for Spark X2.6.'}</p><button type="button" onClick={() => { setQuery('Spark-X2.6'); setHfFormat('gguf'); }} className="rounded-lg border px-3 py-2 text-xs font-semibold">{dari ? 'جست‌وجوی Spark X2.6' : 'Search Spark X2.6'}</button></div>}
