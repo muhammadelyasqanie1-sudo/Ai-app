@@ -107,6 +107,11 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [announcementTitle,setAnnouncementTitle] = useState('');
   const [announcementBody,setAnnouncementBody] = useState('');
   const [search,setSearch] = useState('');
+  const [userRoleFilter,setUserRoleFilter] = useState('all');
+  const [userStatusFilter,setUserStatusFilter] = useState('all');
+  const [userJoinedFrom,setUserJoinedFrom] = useState('');
+  const [userJoinedTo,setUserJoinedTo] = useState('');
+  const [userPage,setUserPage] = useState(0);
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState('');
   const [notice,setNotice] = useState('');
@@ -325,7 +330,18 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     }catch(err){setError(err instanceof Error?err.message:'Announcement could not be published and delivered.');}
   };
 
-  const filteredUsers=useMemo(()=>users.filter((u)=>[u.email,u.display_name,u.id].some((v)=>String(v||'').toLowerCase().includes(search.toLowerCase()))),[users,search]);
+  const filteredUsers=useMemo(()=>users.filter((u)=>{
+    const matchesSearch=[u.email,u.display_name,u.id].some((v)=>String(v||'').toLowerCase().includes(search.toLowerCase()));
+    const matchesRole=userRoleFilter==='all'||u.role===userRoleFilter;
+    const matchesStatus=userStatusFilter==='all'||u.status===userStatusFilter;
+    const created=new Date(u.created_at).getTime();
+    const fromOk=!userJoinedFrom||created>=new Date(userJoinedFrom+'T00:00:00').getTime();
+    const toOk=!userJoinedTo||created<=new Date(userJoinedTo+'T23:59:59').getTime();
+    return matchesSearch&&matchesRole&&matchesStatus&&fromOk&&toOk;
+  }).sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime()),[users,search,userRoleFilter,userStatusFilter,userJoinedFrom,userJoinedTo]);
+  const userPageSize=50;
+  const userPageCount=Math.max(1,Math.ceil(filteredUsers.length/userPageSize));
+  const pageUsers=filteredUsers.slice(userPage*userPageSize,(userPage+1)*userPageSize);
   const panel='rounded-2xl border border-slate-800 bg-slate-950/75 p-4 sm:p-5 shadow-lg shadow-black/10';
   const field='w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400';
   const primary='rounded-xl bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-300 disabled:opacity-40';
@@ -395,15 +411,23 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       </div></div>
     </div>}
 
-    {tab==='users'&&<div className={panel}><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">User management</h2><p className="text-xs text-slate-500">Suspend access, revoke sessions, and assign roles.</p></div><div className="relative w-full sm:w-72"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500"/><input className={field+' pl-9'} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search email or user ID"/></div></div>
-      <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="text-slate-500"><tr>{['User','Role','Status','Last activity','Requests 30d','Actions'].map(x=><th key={x} className="border-b border-slate-800 px-3 py-3">{x}</th>)}</tr></thead><tbody>{filteredUsers.map(u=><tr key={u.id} className="border-b border-slate-900"><td className="px-3 py-3"><p className="font-semibold text-white">{u.display_name||u.email||'Unnamed user'}</p><p className="mt-1 text-[10px] text-slate-500">{u.email} · {u.id.slice(0,8)}</p></td><td className="px-3 py-3 text-slate-300">{u.role}</td><td className="px-3 py-3"><span className={u.status==='active'?'text-emerald-300':'text-amber-300'}>{u.status}</span></td><td className="px-3 py-3 text-slate-400">{date(u.last_seen_at)}</td><td className="px-3 py-3 text-slate-300">{fmt(u.requests_30d)}</td><td className="px-3 py-3"><div className="flex flex-wrap gap-2">
+    {tab==='users'&&<div className={panel}><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">User management</h2><p className="text-xs text-slate-500">Suspend access, revoke sessions, and assign roles.</p></div><div className="grid w-full flex-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500"/><input className={field+' pl-9'} value={search} onChange={e=>{setSearch(e.target.value);setUserPage(0);}} placeholder="Search email, name or ID"/></div>
+        <select className={field} value={userRoleFilter} onChange={e=>{setUserRoleFilter(e.target.value);setUserPage(0);}}><option value="all">All roles</option><option value="user">User</option><option value="admin">Admin</option><option value="superadmin">Superadmin</option></select>
+        <select className={field} value={userStatusFilter} onChange={e=>{setUserStatusFilter(e.target.value);setUserPage(0);}}><option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="deleted">Deleted</option></select>
+        <input className={field} type="date" aria-label="Joined from" value={userJoinedFrom} onChange={e=>{setUserJoinedFrom(e.target.value);setUserPage(0);}}/>
+        <input className={field} type="date" aria-label="Joined to" value={userJoinedTo} onChange={e=>{setUserJoinedTo(e.target.value);setUserPage(0);}}/>
+      </div></div>
+      <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="text-slate-500"><tr>{['User','Role','Status','Last activity','Requests 30d','Actions'].map(x=><th key={x} className="border-b border-slate-800 px-3 py-3">{x}</th>)}</tr></thead><tbody>{pageUsers.map(u=><tr key={u.id} className="border-b border-slate-900"><td className="px-3 py-3"><p className="font-semibold text-white">{u.display_name||u.email||'Unnamed user'}</p><p className="mt-1 text-[10px] text-slate-500">{u.email} · {u.id.slice(0,8)}</p></td><td className="px-3 py-3 text-slate-300">{u.role}</td><td className="px-3 py-3"><span className={u.status==='active'?'text-emerald-300':'text-amber-300'}>{u.status}</span></td><td className="px-3 py-3 text-slate-400">{date(u.last_seen_at)}</td><td className="px-3 py-3 text-slate-300">{fmt(u.requests_30d)}</td><td className="px-3 py-3"><div className="flex flex-wrap gap-2">
         <button className={secondary} onClick={()=>void openUserProfile(u)}>Profile</button>
         <button className={secondary} onClick={()=>void sendPasswordReset(u)}>Reset password</button>
         {u.id!==selectedUser?.id&&<button className={secondary} onClick={()=>void confirmUserChange(u,{status:u.status==='active'?'suspended':'active'})}>{u.status==='active'?'Suspend':'Reactivate'}</button>}
         {u.role!=='superadmin'&&<button className={secondary} onClick={()=>void confirmUserChange(u,{role:u.role==='admin'?'user':'admin'})}>{u.role==='admin'?'Demote':'Make admin'}</button>}
         {isSuperadmin&&u.role!=='superadmin'&&<button className={secondary} onClick={()=>void confirmUserChange(u,{role:'superadmin'})}>Make superadmin</button>}
         {isSuperadmin&&u.status!=='deleted'&&<button className="rounded-xl border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-300" onClick={()=>void confirmUserChange(u,{status:'deleted'})}>Soft delete</button>}
-      </div></td></tr>)}</tbody></table>{!filteredUsers.length&&<p className="py-8 text-center text-sm text-slate-500">No users found.</p>}</div>
+      </div></td></tr>)}</tbody></table>{!filteredUsers.length&&<p className="py-8 text-center text-sm text-slate-500">No users found.</p>}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400"><span>{fmt(filteredUsers.length)} users · Page {userPage+1} of {userPageCount}</span><div className="flex gap-2"><button className={secondary} disabled={userPage===0} onClick={()=>setUserPage(v=>Math.max(0,v-1))}>Previous</button><button className={secondary} disabled={userPage+1>=userPageCount} onClick={()=>setUserPage(v=>Math.min(userPageCount-1,v+1))}>Next</button></div></div>
+      </div>
       {selectedUser&&<div className="mt-4 rounded-xl border border-cyan-500/30 bg-slate-900 p-4">
         <div className="flex items-center justify-between gap-3"><h3 className="font-bold text-white">User profile · {selectedUser.display_name||selectedUser.email}</h3><button className={secondary} onClick={()=>setSelectedUser(null)}>Close</button></div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-xs text-slate-300">
