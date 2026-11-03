@@ -173,7 +173,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
 
 
 
-    const providerConfigRoute=pathname.match(/^\\/api\\/admin\\/providers\\/([a-z0-9-]+)\\/config$/);
+    const providerConfigRoute=pathname.match(/^\/api\/admin\/providers\/([a-z0-9-]+)\/config$/);
     if(req.method==='PATCH'&&providerConfigRoute){
       if(user.role!=='superadmin'){sendAuthJson(res,403,{error:'Only a superadmin can change provider configuration.'});return true;}
       const providerSlug=providerConfigRoute[1];
