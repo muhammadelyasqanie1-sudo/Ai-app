@@ -162,16 +162,17 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     const latency=Date.now()-startedAt;
     const [providerKey,modelKey]=usageProviderId && usageModelId ? [usageProviderId,usageModelId] : [null,null];
     try{
-      let cost=0;
+      let cost:number|null=null;
       if(providerKey&&modelKey){
         const price=await pool.query('SELECT input_cost_per_million,output_cost_per_million FROM model_catalog WHERE provider_key=$1 AND model_key=$2 LIMIT 1',[providerKey,modelKey]);
-        if(price.rows[0]){
-          cost=(tokensIn*Number(price.rows[0].input_cost_per_million||0)+tokensOut*Number(price.rows[0].output_cost_per_million||0))/1000000;
+        if(price.rows[0]&&price.rows[0].input_cost_per_million!==null&&price.rows[0].output_cost_per_million!==null){
+          cost=(tokensIn*Number(price.rows[0].input_cost_per_million)+tokensOut*Number(price.rows[0].output_cost_per_million))/1000000;
         }
       }
-      await pool.query(`INSERT INTO usage_records(user_id,model_id,provider_key,model_key,request_id,tokens_in,tokens_out,cost_usd,latency_ms,status)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      await pool.query(`INSERT INTO usage_records(user_id,model_id,provider_key,model_key,request_id,tokens_in,tokens_out,cost_usd,latency_ms,status,token_count_source)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'estimated')`,
         [requestUserId,providerKey&&modelKey?providerKey+'::'+modelKey:null,providerKey,modelKey,id,tokensIn,tokensOut,cost,latency,status]);
+      if(providerKey)await pool.query(`UPDATE provider_keys k SET last_used_at=now() FROM providers p WHERE p.id=k.provider_id AND p.slug=$1 AND k.status='active'`,[providerKey]).catch(()=>{});
     }catch{console.warn('AFG_USAGE_RECORD_WRITE_FAILED',JSON.stringify({requestId:id}));}
   };
   const persistError = async (error:unknown) => {
