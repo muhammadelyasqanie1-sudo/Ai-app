@@ -173,6 +173,37 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
 
 
 
+    const providerConfigRoute=pathname.match(/^\\/api\\/admin\\/providers\\/([a-z0-9-]+)\\/config$/);
+    if(req.method==='PATCH'&&providerConfigRoute){
+      if(user.role!=='superadmin'){sendAuthJson(res,403,{error:'Only a superadmin can change provider configuration.'});return true;}
+      const providerSlug=providerConfigRoute[1];
+      const body=await readJsonBody(req,8000);
+      const providerConfigInput=z.object({
+        baseUrl:z.string().trim().url().max(500),
+        displayName:z.string().trim().min(1).max(80).optional(),
+        protocol:z.enum(['openai-compatible','anthropic-messages']).optional(),
+      }).strict().safeParse(body);
+      if(!providerConfigInput.success||!(await safeCustomProviderUrl(providerConfigInput.data.baseUrl))){
+        sendAuthJson(res,400,{error:'Provide a public HTTPS provider URL and valid configuration.'});return true;
+      }
+      const before=await pool.query('SELECT slug,display_name,base_url,config_json FROM providers WHERE slug=$1 LIMIT 1',[providerSlug]);
+      if(!before.rows[0]){sendAuthJson(res,404,{error:'Provider not found.'});return true;}
+      if(['cloudflare','ollama'].includes(String(before.rows[0].slug))){
+        sendAuthJson(res,409,{error:'This provider endpoint is managed by the host environment.'});return true;
+      }
+      const configJson={...(before.rows[0].config_json||{}),protocol:providerConfigInput.data.protocol||
+        (before.rows[0].config_json as any)?.protocol||'openai-compatible'};
+      const updated=await pool.query(`UPDATE providers SET base_url=$2,display_name=COALESCE($3,display_name),
+        config_json=$4::jsonb,last_health_at=NULL,last_health_ok=NULL,last_error_code=NULL,updated_at=now()
+        WHERE slug=$1 RETURNING slug,display_name,base_url,config_json`,
+        [providerSlug,providerConfigInput.data.baseUrl,providerConfigInput.data.displayName||null,JSON.stringify(configJson)]);
+      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+        [user.id,user.role,'provider.config.update','provider',providerSlug,JSON.stringify(before.rows[0]),JSON.stringify(updated.rows[0]),JSON.stringify({protocol:configJson.protocol})]);
+      invalidateProviderHealth(providerSlug);
+      await refreshDatabaseProviderAdapters(true);
+      sendAuthJson(res,200,{provider:updated.rows[0]});return true;
+    }
+
     const keyRoute = pathname.match(/^\/api\/admin\/providers\/([a-z0-9-]+)\/keys(?:\/rotate)?$/);
     if (keyRoute && ((req.method==='PUT' && !pathname.endsWith('/rotate')) || (req.method==='POST' && pathname.endsWith('/rotate')))) {
       if (user.role !== 'superadmin') { sendAuthJson(res,403,{error:'Superadmin access is required to manage provider keys.'}); return true; }
