@@ -318,3 +318,15 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 - Source-level review confirms Supabase hostname detection and the TLS decision.
 - No Supabase credential is available in this code-editing session; live TLS negotiation and `SELECT 1` remain unverified.
 - No migration or production database operation was performed.
+
+
+### Follow-up to Milestone 12 — Regression coverage for TLS policy
+
+**Status:** IMPLEMENTED BUT NOT VERIFIED
+
+- Extracted the TLS decision into the pure `shouldUseDatabaseTls` helper.
+- Added regression cases for Supabase direct URLs, Supabase pooler URLs, local PostgreSQL, explicit require/disable modes, and malformed URLs.
+- Added `npm run test:database-config` and wired it into the existing pull-request web-check workflow.
+- The CI result is pending; the test has not yet been run locally.
+
+**Files changed:** `src/api/database.ts`, `scripts/test-database-config.ts`, `package.json`, `.github/workflows/offline-ai-ci.yml`.
