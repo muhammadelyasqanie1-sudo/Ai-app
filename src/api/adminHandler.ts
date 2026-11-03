@@ -674,7 +674,9 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         const config=await adapter?.validateConfig();configured=Boolean(config?.valid);
         if(configured&&adapter){
           const models=await adapter.listModels();discoveredModels=models.length;
-          probeModel=models[0]?.id||null;
+          // Provider-level tests use a text model because the current generic health
+          // probe sends a text prompt. Alphabetical model order may start with an image model.
+          probeModel=models.find(model=>model.capabilities.text&&model.capabilities.streaming)?.id||null;
           if(probeModel){const probe=await adapter.healthCheck(probeModel);connected=probe.healthy;}
           else connected=false;
         }
