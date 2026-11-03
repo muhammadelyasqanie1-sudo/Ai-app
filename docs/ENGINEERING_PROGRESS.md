@@ -332,3 +332,29 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 - `npm run i18n:check`: passed.
 - `npm run build`: passed.
 - Android workflow for the latest PR head was still running; no Android claim is needed for this backend change.
+
+
+## Milestone 13 — Branded PWA install icon
+
+**Status:** IMPLEMENTED BUT NOT VERIFIED
+
+### Problem found
+
+- The PWA manifest had no icon entries, despite the app already registering a service worker and linking a web manifest.
+
+### Changes
+
+- Added a scalable AFG AI SVG brand icon using the product palette.
+- Registered it in the PWA manifest with `any maskable` purpose.
+- Replaced the inline data-URI favicon with the shared brand asset and added an Apple touch icon reference.
+
+### Files changed
+
+- `public/afg-ai-icon.svg`
+- `public/manifest.webmanifest`
+- `index.html`
+
+### Verification
+
+- Source-level review confirms the manifest and document point to the same icon path.
+- Browser installability, Android home-screen icon rendering and iOS Safari behavior remain unverified pending CI/device testing.
