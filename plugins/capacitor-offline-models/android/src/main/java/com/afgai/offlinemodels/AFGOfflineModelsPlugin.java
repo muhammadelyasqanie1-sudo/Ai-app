@@ -89,11 +89,23 @@ public class AFGOfflineModelsPlugin extends Plugin {
         Integer threads = call.getInt("threads");
         File model = new File(path);
         if (!model.isFile() || !model.getName().toLowerCase(Locale.ROOT).endsWith(".gguf")) { call.reject("A downloaded GGUF model file is required."); return; }
-        try {
-            boolean loaded = nativeLoadModel(model.getAbsolutePath(), getContext().getApplicationInfo().nativeLibraryDir, contextSize == null ? 2048 : contextSize, threads == null ? 4 : threads);
-            if (!loaded) { call.reject(nativeGetLastError()); return; }
-            JSObject result = new JSObject(); result.put("loaded", true); result.put("path", model.getAbsolutePath()); result.put("sizeBytes", model.length()); call.resolve(result);
-        } catch (Exception error) { call.reject("Unable to load the local GGUF model.", error); }
+        final String modelPath = model.getAbsolutePath();
+        final String nativeLibraryDirectory = getContext().getApplicationInfo().nativeLibraryDir;
+        final int requestedContext = contextSize == null ? 2048 : contextSize;
+        final int requestedThreads = threads == null ? 4 : threads;
+        INFERENCE_EXECUTOR.execute(() -> {
+            try {
+                boolean loaded = nativeLoadModel(modelPath, nativeLibraryDirectory, requestedContext, requestedThreads);
+                if (!loaded) { call.reject(nativeGetLastError()); return; }
+                JSObject result = new JSObject();
+                result.put("loaded", true);
+                result.put("path", modelPath);
+                result.put("sizeBytes", model.length());
+                call.resolve(result);
+            } catch (Exception error) {
+                call.reject("Unable to load the local GGUF model.", error);
+            }
+        });
     }
 
     @PluginMethod
@@ -180,8 +192,12 @@ public class AFGOfflineModelsPlugin extends Plugin {
 
     @PluginMethod
     public void unloadModel(PluginCall call) {
-        if (NATIVE_RUNTIME_AVAILABLE) nativeUnloadModel();
-        JSObject result = new JSObject(); result.put("unloaded", true); call.resolve(result);
+        INFERENCE_EXECUTOR.execute(() -> {
+            if (NATIVE_RUNTIME_AVAILABLE) nativeUnloadModel();
+            JSObject result = new JSObject();
+            result.put("unloaded", true);
+            call.resolve(result);
+        });
     }
     @PluginMethod
     public void startDownload(PluginCall call) {
