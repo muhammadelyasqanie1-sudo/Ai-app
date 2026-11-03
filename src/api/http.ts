@@ -173,6 +173,27 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
   }
 
   try {
+    if (req.method === 'GET' && pathname === '/api/features/status') {
+      if (!pool) {
+        sendJson(res, 200, { verified: false, featureFlags: {}, integrations: {}, githubOAuthConfigured: false }, requestId);
+        return;
+      }
+      try {
+        const [flagRows, integrationRows] = await Promise.all([
+          pool.query('SELECT flag_key,enabled FROM feature_flags'),
+          pool.query('SELECT slug,enabled,status,last_check_ok FROM integrations'),
+        ]);
+        const featureFlags = Object.fromEntries(flagRows.rows.map((row: any) => [String(row.flag_key), row.enabled === true]));
+        const integrations = Object.fromEntries(integrationRows.rows.map((row: any) => [
+          String(row.slug),
+          { active: row.enabled === true && row.status === 'active' && row.last_check_ok === true, status: String(row.status || 'unconfigured') },
+        ]));
+        sendJson(res, 200, { verified: true, featureFlags, integrations, githubOAuthConfigured: Boolean(process.env.GITHUB_OAUTH_CLIENT_ID && process.env.GITHUB_OAUTH_CLIENT_SECRET && (process.env.APP_ORIGIN || '').split(',')[0].trim().startsWith('https://')) }, requestId);
+      } catch {
+        sendJson(res, 503, { verified: false, featureFlags: {}, integrations: {}, githubOAuthConfigured: false, error: 'Feature status is not available until the database schema is ready.' }, requestId);
+      }
+      return;
+    }
     if (await enforceAdminConfiguredRateLimits(req, res, pathname, requestId)) return;
     if (await handleAuthApi(req, res, pathname)) return;
     if (await handleUserIntegrationApi(req, res, pathname)) return;
