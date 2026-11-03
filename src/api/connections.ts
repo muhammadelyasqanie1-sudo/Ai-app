@@ -227,3 +227,62 @@ export async function handleConnectionsApi(req: IncomingMessage,res: ServerRespo
     sendAuthJson(res,500,{error:message});return true;
   }
 }
+
+const githubOAuthStates = new Map<string,{userId:string;expiresAt:number}>();
+export async function handleUserIntegrationApi(req: IncomingMessage,res: ServerResponse,pathname: string): Promise<boolean> {
+  if (!pathname.startsWith('/api/integrations/github/')) return false;
+  if (!pool) { sendAuthJson(res,503,{error:'Account integrations require the database.'}); return true; }
+  if (pathname==='/api/integrations/github/callback' && req.method==='GET') {
+    const url=new URL(req.url||'/', 'http://localhost');
+    const state=url.searchParams.get('state')||'',code=url.searchParams.get('code')||'';
+    const saved=githubOAuthStates.get(state);githubOAuthStates.delete(state);
+    if(!saved||saved.expiresAt<Date.now()||!code){res.statusCode=302;res.setHeader('Location',(process.env.APP_ORIGIN||'/').split(',')[0].replace(/\/$/,'')+'/?github=oauth_failed');res.end();return true;}
+    try {
+      const origin=(process.env.APP_ORIGIN||'').split(',')[0].trim().replace(/\/$/,'');
+      const clientId=process.env.GITHUB_OAUTH_CLIENT_ID||'',clientSecret=process.env.GITHUB_OAUTH_CLIENT_SECRET||'';
+      if(!origin.startsWith('https://')||!clientId||!clientSecret) throw new Error('GitHub OAuth is not configured.');
+      const tokenResponse=await fetch('https://github.com/login/oauth/access_token',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({client_id:clientId,client_secret:clientSecret,code,state})});
+      const tokenData=await tokenResponse.json() as any;
+      if(!tokenResponse.ok||!tokenData.access_token) throw new Error('GitHub OAuth token exchange failed.');
+      const token=String(tokenData.access_token);
+      const profile=await jsonFetch('https://api.github.com/user',{headers:{Authorization:'Bearer '+token,Accept:'application/vnd.github+json'}},[token]);
+      const integration=await pool.query("SELECT id FROM integrations WHERE slug='github' LIMIT 1");
+      if(!integration.rows[0]) throw new Error('GitHub integration is not initialized.');
+      await pool.query(`INSERT INTO integration_user_credentials(integration_id,user_id,credential_key,credential_value_encrypted)
+        VALUES($1,$2,'oauth_token',$3) ON CONFLICT(integration_id,user_id,credential_key)
+        DO UPDATE SET credential_value_encrypted=EXCLUDED.credential_value_encrypted,updated_at=now()`,[integration.rows[0].id,saved.userId,encryptSecret(token)]);
+      await pool.query(`INSERT INTO integration_user_links(integration_id,user_id,provider_user_id,provider_username,revoked_at)
+        VALUES($1,$2,$3,$4,NULL) ON CONFLICT(integration_id,user_id)
+        DO UPDATE SET provider_user_id=EXCLUDED.provider_user_id,provider_username=EXCLUDED.provider_username,linked_at=now(),revoked_at=NULL`,[integration.rows[0].id,saved.userId,String(profile.id),String(profile.login)]);
+      res.statusCode=302;res.setHeader('Location',origin+'/?github=connected');res.end();return true;
+    } catch {
+      const origin=(process.env.APP_ORIGIN||'/').split(',')[0].replace(/\/$/,'');
+      res.statusCode=302;res.setHeader('Location',origin+'/?github=oauth_failed');res.end();return true;
+    }
+  }
+  const user=await authenticateRequest(req);
+  if(!user){sendAuthJson(res,401,{error:'Sign in is required.'});return true;}
+  if(req.method!=='GET'&&!verifyCsrf(req)){sendAuthJson(res,403,{error:'CSRF validation failed.'});return true;}
+  if(req.method==='GET'&&pathname==='/api/integrations/github/status'){
+    const row=await pool.query(`SELECT l.provider_username,l.linked_at FROM integration_user_links l
+      JOIN integrations i ON i.id=l.integration_id WHERE i.slug='github' AND l.user_id=$1 AND l.revoked_at IS NULL LIMIT 1`,[user.id]);
+    sendAuthJson(res,200,{configured:Boolean(process.env.GITHUB_OAUTH_CLIENT_ID&&process.env.GITHUB_OAUTH_CLIENT_SECRET),linked:Boolean(row.rows[0]),username:row.rows[0]?.provider_username||null,linkedAt:row.rows[0]?.linked_at||null});return true;
+  }
+  if(req.method==='POST'&&pathname==='/api/integrations/github/start'){
+    const clientId=process.env.GITHUB_OAUTH_CLIENT_ID||'',origin=(process.env.APP_ORIGIN||'').split(',')[0].trim().replace(/\/$/,'');
+    if(!clientId||!origin.startsWith('https://')){sendAuthJson(res,503,{error:'GitHub OAuth is not configured by the platform administrator.'});return true;}
+    const state=randomBytes(32).toString('hex');githubOAuthStates.set(state,{userId:user.id,expiresAt:Date.now()+600000});
+    for(const [key,value] of githubOAuthStates)if(value.expiresAt<Date.now())githubOAuthStates.delete(key);
+    const redirectUri=origin+'/api/integrations/github/callback';
+    const authUrl='https://github.com/login/oauth/authorize?'+new URLSearchParams({client_id:clientId,redirect_uri:redirectUri,scope:'read:user repo',state}).toString();
+    sendAuthJson(res,200,{authUrl});return true;
+  }
+  if(req.method==='DELETE'&&pathname==='/api/integrations/github/link'){
+    await pool.query(`UPDATE integration_user_links l SET revoked_at=now() FROM integrations i
+      WHERE i.id=l.integration_id AND i.slug='github' AND l.user_id=$1`,[user.id]);
+    await pool.query(`DELETE FROM integration_user_credentials c USING integrations i
+      WHERE i.id=c.integration_id AND i.slug='github' AND c.user_id=$1`,[user.id]);
+    sendAuthJson(res,200,{unlinked:true});return true;
+  }
+  sendAuthJson(res,404,{error:'Account integration route not found.'});return true;
+}
