@@ -361,6 +361,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
         setStorage({ usage: estimate.usage, quota: estimate.quota });
       }
     } catch (error) {
+      const outOfMemory = /out of memory|allocation failed|cannot allocate/i.test(error instanceof Error ? error.message : '');
+      void recordOfflineDiagnostic({ code: outOfMemory ? 'out_of_memory' : 'model_load_error', modelId }).catch(() => undefined);
       setRuntimeMessage(error instanceof Error ? error.message : copy.failed);
     } finally { setBusy(false); setProgress(0); setProgressText(''); }
   }, [busy, runtime, webGpuAvailable, copy, dari, models, device, modelSizes, storage]);
