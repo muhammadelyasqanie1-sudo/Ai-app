@@ -111,6 +111,8 @@ export async function getHuggingFaceRepository(repoId: string, signal?: AbortSig
     const sha = file.lfs?.sha256 || (oid.startsWith('sha256:') ? oid.slice(7) : /^[a-f0-9]{64}$/i.test(oid) ? oid : null);
     return { name, path: file.path, size: file.size, quantization: match?.[1]?.toUpperCase() || null, sha256: sha };
   });
+  const quantizationPriority = (name: string) => /Q4_K_M/i.test(name) ? 0 : /Q4_K_S|Q4_0/i.test(name) ? 1 : /Q5/i.test(name) ? 2 : /Q6/i.test(name) ? 3 : /Q8/i.test(name) ? 4 : 5;
+  ggufFiles.sort((a, b) => quantizationPriority(a.name) - quantizationPriority(b.name));
   const result = { id: repoId, revision, files: normalized, totalBytes: normalized.reduce((sum, file) => sum + (file.size || 0), 0), ggufFiles };
   safeWrite(cacheKey, result);
   return result;
