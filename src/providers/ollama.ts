@@ -12,7 +12,7 @@ function localUrl(value:string):boolean{
 }
 
 export function createOllamaAdapter(id='ollama',displayName='Ollama (Local)',configuredBaseUrl?:string):ChatProviderAdapter{
-  const base=()=>((configuredBaseUrl||process.env.OLLAMA_BASE_URL||'http://127.0.0.1:11434').trim().replace(/\\/+$/,''));
+  const base=()=>((configuredBaseUrl||process.env.OLLAMA_BASE_URL||'http://127.0.0.1:11434').trim().replace(/\/+$/,''));
   return{
     id,key:id,displayName,
     async validateConfig():Promise<ConfigStatus>{
@@ -60,7 +60,7 @@ export function createOllamaAdapter(id='ollama',displayName='Ollama (Local)',con
         while(true){
           const {done,value}=await reader.read();if(done)break;
           buffer+=decoder.decode(value,{stream:true});
-          const lines=buffer.split(/\\r?\\n/);buffer=lines.pop()||'';
+          const lines=buffer.split(/\r?\n/);buffer=lines.pop()||'';
           for(const line of lines){if(!line.trim())continue;let row:any;try{row=JSON.parse(line);}catch{continue;}
             if(row.error)throw new ProviderAdapterError('Ollama stream returned an error.',502,'provider_stream_error');
             if(typeof row.message?.content==='string'&&row.message.content)yield{content:row.message.content};
