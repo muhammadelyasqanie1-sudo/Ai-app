@@ -205,9 +205,13 @@ export async function downloadGGUF(options: {
   const { repoId, fileName } = options;
   const revision = options.revision || 'main';
   const id = repoId + '/' + fileName;
-  if (isAndroidNative()) return downloadGGUFAndroid(options);
-  if (!/^[^/]+\/[^/]+$/.test(repoId) || !fileName.toLowerCase().endsWith('.gguf') || fileName.split('/').some(part => !part || part === '.' || part === '..')) throw new Error('Invalid GGUF model selection.');
   if (activeTasks.has(id)) throw new Error('This model is already downloading.');
+  if (isAndroidNative()) {
+    activeTasks.set(id, { controller: new AbortController(), paused: false });
+    try { return await downloadGGUFAndroid(options); }
+    finally { activeTasks.delete(id); }
+  }
+  if (!/^[^/]+\/[^/]+$/.test(repoId) || !fileName.toLowerCase().endsWith('.gguf') || fileName.split('/').some(part => !part || part === '.' || part === '..')) throw new Error('Invalid GGUF model selection.');
   const controller = new AbortController();
   const task: DownloadTask = { controller, paused: false };
   activeTasks.set(id, task);
@@ -239,9 +243,15 @@ export async function downloadGGUF(options: {
     }
     if (!response.ok || !response.body) throw new Error('Model download failed (' + response.status + ').');
     const range = response.headers.get('content-range');
-    if (offset && range && !range.startsWith('bytes ' + offset + '-')) throw new Error('Server returned an unexpected byte range.');
-    const totalFromRange = range ? Number(range.split('/')[1]) : null;
-    const totalBytes = Number.isFinite(totalFromRange) && totalFromRange! > 0 ? totalFromRange : expectedBytes;
+    const rangeMatch = range?.match(/^bytes (\\d+)-\\d+\\/(\\d+|\\*)$/);
+    if (offset && (!rangeMatch || Number(rangeMatch[1]) !== offset)) {
+      throw new Error('The model host returned an invalid byte range; the partial download was preserved for retry.');
+    }
+    const totalFromRange = rangeMatch && rangeMatch[2] !== '*' ? Number(rangeMatch[2]) : null;
+    const contentLength = Number(response.headers.get('content-length'));
+    const totalBytes = Number.isFinite(totalFromRange) && totalFromRange! > 0
+      ? totalFromRange
+      : (expectedBytes || (Number.isFinite(contentLength) && contentLength > 0 ? offset + contentLength : null));
     const handle = await dir.getFileHandle(partial, { create: true });
     const reader = response.body.getReader();
     let downloadedBytes = offset;
