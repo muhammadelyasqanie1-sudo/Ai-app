@@ -44,7 +44,7 @@ describe('Hugging Face offline catalog', () => {
     expect(first.models).toHaveLength(30);
     expect(first.nextCursor).toBe('30');
     const second = await fetchGgufModels({ search: 'cursor-api-test', limit: 30, cursor: first.nextCursor });
-    expect(second.nextCursor).toBe('30');
+    expect(second.nextCursor).toBe('60');
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain('offset=30');
   });
 
