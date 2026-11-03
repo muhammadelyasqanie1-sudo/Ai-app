@@ -131,3 +131,8 @@ The one-time administrator bootstrap now uses a PostgreSQL transaction-scoped ad
 ### Live execution update — administrator lifecycle protection
 
 The `PATCH /api/admin/users` mutation now serializes with first-admin bootstrap using the same transaction-scoped advisory lock. It locks the target user row, prevents demotion/suspension of the final active administrator, and commits the user change, session revocation and audit record together. Source-level only; no database or concurrency test was run.
+
+
+### Live execution update — provider/model/fallback audit integrity
+
+Provider toggles, model configuration changes and fallback-chain updates now execute with their audit-log inserts in the same PostgreSQL transaction. A failed audit write rolls back the associated mutation. Source-level only; no database tests were run.
