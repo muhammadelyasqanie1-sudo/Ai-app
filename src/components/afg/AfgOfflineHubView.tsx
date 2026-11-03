@@ -136,6 +136,10 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
     if (busy || runtime !== 'ready') return;
     setBusy(true); setProgress(0); setProgressText(isDownload ? copy.downloading : copy.loading);
     try {
+      if (engineRef.current) {
+        try { await engineRef.current.unload(); } catch { /* continue with a fresh engine */ }
+        engineRef.current = null;
+      }
       const { CreateMLCEngine, prebuiltAppConfig } = await import('@mlc-ai/web-llm');
       const engine = await CreateMLCEngine(modelId, {
         appConfig: { ...prebuiltAppConfig, cacheBackend: 'indexeddb' },
