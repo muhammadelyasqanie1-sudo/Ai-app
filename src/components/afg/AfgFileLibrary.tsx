@@ -17,7 +17,7 @@ export const AfgFileLibrary:React.FC<{language:Language}>=({language})=>{
   const [error,setError]=useState('');
   const picker=useRef<HTMLInputElement>(null);
   const load=useCallback(async()=>{
-    setLoading(true);setError('');
+    setLoading(true);setError('');setStorageReady(false);
     try{
       const [response,statusResponse]=await Promise.all([
         fetch(API+'/api/files',{credentials:'include',cache:'no-store'}),
