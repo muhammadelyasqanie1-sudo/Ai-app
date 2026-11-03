@@ -51,6 +51,10 @@ public final class AFGDownloadWorker extends Worker {
             setForegroundAsync(foreground("Downloading " + meta.optString("fileName", "AI model"), 0)).get(10, TimeUnit.SECONDS);
             long offset = part.isFile() ? part.length() : 0L;
             String previousEtag = meta.optString("etag", "");
+            if (offset > 0 && previousEtag.isEmpty()) {
+                if (!part.delete()) throw new java.io.IOException("Cannot discard an unvalidated partial model file.");
+                offset = 0L;
+            }
             connection = (HttpURLConnection) new URL(meta.getString("url")).openConnection();
             connection.setConnectTimeout(20000);
             connection.setReadTimeout(30000);
