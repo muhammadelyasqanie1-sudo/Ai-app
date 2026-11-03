@@ -3,6 +3,7 @@ import { createAnthropicAdapter } from '../providers/anthropic.ts';
 import { createOpenAICompatibleAdapter } from '../providers/openAiCompatible.ts';
 import { gptOssProxy } from '../providers/gptOssProxy.ts';
 import { pool } from '../api/database.ts';
+import { isIP } from 'node:net';
 import { decryptProviderSecret } from '../security/providerVault.ts';
 import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescriptor, CapabilityFlags } from '../providers/providerTypes.ts';
 
@@ -31,8 +32,9 @@ export async function refreshDatabaseProviderAdapters(force = false): Promise<vo
         const apiKey = decryptProviderSecret(String(row.key_encrypted));
         const baseUrl = String(row.base_url);
         const parsed = new URL(baseUrl);
-        if (!['https:','http:'].includes(parsed.protocol) ||
-            (parsed.protocol === 'http:' && !['localhost','127.0.0.1'].includes(parsed.hostname))) continue;
+        if (!['https:','http:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.hash ||
+            (parsed.protocol === 'https:' && (isIP(parsed.hostname)||parsed.hostname==='localhost'||parsed.hostname.endsWith('.local')||parsed.hostname.endsWith('.internal')))||
+            (parsed.protocol === 'http:' && (process.env.NODE_ENV==='production'||!['localhost','127.0.0.1'].includes(parsed.hostname)))) continue;
         if (String(row.kind) === 'anthropic') {
           next.push(createAnthropicAdapter({id:String(row.slug),displayName:String(row.display_name),baseUrl,apiKey}));
         } else {
