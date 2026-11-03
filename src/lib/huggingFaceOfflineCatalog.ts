@@ -233,7 +233,7 @@ export function formatModelCategory(tags: string[], pipeline: string | null, mod
   if (/\b(english|grammar|vocabulary|translation|language learning|ielts|toefl|esl)\b/.test(source)) categories.push('english', 'learning');
   if (/\b(robot|robotics|ros|autonomous|navigation|actuator|kinematics|slam)\b/.test(source)) categories.push('robotics', 'learning');
   if (/\b(math|mathematics|algebra|geometry|calculus|arithmetic|theorem|equation)\b/.test(source)) categories.push('mathematics', 'learning');
-  if (/\b(science|physics|chemistry|biology|astronomy|geology|scientific)\b/.test(source)) categories.push('science', 'learning');
+  if (/\b(science|physics|chemistry|biology|astronomy|geology|scientific)\b/.test(source)) categories.push('science');
   if (/\b(creative|writing|story|poetry|novel|screenplay|copywriting)\b/.test(source)) categories.push('creative');
   return categories.length ? Array.from(new Set(categories)) : ['general'];
 }
