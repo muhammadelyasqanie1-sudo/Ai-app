@@ -1,4 +1,4 @@
-export const translations = {
+const baseTranslations = {
   dari: {
     // Brand
     brandName: 'AFG AI',
@@ -278,4 +278,17 @@ export const translations = {
     autoModeration: 'Intelligent Auto Moderation',
     viewDashboard: 'View Full Dashboard',
   }
+};
+
+// Until reviewed native dictionaries are shipped, these locales use English UI text.
+export const translations = {
+  ...baseTranslations,
+  pashto: baseTranslations.english, persian: baseTranslations.english,
+  arabic: baseTranslations.english, urdu: baseTranslations.english,
+  turkish: baseTranslations.english, russian: baseTranslations.english,
+  french: baseTranslations.english, spanish: baseTranslations.english,
+  german: baseTranslations.english, chinese: baseTranslations.english,
+  hindi: baseTranslations.english, bengali: baseTranslations.english,
+  indonesian: baseTranslations.english, portuguese: baseTranslations.english,
+  japanese: baseTranslations.english, korean: baseTranslations.english,
 };
