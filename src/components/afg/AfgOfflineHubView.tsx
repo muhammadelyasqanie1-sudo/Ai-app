@@ -401,7 +401,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
 
   return <section className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6" dir={dari ? 'rtl' : 'ltr'}>
     <header className="flex flex-wrap items-start justify-between gap-3">
-      <div><div className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-600"><WifiOff size={14}/>{dari ? 'بدون وابستگی به سرور' : 'Server-independent'}</div><h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{copy.title}</h1><p className="mt-2 max-w-2xl text-sm opacity-70">{copy.subtitle}</p></div>
+      <div><div className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-600"><WifiOff size={14}/>{dari ? 'بدون وابستگی به سرور' : 'Server-independent'}</div><h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{viewMode === 'models' ? (dari ? 'مدل‌های آفلاین' : 'Offline Models') : copy.title}</h1><p className="mt-2 max-w-2xl text-sm opacity-70">{viewMode === 'models' ? (dari ? 'مدل‌ها را جست‌وجو، بررسی، دانلود و مدیریت کن.' : 'Discover, inspect, download and manage local AI models.') : copy.subtitle}</p></div>
       <div className="rounded-2xl border p-3 text-end"><div className="flex items-center gap-2 text-xs opacity-70"><HardDrive size={15}/>{copy.storage}</div><div className="mt-1 text-sm font-bold">{formatBytes(storage.usage)} / {formatBytes(storage.quota)}</div></div>
     </header>
 
@@ -411,9 +411,10 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-bold">{copy.deviceTitle}</h2><button type="button" onClick={() => { setDeviceScanBusy(true); void scanOfflineDevice().then(setDevice).finally(() => setDeviceScanBusy(false)); }} className="rounded-lg border px-3 py-1.5 text-xs font-semibold">{copy.rescan}</button></div>
       {deviceScanBusy || !device ? <p className="text-sm opacity-60">{copy.deviceUnknown}</p> : <>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {[[copy.devicePlatform, device.deviceLabel + ' · ' + device.osLabel], [copy.deviceRam, device.memoryGiB ? device.memoryGiB + ' GB' : '—'], [copy.deviceCpu, device.cpuCores ? String(device.cpuCores) : '—'], [copy.deviceGpu, device.gpuName || (device.gpuAvailable ? 'WebGPU' : 'Unavailable')], [copy.deviceStorage, device.storageFreeBytes ? formatBytes(device.storageFreeBytes) : '—']].map(([label,value]) => <div key={label} className="min-w-0 rounded-xl bg-slate-500/5 p-3"><div className="text-[11px] opacity-60">{label}</div><div className="mt-1 break-words text-xs font-semibold">{value}</div></div>)}
+          {[[copy.devicePlatform, device.deviceLabel + ' · ' + device.osLabel], [copy.deviceRam, device.memoryGiB ? device.memoryGiB + ' GB' : '—'], [copy.deviceAvailableRam, device.availableMemoryGiB ? device.availableMemoryGiB + ' GB' : '—'], [copy.deviceCpu, device.cpuCores ? String(device.cpuCores) : '—'], [copy.deviceGpu, device.gpuName || (device.gpuAvailable ? 'WebGPU' : 'Unavailable')], [copy.deviceStorage, device.storageFreeBytes ? formatBytes(device.storageFreeBytes) : '—']].map(([label,value]) => <div key={label} className="min-w-0 rounded-xl bg-slate-500/5 p-3"><div className="text-[11px] opacity-60">{label}</div><div className="mt-1 break-words text-xs font-semibold">{value}</div></div>)}
         </div>
         <p className="text-[11px] opacity-60">{copy.privacyScan} {device.browser} · {device.architecture} · {device.nativeInfoAvailable ? 'Native info' : 'Browser estimate'}</p>
+        {device.lowMemory && <p className="rounded-lg bg-amber-500/10 p-2 text-xs text-amber-700">{dari ? 'اندروید هشدار کمبود حافظه داده است؛ پیش از بارگذاری مدل برنامه‌های دیگر را ببند.' : 'Android reports low memory. Close other apps before loading a model.'}</p>}
         {device.notes.map(note => <p key={note} className="text-[11px] opacity-55">{note}</p>)}
       </>}
     </section>
