@@ -93,7 +93,7 @@ export const cloudflareWorkersAi: ChatProviderAdapter = {
         const id=item.name||item.id||item.model||'';
         const taskName=typeof item.task==='string'?item.task:item.task?.name||'';
         return {item,id,taskName};
-      }).filter(({id})=>/^@cf\//[a-zA-Z0-9._-]+\\/[a-zA-Z0-9._-]+$/.test(id)&&!seen.has(id)&&Boolean(seen.add(id)))
+      }).filter(({id})=>/^@cf\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(id)&&!seen.has(id)&&Boolean(seen.add(id)))
         .map(({item,id,taskName})=>{
           modelTasks.set(id,taskName);
           return {
