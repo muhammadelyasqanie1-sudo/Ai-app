@@ -33,7 +33,9 @@ import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescript
 
 const openAICompatible = createOpenAICompatibleAdapter();
 const cloudflareCatalogAdapter = { ...cloudflareWorkersAi, id: 'cloudflare', key: 'cloudflare' } as ChatProviderAdapter;
-const staticProviderRegistry: ChatProviderAdapter[] = [cloudflareWorkersAi, cloudflareCatalogAdapter, openAICompatible, gptOssProxy];
+// The database seed uses the canonical `cloudflare` slug. Keep one registry entry so
+// discovery and the user model picker do not duplicate every Workers AI model.
+const staticProviderRegistry: ChatProviderAdapter[] = [cloudflareCatalogAdapter, openAICompatible, gptOssProxy];
 let databaseProviderRegistry: ChatProviderAdapter[] = [];
 let databaseProviderRefreshAt = 0;
 const DATABASE_PROVIDER_REFRESH_MS = 15_000;
@@ -100,15 +102,19 @@ export function getProviderRegistry(): Array<Pick<ChatProviderAdapter, 'id' | 'k
 }
 
 export function getProviderAdapter(providerId: string): ChatProviderAdapter | undefined {
+  // Backward compatibility for model references persisted before the provider slug
+  // was normalized to `cloudflare`.
+  if (providerId === 'cloudflare-workers-ai') return cloudflareCatalogAdapter;
   return allProviderAdapters().find((provider) => provider.id === providerId);
 }
 
 async function isProviderEnabled(providerId: string): Promise<boolean> {
   if (!pool) return true;
+  const canonicalProviderId = providerId === 'cloudflare-workers-ai' ? 'cloudflare' : providerId;
   try {
-    const catalog = await pool.query('SELECT enabled FROM providers WHERE slug = $1 LIMIT 1', [providerId]);
+    const catalog = await pool.query('SELECT enabled FROM providers WHERE slug = $1 LIMIT 1', [canonicalProviderId]);
     if (catalog.rows.length) return Boolean(catalog.rows[0].enabled);
-    const result = await pool.query('SELECT enabled FROM provider_configs WHERE provider_key = $1 LIMIT 1', [providerId]);
+    const result = await pool.query('SELECT enabled FROM provider_configs WHERE provider_key = $1 LIMIT 1', [canonicalProviderId]);
     return result.rows.length ? Boolean(result.rows[0].enabled) : true;
   } catch (error) {
     // An uninitialized optional catalog must not disable a configured AI provider.
