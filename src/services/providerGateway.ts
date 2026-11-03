@@ -35,7 +35,16 @@ const openAICompatible = createOpenAICompatibleAdapter();
 const cloudflareCatalogAdapter = { ...cloudflareWorkersAi, id: 'cloudflare', key: 'cloudflare' } as ChatProviderAdapter;
 // The database seed uses the canonical `cloudflare` slug. Keep one registry entry so
 // discovery and the user model picker do not duplicate every Workers AI model.
-const staticProviderRegistry: ChatProviderAdapter[] = [cloudflareCatalogAdapter, openAICompatible, gptOssProxy];
+const beatApiAdapter = process.env.BEATAPI_API_KEY?.trim()
+  ? createOpenAICompatibleAdapter({
+      id: 'beatapi',
+      displayName: 'BeatAPI',
+      baseUrl: (process.env.BEATAPI_BASE_URL?.trim() || 'https://api.beatapi.io/v1').replace(/\\/+$/, ''),
+      apiKey: process.env.BEATAPI_API_KEY.trim(),
+      catalogOnlyHealthCheck: true,
+    })
+  : null;
+const staticProviderRegistry: ChatProviderAdapter[] = [cloudflareCatalogAdapter, openAICompatible, gptOssProxy, ...(beatApiAdapter ? [beatApiAdapter] : [])];
 let databaseProviderRegistry: ChatProviderAdapter[] = [];
 let databaseProviderRefreshAt = 0;
 const DATABASE_PROVIDER_REFRESH_MS = 15_000;
