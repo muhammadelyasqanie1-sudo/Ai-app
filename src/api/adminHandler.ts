@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
 import { z } from 'zod';
 import { isIP } from 'node:net';
-import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './auth.ts';
+import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf, verifyUserPassword } from './auth.ts';
 import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors, refreshDatabaseProviderAdapters, recordModelHealthResult } from '../services/providerGateway.ts';
 import { encryptProviderSecret, providerKeyHint } from '../security/providerVault.ts';
 
@@ -15,6 +15,7 @@ const customProviderInput = z.object({
 }).strict();
 const providerKeyInput = z.object({
   apiKey: z.string().trim().min(8).max(8192),
+  currentPassword: z.string().min(8).max(256),
   alias: z.literal('default').optional(),
 }).strict();
 const manualModelInput = z.object({
@@ -154,6 +155,9 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       if(!parsedKey.success){sendAuthJson(res,400,{error:'Provide a valid provider API key. Only the default key alias is currently supported.'});return true;}
       const secret=parsedKey.data.apiKey;
       const alias='default';
+      if(!(await verifyUserPassword(user.id,parsedKey.data.currentPassword))){
+        sendAuthJson(res,403,{error:'Administrator re-authentication failed. Enter your current account password.'});return true;
+      }
       const provider=await pool.query('SELECT id,slug FROM providers WHERE slug=$1 LIMIT 1',[providerSlug]);
       if(!provider.rows[0]){sendAuthJson(res,404,{error:'Provider not found.'});return true;}
       let encrypted:string;
@@ -268,6 +272,12 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const targetId = typeof body.userId === 'string' ? body.userId : '';
       const role = typeof body.role === 'string' ? body.role : undefined;
       const status = typeof body.status === 'string' ? body.status : undefined;
+      if(status==='deleted'){
+        const currentPassword=typeof body.currentPassword==='string'?body.currentPassword:'';
+        if(!(await verifyUserPassword(user.id,currentPassword))){
+          sendAuthJson(res,403,{error:'Administrator re-authentication failed. Enter your current account password.'});return true;
+        }
+      }
       if (!targetId || (role !== undefined && !['user','admin','superadmin'].includes(role)) ||
           (role === 'superadmin' && user.role !== 'superadmin') ||
           (status !== undefined && !['active','suspended','deleted'].includes(status)) ||
