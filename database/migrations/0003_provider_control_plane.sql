@@ -40,6 +40,9 @@ ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS max_output integer;
 ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS pricing_json jsonb;
 ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS discovered_at timestamptz;
 ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS last_health_ok boolean;
+ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS capabilities_override text[];
+ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS input_cost_per_million numeric(18,8);
+ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS output_cost_per_million numeric(18,8);
 
 -- Seed the built-in providers idempotently. Cloudflare uses the platform AI binding;
 -- Ollama is desktop/local only and is not assumed reachable from the hosted server.
