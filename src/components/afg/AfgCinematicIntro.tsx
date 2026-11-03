@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { AfgBrainLogo } from './AfgBrainLogo';
+import React, { useEffect, useRef, useState } from 'react';
 import type { Language } from '../../types/afg';
+import './AfgCinematicIntro.css';
 
 interface AfgCinematicIntroProps {
   language: Language;
@@ -12,9 +12,18 @@ const copy = {
     eyebrow: 'هوش مصنوعی نسل آینده',
     title: 'فراتر از',
     accent: 'تصور',
-    line: 'یک جهان هوشمند. یک تجربه بی‌مرز.',
-    loading: 'در حال آماده‌سازی تجربه شما',
+    line: 'یک جهان هوشمند؛ امکانات بی‌پایان.',
+    loading: 'آماده‌سازی تجربه',
     enter: 'ورود به AFG AI',
+    engine: 'موتور هوشمند',
+    system: 'هسته سیستم',
+    node: 'گره جهانی',
+    status: 'وضعیت',
+    capacity: 'ذرات فعال',
+    latency: 'تأخیر شبکه',
+    ready: 'آماده',
+    connecting: 'در حال بررسی',
+    offline: 'آفلاین',
   },
   english: {
     eyebrow: 'NEXT-GENERATION INTELLIGENCE',
@@ -23,101 +32,260 @@ const copy = {
     line: 'One intelligent world. Limitless possibilities.',
     loading: 'Preparing your experience',
     enter: 'Enter AFG AI',
+    engine: 'Neural Engine',
+    system: 'Core System',
+    node: 'Global Node',
+    status: 'Status',
+    capacity: 'Active particles',
+    latency: 'Network latency',
+    ready: 'READY',
+    connecting: 'CHECKING',
+    offline: 'OFFLINE',
   },
 };
 
+type NodeState = 'checking' | 'online' | 'offline';
+
 export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, onComplete }) => {
-  const [phase, setPhase] = useState<'arrival' | 'reveal' | 'exit'>('arrival');
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [progress, setProgress] = useState(0);
+  const [nodeState, setNodeState] = useState<NodeState>('checking');
+  const [latency, setLatency] = useState<number | null>(null);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const t = copy[language];
+  const isRtl = language === 'dari';
 
   useEffect(() => {
-    const reveal = window.setTimeout(() => setPhase('reveal'), 900);
-    const finish = window.setTimeout(() => setPhase('exit'), 6900);
-    const complete = window.setTimeout(onComplete, 7650);
-    const progressTimer = window.setInterval(() => setProgress(value => Math.min(100, value + 1)), 76);
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const syncMotion = () => setReducedMotion(media.matches);
+    syncMotion();
+    media.addEventListener?.('change', syncMotion);
+    return () => media.removeEventListener?.('change', syncMotion);
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext('2d', { alpha: true });
+    if (!canvas || !context) {
+      setProgress(100);
+      return;
+    }
+
+    let width = 0;
+    let height = 0;
+    let frame = 0;
+    let raf = 0;
+    let lastArc = 0;
+    let arcTarget = 0;
+    let arcStart = 0;
+    let angle = 0;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const particles = Array.from({ length: 5000 }, (_, index) => {
+      const y = 1 - (index / 4999) * 2;
+      const radius = Math.sqrt(Math.max(0, 1 - y * y));
+      const theta = Math.PI * (3 - Math.sqrt(5)) * index;
+      return {
+        x: Math.cos(theta) * radius,
+        y,
+        z: Math.sin(theta) * radius,
+        seed: (index * 0.61803398875) % 1,
+        size: 0.35 + ((index * 17) % 11) / 10,
+      };
+    });
+
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+
+    const draw = (time: number) => {
+      context.clearRect(0, 0, width, height);
+      const cx = width * 0.5;
+      const cy = height * (width < 700 ? 0.445 : 0.49);
+      const radius = Math.min(width * (width < 700 ? 0.285 : 0.19), height * 0.205);
+      const pulse = 1 + Math.sin(time * 0.001) * 0.035;
+      const rotation = reduced ? 0.28 : angle;
+      const cos = Math.cos(rotation);
+      const sin = Math.sin(rotation);
+
+      const glow = context.createRadialGradient(cx, cy, radius * 0.05, cx, cy, radius * 2.25);
+      glow.addColorStop(0, 'rgba(13,242,255,0.17)');
+      glow.addColorStop(0.36, 'rgba(124,77,255,0.10)');
+      glow.addColorStop(1, 'rgba(5,6,10,0)');
+      context.fillStyle = glow;
+      context.fillRect(cx - radius * 2.3, cy - radius * 2.3, radius * 4.6, radius * 4.6);
+
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        const x = p.x * cos - p.z * sin;
+        const z = p.x * sin + p.z * cos;
+        const perspective = 1.15 / (1.7 - z * 0.42);
+        const px = cx + x * radius * pulse * perspective;
+        const py = cy + p.y * radius * pulse * perspective;
+        const depth = (z + 1) * 0.5;
+        const alpha = 0.18 + depth * 0.76;
+        const dot = p.size * (0.55 + depth * 0.75);
+        context.fillStyle = p.seed > 0.84
+          ? `rgba(177,139,255,${alpha})`
+          : `rgba(${depth > 0.68 ? '221,253,255' : '13,242,255'},${alpha})`;
+        context.beginPath();
+        context.arc(px, py, dot, 0, Math.PI * 2);
+        context.fill();
+      }
+
+      // A fine energy filament periodically connects the core to an orbiting HUD.
+      if (!reduced && time - lastArc > 3600) {
+        lastArc = time;
+        arcStart = time;
+        arcTarget = (arcTarget + 1) % 3;
+      }
+      if (!reduced && time - arcStart < 430) {
+        const targets = [
+          [cx - radius * 1.85, cy - radius * 0.55],
+          [cx + radius * 1.9, cy - radius * 0.2],
+          [cx + radius * 0.2, cy + radius * 1.55],
+        ];
+        const [tx, ty] = targets[arcTarget];
+        const fade = 1 - (time - arcStart) / 430;
+        context.save();
+        context.globalAlpha = fade * 0.75;
+        context.strokeStyle = '#72f8ff';
+        context.shadowColor = '#0df2ff';
+        context.shadowBlur = 14;
+        context.lineWidth = 1;
+        context.beginPath();
+        context.moveTo(cx + (tx - cx) * 0.14, cy + (ty - cy) * 0.14);
+        for (let step = 1; step < 8; step++) {
+          const ratio = step / 8;
+          const jitter = Math.sin(time * 0.04 + step * 8) * radius * 0.035;
+          context.lineTo(cx + (tx - cx) * ratio + jitter, cy + (ty - cy) * ratio - jitter);
+        }
+        context.lineTo(tx, ty);
+        context.stroke();
+        context.restore();
+      }
+
+      if (!reduced) angle += 0.0019;
+      frame++;
+      if (!reduced) raf = window.requestAnimationFrame(draw);
+    };
+
+    resize();
+    setProgress(28);
+    window.addEventListener('resize', resize, { passive: true });
+    raf = window.requestAnimationFrame(draw);
+
+    const initialize = async () => {
+      try {
+        if ('fonts' in document) await document.fonts.ready;
+      } catch { /* The system fallback font is ready to use. */ }
+      setProgress(62);
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+      setProgress(100);
+    };
+    void initialize();
+
     return () => {
-      window.clearTimeout(reveal);
-      window.clearTimeout(finish);
-      window.clearTimeout(complete);
-      window.clearInterval(progressTimer);
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener('resize', resize);
     };
   }, []);
 
+  useEffect(() => {
+    let alive = true;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 4500);
+    const base = String((import.meta as any).env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    const started = performance.now();
+
+    fetch(`${base}/api/capabilities`, { cache: 'no-store', signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json().catch(() => null);
+        if (!alive) return;
+        const elapsed = Math.max(1, Math.round(performance.now() - started));
+        setLatency(elapsed);
+        setNodeState(response.ok && data?.verified === true ? 'online' : 'offline');
+      })
+      .catch(() => {
+        if (alive) setNodeState('offline');
+      })
+      .finally(() => window.clearTimeout(timer));
+
+    return () => {
+      alive = false;
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  const nodeLabel = nodeState === 'online' ? t.ready : nodeState === 'checking' ? t.connecting : t.offline;
+
   return (
-    <main className={`afg-cinematic-intro phase-${phase}`} lang={language === 'dari' ? 'fa-AF' : 'en'} dir={language === 'dari' ? 'rtl' : 'ltr'} aria-label="AFG AI intro">
-      <div className="afg-intro-grain" aria-hidden="true" />
-      <div className="afg-intro-grid" aria-hidden="true" />
-      <div className="afg-intro-vignette" aria-hidden="true" />
-      <div className="afg-intro-aurora" aria-hidden="true"><i /><i /><i /></div>
-      <div className="afg-intro-light-beams" aria-hidden="true"><i /><i /><i /><i /></div>
-      <div className="afg-intro-orbit orbit-one" aria-hidden="true" />
-      <div className="afg-intro-orbit orbit-two" aria-hidden="true" />
-      <div className="afg-intro-orbit orbit-three" aria-hidden="true" />
-      <div className="afg-intro-particles" aria-hidden="true">
-        {Array.from({ length: 24 }, (_, i) => <i key={i} style={{ left: ((i * 41 + 7) % 97) + '%', top: ((i * 67 + 9) % 91) + '%', animationDelay: (-i * 0.21) + 's' }} />)}
+    <main
+      className={`afg-boot-screen ${reducedMotion ? 'is-reduced' : ''}`}
+      lang={isRtl ? 'fa-AF' : 'en'}
+      dir={isRtl ? 'rtl' : 'ltr'}
+      aria-label="AFG AI cinematic welcome"
+    >
+      <canvas ref={canvasRef} className="afg-boot-canvas" aria-hidden="true" />
+      <div className="afg-boot-grain" aria-hidden="true" />
+      <div className="afg-boot-vignette" aria-hidden="true" />
+      <div className="afg-boot-grid afg-boot-grid-ceiling" aria-hidden="true" />
+      <div className="afg-boot-grid afg-boot-grid-floor" aria-hidden="true" />
+      <div className="afg-boot-beams" aria-hidden="true"><i /><i /><i /><i /><i /></div>
+
+      <header className="afg-boot-header">
+        <div className="afg-boot-wordmark"><span className="afg-boot-mark">A</span><span>AFG <b>AI</b></span><small>INTELLIGENCE SYSTEM</small></div>
+        <div className={`afg-boot-status state-${nodeState}`} aria-live="polite">
+          <i />
+          <span>{nodeState === 'online' ? 'GLOBAL NODE' : nodeState === 'checking' ? 'NODE CHECK' : 'LOCAL MODE'}</span>
+          <b>{nodeLabel}</b>
+          <em>{latency === null ? '—' : `${latency} ms`}</em>
+        </div>
+      </header>
+
+      <div className="afg-boot-scene">
+        <div className="afg-boot-orbit orbit-neural" aria-hidden="true" />
+        <div className="afg-boot-orbit orbit-core" aria-hidden="true" />
+        <div className="afg-boot-orbit orbit-node" aria-hidden="true" />
+        <article className="afg-boot-panel panel-neural">
+          <small>01 / THINK</small><strong>{t.engine}</strong>
+          <span className="afg-boot-panel-value">5,000 <i>●</i></span>
+          <span className="afg-boot-panel-caption">{t.capacity}</span>
+        </article>
+        <article className="afg-boot-panel panel-core">
+          <small>02 / SYSTEM</small><strong>{t.system}</strong>
+          <span className="afg-boot-panel-value">{nodeLabel}</span>
+          <span className="afg-boot-panel-caption">{t.status}</span>
+        </article>
+        <article className="afg-boot-panel panel-node">
+          <small>03 / CONNECT</small><strong>{t.node}</strong>
+          <span className="afg-boot-panel-value amber">{latency === null ? '—' : `${latency} ms`}</span>
+          <span className="afg-boot-panel-caption">{t.latency}</span>
+        </article>
+        <div className="afg-boot-core-label"><i /> AFG / CORE 01</div>
       </div>
 
-      <div className="afg-intro-topline">
-        <span className="afg-intro-live-dot" />
-        <span>AFG AI</span>
-        <span className="afg-intro-topline-rule" />
-        <span className="afg-intro-topline-meta">INTELLIGENCE / 01</span>
-      </div>
-
-      <section className="afg-intro-stage">
-        <div className="afg-intro-halo" aria-hidden="true" />
-        <div className="afg-intro-energy-disc" aria-hidden="true"><i /><i /><i /><i /></div>
-        <div className="afg-intro-data-orbit orbit-data-one" aria-hidden="true"><i /><i /><i /></div>
-        <div className="afg-intro-data-orbit orbit-data-two" aria-hidden="true"><i /><i /><i /></div>
-        <div className="afg-intro-ring ring-a" aria-hidden="true" />
-        <div className="afg-intro-ring ring-b" aria-hidden="true" />
-        <div className="afg-intro-ring ring-c" aria-hidden="true" />
-        <div className="afg-intro-core">
-          <div className="afg-intro-core-glow" />
-          <AfgBrainLogo size="xl" showBadge={false} className="afg-intro-logo" />
-          <span className="afg-intro-core-scan" /><span className="afg-intro-core-pulse" />
-        </div>
-
-        <div className="afg-intro-glass-card card-left" aria-hidden="true">
-          <span className="afg-intro-card-index">01 / THINK</span>
-          <span className="afg-intro-card-symbol">✳</span>
-          <span className="afg-intro-card-caption">NEURAL ENGINE</span>
-        </div>
-        <div className="afg-intro-glass-card card-right" aria-hidden="true">
-          <span className="afg-intro-card-index">02 / CREATE</span>
-          <span className="afg-intro-card-symbol">⌘</span>
-          <span className="afg-intro-card-caption">CREATIVE STUDIO</span>
-        </div>
-        <div className="afg-intro-glass-card card-bottom" aria-hidden="true">
-          <span className="afg-intro-card-index">03 / EXPLORE</span>
-          <span className="afg-intro-card-caption">A WORLD OF POSSIBILITIES</span>
-          <span className="afg-intro-card-bars"><i /><i /><i /><i /><i /><i /><i /></span>
-        </div>
-        <div className="afg-intro-crosshair crosshair-one" aria-hidden="true">+</div>
-        <div className="afg-intro-crosshair crosshair-two" aria-hidden="true">+</div>
-        <div className="afg-intro-hud hud-left" aria-hidden="true"><b>AFG / NEURAL NETWORK</b><span>CORE SYSTEM <i>ONLINE</i></span><span>LATENCY <i>OPTIMAL</i></span><small>01.000 · 10.101 · 11.010</small></div>
-        <div className="afg-intro-hud hud-right" aria-hidden="true"><b>LIVE INTELLIGENCE</b><span className="hud-wave"><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /></span><small>PROCESSING CAPACITY</small></div>
-        <div className="afg-intro-coordinate" aria-hidden="true">34°31′N&nbsp; 69°11′E <span>·</span> GLOBAL NODE</div>
-      </section>
-
-      <section className="afg-intro-copy">
-        <p className="afg-intro-eyebrow"><span />{t.eyebrow}<span /></p>
+      <section className="afg-boot-copy">
+        <p className="afg-boot-eyebrow"><i />{t.eyebrow}<i /></p>
         <h1><span>{t.title}</span> <em>{t.accent}</em></h1>
-        <p className="afg-intro-tagline">{t.line}</p>
+        <p className="afg-boot-tagline">{t.line}</p>
       </section>
 
-      <footer className="afg-intro-footer">
-        <div className="afg-intro-progress-copy">
-          <span>{t.loading}</span><span>{String(progress).padStart(2, '0')}%</span>
-        </div>
-        <div className="afg-intro-progress-track"><span style={{ width: progress + '%' }} /></div>
-        <div className="afg-intro-footer-bottom">
-          <span>BUILT FOR WHAT'S NEXT</span>
-          <span>AFGHANISTAN · GLOBAL</span>
-        </div>
+      <footer className="afg-boot-footer">
+        <div className="afg-boot-progress-meta"><span>{t.loading}</span><b>{String(progress).padStart(2, '0')}%</b></div>
+        <div className="afg-boot-progress"><i style={{ width: progress + '%' }} /></div>
+        <div className="afg-boot-footer-row"><span>BUILT FOR WHAT'S NEXT</span><span>34.5°N&nbsp; 69.1°E · KABUL NODE</span></div>
+        <button type="button" className="afg-boot-enter" onClick={onComplete} disabled={progress < 100}>
+          <span>{t.enter}</span><b aria-hidden="true">↗</b>
+        </button>
       </footer>
-      <button type="button" className="afg-intro-skip" onClick={onComplete}>{t.enter}<span>↗</span></button>
     </main>
   );
 };
