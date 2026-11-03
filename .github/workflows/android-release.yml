@@ -56,7 +56,8 @@ jobs:
           done
           mkdir -p android/app
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release-keystore.jks
-          echo "ANDROID_KEYSTORE_PATH=$GITHUB_WORKSPACE/android/app/release-keystore.jks" >> "$GITHUB_ENV"
+          export ANDROID_KEYSTORE_PATH="$GITHUB_WORKSPACE/android/app/release-keystore.jks"
+          echo "ANDROID_KEYSTORE_PATH=$ANDROID_KEYSTORE_PATH" >> "$GITHUB_ENV"
           node scripts/configure-android-release.mjs
 
       - name: Build signed release APK
