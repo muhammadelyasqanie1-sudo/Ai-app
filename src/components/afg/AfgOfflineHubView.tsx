@@ -384,6 +384,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     const next = [...messages, { role: 'user' as const, content: text }];
     setMessages(next); setPrompt(''); setChatBusy(true); setThermalWarning(false);
     const thermalTimer = window.setTimeout(() => setThermalWarning(true), 120000);
+    const inferenceStartedAt = Date.now();
+    void recordOfflineMetric({ name: 'inference_started', modelId: selectedId || null }).catch(() => undefined);
     try {
       const result = await engineRef.current.chat.completions.create({
         messages: next.map(item => ({ role: item.role, content: item.content })),
@@ -391,8 +393,12 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
         max_tokens: lowPowerMode ? 256 : 512,
       });
       const answer = result.choices?.[0]?.message?.content;
+      void recordOfflineMetric({ name: 'inference_completed', modelId: selectedId || null, durationMs: Date.now() - inferenceStartedAt }).catch(() => undefined);
       setMessages(previous => [...previous, { role: 'assistant', content: typeof answer === 'string' ? answer : JSON.stringify(answer || '') }]);
     } catch (error) {
+      const outOfMemory = /out of memory|allocation failed|cannot allocate/i.test(error instanceof Error ? error.message : '');
+      void recordOfflineMetric({ name: outOfMemory ? 'out_of_memory' : 'inference_failed', modelId: selectedId || null, durationMs: Date.now() - inferenceStartedAt }).catch(() => undefined);
+      void recordOfflineDiagnostic({ code: outOfMemory ? 'out_of_memory' : 'inference_error', modelId: selectedId || null }).catch(() => undefined);
       setMessages(previous => [...previous, { role: 'assistant', content: error instanceof Error ? error.message : copy.failed }]);
     } finally { window.clearTimeout(thermalTimer); setChatBusy(false); setThermalWarning(false); }
   };
