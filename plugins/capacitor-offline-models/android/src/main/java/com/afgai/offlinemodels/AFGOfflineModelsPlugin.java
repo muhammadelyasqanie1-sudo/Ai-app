@@ -103,9 +103,14 @@ public class AFGOfflineModelsPlugin extends Plugin {
 
             if (statusCode == DownloadManager.STATUS_SUCCESSFUL) {
                 File file = new File(localPath);
+                long expectedBytes = meta.optLong("expectedBytes", -1L);
                 if (!file.isFile() || file.length() <= 0) {
                     state = "error";
                     error = "Downloaded model file is missing or empty.";
+                } else if (expectedBytes > 0 && file.length() != expectedBytes) {
+                    file.delete();
+                    state = "error";
+                    error = "Downloaded model size does not match the trusted repository metadata; the incomplete file was deleted.";
                 } else if (computedSha.isEmpty()) {
                     computedSha = sha256(file);
                     hashVerified = !expectedSha.isEmpty() && expectedSha.equalsIgnoreCase(computedSha);
