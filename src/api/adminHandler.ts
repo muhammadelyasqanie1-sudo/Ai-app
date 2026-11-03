@@ -147,47 +147,6 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/subscription-plans') {
-    if (req.method === 'GET' && pathname === '/api/admin/providers') {
-      const result = await pool.query(`SELECT id,slug,kind,display_name,base_url,enabled,config_json,
-          last_health_at,last_health_ok,last_error_code,source,created_at,updated_at
-        FROM providers ORDER BY source,display_name`);
-      sendAuthJson(res, 200, { providers: result.rows }); return true;
-    }
-
-    if (req.method === 'POST' && pathname === '/api/admin/providers/custom') {
-      const body = await readJsonBody(req, 8000);
-      const slug = typeof body.slug === 'string' ? body.slug.trim().toLowerCase() : '';
-      const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : '';
-      const baseUrl = typeof body.baseUrl === 'string' ? body.baseUrl.trim() : '';
-      const protocol = body.protocol === 'anthropic-messages' ? 'anthropic-messages' : 'openai-compatible';
-      let parsedUrl: URL | null = null;
-      try { parsedUrl = new URL(baseUrl); } catch { parsedUrl = null; }
-      if (!/^[a-z0-9][a-z0-9-]{1,47}$/.test(slug) || !displayName || displayName.length > 80 ||
-          !parsedUrl || !['https:','http:'].includes(parsedUrl.protocol) ||
-          (parsedUrl.protocol === 'http:' && !['localhost','127.0.0.1'].includes(parsedUrl.hostname))) {
-        sendAuthJson(res, 400, { error: 'Provide a valid slug, display name, and HTTPS base URL (HTTP is allowed only for localhost).' }); return true;
-      }
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        const created = await client.query(`INSERT INTO providers(kind,display_name,enabled,slug,base_url,config_json,source)
-          VALUES('custom',$1,false,$2,$3,$4::jsonb,'custom')
-          RETURNING id,slug,kind,display_name,base_url,enabled,config_json,source,created_at`,
-          [displayName,slug,baseUrl,JSON.stringify({protocol,requires_key:true,custom:true})]);
-        await client.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
-          [user.id,'provider.custom.create','provider',created.rows[0].id,JSON.stringify({slug,displayName,baseUrl,protocol})]);
-        await client.query('COMMIT');
-        sendAuthJson(res, 201, { provider: created.rows[0] }); return true;
-      } catch (error) {
-        await client.query('ROLLBACK');
-        if ((error as { code?: string })?.code === '23505') {
-          sendAuthJson(res, 409, { error: 'A provider with this slug already exists.' }); return true;
-        }
-        throw error;
-      } finally { client.release(); }
-    }
-
-    if (req.method === 'GET' && pathname === '/api/admin/subscription-plans') {
       const result = await pool.query(`SELECT plan_key,display_name,monthly_price_usd,limits_json,features_json,enabled
         FROM subscription_plans ORDER BY monthly_price_usd,plan_key`);
       sendAuthJson(res, 200, { plans: result.rows }); return true;
@@ -704,7 +663,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        await client.query('UPDATE providers SET enabled=$2,updated_at=now() WHERE slug=$1',[provider.id,enabled]);
+        await client.query('UPDATE providers SET enabled=$2,updated_at=now() WHERE slug=$1',[providerId,enabled]);
         await client.query(
           `INSERT INTO provider_configs (provider_key, display_name, enabled)
            VALUES ($1, $2, $3)
