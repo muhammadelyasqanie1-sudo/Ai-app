@@ -62,7 +62,7 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
   const copy = dari ? {
     title: 'مرکز هوش مصنوعی آفلاین', subtitle: 'مدل را یک‌بار دانلود کن و در همین دستگاه، بدون اینترنت از آن استفاده کن.',
     runtime: 'وضعیت موتور محلی', compatible: 'این دستگاه از WebGPU پشتیبانی می‌کند.', unsupported: 'این مرورگر یا WebView از WebGPU پشتیبانی نمی‌کند؛ اجرای مدل آفلاین در این دستگاه فعلاً فعال نیست.',
-    checking: 'در حال بررسی سخت‌افزار…', catalog: 'مدل‌های سازگار', search: 'جست‌وجوی مدل…', install: 'دانلود و نصب', installed: 'ذخیره‌شده', downloading: 'در حال دانلود مدل…',
+    checking: 'در حال بررسی سخت‌افزار…', catalog: 'مدل‌های سازگار', search: 'جست‌وجوی مدل…', install: 'دانلود و نصب', installed: 'قبلاً بارگذاری‌شده', downloading: 'در حال دانلود مدل…',
     minMemory: 'حداقل حافظه گرافیکی', downloadSize: 'حجم تقریبی مخزن مدل', unknownSize: 'اندازه دقیق در دسترس نیست', storage: 'فضای ذخیره‌سازی دستگاه',
     chat: 'گفت‌وگوی آفلاین', chatHint: 'مدل نصب‌شده را بارگذاری کن و بدون اتصال به سرور پیام بده.', choose: 'یک مدل انتخاب کن', load: 'بارگذاری مدل', send: 'ارسال', input: 'پیام خود را بنویس…',
     noModels: 'مدل سازگاری پیدا نشد.', noInstalled: 'هنوز مدلی نصب نشده است.', loading: 'در حال بارگذاری مدل…', ready: 'مدل آماده است؛ پیام‌ها فقط روی همین دستگاه پردازش می‌شوند.',
@@ -73,7 +73,7 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
   } : {
     title: 'Offline AI Hub', subtitle: 'Download a model once, then use it on this device without an internet connection.',
     runtime: 'Local runtime status', compatible: 'This device supports WebGPU.', unsupported: 'This browser or WebView does not support WebGPU. Offline model inference is unavailable on this device for now.',
-    checking: 'Checking device capabilities…', catalog: 'Compatible models', search: 'Search models…', install: 'Download & install', installed: 'Cached', downloading: 'Downloading model…',
+    checking: 'Checking device capabilities…', catalog: 'Compatible models', search: 'Search models…', install: 'Download & install', installed: 'Previously loaded', downloading: 'Downloading model…',
     minMemory: 'Minimum GPU memory', downloadSize: 'Approx. repository size', unknownSize: 'Exact size unavailable', storage: 'Device storage',
     chat: 'Offline chat', chatHint: 'Load an installed model and chat without sending requests to a server.', choose: 'Choose a model', load: 'Load model', send: 'Send', input: 'Write a message…',
     noModels: 'No compatible models found.', noInstalled: 'No models installed yet.', loading: 'Loading model…', ready: 'Model ready. Messages are processed on this device only.',
@@ -200,6 +200,7 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
     } finally { setChatBusy(false); }
   };
 
+  const selectedFit = selected && device ? assessOfflineModelFit(selected.vram_required_MB || 0, device) : 'limited';
   const selectedRepo = selected ? getHuggingFaceRepo(selected) : null;
   const exactSize = selectedRepo ? modelSizes[selectedRepo] : undefined;
 
@@ -248,7 +249,7 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
           <p className="text-xs opacity-65">{copy.limitation}</p>
           <p className="text-xs opacity-65">{copy.onlineNeeded}</p>
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span>{copy.downloadSize}</span><strong>{exactSize ? formatBytes(exactSize) : copy.unknownSize}</strong></div>
-          <button type="button" disabled={runtime !== 'ready' || busy} onClick={() => void loadModel(selected.model_id, !installed.includes(selected.model_id))} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 px-4 py-3 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"><ArrowDownToLine size={17}/>{installed.includes(selected.model_id) ? copy.load : copy.install}</button>
+          <button type="button" disabled={runtime !== 'ready' || busy || selectedFit === 'incompatible'} onClick={() => void loadModel(selected.model_id, !installed.includes(selected.model_id))} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 px-4 py-3 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"><ArrowDownToLine size={17}/>{installed.includes(selected.model_id) ? copy.load : copy.install}</button>
         </div>}
         {busy && <div className="space-y-2 rounded-xl border p-3"><div className="flex justify-between gap-2 text-xs"><span className="truncate">{progressText}</span><strong>{progress}%</strong></div><div className="h-2 overflow-hidden rounded-full bg-slate-500/20"><div className="h-full rounded-full bg-cyan-400 transition-all" style={{ width: progress + '%' }}/></div></div>}
       </section>
