@@ -9,7 +9,7 @@ import { getIntlLocale } from '../../utils/i18n';
 
 interface AfgAdminPanelProps { language: Language; }
 type Tab = 'overview'|'users'|'providers'|'models'|'usage'|'errors'|'limits'|'health'|'config'|'flags'|'audit'|'security';
-type ProviderRow = { id:string; displayName:string; enabled:boolean; configured:boolean; kind?:string; base_url?:string|null; keyHint?:string|null; keyStatus?:string|null; last_health_at?:string|null; last_health_ok?:boolean|null; source?:string };
+type ProviderRow = { id:string; displayName:string; enabled:boolean; configured:boolean; kind?:string; base_url?:string|null; config_json?:Record<string,any>; keyHint?:string|null; keyStatus?:string|null; last_health_at?:string|null; last_health_ok?:boolean|null; source?:string };
 type ModelRow = {
   id:string; providerId:string; displayName:string; description?:string; contextWindow:number;
   enabled:boolean; verifiedAt:string|null; capabilities:Record<string,boolean>;
@@ -60,6 +60,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [showBootstrap,setShowBootstrap] = useState(false);
   const [providers,setProviders] = useState<ProviderRow[]>([]);
   const [providerSecrets,setProviderSecrets] = useState<Record<string,string>>({});
+  const [providerBaseUrls,setProviderBaseUrls] = useState<Record<string,string>>({});
   const [customSlug,setCustomSlug] = useState('');
   const [customName,setCustomName] = useState('');
   const [customBaseUrl,setCustomBaseUrl] = useState('');
@@ -196,6 +197,17 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     try{const result=await api('/api/admin/providers/'+encodeURIComponent(provider.id)+'/discover-models',{method:'POST',body:'{}'});
       setNotice(`${provider.displayName}: discovered ${result.discovered} models. All new entries are disabled pending review.`);await loadAdminData();}
     catch(err){setNotice('');setError(err instanceof Error?err.message:'Provider model discovery failed.');}
+  };
+  const saveProviderConfig=async(provider:ProviderRow)=>{
+    const baseUrl=(providerBaseUrls[provider.id]??provider.base_url??'').trim();
+    if(!baseUrl){setError('Enter a provider base URL.');return;}
+    if(!isSuperadmin){setError('Only superadmin can change provider configuration.');return;}
+    try{
+      await api('/api/admin/providers/'+encodeURIComponent(provider.id)+'/config',{method:'PATCH',
+        body:JSON.stringify({baseUrl,protocol:provider.config_json?.protocol||'openai-compatible'})});
+      setNotice(provider.displayName+' configuration updated; model verification cache cleared.');
+      await loadAdminData();
+    }catch(err){setError(err instanceof Error?err.message:'Provider configuration could not be saved.');}
   };
   const saveProviderKey=async(provider:ProviderRow,rotate=false)=>{
     const apiKey=(providerSecrets[provider.id]||'').trim();if(!apiKey){setError('Enter the provider API key first.');return;}
@@ -425,6 +437,10 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
             <button className={secondary+' flex items-center gap-2'} onClick={()=>void api('/api/admin/providers',{method:'PATCH',body:JSON.stringify({providerId:p.id,enabled:!p.enabled})}).then(loadAdminData).catch(e=>setError(e.message))}><Power className="h-3.5 w-3.5"/>{p.enabled?'Disable':'Enable'}</button>
           </div>
           {isSuperadmin&&p.kind!=='cloudflare'&&p.kind!=='ollama'&&<div className="mt-3 rounded-lg border border-slate-800 bg-slate-950 p-3">
+            <label className="mb-2 block text-[11px] text-slate-400">Provider base URL</label>
+            <input className={field} value={providerBaseUrls[p.id]??p.base_url??''} onChange={e=>setProviderBaseUrls(current=>({...current,[p.id]:e.target.value}))} placeholder="https://api.example.com/v1"/>
+            <button className={secondary+' mt-2'} onClick={()=>void saveProviderConfig(p)}>Save endpoint configuration</button>
+
             <label className="mb-2 block text-[11px] text-slate-400">Provider API key · saved value is never displayed</label>
             <input className={field} type="password" autoComplete="new-password" value={providerSecrets[p.id]||''} onChange={e=>setProviderSecrets(current=>({...current,[p.id]:e.target.value}))} placeholder="Paste new API key"/>
             <div className="mt-2 flex gap-2"><button className={secondary} onClick={()=>void saveProviderKey(p,false)}>Save key</button><button className={secondary} onClick={()=>void saveProviderKey(p,true)}>Rotate key</button></div>
