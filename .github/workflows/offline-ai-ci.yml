@@ -1,0 +1,28 @@
+name: Offline AI Hub checks
+on:
+  pull_request:
+    paths:
+      - 'src/lib/huggingFaceOfflineCatalog.ts'
+      - 'src/lib/offlineModelDownloads.ts'
+      - 'src/components/afg/AfgOfflineHubView.tsx'
+      - 'package.json'
+      - 'tsconfig.json'
+      - '.github/workflows/offline-ai-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  web-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: TypeScript validation
+        run: npm run lint
+      - name: Production web build
+        run: npm run build
