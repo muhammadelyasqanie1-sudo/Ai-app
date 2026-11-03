@@ -164,8 +164,9 @@ export async function downloadGGUF(options: {
   const expectedBytes = options.expectedBytes && options.expectedBytes > 0 ? options.expectedBytes : null;
   const expectedSha256 = options.expectedSha256?.toLowerCase() || null;
   let activeWritable: FileSystemWritableFileStream | null = null;
+  let dir: FileSystemDirectoryHandle | null = null;
   try {
-    const dir = await modelDirectory();
+    dir = await modelDirectory();
     let offset = await getFileSize(dir, partial);
     await saveTask({ id, repoId, fileName, url: 'https://huggingface.co/' + repoId + '/resolve/main/' + fileName, expectedBytes, downloadedBytes: offset, expectedSha256, status: 'downloading', updatedAt: Date.now() });
     let response = await fetch('https://huggingface.co/' + encodeURIComponent(repoId).replace('%2F','/') + '/resolve/main/' + fileName.split('/').map(encodeURIComponent).join('/'), {
@@ -235,7 +236,7 @@ export async function downloadGGUF(options: {
   } catch (error) {
     if (activeWritable) await activeWritable.close().catch(() => undefined);
     const paused = task.paused || controller.signal.aborted;
-    const current = await getFileSize(dir, partial).catch(() => 0);
+    const current = dir ? await getFileSize(dir, partial).catch(() => 0) : 0;
     const result: OfflineDownloadState = {
       id, repoId, fileName, url: 'https://huggingface.co/' + repoId + '/resolve/main/' + fileName,
       expectedBytes, downloadedBytes: current, expectedSha256, status: paused ? 'paused' : 'error',
