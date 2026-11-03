@@ -10,6 +10,7 @@
 #include <vector>
 #include <cstring>
 #include <atomic>
+#include <cstdint>
 
 #define AFG_TAG "AFG-Llama"
 #define AFG_LOGE(...) __android_log_print(ANDROID_LOG_ERROR, AFG_TAG, __VA_ARGS__)
