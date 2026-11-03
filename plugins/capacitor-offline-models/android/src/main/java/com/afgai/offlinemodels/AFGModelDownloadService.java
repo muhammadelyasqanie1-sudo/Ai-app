@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
 
@@ -32,7 +33,8 @@ public final class AFGModelDownloadService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        startForeground(NOTIFICATION_ID, notification());
+        if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+        else startForeground(NOTIFICATION_ID, notification());
         if (intent != null && ACTION_ENQUEUE.equals(intent.getAction())) {
             int id = intent.getIntExtra(EXTRA_DOWNLOAD_ID, -1);
             if (id > 0) enqueue(this, id);
