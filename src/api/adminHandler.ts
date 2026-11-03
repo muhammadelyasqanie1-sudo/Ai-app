@@ -5,6 +5,43 @@ import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors } 
 
 const ALLOWED_FALLBACK_CAPABILITIES = new Set(['text', 'vision', 'imageGen', 'tts', 'stt']);
 
+function requiredAdminPermission(method: string, pathname: string): string | null {
+  const route = method + ' ' + pathname;
+  const permissions: Record<string, string> = {
+    'GET /api/admin/subscription-plans': 'subscriptions:read',
+    'GET /api/admin/subscriptions': 'subscriptions:read',
+    'PATCH /api/admin/subscriptions': 'subscriptions:manage',
+    'GET /api/admin/users': 'users:read',
+    'PATCH /api/admin/users': 'users:manage',
+    'GET /api/admin/overview': 'dashboard:read',
+    'GET /api/admin/requests': 'usage:read',
+    'GET /api/admin/audit': 'audit:read',
+    'GET /api/admin/security-events': 'security:read',
+    'GET /api/admin/rate-limits': 'security:read',
+    'PATCH /api/admin/rate-limits': 'security:manage',
+    'GET /api/admin/feature-flags': 'settings:read',
+    'PATCH /api/admin/feature-flags': 'settings:manage',
+    'POST /api/admin/providers/test': 'providers:manage',
+    'GET /api/admin/providers': 'providers:read',
+    'PATCH /api/admin/providers': 'providers:manage',
+    'POST /api/admin/models/discover': 'models:manage',
+    'GET /api/admin/models': 'models:read',
+    'PATCH /api/admin/models': 'models:manage',
+    'GET /api/admin/fallbacks': 'routing:read',
+    'PATCH /api/admin/fallbacks': 'routing:manage',
+    'GET /api/admin/system-health': 'system:read',
+    'POST /api/admin/notifications/product-update': 'notifications:broadcast',
+  };
+  return permissions[route] || null;
+}
+
+async function rolePermissions(role: string): Promise<Record<string, boolean>> {
+  if (!pool) return {};
+  const result = await pool.query('SELECT permissions_json FROM roles WHERE name=$1 LIMIT 1', [role]);
+  const value = result.rows[0]?.permissions_json;
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, boolean> : {};
+}
+
 async function requireAdmin(req: IncomingMessage, res: ServerResponse) {
   const user = await authenticateRequest(req);
   if (!user) {
@@ -44,8 +81,21 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     sendAuthJson(res, 401, { error: 'Sign in is required.' });
     return true;
   }
-  if (user.role !== 'admin') {
-    sendAuthJson(res, 403, { error: 'Administrator access is required.' });
+  const permission = requiredAdminPermission(req.method || 'GET', pathname);
+  if (!permission) {
+    sendAuthJson(res, 404, { error: 'Admin route not found.' });
+    return true;
+  }
+  let permissions: Record<string, boolean> = {};
+  try {
+    permissions = await rolePermissions(user.role);
+  } catch {
+    sendAuthJson(res, 503, { error: 'Could not load staff permissions.' });
+    return true;
+  }
+  const rootRole = ['admin', 'super_admin'].includes(user.role);
+  if (!rootRole && permissions['*'] !== true && permissions[permission] !== true) {
+    sendAuthJson(res, 403, { error: 'Your staff role does not have permission for this action.', requiredPermission: permission });
     return true;
   }
   if (req.method !== 'GET' && !verifyCsrf(req)) {
@@ -114,7 +164,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const targetId = typeof body.userId === 'string' ? body.userId : '';
       const role = typeof body.role === 'string' ? body.role : undefined;
       const status = typeof body.status === 'string' ? body.status : undefined;
-      if (!targetId || (role !== undefined && !['user','admin'].includes(role)) ||
+      if (!targetId || (role !== undefined && !/^[a-z][a-z0-9_]{1,47}$/.test(role)) ||
           (status !== undefined && !['active','suspended'].includes(status)) ||
           (role === undefined && status === undefined)) {
         sendAuthJson(res, 400, { error: 'Provide a user ID and a valid role or status.' }); return true;
@@ -138,10 +188,26 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         }
         const nextRole = role ?? target.rows[0].role;
         const nextStatus = status ?? target.rows[0].status;
-        const removingActiveAdmin = target.rows[0].role === 'admin' && target.rows[0].status === 'active' &&
-          (nextRole !== 'admin' || nextStatus !== 'active');
+        const actorIsRoot = ['admin', 'super_admin'].includes(user.role);
+        if (role !== undefined) {
+          const assignedRole = await client.query('SELECT name FROM roles WHERE name=$1', [role]);
+          if (!assignedRole.rows[0]) {
+            await client.query('ROLLBACK');
+            sendAuthJson(res, 400, { error: 'The requested staff role is not registered.' }); return true;
+          }
+          if ((role === 'admin' || role === 'super_admin' || target.rows[0].role !== 'user' || role !== 'user') && !actorIsRoot) {
+            await client.query('ROLLBACK');
+            sendAuthJson(res, 403, { error: 'Only a root administrator can assign or revoke staff roles.' }); return true;
+          }
+        }
+        if (status === 'suspended' && !actorIsRoot && permissions['users:suspend'] !== true) {
+          await client.query('ROLLBACK');
+          sendAuthJson(res, 403, { error: 'Your staff role cannot suspend user accounts.' }); return true;
+        }
+        const removingActiveAdmin = ['admin','super_admin'].includes(target.rows[0].role) && target.rows[0].status === 'active' &&
+          (!['admin','super_admin'].includes(nextRole) || nextStatus !== 'active');
         if (removingActiveAdmin) {
-          const admins = await client.query("SELECT count(*)::int AS total FROM users WHERE role='admin' AND status='active'");
+          const admins = await client.query("SELECT count(*)::int AS total FROM users WHERE role IN ('admin','super_admin') AND status='active'");
           if (Number(admins.rows[0]?.total || 0) <= 1) {
             await client.query('ROLLBACK');
             sendAuthJson(res, 409, { error: 'At least one active administrator must remain.' }); return true;
