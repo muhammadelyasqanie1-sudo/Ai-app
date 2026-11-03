@@ -122,16 +122,51 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       if (targetId === user.id && (role === 'user' || status === 'suspended')) {
         sendAuthJson(res, 400, { error: 'You cannot revoke your own administrator access or suspend your own account.' }); return true;
       }
-      const result = await pool.query(`
-        UPDATE users SET role=COALESCE($2,role),status=COALESCE($3,status),updated_at=now()
-        WHERE id=$1 AND status <> 'deleted' RETURNING id,role,status`,
-        [targetId, role ?? null, status ?? null]);
-      if (!result.rowCount) { sendAuthJson(res, 404, { error: 'User not found.' }); return true; }
-      if (status === 'suspended' || role !== undefined) await revokeUserSessions(targetId);
-      await pool.query(
-        'INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
-        [user.id,'user.access.update','user',targetId,JSON.stringify({role:role ?? null,status:status ?? null})]);
-      sendAuthJson(res, 200, { user: result.rows[0] }); return true;
+      const client = await pool.connect();
+      let updatedUser;
+      try {
+        await client.query('BEGIN');
+        // Share the bootstrap lock so concurrent admin changes cannot remove the last active administrator.
+        await client.query("SELECT pg_advisory_xact_lock(hashtext('afg-ai:admin-bootstrap'))");
+        const target = await client.query(
+          "SELECT id,role,status FROM users WHERE id=$1 AND status <> 'deleted' FOR UPDATE",
+          [targetId],
+        );
+        if (!target.rows[0]) {
+          await client.query('ROLLBACK');
+          sendAuthJson(res, 404, { error: 'User not found.' }); return true;
+        }
+        const nextRole = role ?? target.rows[0].role;
+        const nextStatus = status ?? target.rows[0].status;
+        const removingActiveAdmin = target.rows[0].role === 'admin' && target.rows[0].status === 'active' &&
+          (nextRole !== 'admin' || nextStatus !== 'active');
+        if (removingActiveAdmin) {
+          const admins = await client.query("SELECT count(*)::int AS total FROM users WHERE role='admin' AND status='active'");
+          if (Number(admins.rows[0]?.total || 0) <= 1) {
+            await client.query('ROLLBACK');
+            sendAuthJson(res, 409, { error: 'At least one active administrator must remain.' }); return true;
+          }
+        }
+        const result = await client.query(`
+          UPDATE users SET role=COALESCE($2,role),status=COALESCE($3,status),updated_at=now()
+          WHERE id=$1 AND status <> 'deleted' RETURNING id,role,status`,
+          [targetId, role ?? null, status ?? null]);
+        updatedUser = result.rows[0];
+        if (status === 'suspended' || role !== undefined) {
+          await client.query('UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL',[targetId]);
+        }
+        await client.query(
+          'INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+          [user.id,'user.access.update','user',targetId,JSON.stringify({role:role ?? null,status:status ?? null})],
+        );
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+      sendAuthJson(res, 200, { user: updatedUser }); return true;
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/overview') {
