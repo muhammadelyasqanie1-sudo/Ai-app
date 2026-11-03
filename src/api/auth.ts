@@ -211,7 +211,8 @@ export function sendAuthJson(res: ServerResponse, status: number, body: Record<s
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
-  res.end(JSON.stringify(body));
+  const requestId = res.getHeader('X-Request-Id');
+  res.end(JSON.stringify({ ...body, ...(typeof requestId === 'string' ? { requestId } : {}) }));
 }
 
 export async function readJsonBody(req: IncomingMessage, maxBytes = 16_384): Promise<Record<string, unknown>> {
