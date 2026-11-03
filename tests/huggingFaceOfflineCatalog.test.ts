@@ -5,6 +5,7 @@ describe('Hugging Face offline catalog', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('retries transient 5xx responses with backoff and returns normalized catalog data', async () => {
