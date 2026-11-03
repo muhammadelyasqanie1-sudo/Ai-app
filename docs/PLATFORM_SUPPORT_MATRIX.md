@@ -19,7 +19,7 @@ This document records what the repository actually contains. Source presence is 
 
 | Area | Current status | Evidence and limitations |
 |---|---|---|
-| Cloud providers | PARTIALLY IMPLEMENTED | The provider registry currently includes Cloudflare Workers AI and a server-configured OpenAI-compatible adapter. Custom arbitrary provider creation with encrypted DB-stored credentials and per-provider adapters is not complete. |
+| Cloud providers | PARTIALLY IMPLEMENTED | The provider registry includes Cloudflare Workers AI, a server-configured OpenAI-compatible adapter, and a backend custom-provider path for OpenAI-compatible `/models` and `/chat/completions`. Custom credentials/default headers are encrypted at rest with AES-256-GCM using backend-only `AFG_PROVIDER_SECRET_ENCRYPTION_KEY`. Other API formats still require dedicated adapters; custom provider administration UI and credential rotation are incomplete. Migration `0009_custom_provider_registry.sql` is committed on the custom-provider branch and has not been applied. |
 | Model discovery | PARTIALLY IMPLEMENTED | Provider model discovery and Hugging Face GGUF metadata discovery exist. Model registry formats and capabilities are not universal; many Hugging Face models are discoverable but not directly runnable. |
 | Model routing | IMPLEMENTED BUT NOT VERIFIED | PR #6 pins manually selected models and limits Auto-mode failover to administrator-configured fallback IDs. TypeScript, offline SHA tests, locale checks and production build passed on PR #6 head `49758e23c4bcae1d0f966de772e79d6128645967`. Live provider/database failover was not tested. |
 | Offline inference | PARTIALLY IMPLEMENTED | WebLLM prebuilt models require browser WebGPU. Android GGUF inference uses a native arm64 llama.cpp CPU library when present. Browser GGUF inference, iOS inference, desktop runtimes, streaming/cancellation parity, and full sampling controls are incomplete. |
@@ -36,7 +36,7 @@ This document records what the repository actually contains. Source presence is 
 | Supabase live connection | BLOCKED BY EXTERNAL REQUIREMENT | No database credential/connection was supplied to this editing session. The `SUCCESS SUPABASE_DATABASE_CONNECTED` log is emitted only after a real successful `SELECT 1`, but that live path was not exercised here. |
 | Database migrations | PARTIALLY IMPLEMENTED | Migration files 0000–0007 and a migration runner exist. No migration was run during this mission. Production schema state is not inferred from repository files. |
 | Render deployment | BLOCKED BY EXTERNAL REQUIREMENT | No Render deployment was triggered or verified in this mission. |
-| Provider credentials | BLOCKED BY EXTERNAL REQUIREMENT | Provider keys must be configured as server-side environment variables. No credentials were created, exposed, or invented. |
+| Provider credentials | PARTIALLY IMPLEMENTED | Custom provider credentials are encrypted at rest by the AES-256-GCM backend helper. Live use is blocked until `AFG_PROVIDER_SECRET_ENCRYPTION_KEY` is configured and migration 0009 is applied; no credential was supplied or created in this work. |
 
 ## Localization and accessibility
 
