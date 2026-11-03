@@ -40,6 +40,26 @@ export interface OpenAICompatibleAdapterOptions {
   catalogOnlyHealthCheck?: boolean;
 }
 
+function beatApiRetryDelayMs(response: Response, attempt: number): number {
+  const retryAfter = response.headers.get('retry-after');
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.min(60_000, Math.max(1_000, seconds * 1_000));
+    const dateDelay = Date.parse(retryAfter) - Date.now();
+    if (Number.isFinite(dateDelay) && dateDelay > 0) return Math.min(60_000, Math.max(1_000, dateDelay));
+  }
+  return Math.min(8_000, 1_000 * (2 ** attempt));
+}
+
+async function waitBeforeProviderRetry(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) throw signal.reason || new Error('Request aborted');
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, ms);
+    const onAbort = () => { clearTimeout(timer); reject(signal?.reason || new Error('Request aborted')); };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterOptions): ChatProviderAdapter {
   const currentConfig = () => options ? {
     id: options.id, displayName: options.displayName,
@@ -195,9 +215,30 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
         console.error('AI_PROVIDER_CHAT_CONNECTION_ERROR', JSON.stringify({ provider: current.id, model: input.model, error: error instanceof Error ? error.message : 'unknown_error' }));
         throw new ProviderAdapterError('Could not contact the OpenAI-compatible provider.', 502, 'provider_unreachable');
       }
+      // BeatAPI free models have strict per-minute limits. Respect Retry-After and
+      // retry transient gateway failures once; never spin or retry arbitrary 4xx errors.
+      if ([429, 500, 503].includes(response.status)) {
+        const retryDelay = beatApiRetryDelayMs(response, 0);
+        const retryStatus = response.status;
+        try {
+          await waitBeforeProviderRetry(retryDelay, input.signal);
+          response = await fetch(current.baseUrl + '/chat/completions', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + current.apiKey, 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+            body: JSON.stringify({ model: input.model, messages: input.messages, stream: true }),
+            signal: input.signal ? AbortSignal.any([AbortSignal.timeout(90_000), input.signal]) : AbortSignal.timeout(90_000), redirect: 'error',
+          });
+        } catch (error) {
+          if (input.signal?.aborted) throw error;
+          console.warn('AI_PROVIDER_RETRY_FAILED', JSON.stringify({ provider: current.id, model: input.model, previousStatus: retryStatus }));
+        }
+      }
       if (!response.ok || !response.body) {
         console.error('AI_PROVIDER_CHAT_REJECTED', JSON.stringify({ provider: current.id, model: input.model, status: response.status }));
-        throw new ProviderAdapterError('The OpenAI-compatible provider rejected the chat request.', response.status >= 400 && response.status < 500 ? response.status : 502, 'provider_request_rejected');
+        const message = response.status === 429
+          ? 'BeatAPI rate limit reached. Wait for the Retry-After interval and try again.'
+          : 'The OpenAI-compatible provider rejected the chat request.';
+        throw new ProviderAdapterError(message, response.status >= 400 && response.status < 500 ? response.status : 502, response.status === 429 ? 'provider_rate_limited' : 'provider_request_rejected');
       }
 
       const reader = response.body.getReader();
