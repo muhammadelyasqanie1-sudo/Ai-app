@@ -17,7 +17,7 @@ set(LLAMA_CURL OFF CACHE BOOL "" FORCE)
 set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 set(GGML_LLAMAFILE OFF CACHE BOOL "" FORCE)
-set(GGML_BACKEND_DL OFF CACHE BOOL "" FORCE)
+set(GGML_BACKEND_DL ON CACHE BOOL "" FORCE)
 set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
 set(GGML_OPENCL OFF CACHE BOOL "" FORCE)
 set(GGML_RPC OFF CACHE BOOL "" FORCE)
@@ -32,6 +32,7 @@ FetchContent_MakeAvailable(llama_cpp)
 add_library(afg_llama_jni SHARED afg_llama_jni.cpp)
 target_include_directories(afg_llama_jni PRIVATE
   ${llama_cpp_SOURCE_DIR}/include
+  ${llama_cpp_SOURCE_DIR}/ggml/include
   ${llama_cpp_SOURCE_DIR}/vendor/nlohmann
 )
-target_link_libraries(afg_llama_jni PRIVATE llama android log)
+target_link_libraries(afg_llama_jni PRIVATE llama ggml android log)
