@@ -203,3 +203,28 @@
 ### Next action
 
 - Inspect and strengthen the next highest-priority backend reliability issue, then update the platform verification evidence and continue toward model routing/offline runtime gaps.
+
+
+## Milestone 9 — Atomic CLI token lifecycle audit
+
+**Status:** IMPLEMENTED BUT NOT VERIFIED
+
+### Completed
+
+- CLI token creation and its audit record now commit in one PostgreSQL transaction.
+- CLI token revocation and its audit record now commit in one transaction.
+- A failed audit write rolls back the associated token mutation.
+- Revocation of a missing/already-revoked token returns the existing 404 behavior without creating a false audit event.
+
+### Files changed
+
+- `src/api/terminal.ts`
+
+### Verification
+
+- Source-level review confirms transaction boundaries and release handling for both token lifecycle mutations.
+- No database integration test or runtime command was executed. The terminal continues to expose only read-only `afg` commands; shell execution remains disabled.
+
+### Next action
+
+- Open a focused PR and inspect CI; then continue auditing file ownership, authentication, and platform capability boundaries.
