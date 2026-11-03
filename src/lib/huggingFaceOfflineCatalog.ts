@@ -80,9 +80,15 @@ async function request<T>(url: string, signal?: AbortSignal): Promise<T> {
       const baseDelay = Math.min(8000, 500 * (2 ** attempt));
       const jitter = Math.floor(Math.random() * Math.max(1, baseDelay * 0.25));
       await new Promise<void>((resolve, reject) => {
-        const timer = window.setTimeout(resolve, baseDelay + jitter);
-        const cancel = () => { window.clearTimeout(timer); reject(new DOMException('The request was cancelled.', 'AbortError')); };
+        const cleanup = () => signal?.removeEventListener('abort', cancel);
+        const timer = window.setTimeout(() => { cleanup(); resolve(); }, baseDelay + jitter);
+        const cancel = () => {
+          window.clearTimeout(timer);
+          cleanup();
+          reject(new DOMException('The request was cancelled.', 'AbortError'));
+        };
         signal?.addEventListener('abort', cancel, { once: true });
+        if (signal?.aborted) cancel();
       });
     } finally {
       window.clearTimeout(timeout);
@@ -151,7 +157,7 @@ export async function getHuggingFaceRepository(repoId: string, signal?: AbortSig
   }));
   const ggufFiles = normalized.filter(file => file.path.toLowerCase().endsWith('.gguf')).map(file => {
     const name = file.path.split('/').pop() || file.path;
-    const match = name.match(/(?:^|[-_.])(Q[0-9]+(?:_[KMS]_[MS]|_[0-9]+)?|IQ[0-9]+_[A-Z0-9_]+|F16|F32)(?:[-_.]|$)/i);
+    const match = name.match(/(?:^|[-_.])(Q[0-9]+(?:_[KMS](?:_[MS])?|_[0-9]+)?|IQ[0-9]+_[A-Z0-9_]+|F16|F32)(?:[-_.]|$)/i);
     const oid = file.lfs?.oid || '';
     const sha = file.lfs?.sha256 || (oid.startsWith('sha256:') ? oid.slice(7) : /^[a-f0-9]{64}$/i.test(oid) ? oid : null);
     return { name, path: file.path, size: file.size, quantization: match?.[1]?.toUpperCase() || null, sha256: sha };
