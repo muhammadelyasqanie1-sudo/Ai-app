@@ -93,13 +93,7 @@ export async function pauseOfflineDownload(id: string): Promise<void> {
   }
 }
 
-export async function resumeOfflineDownload(id: string): Promise<void> {
-  if (isAndroidNative()) {
-    const item = (await AFGOfflineModels.listDownloads()).downloads.find(download => download.id === id);
-    if (!item) throw new Error('Offline download was not found.');
-    await AFGOfflineModels.resumeDownload({ downloadId: item.downloadId });
-    return;
-  }
+export async function resumeOfflineDownload(id: string, onProgress?: DownloadListener): Promise<void> {
   const task = await getOfflineDownload(id);
   if (!task || task.status === 'installed') return;
   await downloadGGUF({
@@ -108,6 +102,7 @@ export async function resumeOfflineDownload(id: string): Promise<void> {
     revision: task.revision,
     expectedBytes: task.expectedBytes,
     expectedSha256: task.expectedSha256,
+    onProgress,
   });
 }
 
