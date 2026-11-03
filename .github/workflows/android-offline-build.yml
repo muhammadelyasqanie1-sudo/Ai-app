@@ -1,5 +1,16 @@
 name: Android offline hub build
 on:
+  push:
+    branches:
+      - offline-complete
+    paths:
+      - 'src/components/afg/AfgOfflineHubView.tsx'
+      - 'src/lib/offline*.ts'
+      - 'src/lib/huggingFaceOfflineCatalog.ts'
+      - 'plugins/**'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - '.github/workflows/android-offline-build.yml'
   pull_request:
     paths:
       - 'src/components/afg/AfgOfflineHubView.tsx'
