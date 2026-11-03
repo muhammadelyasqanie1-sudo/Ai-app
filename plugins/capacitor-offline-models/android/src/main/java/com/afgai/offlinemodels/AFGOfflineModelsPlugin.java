@@ -99,16 +99,24 @@ public class AFGOfflineModelsPlugin extends Plugin {
     @PluginMethod
     public void generate(PluginCall call) {
         if (!NATIVE_RUNTIME_AVAILABLE) { call.reject("The Android llama.cpp runtime is not available in this APK."); return; }
+        generationCancelled = false;
         final String messages = call.getString("messages", "[]");
         final Integer maxTokens = call.getInt("maxTokens");
         INFERENCE_EXECUTOR.execute(() -> {
             try {
                 nativeResetGeneration();
+                if (generationCancelled) {
+                    JSObject cancelled = new JSObject();
+                    cancelled.put("text", "");
+                    cancelled.put("cancelled", true);
+                    call.resolve(cancelled);
+                    return;
+                }
                 String response = nativeGenerateStream(messages, maxTokens == null ? 256 : maxTokens, null);
                 if (response == null) { call.reject(nativeGetLastError()); return; }
                 JSObject result = new JSObject();
                 result.put("text", response);
-                result.put("cancelled", false);
+                result.put("cancelled", generationCancelled);
                 call.resolve(result);
             } catch (Exception error) {
                 call.reject("Local GGUF inference failed.", error);
@@ -118,13 +126,20 @@ public class AFGOfflineModelsPlugin extends Plugin {
 
     @PluginMethod
     public void generateStream(PluginCall call) {
-        generationCancelled = false;
         if (!NATIVE_RUNTIME_AVAILABLE) { call.reject("The Android llama.cpp runtime is not available in this APK."); return; }
-        nativeResetGeneration();
+        generationCancelled = false;
         final String messages = call.getString("messages", "[]");
         final Integer requestedTokens = call.getInt("maxTokens");
         INFERENCE_EXECUTOR.execute(() -> {
             try {
+                nativeResetGeneration();
+                if (generationCancelled) {
+                    JSObject cancelled = new JSObject();
+                    cancelled.put("text", "");
+                    cancelled.put("cancelled", true);
+                    call.resolve(cancelled);
+                    return;
+                }
                 String response = nativeGenerateStream(messages, requestedTokens == null ? 256 : requestedTokens, this);
                 if (response == null) {
                     String error = nativeGetLastError();
