@@ -65,19 +65,24 @@ export async function handleFilesApi(req:IncomingMessage,res:ServerResponse,path
     }
     const bytes=Buffer.from(encoded,'base64');
     if (bytes.length!==estimatedBytes) { reply(res,400,{error:'The uploaded file encoding is invalid.'}); return true; }
-    const quota=await pool.query('SELECT count(*)::int AS count,COALESCE(sum(size_bytes),0)::bigint AS total FROM files WHERE user_id=$1',[user.id]);
-    if (Number(quota.rows[0]?.count||0)>=MAX_FILES_PER_USER || Number(quota.rows[0]?.total||0)+bytes.length>MAX_USER_STORAGE_BYTES) {
-      reply(res,413,{error:'Your private file library quota is full (100 files or 100 MB). Delete an existing file before uploading more.'}); return true;
-    }
-    let quarantined;
-    try { quarantined=await quarantineUpload({bytes,originalName:name}); }
-    catch(error) {
-      const message=error instanceof Error?error.message:'Upload validation failed.';
-      reply(res,400,{error:message}); return true;
-    }
-    const digest=createHash('sha256').update(bytes).digest('hex');
+    const quotaClient=await pool.connect();
+    let lockHeld=false;
+    let quarantined:Awaited<ReturnType<typeof quarantineUpload>>|null=null;
     try {
-      const saved=await pool.query(
+      await quotaClient.query("SELECT pg_advisory_lock(hashtext('afg-file-quota:' || $1))",[user.id]);
+      lockHeld=true;
+      const quota=await quotaClient.query('SELECT count(*)::int AS count,COALESCE(sum(size_bytes),0)::bigint AS total FROM files WHERE user_id=$1',[user.id]);
+      if (Number(quota.rows[0]?.count||0)>=MAX_FILES_PER_USER || Number(quota.rows[0]?.total||0)+bytes.length>MAX_USER_STORAGE_BYTES) {
+        reply(res,413,{error:'Your private file library quota is full (100 files or 100 MB). Delete an existing file before uploading more.'});
+        return true;
+      }
+      try { quarantined=await quarantineUpload({bytes,originalName:name}); }
+      catch(error) {
+        const message=error instanceof Error?error.message:'Upload validation failed.';
+        reply(res,400,{error:message}); return true;
+      }
+      const digest=createHash('sha256').update(bytes).digest('hex');
+      const saved=await quotaClient.query(
         `INSERT INTO files(user_id,kind,mime,size_bytes,storage_key,original_name,status,sha256)
          VALUES($1,$2,$3,$4,$5,$6,'quarantined',$7)
          RETURNING id,original_name AS "name",kind,mime,size_bytes AS "sizeBytes",status,created_at AS "createdAt"`,
@@ -85,8 +90,11 @@ export async function handleFilesApi(req:IncomingMessage,res:ServerResponse,path
       );
       reply(res,201,{file:saved.rows[0],message:'Stored privately in quarantine. It cannot be opened by AI until a security scanner approves it.'});
     } catch {
-      await unlink(quarantined.quarantinePath).catch(()=>{});
+      if(quarantined) await unlink(quarantined.quarantinePath).catch(()=>{});
       reply(res,503,{error:'File metadata could not be saved; the temporary upload was removed.'});
+    } finally {
+      if(lockHeld) await quotaClient.query("SELECT pg_advisory_unlock(hashtext('afg-file-quota:' || $1))",[user.id]).catch(()=>{});
+      quotaClient.release();
     }
     return true;
   }
