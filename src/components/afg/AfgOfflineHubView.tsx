@@ -37,8 +37,9 @@ function getHuggingFaceRepo(model: CatalogModel): string | null {
   } catch { return null; }
 }
 
-export function AfgOfflineHubView({ language }: { language: Language }) {
+export function AfgOfflineHubView({ language, initialView = 'chat' }: { language: Language; initialView?: 'models' | 'chat' }) {
   const dari = language === 'dari';
+  const [viewMode, setViewMode] = useState<'models' | 'chat'>(initialView);
   const [models, setModels] = useState<CatalogModel[]>([]);
   const [hfModels, setHfModels] = useState<HuggingFaceModel[]>([]);
   const [sparkModels, setSparkModels] = useState<HuggingFaceModel[]>([]);
@@ -277,6 +278,8 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
       <div className="rounded-2xl border p-3 text-end"><div className="flex items-center gap-2 text-xs opacity-70"><HardDrive size={15}/>{copy.storage}</div><div className="mt-1 text-sm font-bold">{formatBytes(storage.usage)} / {formatBytes(storage.quota)}</div></div>
     </header>
 
+    <nav className="flex gap-2 rounded-xl border p-1" aria-label={dari ? "بخش‌های آفلاین" : "Offline sections"}><button type="button" onClick={() => setViewMode("chat")} className={"flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold " + (viewMode === "chat" ? "bg-cyan-500 text-slate-950" : "opacity-65")}>{dari ? "گفت‌وگوی آفلاین" : "Offline Chat"}</button><button type="button" onClick={() => setViewMode("models")} className={"flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold " + (viewMode === "models" ? "bg-cyan-500 text-slate-950" : "opacity-65")}>{dari ? "مدیریت مدل‌ها" : "Models"}</button></nav>
+
     <section className="rounded-2xl border p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-bold">{copy.deviceTitle}</h2><button type="button" onClick={() => { setDeviceScanBusy(true); void scanOfflineDevice().then(setDevice).finally(() => setDeviceScanBusy(false)); }} className="rounded-lg border px-3 py-1.5 text-xs font-semibold">{copy.rescan}</button></div>
       {deviceScanBusy || !device ? <p className="text-sm opacity-60">{copy.deviceUnknown}</p> : <>
@@ -292,8 +295,8 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
       <div className="flex items-start gap-3"><Cpu size={20} className="mt-0.5 shrink-0"/><div className="min-w-0"><div className="font-semibold">{copy.runtime}</div><p className="mt-1 text-sm opacity-75">{runtime === 'checking' ? copy.checking : runtimeMessage}</p></div></div>
     </div>
 
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,.9fr)]">
-      <section className="min-w-0 space-y-3 rounded-2xl border p-4">
+    {viewMode === "models" && <div className="min-w-0 space-y-3 rounded-2xl border p-4">
+      <section className="min-w-0 space-y-3">
         <div className="flex items-center justify-between gap-2"><h2 className="text-lg font-bold">{copy.catalog}</h2><span className="text-xs opacity-60">{models.length} {dari ? 'مدل' : 'models'}</span></div>
         <label className="flex items-center gap-2 rounded-xl border px-3"><Search size={17} className="opacity-50"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={copy.search} className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none"/></label>
         <div className="flex flex-wrap gap-1.5">{(['all','recommended','limited','incompatible'] as const).map(filter => <button key={filter} type="button" onClick={() => setModelFilter(filter)} className={'rounded-full border px-3 py-1.5 text-[11px] ' + (modelFilter === filter ? 'border-cyan-400 bg-cyan-400/10' : 'opacity-65')}>{filter === 'all' ? copy.allModels : copy[filter]}</button>)}</div>
@@ -319,9 +322,9 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
           <button type="button" disabled={runtime !== 'ready' || busy || selectedFit === 'incompatible'} onClick={() => void loadModel(selected.model_id, !installed.includes(selected.model_id))} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 px-4 py-3 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"><ArrowDownToLine size={17}/>{installed.includes(selected.model_id) ? copy.load : copy.install}</button>
         </div>}
         {busy && <div className="space-y-2 rounded-xl border p-3"><div className="flex justify-between gap-2 text-xs"><span className="truncate">{progressText}</span><strong>{progress}%</strong></div><div className="h-2 overflow-hidden rounded-full bg-slate-500/20"><div className="h-full rounded-full bg-cyan-400 transition-all" style={{ width: progress + '%' }}/></div></div>}
-      </section>
+      </section>}
 
-      <section className="flex min-h-[480px] min-w-0 flex-col rounded-2xl border p-4">
+      {viewMode === "chat" && <section className="flex min-h-[480px] min-w-0 flex-col rounded-2xl border p-4">
         <div className="flex items-center gap-2"><MessageSquare size={18}/><div><h2 className="font-bold">{copy.chat}</h2><p className="text-xs opacity-60">{copy.chatHint}</p></div></div>
         <div className="my-3 rounded-xl bg-emerald-500/5 p-3 text-xs text-emerald-700 dark:text-emerald-300">{copy.privacy}</div>
         {!engineRef.current && <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center"><Sparkles size={34} className="opacity-40"/><p className="text-sm opacity-60">{copy.choose}</p></div>}
@@ -333,10 +336,9 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
         <div className="mt-3 border-t pt-3"><div className="mb-2 text-xs font-semibold opacity-70">{copy.installed}</div>
           {installed.length === 0 ? <p className="text-xs opacity-55">{copy.noInstalled}</p> : installed.map(id=><div key={id} className="flex items-center justify-between gap-2 py-1.5 text-xs"><span className="min-w-0 break-all">{id}</span></div>)}
         </div>
-      </section>
-    </div>
+      </section>}
 
-    <section className="space-y-4 rounded-2xl border p-4 sm:p-5">
+    {viewMode === "models" && <section className="space-y-4 rounded-2xl border p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-extrabold">{dari ? 'کتابخانه جهانی مدل‌های GGUF' : 'Global GGUF Model Library'}</h2><p className="mt-1 text-xs opacity-65">{dari ? 'جست‌وجوی زنده در Hugging Face با صفحه‌بندی' : 'Live Hugging Face discovery with pagination'}</p></div><span className="text-xs opacity-60">{hfModels.length} {dari ? 'نتیجه' : 'results'}</span></div>
       <div className="flex items-center gap-2 rounded-xl border px-3"><Search size={17}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={dari ? 'جست‌وجو؛ مثلاً Spark-X2.6' : 'Search models — e.g. Spark-X2.6'} className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none"/></div>
       {hfError && <p className="rounded-lg bg-amber-500/10 p-3 text-xs">{hfError}</p>}{hfBusy && <p className="text-xs opacity-60">{dari ? 'در حال دریافت…' : 'Loading…'}</p>}
@@ -353,6 +355,6 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
       <div className="flex items-center justify-between gap-2"><h2 className="font-bold">{dari ? 'مدل‌های GGUF نصب‌شده' : 'Installed GGUF models'}</h2><span className="text-xs opacity-60">{ggufTasks.filter(task => task.status === 'installed').length}</span></div>
       {!ggufTasks.length && <p className="text-xs opacity-60">{dari ? 'هنوز فایل GGUF دانلود نشده است.' : 'No GGUF files downloaded yet.'}</p>}
       {ggufTasks.map(task => <div key={task.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-500/5 p-3"><div className="min-w-0 flex-1"><div className="break-all text-xs font-semibold">{task.repoId} / {task.fileName}</div><div className="mt-1 text-[11px] opacity-60">{formatBytes(task.downloadedBytes)} · {task.status}{task.error ? ' · ' + task.error : ''}</div></div><div className="flex gap-2">{task.status !== 'installed' && <button type="button" disabled={!!ggufBusyId} onClick={() => {setHfSelected(task.repoId);setHfQuantization(task.fileName);}} className="rounded-lg border px-2 py-1 text-xs">{dari ? 'ادامه' : 'Resume'}</button>}<button type="button" onClick={() => void removeGguf(task.id)} className="rounded-lg border px-2 py-1 text-xs">{dari ? 'حذف' : 'Delete'}</button></div></div>)}
-    </section>
+    </section>}
   </section>;
 }
