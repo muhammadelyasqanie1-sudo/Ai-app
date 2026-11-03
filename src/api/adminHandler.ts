@@ -231,13 +231,24 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         }
         const nextRole = role ?? target.rows[0].role;
         const nextStatus = status ?? target.rows[0].status;
+        if(target.rows[0].role==='superadmin' && user.role!=='superadmin'){
+          await client.query('ROLLBACK');sendAuthJson(res,403,{error:'Only a superadmin may modify another superadmin.'});return true;
+        }
         const removingActiveAdmin = ['admin','superadmin'].includes(target.rows[0].role) && target.rows[0].status === 'active' &&
           (!['admin','superadmin'].includes(nextRole) || nextStatus !== 'active');
+        const removingSuperadmin = target.rows[0].role==='superadmin' && target.rows[0].status==='active' &&
+          (nextRole!=='superadmin' || nextStatus!=='active');
         if (removingActiveAdmin) {
           const admins = await client.query("SELECT count(*)::int AS total FROM users WHERE role IN ('admin','superadmin') AND status='active'");
           if (Number(admins.rows[0]?.total || 0) <= 1) {
             await client.query('ROLLBACK');
-            sendAuthJson(res, 409, { error: 'At least one active administrator must remain.' }); return true;
+            sendAuthJson(res,409,{error:'At least one active administrator must remain.'});return true;
+          }
+        }
+        if(removingSuperadmin){
+          const superadmins=await client.query("SELECT count(*)::int AS total FROM users WHERE role='superadmin' AND status='active'");
+          if(Number(superadmins.rows[0]?.total||0)<=1){
+            await client.query('ROLLBACK');sendAuthJson(res,409,{error:'At least one active superadmin must remain.'});return true;
           }
         }
         const result = await client.query(`
@@ -249,8 +260,8 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           await client.query('UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL',[targetId]);
         }
         await client.query(
-          'INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
-          [user.id,'user.access.update','user',targetId,JSON.stringify({role:role ?? null,status:status ?? null})],
+          'INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+          [user.id,user.role,'user.access.update','user',targetId,JSON.stringify({role:target.rows[0].role,status:target.rows[0].status}),JSON.stringify({role:updatedUser.role,status:updatedUser.status}),JSON.stringify({role:role ?? null,status:status ?? null})],
         );
         await client.query('COMMIT');
       } catch (error) {
