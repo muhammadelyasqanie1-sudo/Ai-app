@@ -15,7 +15,6 @@ import { AfgSettingsView } from './components/afg/AfgSettingsView';
 import { AfgAdminPanel } from './components/afg/AfgAdminPanel';
 import { AfgTerminalView } from './components/afg/AfgTerminalView';
 import { AfgOfflineView } from './components/afg/AfgOfflineView';
-import { AfgOfflineHubView } from './components/afg/AfgOfflineHubView';
 import { AfgSideMenu } from './components/afg/AfgSideMenu';
 import { AfgLanguageModal } from './components/afg/AfgLanguageModal';
 import { AfgCinematicIntro } from './components/afg/AfgCinematicIntro';
@@ -23,6 +22,10 @@ import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { ErrorBoundary } from './components/afg/AfgDesignSystem';
 import { applyDocumentLocale } from './utils/i18n';
 import { apiFetch } from './lib/apiClient';
+
+const LazyAfgOfflineHubView = React.lazy(() =>
+  import('./components/afg/AfgOfflineHubView').then((module) => ({ default: module.AfgOfflineHubView })),
+);
 
 import type { 
   Language, 
@@ -641,9 +644,20 @@ export default function App() {
 
         {currentTab === 'offline-learning' && <AfgOfflineView language={language} />}
 
-        {currentTab === 'offline-ai-hub' && <AfgOfflineHubView language={language} initialView="chat" />}
-        {currentTab === 'offline-chat' && <AfgOfflineHubView language={language} initialView="chat" />}
-        {currentTab === 'offline-models' && <AfgOfflineHubView language={language} initialView="models" />}
+        {(currentTab === 'offline-ai-hub' || currentTab === 'offline-chat' || currentTab === 'offline-models') && (
+          <React.Suspense
+            fallback={
+              <div className="mx-auto flex min-h-[40vh] items-center justify-center text-sm text-slate-500" role="status" aria-live="polite">
+                {language === 'dari' ? 'در حال بارگذاری...' : 'Loading...'}
+              </div>
+            }
+          >
+            <LazyAfgOfflineHubView
+              language={language}
+              initialView={currentTab === 'offline-models' ? 'models' : 'chat'}
+            />
+          </React.Suspense>
+        )}
 
         {currentTab === 'history' && (
           <AfgHistoryView
