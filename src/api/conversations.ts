@@ -107,13 +107,11 @@ export async function handleConversationsApi(req: IncomingMessage, res: ServerRe
     try {
       await client.query('BEGIN');
       const result = await client.query(
-        `INSERT INTO messages(conversation_id,role,content,model,status,client_message_id)
-         VALUES($1,$2,$3,$4,$5,$6)
-         ON CONFLICT (conversation_id,client_message_id)
-           WHERE client_message_id IS NOT NULL
-         DO NOTHING
+        `INSERT INTO messages(id,conversation_id,role,content,model,status)
+         VALUES(COALESCE($1::uuid,gen_random_uuid()),$2,$3,$4,$5,$6)
+         ON CONFLICT (id) DO NOTHING
          RETURNING id,role,content,model,status,created_at AS "createdAt"`,
-        [conversationId,parsed.data.role,parsed.data.content,parsed.data.model ?? null,parsed.data.status || 'complete',parsed.data.clientMessageId ?? null],
+        [parsed.data.clientMessageId ?? null,conversationId,parsed.data.role,parsed.data.content,parsed.data.model ?? null,parsed.data.status || 'complete'],
       );
       if (result.rows.length) {
         savedMessage = result.rows[0];
@@ -121,9 +119,9 @@ export async function handleConversationsApi(req: IncomingMessage, res: ServerRe
         const existing = await client.query(
           `SELECT id,role,content,model,status,created_at AS "createdAt"
              FROM messages
-            WHERE conversation_id=$1 AND client_message_id=$2
+            WHERE id=$1 AND conversation_id=$2
             LIMIT 1`,
-          [conversationId,parsed.data.clientMessageId],
+          [parsed.data.clientMessageId,conversationId],
         );
         const previous = existing.rows[0];
         if (!previous) throw new Error('Idempotent message conflict could not be resolved.');
