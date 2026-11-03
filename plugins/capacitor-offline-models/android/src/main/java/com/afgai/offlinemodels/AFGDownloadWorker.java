@@ -92,7 +92,7 @@ public final class AFGDownloadWorker extends Worker {
             }
             if (status == HttpURLConnection.HTTP_PARTIAL) {
                 String range = connection.getHeaderField("Content-Range");
-                Matcher rangeMatcher = range == null ? null : Pattern.compile("^bytes (\\\\d+)-(\\\\d+)/(\\\\d+|\\\\*)$").matcher(range);
+                Matcher rangeMatcher = range == null ? null : Pattern.compile("^bytes (\\d+)-(\\d+)/(\\d+|\\*)$").matcher(range);
                 boolean validRange = offset > 0 && rangeMatcher != null && rangeMatcher.matches()
                     && Long.parseLong(rangeMatcher.group(1)) == offset
                     && Long.parseLong(rangeMatcher.group(2)) >= offset;
