@@ -4,6 +4,7 @@ export type HuggingFaceModel = {
   downloads: number;
   likes: number;
   pipeline_tag: string | null;
+  description: string | null;
   tags: string[];
   lastModified: string | null;
   private: boolean;
@@ -134,6 +135,7 @@ export async function searchHuggingFaceGGUF(options: {
     downloads: Number(item.downloads || 0),
     likes: Number(item.likes || 0),
     pipeline_tag: typeof item.pipeline_tag === 'string' ? item.pipeline_tag : null,
+    description: typeof item.description === 'string' ? item.description : (item.cardData && typeof item.cardData === 'object' && typeof (item.cardData as Record<string, unknown>).description === 'string' ? String((item.cardData as Record<string, unknown>).description) : null),
     tags: Array.isArray(item.tags) ? item.tags.filter((tag): tag is string => typeof tag === 'string') : [],
     lastModified: typeof item.lastModified === 'string' ? item.lastModified : null,
     private: item.private === true,
