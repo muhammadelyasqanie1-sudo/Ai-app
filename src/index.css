@@ -769,3 +769,29 @@ body {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+/* Explicit component hooks for the shared chat composer. */
+.afg-model-chip {
+  background: color-mix(in srgb,var(--bg-surface) 88%,transparent) !important;
+  border-color: var(--border-color) !important;
+  min-height: 38px;
+  width: fit-content;
+  max-width: 100%;
+  margin-inline-start: auto;
+  margin-inline-end: 0;
+  backdrop-filter: blur(10px);
+}
+.afg-model-chip > div:first-child { gap: 6px; }
+.afg-model-chip select { max-width: min(58vw, 310px); }
+.afg-composer-shell { padding-bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
+.afg-composer-shell textarea {
+  background: transparent !important;
+  color: var(--text-primary) !important;
+  border-color: transparent !important;
+}
+.afg-composer-shell .bg-slate-900\/95,
+.afg-composer-shell .bg-slate-900 { background: var(--bg-surface) !important; color: var(--text-primary) !important; }
+.afg-composer-shell .text-slate-400 { color: var(--text-muted) !important; }
+.afg-composer-shell .text-cyan-200,
+.afg-composer-shell .text-cyan-300 { color: var(--accent-cyan) !important; }
+.afg-composer-shell .border-cyan-500\/30 { border-color: var(--border-color) !important; }
