@@ -51,6 +51,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const [hfSelected, setHfSelected] = useState('');
   const [hfRepository, setHfRepository] = useState<HuggingFaceRepository | null>(null);
   const [hfQuantization, setHfQuantization] = useState('');
+  const [pendingGgufPath, setPendingGgufPath] = useState('');
   const [ggufTasks, setGgufTasks] = useState<OfflineDownloadState[]>([]);
   const [ggufProgress, setGgufProgress] = useState<Record<string, { downloadedBytes: number; totalBytes: number | null; percent: number | null; status: string }>>({});
   const [ggufBusyId, setGgufBusyId] = useState('');
@@ -172,10 +173,10 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     if (!hfSelected) { setHfRepository(null); setHfQuantization(''); return; }
     const controller = new AbortController(); setHfRepository(null);
     void getHuggingFaceRepository(hfSelected, controller.signal)
-      .then(repository => { setHfRepository(repository); setHfQuantization(repository.ggufFiles[0]?.path || ''); })
+      .then(repository => { setHfRepository(repository); setHfQuantization(pendingGgufPath || repository.ggufFiles[0]?.path || ''); setPendingGgufPath(''); })
       .catch(error => { if (!controller.signal.aborted) setHfError(error instanceof Error ? error.message : 'Repository metadata unavailable'); });
     return () => controller.abort();
-  }, [hfSelected]);
+  }, [hfSelected, pendingGgufPath]);
 
   const downloadSelectedGguf = async () => {
     if (!hfRepository || !hfQuantization || ggufBusyId) return;
@@ -346,7 +347,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       {viewMode === "chat" && <section className="flex min-h-[480px] min-w-0 flex-col rounded-2xl border p-4">
         <div className="flex items-center gap-2"><MessageSquare size={18}/><div><h2 className="font-bold">{copy.chat}</h2><p className="text-xs opacity-60">{copy.chatHint}</p></div></div>
         <div className="my-3 rounded-xl bg-emerald-500/5 p-3 text-xs text-emerald-700 dark:text-emerald-300">{copy.privacy}</div>
-        {!engineRef.current && <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center"><Sparkles size={34} className="opacity-40"/><p className="text-sm opacity-60">{copy.choose}</p></div>}
+        {!engineRef.current && <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center"><Sparkles size={34} className="opacity-40"/><p className="text-sm opacity-60">{copy.choose}</p><button type="button" onClick={() => setViewMode('models')} className="rounded-xl bg-cyan-500 px-4 py-2.5 text-xs font-bold text-slate-950">{dari ? 'انتخاب یا دانلود مدل' : 'Choose or download a model'}</button></div>}
         {engineRef.current && <div className="flex-1 space-y-3 overflow-y-auto py-3">{messages.map((message,index)=><div key={index} className={'max-w-[92%] whitespace-pre-wrap rounded-2xl p-3 text-sm leading-6 ' + (message.role === 'user' ? 'ms-auto bg-cyan-500/10' : 'me-auto bg-slate-500/10')}>{message.content}</div>)}{chatBusy && <div className="text-xs opacity-60">{dari ? 'در حال تولید پاسخ محلی…' : 'Generating locally…'}</div>}<div ref={chatEndRef}/></div>}
         <form className="mt-3 flex gap-2" onSubmit={event => { event.preventDefault(); void sendMessage(); }}>
           <input value={prompt} onChange={event => setPrompt(event.target.value)} placeholder={copy.input} disabled={!engineRef.current || chatBusy} className="min-w-0 flex-1 rounded-xl border bg-transparent px-3 py-3 text-sm outline-none disabled:opacity-40"/>
@@ -373,7 +374,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     {viewMode === "models" && <section className="space-y-3 rounded-2xl border p-4">
       <div className="flex items-center justify-between gap-2"><h2 className="font-bold">{dari ? 'مدل‌های GGUF نصب‌شده' : 'Installed GGUF models'}</h2><span className="text-xs opacity-60">{ggufTasks.filter(task => task.status === 'installed').length}</span></div>
       {!ggufTasks.length && <p className="text-xs opacity-60">{dari ? 'هنوز فایل GGUF دانلود نشده است.' : 'No GGUF files downloaded yet.'}</p>}
-      {ggufTasks.map(task => <div key={task.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-500/5 p-3"><div className="min-w-0 flex-1"><div className="break-all text-xs font-semibold">{task.repoId} / {task.fileName}</div><div className="mt-1 text-[11px] opacity-60">{formatBytes(task.downloadedBytes)} · {task.status}{task.error ? ' · ' + task.error : ''}</div></div><div className="flex gap-2">{task.status !== 'installed' && <button type="button" disabled={!!ggufBusyId} onClick={() => {setHfSelected(task.repoId);setHfQuantization(task.fileName);}} className="rounded-lg border px-2 py-1 text-xs">{dari ? 'ادامه' : 'Resume'}</button>}<button type="button" onClick={() => void removeGguf(task.id)} className="rounded-lg border px-2 py-1 text-xs">{dari ? 'حذف' : 'Delete'}</button></div></div>)}
+      {ggufTasks.map(task => <div key={task.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-500/5 p-3"><div className="min-w-0 flex-1"><div className="break-all text-xs font-semibold">{task.repoId} / {task.fileName}</div><div className="mt-1 text-[11px] opacity-60">{formatBytes(task.downloadedBytes)} · {task.status}{task.error ? ' · ' + task.error : ''}</div></div><div className="flex gap-2">{task.status !== 'installed' && <button type="button" disabled={!!ggufBusyId} onClick={() => {setPendingGgufPath(task.fileName);setHfSelected(task.repoId);setViewMode('models');}} className="rounded-lg border px-2 py-1 text-xs">{dari ? 'ادامه' : 'Resume'}</button>}<button type="button" onClick={() => void removeGguf(task.id)} className="rounded-lg border px-2 py-1 text-xs">{dari ? 'حذف' : 'Delete'}</button></div></div>)}
     </section>}
   </section>;
 }
