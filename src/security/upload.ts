@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, open } from 'node:fs/promises';
+import { chmod, lstat, mkdir, open, realpath } from 'node:fs/promises';
 import path from 'node:path';
 
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
@@ -14,6 +14,30 @@ const SIGNATURES: Record<string, (bytes: Buffer) => boolean> = {
   '.txt': (b) => !b.subarray(0, Math.min(b.length, 4096)).includes(0),
   '.csv': (b) => !b.subarray(0, Math.min(b.length, 4096)).includes(0),
 };
+
+/** Create and verify a dedicated private quarantine directory. */
+export async function ensureQuarantineDirectory(): Promise<string> {
+  const configured = process.env.AFG_UPLOAD_QUARANTINE_DIR;
+  if (!configured || !path.isAbsolute(configured)) {
+    throw new Error('AFG_UPLOAD_QUARANTINE_DIR must be an absolute private storage path.');
+  }
+  const directory = path.resolve(configured);
+  if (directory === path.parse(directory).root) throw new Error('The filesystem root cannot be used for uploads.');
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const info = await lstat(directory);
+  if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('The quarantine path must be a real directory, not a symlink.');
+  await chmod(directory, 0o700);
+  const canonical = await realpath(directory);
+  const appRoot = await realpath(process.cwd()).catch(() => path.resolve(process.cwd()));
+  const blockedRoots = [path.join(appRoot, 'public'), path.join(appRoot, 'dist')];
+  for (const blocked of blockedRoots) {
+    const relative = path.relative(blocked, canonical);
+    if (relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative))) {
+      throw new Error('Uploads must be stored outside public and build output directories.');
+    }
+  }
+  return canonical;
+}
 
 export type QuarantinedUpload = {
   id: string;
@@ -42,13 +66,7 @@ export async function quarantineUpload(input: {
     throw new Error('Unsupported file type or file signature mismatch.');
   }
 
-  const configured = process.env.AFG_UPLOAD_QUARANTINE_DIR;
-  if (!configured || !path.isAbsolute(configured)) {
-    throw new Error('AFG_UPLOAD_QUARANTINE_DIR must be an absolute private storage path.');
-  }
-
-  const directory = path.resolve(configured);
-  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const directory = await ensureQuarantineDirectory();
   const id = randomUUID();
   const quarantinePath = path.join(directory, id + extension);
   const handle = await open(quarantinePath, 'wx', 0o600);
