@@ -332,10 +332,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         const saved = await client.query(
           `INSERT INTO providers(kind,display_name,config_encrypted,enabled,api_format,auth_method,priority,request_timeout_ms,streaming_supported,is_custom)
            VALUES($1,$2,$3,$4,$5,$6,$7,$8,true,true)
-           ON CONFLICT(kind) DO UPDATE SET display_name=EXCLUDED.display_name,config_encrypted=EXCLUDED.config_encrypted,
-             enabled=EXCLUDED.enabled,api_format=EXCLUDED.api_format,auth_method=EXCLUDED.auth_method,
-             priority=EXCLUDED.priority,request_timeout_ms=EXCLUDED.request_timeout_ms,streaming_supported=true,updated_at=now()
-           WHERE providers.is_custom=true RETURNING kind,display_name,enabled`,
+           ON CONFLICT(kind) DO NOTHING RETURNING kind,display_name,enabled`,
           [providerId,displayName,encrypted,enabled,apiFormat,authMethod,priority,timeoutMs],
         );
         if (!saved.rows[0]) {
