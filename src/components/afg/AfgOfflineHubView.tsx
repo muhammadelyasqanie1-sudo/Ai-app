@@ -3,6 +3,7 @@ import { ArrowDownToLine, Cpu, HardDrive, MessageSquare, Search, ShieldCheck, Sp
 import type { Language } from '../../types/afg';
 import { searchHuggingFaceGGUF, getHuggingFaceRepository, type HuggingFaceModel, type HuggingFaceRepository } from '../../lib/huggingFaceOfflineCatalog';
 import { assessOfflineModelFit, scanOfflineDevice, type OfflineDeviceProfile, type ModelFit } from '../../lib/offlineDevice';
+import { downloadGGUF, listOfflineDownloads, pauseGGUFDownload, removeOfflineModel, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
 
 type CatalogModel = {
   model_id: string;
@@ -47,6 +48,9 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
   const [hfSelected, setHfSelected] = useState('');
   const [hfRepository, setHfRepository] = useState<HuggingFaceRepository | null>(null);
   const [hfQuantization, setHfQuantization] = useState('');
+  const [ggufTasks, setGgufTasks] = useState<OfflineDownloadState[]>([]);
+  const [ggufProgress, setGgufProgress] = useState<Record<string, { downloadedBytes: number; totalBytes: number | null; percent: number | null; status: string }>>({});
+  const [ggufBusyId, setGgufBusyId] = useState('');
   const [device, setDevice] = useState<OfflineDeviceProfile | null>(null);
   const [deviceScanBusy, setDeviceScanBusy] = useState(true);
   const [modelFilter, setModelFilter] = useState<'all' | ModelFit>('all');
@@ -144,11 +148,25 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
     if (!hfSelected) { setHfRepository(null); setHfQuantization(''); return; }
     const controller = new AbortController(); setHfRepository(null);
     void getHuggingFaceRepository(hfSelected, controller.signal)
-      .then(repository => { setHfRepository(repository); setHfQuantization(repository.ggufFiles[0]?.name || ''); })
+      .then(repository => { setHfRepository(repository); setHfQuantization(repository.ggufFiles[0]?.path || ''); })
       .catch(error => { if (!controller.signal.aborted) setHfError(error instanceof Error ? error.message : 'Repository metadata unavailable'); });
     return () => controller.abort();
   }, [hfSelected]);
 
+  const downloadSelectedGguf = async () => {
+    if (!hfRepository || !hfQuantization || ggufBusyId) return;
+    const file = hfRepository.ggufFiles.find(item => item.path === hfQuantization);
+    if (!file) return;
+    const id = hfSelected + '/' + file.path;
+    setGgufBusyId(id);
+    try {
+      await downloadGGUF({ repoId: hfSelected, fileName: file.path, expectedBytes: file.size, expectedSha256: file.sha256, onProgress: progress => setGgufProgress(previous => ({ ...previous, [id]: progress })) });
+      setGgufTasks(await listOfflineDownloads());
+    } catch (error) { setHfError(error instanceof Error ? error.message : 'GGUF download failed.'); }
+    finally { setGgufBusyId(''); setGgufTasks(await listOfflineDownloads().catch(() => [])); }
+  };
+  const removeGguf = async (id: string) => { await removeOfflineModel(id); setGgufTasks(await listOfflineDownloads()); };
+  const pauseSelectedGguf = (id: string) => pauseGGUFDownload(id);
   const loadMoreHf = async () => {
     if (hfBusy || !hfHasMore) return;
     setHfBusy(true); setHfError('');
@@ -315,8 +333,13 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
       {!hfModels.length && !hfBusy && <p className="py-4 text-center text-sm opacity-60">{dari ? 'مدلی پیدا نشد.' : 'No models found.'}</p>}
       {hfHasMore && <button type="button" disabled={hfBusy} onClick={() => void loadMoreHf()} className="w-full rounded-xl border px-4 py-2 text-sm">{dari ? 'مدل‌های بیشتر' : 'Load more'}</button>}
       {hfSelected && <div className="space-y-3 rounded-xl bg-slate-500/5 p-3"><div className="flex flex-wrap justify-between gap-2"><strong className="break-all text-sm">{hfSelected}</strong><span className="text-xs">{hfRepository ? formatBytes(hfRepository.totalBytes) : '…'}</span></div>
-        {hfRepository && <><label className="block text-xs font-semibold">{dari ? 'انتخاب فایل و Quantization' : 'Select GGUF file / quantization'}<select value={hfQuantization} onChange={event => setHfQuantization(event.target.value)} className="mt-2 w-full rounded-lg border bg-transparent p-2">{hfRepository.ggufFiles.map(file => <option key={file.name} value={file.name}>{file.name} · {formatBytes(file.size)}{file.quantization ? ' · ' + file.quantization : ''}</option>)}</select></label><p className="text-xs text-amber-700">{dari ? 'این بخش کاتالوگ و مشخصات واقعی را نشان می‌دهد. فایل GGUF هنوز از طریق موتور WebLLM قابل اجرا نیست؛ نصب‌کننده و Runtime بومی llama.cpp مرحله بعدی است.' : 'This is live catalog and file metadata only. GGUF cannot run in WebLLM; a native llama.cpp runtime and verified installer are still required.'}</p><a className="inline-flex rounded-lg border px-3 py-2 text-xs" href={'https://huggingface.co/' + hfSelected} target="_blank" rel="noreferrer">{dari ? 'بازکردن در Hugging Face' : 'Open on Hugging Face'}</a></>}
+        {hfRepository && <><label className="block text-xs font-semibold">{dari ? 'انتخاب فایل و Quantization' : 'Select GGUF file / quantization'}<select value={hfQuantization} onChange={event => setHfQuantization(event.target.value)} className="mt-2 w-full rounded-lg border bg-transparent p-2">{hfRepository.ggufFiles.map(file => <option key={file.path} value={file.path}>{file.name} · {formatBytes(file.size)}{file.quantization ? ' · ' + file.quantization : ''}</option>)}</select></label><div className="flex flex-wrap items-center gap-2"><button type="button" disabled={!!ggufBusyId || !hfQuantization} onClick={() => void downloadSelectedGguf()} className="rounded-lg bg-cyan-500 px-4 py-2.5 text-xs font-bold text-slate-950 disabled:opacity-40">{dari ? 'دانلود و نصب فایل GGUF' : 'Download & install GGUF'}</button><a className="rounded-lg border px-3 py-2.5 text-xs" href={'https://huggingface.co/' + hfSelected} target="_blank" rel="noreferrer">{dari ? 'مخزن' : 'Repository'}</a></div><p className="text-xs text-amber-700">{dari ? 'فایل در حافظه خصوصی مرورگر ذخیره و SHA-256 محاسبه می‌شود. اگر مخزن هش معتبر ارائه کند، با آن مقایسه می‌شود. این دانلود به معنی آماده بودن موتور اجرای GGUF نیست.' : 'The file is stored in browser-private OPFS storage and SHA-256 is calculated; when the repository provides a trusted hash it is compared. Downloading does not mean the GGUF inference runtime is ready.'}</p>{ggufBusyId === hfSelected + '/' + hfQuantization && <div className="space-y-2"><div className="flex justify-between text-xs"><span>{formatBytes(ggufProgress[ggufBusyId]?.downloadedBytes || 0)} / {formatBytes(ggufProgress[ggufBusyId]?.totalBytes)}</span><span>{ggufProgress[ggufBusyId]?.percent ?? '—'}%</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-500/20"><div className="h-full bg-cyan-400" style={{width:(ggufProgress[ggufBusyId]?.percent ?? 0)+'%'}}/></div><button type="button" onClick={() => pauseSelectedGguf(ggufBusyId)} className="rounded-lg border px-3 py-1.5 text-xs">{dari ? 'توقف موقت' : 'Pause'}</button></div>}</>}
       </div>}
+    </section>
+    <section className="space-y-3 rounded-2xl border p-4">
+      <div className="flex items-center justify-between gap-2"><h2 className="font-bold">{dari ? 'مدل‌های GGUF نصب‌شده' : 'Installed GGUF models'}</h2><span className="text-xs opacity-60">{ggufTasks.filter(task => task.status === 'installed').length}</span></div>
+      {!ggufTasks.length && <p className="text-xs opacity-60">{dari ? 'هنوز فایل GGUF دانلود نشده است.' : 'No GGUF files downloaded yet.'}</p>}
+      {ggufTasks.map(task => <div key={task.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-500/5 p-3"><div className="min-w-0 flex-1"><div className="break-all text-xs font-semibold">{task.repoId} / {task.fileName}</div><div className="mt-1 text-[11px] opacity-60">{formatBytes(task.downloadedBytes)} · {task.status}{task.error ? ' · ' + task.error : ''}</div></div><div className="flex gap-2">{task.status !== 'installed' && <button type="button" disabled={!!ggufBusyId} onClick={() => {setHfSelected(task.repoId);setHfQuantization(task.fileName);}} className="rounded-lg border px-2 py-1 text-xs">{dari ? 'ادامه' : 'Resume'}</button>}<button type="button" onClick={() => void removeGguf(task.id)} className="rounded-lg border px-2 py-1 text-xs">{dari ? 'حذف' : 'Delete'}</button></div></div>)}
     </section>
   </section>;
 }
