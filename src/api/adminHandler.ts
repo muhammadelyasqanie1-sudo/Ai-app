@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './auth.ts';
 import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors, refreshDatabaseProviderAdapters } from '../services/providerGateway.ts';
-import { encryptProviderSecret, providerKeyHint, redactSecret } from '../security/providerVault.ts';
+import { encryptProviderSecret, providerKeyHint } from '../security/providerVault.ts';
 
 const ALLOWED_FALLBACK_CAPABILITIES = new Set(['text', 'vision', 'imageGen', 'tts', 'stt']);
 
@@ -45,7 +45,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     sendAuthJson(res, 401, { error: 'Sign in is required.' });
     return true;
   }
-  if (user.role !== 'admin') {
+  if (!['admin','superadmin'].includes(user.role)) {
     sendAuthJson(res, 403, { error: 'Administrator access is required.' });
     return true;
   }
