@@ -28,6 +28,70 @@ static bool afg_llama_abort_callback(void *) {
     return g_cancel_requested.load(std::memory_order_acquire);
 }
 
+static size_t complete_utf8_prefix(const std::string & value) {
+    size_t index = 0;
+    while (index < value.size()) {
+        const unsigned char lead = static_cast<unsigned char>(value[index]);
+        size_t width = lead < 0x80 ? 1 : (lead >= 0xC2 && lead <= 0xDF ? 2 : (lead >= 0xE0 && lead <= 0xEF ? 3 : (lead >= 0xF0 && lead <= 0xF4 ? 4 : 1)));
+        if (width > 1 && index + width > value.size()) break;
+        bool valid = true;
+        for (size_t offset = 1; offset < width; ++offset) {
+            const unsigned char next = static_cast<unsigned char>(value[index + offset]);
+            if ((next & 0xC0) != 0x80) { valid = false; break; }
+        }
+        if (valid && width == 3) {
+            const unsigned char second = static_cast<unsigned char>(value[index + 1]);
+            if ((lead == 0xE0 && second < 0xA0) || (lead == 0xED && second >= 0xA0)) valid = false;
+        }
+        if (valid && width == 4) {
+            const unsigned char second = static_cast<unsigned char>(value[index + 1]);
+            if ((lead == 0xF0 && second < 0x90) || (lead == 0xF4 && second > 0x8F)) valid = false;
+        }
+        index += valid ? width : 1;
+    }
+    return index;
+}
+
+static jstring utf8_to_jstring(JNIEnv * env, const std::string & value) {
+    std::u16string utf16;
+    utf16.reserve(value.size());
+    size_t index = 0;
+    while (index < value.size()) {
+        const unsigned char lead = static_cast<unsigned char>(value[index]);
+        uint32_t codepoint = 0xFFFD;
+        size_t width = 1;
+        if (lead < 0x80) codepoint = lead;
+        else if (lead >= 0xC2 && lead <= 0xDF) { width = 2; codepoint = lead & 0x1F; }
+        else if (lead >= 0xE0 && lead <= 0xEF) { width = 3; codepoint = lead & 0x0F; }
+        else if (lead >= 0xF0 && lead <= 0xF4) { width = 4; codepoint = lead & 0x07; }
+        bool valid = width == 1 || index + width <= value.size();
+        if (valid && width > 1) {
+            for (size_t offset = 1; offset < width; ++offset) {
+                const unsigned char next = static_cast<unsigned char>(value[index + offset]);
+                if ((next & 0xC0) != 0x80) { valid = false; break; }
+                codepoint = (codepoint << 6) | (next & 0x3F);
+            }
+            if (valid && width == 3) {
+                const unsigned char second = static_cast<unsigned char>(value[index + 1]);
+                if ((lead == 0xE0 && second < 0xA0) || (lead == 0xED && second >= 0xA0)) valid = false;
+            }
+            if (valid && width == 4) {
+                const unsigned char second = static_cast<unsigned char>(value[index + 1]);
+                if ((lead == 0xF0 && second < 0x90) || (lead == 0xF4 && second > 0x8F)) valid = false;
+            }
+        }
+        if (!valid) { codepoint = 0xFFFD; width = 1; }
+        if (codepoint <= 0xFFFF) utf16.push_back(static_cast<char16_t>(codepoint));
+        else {
+            codepoint -= 0x10000;
+            utf16.push_back(static_cast<char16_t>(0xD800 + (codepoint >> 10)));
+            utf16.push_back(static_cast<char16_t>(0xDC00 + (codepoint & 0x3FF)));
+        }
+        index += width;
+    }
+    return env->NewString(reinterpret_cast<const jchar *>(utf16.data()), static_cast<jsize>(utf16.size()));
+}
+
 static std::string from_jstring(JNIEnv * env, jstring value) {
     if (value == nullptr) return {};
     const char * chars = env->GetStringUTFChars(value, nullptr);
@@ -198,6 +262,7 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerateStream(
         const int32_t vocab_size = llama_vocab_n_tokens(g_vocab);
         const int32_t limit = std::max(1, std::min(512, static_cast<int>(max_tokens)));
         std::string output;
+        std::string pending_utf8;
         output.reserve(static_cast<size_t>(limit) * 6);
         for (int32_t step = 0; step < limit; ++step) {
             if (g_cancel_requested.load(std::memory_order_acquire)) break;
@@ -217,10 +282,16 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerateStream(
             if (piece_size > 0) {
                 const std::string token_piece(piece, static_cast<size_t>(piece_size));
                 output.append(token_piece);
-                jstring java_piece = env->NewStringUTF(token_piece.c_str());
-                if (java_piece != nullptr) {
-                    env->CallVoidMethod(callback, on_token, java_piece);
-                    env->DeleteLocalRef(java_piece);
+                pending_utf8.append(token_piece);
+                const size_t complete_size = complete_utf8_prefix(pending_utf8);
+                if (complete_size > 0) {
+                    const std::string complete_piece = pending_utf8.substr(0, complete_size);
+                    pending_utf8.erase(0, complete_size);
+                    jstring java_piece = utf8_to_jstring(env, complete_piece);
+                    if (java_piece != nullptr) {
+                        env->CallVoidMethod(callback, on_token, java_piece);
+                        env->DeleteLocalRef(java_piece);
+                    }
                 }
                 if (env->ExceptionCheck()) {
                     env->ExceptionClear();
@@ -237,8 +308,15 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGenerateStream(
                 break;
             }
         }
+        if (!pending_utf8.empty()) {
+            jstring final_piece = utf8_to_jstring(env, pending_utf8);
+            if (final_piece != nullptr) {
+                env->CallVoidMethod(callback, on_token, final_piece);
+                env->DeleteLocalRef(final_piece);
+            }
+        }
         env->DeleteLocalRef(callback_class);
-        return env->NewStringUTF(output.c_str());
+        return utf8_to_jstring(env, output);
     } catch (const std::exception & error) {
         g_last_error = error.what();
         AFG_LOGE("Generation failed: %s", error.what());
