@@ -11,6 +11,8 @@ export const OFFLINE_MODEL_CATEGORIES = [
 
 export type OfflineModelCategory = typeof OFFLINE_MODEL_CATEGORIES[number];
 
+export const LEARNING_SUBCATEGORIES = ['english', 'robotics', 'mathematics', 'science'] as const;
+
 const RULES: Array<{ category: OfflineModelCategory; pattern: RegExp }> = [
   { category: 'learning', pattern: /\b(education|educational|learning|teaching|tutor)\b/i },
   { category: 'coding', pattern: /\b(code|coding|programming|developer|software|repository|debug|javascript|typescript|python|java|rust|sql)\b/i },
@@ -24,7 +26,7 @@ const RULES: Array<{ category: OfflineModelCategory; pattern: RegExp }> = [
 export function classifyOfflineModel(tags: string[], pipeline: string | null, modelId = ''): OfflineModelCategory[] {
   const source = [modelId, pipeline || '', ...tags].join(' ').toLowerCase().replace(/[-_/.:]+/g, ' ');
   const found = RULES.filter(rule => rule.pattern.test(source)).map(rule => rule.category);
-  if (found.includes('english') || found.includes('robotics') || found.includes('mathematics') || found.includes('science')) {
+  if (found.includes('english') || found.includes('robotics') || found.includes('mathematics')) {
     found.push('learning');
   }
   return found.length ? Array.from(new Set(found)) : ['general'];
