@@ -310,7 +310,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       if (!defaultHeaders || typeof defaultHeaders !== 'object' || Array.isArray(defaultHeaders) ||
           Object.entries(defaultHeaders).length > 12 ||
           Object.entries(defaultHeaders).some(([key,value]) => !/^[A-Za-z0-9-]{1,80}$/.test(key) ||
-            typeof value !== 'string' || value.length > 1000 || /[\\r\\n]/.test(value))) {
+            typeof value !== 'string' || value.length > 1000 || /[\r\n]/.test(value))) {
         sendAuthJson(res, 400, { error: 'Default headers must be a small object of safe header names and string values.' });
         return true;
       }
