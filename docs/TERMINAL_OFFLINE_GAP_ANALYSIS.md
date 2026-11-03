@@ -6,7 +6,7 @@ Audited against the current main tree and source files. Code inspection only; no
 |---|---|---|---|
 | React/Vite, Express, PostgreSQL | Root app, API router, database pool, migrations | Physical workspace split remains a facade | Existing |
 | Auth / CSRF | Cookie sessions, authenticated user lookup, CSRF | CLI token path not runtime verified | Existing + partial |
-| Terminal UI | Terminal tab, session list, persisted command/output scrollback, search, arrow-key history, token create/revoke panel | xterm.js, terminal tabs, tab completion, audit drawer polish | Partial |
+| Terminal UI | App-wide launcher and shortcut, responsive terminal workspace, isolated local virtual filesystem, file upload/download, command history/search/completion, server sessions, account-scoped AFG commands and CLI token controls | xterm.js emulation, true multi-tab terminal panes, server-synced workspace files, isolated code-execution sandbox | Expanded UI / partial runtime |
 | CLI tokens | SHA-256 hashes, prefix, scopes, expiry, last-used, revoke; hourly bucket limiter | OS keyring and compiled binary | Partial |
 | Terminal API | Sessions, whoami, read-only commands, request IDs, bounded output audit | Full command matrix, chat streaming, uploads, image, admin, search/export/rename/pin | Partial |
 | Terminal audit | Request ID, command, exit code, duration; immutable event content | Runtime verification and retention policy | Partial |
