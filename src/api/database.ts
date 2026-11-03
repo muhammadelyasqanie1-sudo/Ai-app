@@ -1,16 +1,6 @@
 import { Pool } from 'pg';
-
-export function shouldUseDatabaseTls(connectionString?: string, sslMode?: string): boolean {
-  const mode = sslMode?.trim().toLowerCase();
-  if (mode === 'require') return true;
-  if (mode) return false;
-  try {
-    const hostname = connectionString ? new URL(connectionString).hostname.toLowerCase() : '';
-    return /(^|\.)supabase\.(co|com)$/.test(hostname);
-  } catch {
-    return false;
-  }
-}
+import { shouldUseDatabaseTls } from './databaseTls.ts';
+export { shouldUseDatabaseTls } from './databaseTls.ts';
 
 const connectionString = process.env.DATABASE_URL?.trim();
 const useDatabaseTls = shouldUseDatabaseTls(connectionString, process.env.DATABASE_SSL);
