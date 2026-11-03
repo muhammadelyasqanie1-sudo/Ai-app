@@ -1,10 +1,48 @@
 import { cloudflareWorkersAi } from '../providers/cloudflareWorkersAi.ts';
-import { createOpenAICompatibleAdapter } from '../providers/openAiCompatible.ts';
+import { createOpenAICompatibleAdapter, type OpenAICompatibleProviderConfig } from '../providers/openAiCompatible.ts';
+import { decryptProviderConfig } from './providerSecrets.ts';
 import { pool } from '../api/database.ts';
 import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescriptor, CapabilityFlags } from '../providers/providerTypes.ts';
 
 const openAICompatible = createOpenAICompatibleAdapter();
-const providerRegistry: ChatProviderAdapter[] = [cloudflareWorkersAi, openAICompatible];
+const builtInProviderRegistry: ChatProviderAdapter[] = [cloudflareWorkersAi, openAICompatible];
+let providerRegistry: ChatProviderAdapter[] = [...builtInProviderRegistry];
+let customRegistryLoadedAt = 0;
+
+export async function refreshCustomProviderRegistry(force = false): Promise<void> {
+  if (!pool) return;
+  if (!force && Date.now() - customRegistryLoadedAt < 30_000) return;
+  try {
+    const result = await pool.query(
+      'SELECT kind,display_name,config_encrypted,enabled,request_timeout_ms,auth_method FROM providers WHERE is_custom=true ORDER BY priority,display_name',
+    );
+    const custom: ChatProviderAdapter[] = [];
+    for (const row of result.rows) {
+      if (typeof row.config_encrypted !== 'string' || !row.config_encrypted) continue;
+      try {
+        const stored = decryptProviderConfig(row.config_encrypted);
+        const providerConfig: OpenAICompatibleProviderConfig = {
+          id: String(row.kind),
+          displayName: String(row.display_name),
+          baseUrl: typeof stored.baseUrl === 'string' ? stored.baseUrl : '',
+          apiKey: typeof stored.apiKey === 'string' ? stored.apiKey : '',
+          authMethod: row.auth_method === 'api-key-header' || row.auth_method === 'none' ? row.auth_method : 'bearer',
+          authHeaderName: typeof stored.authHeaderName === 'string' ? stored.authHeaderName : 'api-key',
+          defaultHeaders: stored.defaultHeaders && typeof stored.defaultHeaders === 'object' && !Array.isArray(stored.defaultHeaders)
+            ? stored.defaultHeaders as Record<string, string> : {},
+          timeoutMs: Number(row.request_timeout_ms) || 30000,
+        };
+        custom.push(createOpenAICompatibleAdapter(providerConfig));
+      } catch {
+        console.warn('AI_CUSTOM_PROVIDER_CONFIG_UNAVAILABLE', JSON.stringify({ provider: String(row.kind) }));
+      }
+    }
+    providerRegistry = [...builtInProviderRegistry, ...custom];
+    customRegistryLoadedAt = Date.now();
+  } catch {
+    // The canonical provider table is introduced by a migration; built-in providers remain usable before it is applied.
+  }
+}
 const HEALTH_TTL_MS = 5 * 60 * 1000;
 const healthCache = new Map<string, { healthy: boolean; checkedAt: string }>();
 
@@ -20,9 +58,10 @@ async function isProviderEnabled(providerId: string): Promise<boolean> {
   if (!pool) return true;
   try {
     const result = await pool.query('SELECT enabled FROM provider_configs WHERE provider_key = $1 LIMIT 1', [providerId]);
-    return result.rows.length ? Boolean(result.rows[0].enabled) : true;
+    if (result.rows.length) return Boolean(result.rows[0].enabled);
+    const custom = await pool.query('SELECT enabled FROM providers WHERE kind=$1 AND is_custom=true LIMIT 1', [providerId]);
+    return custom.rows.length ? Boolean(custom.rows[0].enabled) : true;
   } catch (error) {
-    // An uninitialized optional catalog must not disable a configured AI provider.
     console.warn('AI_PROVIDER_CONFIG_DB_UNAVAILABLE', JSON.stringify({ provider: providerId, error: error instanceof Error ? error.message : 'unknown_error' }));
     return true;
   }
@@ -156,6 +195,7 @@ async function applyCapabilityOverrides(providerId: string, models: ModelDescrip
 }
 
 export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> {
+  await refreshCustomProviderRegistry();
   const verified: ModelDescriptor[] = [];
   for (const provider of providerRegistry) {
     let configValid = false;
