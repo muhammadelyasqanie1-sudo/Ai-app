@@ -409,24 +409,32 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       sendAuthJson(res, 200, { key: body.key, enabled: body.enabled }); return true;
     }
 
-    if (req.method === 'POST' && pathname === '/api/admin/providers/test') {
-      const body = await readJsonBody(req, 4000);
-      const provider = getProviderRegistry().find((item) => item.id === body.providerId);
-      if (!provider) { sendAuthJson(res, 400, { error: 'Unknown provider.' }); return true; }
-      const adapter = getProviderAdapter(provider.id);
-      const started = Date.now();
-      let configured = false, connected = false, discoveredModels = 0;
-      try {
-        const config = await adapter?.validateConfig();
-        configured = Boolean(config?.valid);
-        if (configured) { const models = await adapter!.listModels(); discoveredModels = models.length; connected = true; }
-      } catch { connected = false; }
-      const latencyMs = Date.now() - started;
-      await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
-        [user.id,'provider.connection_test','provider',provider.id,JSON.stringify({configured,connected,discoveredModels,latencyMs})]);
-      sendAuthJson(res, connected ? 200 : 502, { providerId: provider.id, configured, connected, discoveredModels, latencyMs,
-        message: connected ? 'Provider connection succeeded.' : (configured ? 'Provider connection failed.' : 'Provider credentials are not configured.') });
-      return true;
+    if (req.method === 'POST' && (pathname === '/api/admin/providers/test' || /^\\/api\\/admin\\/providers\\/[a-z0-9-]+\\/test$/.test(pathname))) {
+      const body = await readJsonBody(req,4000);
+      const routeId=pathname.match(/^\\/api\\/admin\\/providers\\/([a-z0-9-]+)\\/test$/)?.[1];
+      const providerId=routeId || (typeof body.providerId==='string'?body.providerId:'');
+      if(!providerId){sendAuthJson(res,400,{error:'Provider ID is required.'});return true;}
+      await refreshDatabaseProviderAdapters(true);
+      const providerRow=await pool.query('SELECT slug,display_name,enabled,kind FROM providers WHERE slug=$1 LIMIT 1',[providerId]);
+      const adapter=getProviderAdapter(providerId);
+      if(!providerRow.rows[0]&&!adapter){sendAuthJson(res,404,{error:'Provider not found.'});return true;}
+      const started=Date.now();let configured=false,connected=false,discoveredModels=0,probeModel:string|null=null;
+      try{
+        const config=await adapter?.validateConfig();configured=Boolean(config?.valid);
+        if(configured&&adapter){
+          const models=await adapter.listModels();discoveredModels=models.length;
+          probeModel=models[0]?.id||null;
+          if(probeModel){const probe=await adapter.healthCheck(probeModel);connected=probe.healthy;}
+          else connected=false;
+        }
+      }catch{connected=false;}
+      const latencyMs=Date.now()-started;
+      if(providerRow.rows[0])await pool.query('UPDATE providers SET last_health_at=now(),last_health_ok=$2,last_error_code=$3,updated_at=now() WHERE slug=$1',
+        [providerId,connected,connected?null:(configured?'provider_probe_failed':'credentials_missing')]);
+      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
+        [user.id,user.role,'provider.connection_test','provider',providerId,JSON.stringify({configured,connected,discoveredModels,probeModel,latencyMs})]);
+      sendAuthJson(res,connected?200:502,{providerId,configured,connected,discoveredModels,probeModel,latencyMs,
+        message:connected?'Provider inference probe succeeded.':(configured?'Provider inference probe failed.':'Provider credentials are not configured or adapter is unavailable.')});return true;
     }
 
     if (req.method === 'POST' && pathname === '/api/admin/models/discover') {
@@ -684,10 +692,11 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const providerId = typeof body.providerId === 'string' ? body.providerId : '';
       const enabled = body.enabled;
       const provider = getProviderRegistry().find((item) => item.id === providerId);
-      if (!provider || typeof enabled !== 'boolean') {
-        sendAuthJson(res, 400, { error: 'A registered provider ID and boolean enabled value are required.' });
-        return true;
+      const catalogProvider = await pool.query('SELECT slug,display_name FROM providers WHERE slug=$1 LIMIT 1',[providerId]);
+      if ((!provider && !catalogProvider.rows[0]) || typeof enabled !== 'boolean') {
+        sendAuthJson(res,400,{error:'A registered provider ID and boolean enabled value are required.'});return true;
       }
+      const displayName=provider?.displayName || catalogProvider.rows[0].display_name;
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
@@ -696,11 +705,11 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           `INSERT INTO provider_configs (provider_key, display_name, enabled)
            VALUES ($1, $2, $3)
            ON CONFLICT (provider_key) DO UPDATE SET enabled = EXCLUDED.enabled, display_name = EXCLUDED.display_name, updated_at = now()`,
-          [provider.id, provider.displayName, enabled],
+          [providerId, displayName, enabled],
         );
         await client.query(
           'INSERT INTO audit_logs (actor_user_id, action, target_type, target_id, metadata) VALUES ($1, $2, $3, $4, $5)',
-          [user.id, 'provider.toggle', 'provider', provider.id, JSON.stringify({ enabled })],
+          [user.id, 'provider.toggle', 'provider', providerId, JSON.stringify({ enabled })],
         );
         await client.query('COMMIT');
       } catch (error) {
@@ -726,9 +735,9 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         sendAuthJson(res, 400, { error: 'Invalid model capability override.' }); return true;
       }
       const descriptor = (await getVerifiedModelDescriptors()).find((model) => model.providerId === providerId && model.id === modelId);
-      if (!descriptor || typeof enabled !== 'boolean') {
-        sendAuthJson(res, 400, { error: 'Select a discovered model and provide a boolean enabled value.' });
-        return true;
+      const storedModel=await pool.query('SELECT display_name,context_window,capabilities,verified_at,last_health_ok FROM model_catalog WHERE provider_key=$1 AND model_key=$2 LIMIT 1',[providerId,modelId]);
+      if ((!descriptor&&!storedModel.rows[0]) || typeof enabled !== 'boolean') {
+        sendAuthJson(res,400,{error:'Select a registered model and provide a boolean enabled value.'});return true;
       }
       const validCost = (value: unknown) => value === null || value === undefined ||
         (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1_000_000);
@@ -754,10 +763,10 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
              verified_at = EXCLUDED.verified_at,
              last_health_ok = EXCLUDED.last_health_ok,
              updated_at = now()`,
-          [providerId, modelId, descriptor.displayName,
-            Object.entries(descriptor.capabilities).filter(([, value]) => value).map(([key]) => key),
-            enabled, descriptor.contextWindow, inputCost ?? null, outputCost ?? null,
-            descriptor.verifiedAt, descriptor.verifiedAt !== null, capabilities],
+          [providerId, modelId, descriptor?.displayName || storedModel.rows[0].display_name,
+            descriptor ? Object.entries(descriptor.capabilities).filter(([, value]) => value).map(([key]) => key) : storedModel.rows[0].capabilities,
+            enabled, descriptor?.contextWindow ?? Number(storedModel.rows[0].context_window) ?? 0, inputCost ?? null, outputCost ?? null,
+            descriptor?.verifiedAt ?? null, Boolean(descriptor?.verifiedAt), capabilities],
         );
         await client.query(
           'INSERT INTO audit_logs (actor_user_id, action, target_type, target_id, metadata) VALUES ($1, $2, $3, $4, $5)',
