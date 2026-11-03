@@ -271,7 +271,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const loadModel = useCallback(async (modelId: string, isDownload: boolean) => {
-    if (busy || runtime !== 'ready') return;
+    if (busy || runtime !== 'ready' || !webGpuAvailable) return;
     const target = models.find(item => item.model_id === modelId);
     const fit = target && device ? assessOfflineModelFit(target.vram_required_MB || 0, device) : 'limited';
     const targetRepo = target ? getHuggingFaceRepo(target) : null;
@@ -286,6 +286,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       if (engineRef.current) {
         try { await engineRef.current.unload(); } catch { /* continue with a fresh engine */ }
         engineRef.current = null;
+        engineModelIdRef.current = '';
       }
       const { CreateMLCEngine, prebuiltAppConfig } = await import('@mlc-ai/web-llm');
       const engine = await CreateMLCEngine(modelId, {
@@ -296,6 +297,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
         },
       });
       engineRef.current = engine;
+      engineModelIdRef.current = modelId;
+      setActiveOfflineModelLabel(modelId);
       setInstalled(previous => previous.includes(modelId) ? previous : [...previous, modelId]);
       setSelectedId(modelId);
       setMessages([{ role: 'assistant', content: dari ? 'سلام! من مدل آفلاین AFG AI هستم. چطور کمک کنم؟' : 'Hello! I am your local AFG AI model. How can I help?' }]);
@@ -307,15 +310,36 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     } catch (error) {
       setRuntimeMessage(error instanceof Error ? error.message : copy.failed);
     } finally { setBusy(false); setProgress(0); setProgressText(''); }
-  }, [busy, runtime, copy, dari, models, device, modelSizes, storage]);
+  }, [busy, runtime, webGpuAvailable, copy, dari, models, device, modelSizes, storage]);
 
+  const loadNativeGgufModel = async (task: OfflineDownloadState) => {
+    if (!nativeRuntimeAvailable || !task.localPath || busy || task.status !== 'installed') return;
+    setBusy(true); setProgressText(dari ? 'در حال بارگذاری مدل GGUF…' : 'Loading local GGUF model…');
+    try {
+      if (engineRef.current) { const previous = engineRef.current; engineRef.current = null; engineModelIdRef.current = ''; await previous.unload().catch(() => undefined); }
+      setSelectedId(task.id);
+      const contextSize = lowPowerMode ? 1024 : 2048;
+      const threads = Math.max(1, Math.min(4, device?.cpuCores || 4));
+      await loadNativeLlamaModel(task.localPath, contextSize, threads);
+      engineRef.current = {
+        chat: { completions: { create: async (request: { messages: Array<{ role: string; content: string }>; max_tokens?: number }) => ({ choices: [{ message: { content: await generateNativeLlamaResponse(request.messages, request.max_tokens || 256) } }] }) } },
+        unload: async () => unloadNativeLlamaModel(),
+      };
+      engineModelIdRef.current = task.id;
+      setActiveOfflineModelLabel(task.repoId + '/' + task.fileName);
+      setRuntime('ready');
+      setRuntimeMessage(dari ? 'مدل GGUF به‌صورت محلی آماده است.' : 'GGUF model loaded locally and ready for offline chat.');
+      setViewMode('chat');
+    } catch (error) { setRuntimeMessage(error instanceof Error ? error.message : copy.failed); }
+    finally { setBusy(false); setProgressText(''); }
+  };
   const clearCurrentOfflineChat = async () => {
     setMessages([]);
     await clearOfflineChatMessages(selectedId).catch(() => undefined);
   };
   const removeMlcModel = async (modelId: string) => {
     try {
-      if (selectedId === modelId && engineRef.current) { await engineRef.current.unload(); engineRef.current = null; setMessages([]); }
+      if (selectedId === modelId && engineRef.current) { await engineRef.current.unload(); engineRef.current = null; engineModelIdRef.current = ''; setActiveOfflineModelLabel(''); setMessages([]); }
       const { deleteModelAllInfoInCache, prebuiltAppConfig } = await import('@mlc-ai/web-llm');
       await deleteModelAllInfoInCache(modelId, { ...prebuiltAppConfig, cacheBackend: 'indexeddb' });
       setInstalled(previous => previous.filter(id => id !== modelId));
