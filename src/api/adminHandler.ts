@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './auth.ts';
-import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors } from '../services/providerGateway.ts';
+import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors, refreshDatabaseProviderAdapters } from '../services/providerGateway.ts';
+import { encryptProviderSecret, providerKeyHint, redactSecret } from '../security/providerVault.ts';
 
 const ALLOWED_FALLBACK_CAPABILITIES = new Set(['text', 'vision', 'imageGen', 'tts', 'stt']);
 
@@ -11,7 +12,7 @@ async function requireAdmin(req: IncomingMessage, res: ServerResponse) {
     sendAuthJson(res, 401, { error: 'Sign in is required.' });
     return null;
   }
-  if (user.role !== 'admin') {
+  if (!['admin','superadmin'].includes(user.role)) {
     sendAuthJson(res, 403, { error: 'Administrator access is required.' });
     return null;
   }
@@ -28,7 +29,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     sendAuthJson(res, 503, { error: 'Admin controls require DATABASE_URL and the database schema.' });
     return true;
   }
-  if (!['GET', 'PATCH', 'POST'].includes(req.method || '')) {
+  if (!['GET', 'PATCH', 'POST', 'PUT', 'DELETE'].includes(req.method || '')) {
     sendAuthJson(res, 405, { error: 'Method not allowed.' });
     return true;
   }
@@ -54,6 +55,94 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
   }
 
   try {
+    const policy = await pool.query("SELECT requests,window_seconds FROM rate_limit_policies WHERE scope_type='admin' AND scope_key='*' AND enabled=true LIMIT 1");
+    const adminLimit = Number(policy.rows[0]?.requests || 100);
+    const adminWindow = Number(policy.rows[0]?.window_seconds || 60);
+    const counter = await pool.query(`INSERT INTO rate_limit_counters(scope_type,scope_key,window_start,request_count)
+      VALUES('admin',$1,to_timestamp((floor(extract(epoch FROM now())/$2)*$2)::double precision),1)
+      ON CONFLICT(scope_type,scope_key,window_start)
+      DO UPDATE SET request_count=rate_limit_counters.request_count+1
+      RETURNING request_count`,[user.id,adminWindow]);
+    if (Number(counter.rows[0]?.request_count || 0) > adminLimit) {
+      res.setHeader('Retry-After',String(adminWindow));
+      sendAuthJson(res,429,{error:'Admin API rate limit exceeded.'}); return true;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/admin/providers') {
+      const result = await pool.query(`SELECT p.id,p.slug,p.kind,p.display_name,p.base_url,p.enabled,p.config_json,
+          p.last_health_at,p.last_health_ok,p.last_error_code,p.source,p.created_at,p.updated_at,
+          EXISTS(SELECT 1 FROM provider_keys k WHERE k.provider_id=p.id AND k.status='active') AS has_key,
+          (SELECT k.key_hint FROM provider_keys k WHERE k.provider_id=p.id AND k.alias='default' AND k.status='active' LIMIT 1) AS key_hint,
+          (SELECT k.status FROM provider_keys k WHERE k.provider_id=p.id AND k.alias='default' ORDER BY k.created_at DESC LIMIT 1) AS key_status
+        FROM providers p ORDER BY p.source,p.display_name`);
+      sendAuthJson(res,200,{providers:result.rows.map((row)=>({
+        ...row,id:row.slug,displayName:row.display_name,
+        configured: row.kind==='cloudflare' ? Boolean(process.env.CLOUDFLARE_ACCOUNT_ID&&process.env.CLOUDFLARE_API_TOKEN)
+          : row.kind==='ollama' ? false : Boolean(row.has_key),
+        keyHint:user.role==='superadmin' ? row.key_hint : null,
+        keyStatus:row.key_status,
+      }))}); return true;
+    }
+
+    const keyRoute = pathname.match(/^\\/api\\/admin\\/providers\\/([a-z0-9-]+)\\/keys(?:\\/rotate)?$/);
+    if (keyRoute && ((req.method==='PUT' && !pathname.endsWith('/rotate')) || (req.method==='POST' && pathname.endsWith('/rotate'))) {
+      if (user.role !== 'superadmin') { sendAuthJson(res,403,{error:'Superadmin access is required to manage provider keys.'}); return true; }
+      const providerSlug=keyRoute[1];
+      const body=await readJsonBody(req,10000);
+      const secret=typeof body.apiKey==='string' ? body.apiKey.trim() : '';
+      const alias=typeof body.alias==='string' && /^[a-zA-Z0-9_-]{1,64}$/.test(body.alias) ? body.alias : 'default';
+      if(secret.length<8 || secret.length>8192){sendAuthJson(res,400,{error:'A provider API key between 8 and 8192 characters is required.'});return true;}
+      const provider=await pool.query('SELECT id,slug FROM providers WHERE slug=$1 LIMIT 1',[providerSlug]);
+      if(!provider.rows[0]){sendAuthJson(res,404,{error:'Provider not found.'});return true;}
+      let encrypted:string;
+      try{encrypted=encryptProviderSecret(secret);}catch{
+        sendAuthJson(res,503,{error:'Provider key vault is not configured. Set PROVIDER_KEYS_MASTER_KEY to a 32-byte base64 or 64-character hex key.'});return true;
+      }
+      const hint=providerKeyHint(secret);
+      const client=await pool.connect();
+      try{
+        await client.query('BEGIN');
+        await client.query(`INSERT INTO provider_keys(provider_id,alias,key_encrypted,key_hint,status,rotated_at)
+          VALUES($1,$2,$3,$4,'active',CASE WHEN $5 THEN now() ELSE NULL END)
+          ON CONFLICT(provider_id,alias) DO UPDATE SET key_encrypted=EXCLUDED.key_encrypted,key_hint=EXCLUDED.key_hint,status='active',rotated_at=now()`,
+          [provider.rows[0].id,alias,encrypted,hint,pathname.endsWith('/rotate')]);
+        await client.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
+          [user.id,user.role,pathname.endsWith('/rotate')?'provider.key.rotate':'provider.key.set','provider',providerSlug,JSON.stringify({alias,keyHint:hint})]);
+        await client.query('COMMIT');
+      }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+      await refreshDatabaseProviderAdapters(true);
+      sendAuthJson(res,200,{providerId:providerSlug,alias,keyHint:hint,status:'active'});return true;
+    }
+
+    const discoverRoute=pathname.match(/^\\/api\\/admin\\/providers\\/([a-z0-9-]+)\\/discover-models$/);
+    if(req.method==='POST' && discoverRoute){
+      const providerId=discoverRoute[1];
+      await refreshDatabaseProviderAdapters(true);
+      const adapter=getProviderAdapter(providerId);
+      if(!adapter){sendAuthJson(res,404,{error:'Provider adapter is not implemented or is not configured.'});return true;}
+      const config=await adapter.validateConfig();
+      if(!config.valid){sendAuthJson(res,409,{error:'Provider credentials are not configured.'});return true;}
+      const discovered=await adapter.listModels();
+      const client=await pool.connect();
+      try{
+        await client.query('BEGIN');
+        for(const model of discovered){
+          await client.query(`INSERT INTO model_catalog(provider_key,model_key,display_name,description,capabilities,enabled,context_window,discovered_at,last_health_ok,verified_at)
+            VALUES($1,$2,$3,$4,$5,false,$6,now(),false,NULL)
+            ON CONFLICT(provider_key,model_key) DO UPDATE SET display_name=EXCLUDED.display_name,
+              description=EXCLUDED.description,capabilities=EXCLUDED.capabilities,context_window=EXCLUDED.context_window,
+              discovered_at=now(),updated_at=now()`,
+            [providerId,model.id,model.displayName,model.description,
+              Object.entries(model.capabilities).filter(([,enabled])=>enabled).map(([name])=>name),model.contextWindow]);
+        }
+        await client.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
+          [user.id,user.role,'provider.models.discover','provider',providerId,JSON.stringify({discovered:discovered.length})]);
+        await client.query('COMMIT');
+      }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+      sendAuthJson(res,200,{providerId,discovered:discovered.length,enabledByDefault:false});return true;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/admin/subscription-plans') {
     if (req.method === 'GET' && pathname === '/api/admin/providers') {
       const result = await pool.query(`SELECT id,slug,kind,display_name,base_url,enabled,config_json,
           last_health_at,last_health_ok,last_error_code,source,created_at,updated_at
@@ -154,7 +243,8 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const targetId = typeof body.userId === 'string' ? body.userId : '';
       const role = typeof body.role === 'string' ? body.role : undefined;
       const status = typeof body.status === 'string' ? body.status : undefined;
-      if (!targetId || (role !== undefined && !['user','admin'].includes(role)) ||
+      if (!targetId || (role !== undefined && !['user','admin','superadmin'].includes(role)) ||
+          (role === 'superadmin' && user.role !== 'superadmin') ||
           (status !== undefined && !['active','suspended'].includes(status)) ||
           (role === undefined && status === undefined)) {
         sendAuthJson(res, 400, { error: 'Provide a user ID and a valid role or status.' }); return true;
@@ -178,10 +268,10 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         }
         const nextRole = role ?? target.rows[0].role;
         const nextStatus = status ?? target.rows[0].status;
-        const removingActiveAdmin = target.rows[0].role === 'admin' && target.rows[0].status === 'active' &&
-          (nextRole !== 'admin' || nextStatus !== 'active');
+        const removingActiveAdmin = ['admin','superadmin'].includes(target.rows[0].role) && target.rows[0].status === 'active' &&
+          (!['admin','superadmin'].includes(nextRole) || nextStatus !== 'active');
         if (removingActiveAdmin) {
-          const admins = await client.query("SELECT count(*)::int AS total FROM users WHERE role='admin' AND status='active'");
+          const admins = await client.query("SELECT count(*)::int AS total FROM users WHERE role IN ('admin','superadmin') AND status='active'");
           if (Number(admins.rows[0]?.total || 0) <= 1) {
             await client.query('ROLLBACK');
             sendAuthJson(res, 409, { error: 'At least one active administrator must remain.' }); return true;
@@ -451,6 +541,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+        await client.query('UPDATE providers SET enabled=$2,updated_at=now() WHERE slug=$1',[provider.id,enabled]);
         await client.query(
           `INSERT INTO provider_configs (provider_key, display_name, enabled)
            VALUES ($1, $2, $3)
