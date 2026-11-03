@@ -26,3 +26,30 @@ export function getAccountLabels(language: Language): Labels {
   const values = rows[language] || en;
   return Object.fromEntries(keys.map((key, index) => [key, values[index] || en[index]])) as Labels;
 }
+
+
+export type CoreUi = Record<string,string>;
+const coreKeys = ['greeting','welcomeBack','askAnythingPlaceholder','navHome','navChat','navTools','navImage','navVideo','navHistory','navSettings','navAdmin','navInvite','navProfile','chatTitle','chatPlaceholder','send','copy','copied','quickAccess','seeAll','settingsTitle','appLanguage','logout'];
+const coreRows: Partial<Record<Language,string[]>> = {
+dari:['سلام!','به AFG AI خوش آمدید','سوال خود را بنویسید...','خانه','چت','ابزارها','تولید عکس','ساخت ویدیو','تاریخچه','تنظیمات','مدیریت','دعوت دوستان','پروفایل','دستیار هوشمند AFG AI','پرسشت را بنویس...','ارسال','کپی','کپی شد!','دسترسی سریع','مشاهده همه','تنظیمات برنامه','زبان برنامه','خروج از حساب'],
+pashto:['سلام!','AFG AI ته ښه راغلاست','خپله پوښتنه ولیکئ...','کور','خبرې','وسایل','انځور جوړول','ویډیو جوړول','تاریخچه','امستنې','مدیریت','ملګري راوبلئ','پروفایل','د AFG AI هوښیار مرستیال','پیغام ولیکئ...','لېږل','کاپي','کاپي شو!','چټک لاسرسی','ټول وګورئ','د اپ امستنې','د اپ ژبه','وتل'],
+persian:['سلام!','به AFG AI خوش آمدید','سؤال خود را بنویسید...','خانه','گفتگو','ابزارها','ساخت تصویر','ساخت ویدیو','تاریخچه','تنظیمات','مدیریت','دعوت دوستان','نمایه','دستیار هوشمند AFG AI','پیام خود را بنویسید...','ارسال','کپی','کپی شد!','دسترسی سریع','مشاهده همه','تنظیمات برنامه','زبان برنامه','خروج'],
+arabic:['مرحباً!','مرحباً بعودتك إلى AFG AI','اكتب سؤالك...','الرئيسية','المحادثة','الأدوات','إنشاء صورة','إنشاء فيديو','السجل','الإعدادات','الإدارة','دعوة الأصدقاء','الملف الشخصي','مساعد AFG AI الذكي','اكتب رسالة...','إرسال','نسخ','تم النسخ!','الوصول السريع','عرض الكل','إعدادات التطبيق','لغة التطبيق','تسجيل الخروج'],
+urdu:['السلام علیکم!','AFG AI میں خوش آمدید','اپنا سوال لکھیں...','ہوم','چیٹ','ٹولز','تصویر بنائیں','ویڈیو بنائیں','تاریخچہ','ترتیبات','ایڈمن','دوستوں کو مدعو کریں','پروفائل','AFG AI معاون','پیغام لکھیں...','بھیجیں','کاپی','کاپی ہو گیا!','فوری رسائی','سب دیکھیں','ایپ کی ترتیبات','ایپ کی زبان','لاگ آؤٹ'],
+turkish:['Merhaba!','AFG AI’ye tekrar hoş geldiniz','Bir şey sorun...','Ana sayfa','Sohbet','Araçlar','Görsel oluştur','Video oluştur','Geçmiş','Ayarlar','Yönetim','Davet et','Profil','AFG AI Asistanı','Mesaj yazın...','Gönder','Kopyala','Kopyalandı!','Hızlı erişim','Tümünü gör','Uygulama ayarları','Uygulama dili','Çıkış yap'],
+russian:['Здравствуйте!','С возвращением в AFG AI','Задайте вопрос...','Главная','Чат','Инструменты','Создать изображение','Создать видео','История','Настройки','Админ','Пригласить','Профиль','Помощник AFG AI','Введите сообщение...','Отправить','Копировать','Скопировано!','Быстрый доступ','Показать все','Настройки приложения','Язык приложения','Выйти'],
+french:['Bonjour !','Bon retour sur AFG AI','Posez une question...','Accueil','Discussion','Outils','Créer une image','Créer une vidéo','Historique','Paramètres','Admin','Inviter','Profil','Assistant AFG AI','Écrivez un message...','Envoyer','Copier','Copié !','Accès rapide','Tout voir','Paramètres de l’application','Langue de l’application','Déconnexion'],
+spanish:['¡Hola!','Te damos la bienvenida a AFG AI','Escribe tu pregunta...','Inicio','Chat','Herramientas','Crear imagen','Crear vídeo','Historial','Ajustes','Administración','Invitar','Perfil','Asistente AFG AI','Escribe un mensaje...','Enviar','Copiar','¡Copiado!','Acceso rápido','Ver todo','Ajustes de la aplicación','Idioma de la aplicación','Cerrar sesión'],
+german:['Hallo!','Willkommen zurück bei AFG AI','Stelle eine Frage...','Startseite','Chat','Werkzeuge','Bild erstellen','Video erstellen','Verlauf','Einstellungen','Admin','Einladen','Profil','AFG AI-Assistent','Nachricht eingeben...','Senden','Kopieren','Kopiert!','Schnellzugriff','Alle anzeigen','App-Einstellungen','App-Sprache','Abmelden'],
+chinese:['你好！','欢迎回到 AFG AI','请输入问题…','首页','聊天','工具','生成图片','生成视频','历史记录','设置','管理','邀请','个人资料','AFG AI 智能助手','输入消息…','发送','复制','已复制！','快速访问','查看全部','应用设置','应用语言','退出登录'],
+hindi:['नमस्ते!','AFG AI में आपका स्वागत है','अपना सवाल लिखें...','होम','चैट','टूल्स','चित्र बनाएँ','वीडियो बनाएँ','इतिहास','सेटिंग','एडमिन','आमंत्रित करें','प्रोफ़ाइल','AFG AI सहायक','संदेश लिखें...','भेजें','कॉपी','कॉपी हो गया!','त्वरित पहुँच','सभी देखें','ऐप सेटिंग','ऐप की भाषा','साइन आउट'],
+bengali:['হ্যালো!','AFG AI-তে স্বাগতম','আপনার প্রশ্ন লিখুন...','হোম','চ্যাট','টুলস','ছবি তৈরি','ভিডিও তৈরি','ইতিহাস','সেটিংস','অ্যাডমিন','আমন্ত্রণ','প্রোফাইল','AFG AI সহকারী','বার্তা লিখুন...','পাঠান','কপি','কপি হয়েছে!','দ্রুত প্রবেশ','সব দেখুন','অ্যাপ সেটিংস','অ্যাপের ভাষা','সাইন আউট'],
+indonesian:['Halo!','Selamat datang kembali di AFG AI','Tanyakan sesuatu...','Beranda','Obrolan','Alat','Buat gambar','Buat video','Riwayat','Pengaturan','Admin','Undang','Profil','Asisten AFG AI','Tulis pesan...','Kirim','Salin','Tersalin!','Akses cepat','Lihat semua','Pengaturan aplikasi','Bahasa aplikasi','Keluar'],
+portuguese:['Olá!','Bem-vindo de volta ao AFG AI','Faça uma pergunta...','Início','Chat','Ferramentas','Gerar imagem','Gerar vídeo','Histórico','Configurações','Admin','Convidar','Perfil','Assistente AFG AI','Digite uma mensagem...','Enviar','Copiar','Copiado!','Acesso rápido','Ver tudo','Configurações do app','Idioma do app','Sair'],
+japanese:['こんにちは！','AFG AIへようこそ','質問を入力してください…','ホーム','チャット','ツール','画像生成','動画生成','履歴','設定','管理','招待','プロフィール','AFG AIアシスタント','メッセージを入力…','送信','コピー','コピーしました！','クイックアクセス','すべて表示','アプリ設定','アプリの言語','ログアウト'],
+korean:['안녕하세요!','AFG AI에 다시 오신 것을 환영합니다','무엇이든 질문하세요...','홈','채팅','도구','이미지 생성','동영상 생성','기록','설정','관리자','초대','프로필','AFG AI 어시스턴트','메시지를 입력하세요...','보내기','복사','복사됨!','빠른 실행','모두 보기','앱 설정','앱 언어','로그아웃']
+};
+export function getCoreUi(language: Language): CoreUi {
+  const values = coreRows[language] || coreRows.english || [];
+  return Object.fromEntries(coreKeys.map((key,index)=>[key,values[index] || key])) as CoreUi;
+}
