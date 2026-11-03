@@ -322,7 +322,7 @@ export async function downloadGGUF(options: {
       const existing = await (await handle.getFile()).stream().getReader();
       while (true) { const item = await existing.read(); if (item.done) break; sha.update(item.value); }
     }
-    const writable = await handle.createWritable({ keepExistingData: true });
+    let writable = await handle.createWritable({ keepExistingData: true });
     activeWritable = writable;
     await writable.seek(offset);
     const emit = (status: OfflineDownloadState['status']) => options.onProgress?.({
@@ -336,8 +336,15 @@ export async function downloadGGUF(options: {
       sha.update(item.value);
       downloadedBytes += item.value.length;
       if (downloadedBytes - lastPersistedBytes >= 8 * 1024 * 1024) {
+        // OPFS writable streams commit on close. Checkpoint each 8 MiB so a browser
+        // process kill cannot discard the entire multi-gigabyte partial transfer.
+        await writable.close();
+        activeWritable = null;
         await saveTask({ id, repoId, fileName, revision, url: modelUrl, expectedBytes: totalBytes, downloadedBytes, expectedSha256, etag: currentEtag, status: 'downloading', updatedAt: Date.now() });
         lastPersistedBytes = downloadedBytes;
+        writable = await handle.createWritable({ keepExistingData: true });
+        await writable.seek(downloadedBytes);
+        activeWritable = writable;
       }
       emit('downloading');
     }
