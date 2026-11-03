@@ -37,7 +37,7 @@ public class AFGOfflineModelsPlugin extends Plugin {
         NATIVE_RUNTIME_AVAILABLE = loaded;
     }
 
-    private native boolean nativeLoadModel(String path, int contextSize, int threads);
+    private native boolean nativeLoadModel(String path, String nativeLibraryDirectory, int contextSize, int threads);
     private native String nativeGenerate(String messagesJson, int maxTokens);
     private native void nativeUnloadModel();
     private native String nativeGetLastError();
@@ -180,7 +180,7 @@ public class AFGOfflineModelsPlugin extends Plugin {
         File model = new File(path);
         if (!model.isFile() || !model.getName().toLowerCase(Locale.ROOT).endsWith(".gguf")) { call.reject("A downloaded GGUF model file is required."); return; }
         try {
-            boolean loaded = nativeLoadModel(model.getAbsolutePath(), contextSize == null ? 2048 : contextSize, threads == null ? 4 : threads);
+            boolean loaded = nativeLoadModel(model.getAbsolutePath(), getContext().getApplicationInfo().nativeLibraryDir, contextSize == null ? 2048 : contextSize, threads == null ? 4 : threads);
             if (!loaded) { call.reject(nativeGetLastError()); return; }
             JSObject result = new JSObject(); result.put("loaded", true); result.put("path", model.getAbsolutePath()); result.put("sizeBytes", model.length()); call.resolve(result);
         } catch (Exception error) { call.reject("Unable to load the local GGUF model.", error); }
