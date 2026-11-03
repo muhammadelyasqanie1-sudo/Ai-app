@@ -574,3 +574,5 @@ body:after {width:32rem;height:32rem;right:-18rem;bottom:4%;background:#5142a8}
 @media(max-width:680px){.afg-intro-stage{width:116%;height:100%;min-height:0;margin:0}.afg-intro-copy{margin-top:-.3rem}.afg-intro-footer{padding-bottom:env(safe-area-inset-bottom)}.afg-intro-glass-card{scale:.82}.afg-auth-card{border-radius:23px}}
 @media(max-height:650px){.afg-cinematic-intro{padding-block:8px}.afg-intro-copy h1{font-size:1.7rem}.afg-intro-stage{min-height:0}.afg-intro-footer{font-size:.72rem}}
 @media(prefers-reduced-motion:reduce){.afg-auth-aurora i,.afg-intro-core,.afg-intro-halo,.afg-intro-ring,.afg-intro-glass-card,.afg-intro-light-beams i,.afg-intro-particles i{animation:none!important}}
+
+.afg-chat-search-hit{outline:2px solid rgba(13,242,255,.85);outline-offset:5px;box-shadow:0 0 28px rgba(13,242,255,.18);border-radius:16px;transition:outline-color .2s ease}
