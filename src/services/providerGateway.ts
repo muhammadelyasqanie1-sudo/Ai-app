@@ -1,5 +1,6 @@
 import { cloudflareWorkersAi } from '../providers/cloudflareWorkersAi.ts';
 import { createAnthropicAdapter } from '../providers/anthropic.ts';
+import { createOllamaAdapter } from '../providers/ollama.ts';
 import { createOpenAICompatibleAdapter } from '../providers/openAiCompatible.ts';
 import { gptOssProxy } from '../providers/gptOssProxy.ts';
 import { pool } from '../api/database.ts';
@@ -22,10 +23,15 @@ export async function refreshDatabaseProviderAdapters(force = false): Promise<vo
           pk.key_encrypted,pk.status AS key_status,p.config_json
         FROM providers p
         LEFT JOIN provider_keys pk ON pk.provider_id=p.id AND pk.alias='default' AND pk.status='active'
-        WHERE p.source='custom' OR p.kind IN ('deepseek','openai','google','openrouter','anthropic')
+        WHERE p.source='custom' OR p.kind IN ('deepseek','openai','google','openrouter','anthropic','ollama')
         ORDER BY p.slug`);
     const next: ChatProviderAdapter[] = [];
     for (const row of result.rows) {
+      if (String(row.kind) === 'ollama') {
+        const localBase = process.env.OLLAMA_BASE_URL?.trim() || String(row.base_url || 'http://127.0.0.1:11434');
+        next.push(createOllamaAdapter(String(row.slug),String(row.display_name),localBase));
+        continue;
+      }
       if (!row.key_encrypted || !row.base_url) continue;
       if (!['custom','deepseek','openai','google','openrouter','anthropic'].includes(String(row.kind))) continue;
       try {
