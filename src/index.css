@@ -576,3 +576,196 @@ body:after {width:32rem;height:32rem;right:-18rem;bottom:4%;background:#5142a8}
 @media(prefers-reduced-motion:reduce){.afg-auth-aurora i,.afg-intro-core,.afg-intro-halo,.afg-intro-ring,.afg-intro-glass-card,.afg-intro-light-beams i,.afg-intro-particles i{animation:none!important}}
 
 .afg-chat-search-hit{outline:2px solid rgba(13,242,255,.85);outline-offset:5px;box-shadow:0 0 28px rgba(13,242,255,.18);border-radius:16px;transition:outline-color .2s ease}
+
+
+/* --------------------------------------------------------------------------
+   AFG AI unified theme layer — Midnight / Daylight
+   Every major surface inherits the active document theme; no component owns
+   a separate dark or light palette.
+   -------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+  --bg-main: #f7f9fc;
+  --bg-surface: #ffffff;
+  --bg-surface-subtle: #f1f5f9;
+  --bg-surface-hover: #e8eef7;
+  --border-color: rgba(15, 23, 42, .10);
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-muted: #8490a3;
+  --accent-cyan: #0066ff;
+  --accent-blue: #2563eb;
+  --accent-violet: #7c4dff;
+  --accent-glow: rgba(0, 102, 255, .16);
+  --card-shadow: 0 8px 24px rgba(15, 23, 42, .06);
+  --header-glass: rgba(255,255,255,.84);
+  --composer-surface: rgba(255,255,255,.96);
+  --user-bubble: linear-gradient(135deg,#dbeafe,#bfdbfe);
+  --user-bubble-text: #10213d;
+  --afg-radius-card: 20px;
+  --afg-radius-control: 14px;
+  --afg-motion-fast: 160ms;
+  --afg-motion-normal: 240ms;
+}
+html.dark, html.neon {
+  color-scheme: dark;
+  --bg-main: #05060a;
+  --bg-surface: #151a27;
+  --bg-surface-subtle: #101522;
+  --bg-surface-hover: #20283a;
+  --border-color: rgba(255,255,255,.075);
+  --text-primary: #f5f7fa;
+  --text-secondary: #a0a9b8;
+  --text-muted: #7f899a;
+  --accent-cyan: #0df2ff;
+  --accent-blue: #0066ff;
+  --accent-violet: #7c4dff;
+  --accent-glow: rgba(13,242,255,.22);
+  --card-shadow: 0 14px 38px rgba(0,0,0,.28);
+  --header-glass: rgba(10,13,21,.78);
+  --composer-surface: rgba(21,26,39,.96);
+  --user-bubble: linear-gradient(135deg,#0df2ff,#0066ff);
+  --user-bubble-text: #04101a;
+}
+html, body, #root {
+  min-height: 100%;
+  background: var(--bg-main) !important;
+  color: var(--text-primary);
+}
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  transition: background-color 300ms ease, color 300ms ease;
+}
+#root { min-height: 100vh; min-height: 100dvh; }
+*, *::before, *::after { box-sizing: border-box; }
+.afg-app-header {
+  background: var(--header-glass) !important;
+  color: var(--text-primary) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  transition: background-color 300ms ease, border-color 300ms ease, color 300ms ease;
+}
+.afg-app-header button { color: var(--text-secondary); }
+.afg-app-header button:hover { color: var(--text-primary); background: var(--bg-surface-hover); }
+.afg-app-header .text-transparent {
+  background-image: linear-gradient(100deg,var(--text-primary),var(--accent-cyan),var(--accent-violet)) !important;
+}
+.afg-app-header .bg-slate-800\/80,
+.afg-app-header .bg-slate-800\/60,
+.afg-app-header .bg-\[\#060b18\]\/85,
+.afg-app-header .bg-\[\#060b18\]\/90 {
+  background-color: var(--bg-surface) !important;
+}
+.afg-chat-view { color: var(--text-primary); }
+.afg-chat-view .text-white,
+.afg-chat-view h1, .afg-chat-view h2, .afg-chat-view h3 { color: var(--text-primary); }
+.afg-chat-view .text-slate-300 { color: var(--text-secondary); }
+.afg-chat-view .text-slate-400 { color: var(--text-muted); }
+.afg-chat-statusbar {
+  background: color-mix(in srgb, var(--bg-main) 88%, transparent) !important;
+  border-color: var(--border-color) !important;
+}
+.afg-chat-welcome-title { color: var(--text-primary) !important; }
+.afg-chat-welcome > div > p { color: var(--text-secondary) !important; }
+.afg-prompt-card {
+  background: color-mix(in srgb, var(--bg-surface) 88%, transparent) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: var(--card-shadow);
+  transition: transform 200ms ease, border-color 200ms ease, box-shadow 200ms ease, background-color 200ms ease;
+}
+.afg-prompt-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent-cyan) 55%, var(--border-color)) !important;
+  box-shadow: 0 10px 28px var(--accent-glow);
+  background: color-mix(in srgb, var(--bg-surface-hover) 82%, transparent) !important;
+}
+.afg-prompt-card .text-slate-400 { color: var(--text-secondary) !important; }
+.afg-prompt-card .text-cyan-400 { color: var(--accent-cyan) !important; }
+.afg-prompt-card span:first-child { color: var(--text-primary); }
+.afg-chat-view .bg-slate-900\/70,
+.afg-chat-view .bg-\[\#08112b\]\/90,
+.afg-chat-view .bg-\[\#091126\]\/95 {
+  background-color: var(--bg-surface) !important;
+}
+.afg-chat-view .border-cyan-900\/50,
+.afg-chat-view .border-cyan-900\/30 { border-color: var(--border-color) !important; }
+.afg-chat-view .text-cyan-300,
+.afg-chat-view .text-cyan-200 { color: var(--accent-cyan) !important; }
+.afg-chat-view .text-slate-100 { color: var(--text-primary) !important; }
+.afg-chat-view [data-afg-message] { color: var(--text-primary); }
+.afg-chat-view [data-afg-message] .bg-cyan-500,
+.afg-chat-view [data-afg-message] .bg-blue-600 {
+  background: var(--user-bubble) !important;
+  color: var(--user-bubble-text) !important;
+}
+.afg-chat-view [data-afg-message] .bg-slate-900,
+.afg-chat-view [data-afg-message] .bg-slate-800 {
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+}
+/* Compact model chip and spacious floating composer */
+.afg-chat-view select[aria-label*="model" i],
+.afg-chat-view select[aria-label*="مدل"] {
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--bg-surface-subtle) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+  font-size: 11px;
+}
+.afg-chat-view textarea {
+  min-height: 48px;
+  max-height: 220px;
+  line-height: 1.55;
+  color: var(--text-primary) !important;
+  background: transparent !important;
+}
+.afg-chat-view textarea::placeholder { color: var(--text-muted) !important; }
+.afg-chat-view .rounded-2xl:has(> textarea),
+.afg-chat-view form:has(> textarea) {
+  border-radius: 24px;
+  background: var(--composer-surface);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 12px 34px rgba(0,0,0,.10);
+  padding: 12px;
+}
+.afg-chat-view button:disabled { opacity: .45; cursor: not-allowed; }
+.afg-chat-view .gradient-btn-cyan,
+.afg-chat-view button[type="submit"]:not(:disabled) {
+  transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+.afg-chat-view button[type="submit"]:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 0 22px var(--accent-glow); }
+.afg-home-view, .afg-settings-view, .afg-history-view { color: var(--text-primary); }
+.afg-home-view .afg-home-hero {
+  background: radial-gradient(ellipse at 80% 0%, color-mix(in srgb,var(--accent-violet) 15%,transparent),transparent 45%),
+              radial-gradient(ellipse at 10% 100%, color-mix(in srgb,var(--accent-cyan) 12%,transparent),transparent 45%),
+              var(--bg-surface) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: var(--card-shadow) !important;
+}
+.afg-home-view .text-white { color: var(--text-primary) !important; }
+.afg-home-view .text-cyan-300 { color: var(--accent-cyan) !important; }
+.afg-home-view .text-slate-400 { color: var(--text-secondary) !important; }
+.afg-tool-card, .afg-settings-section, .afg-message-card, .afg-dialog {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+  box-shadow: var(--card-shadow);
+}
+@media (max-width: 640px) {
+  .afg-chat-view { height: calc(100dvh - 4.25rem) !important; }
+  .afg-chat-view .afg-chat-welcome { min-height: 52vh; padding: 12px 4px; }
+  .afg-chat-view .afg-prompt-card { width: 100%; min-height: 76px; padding: 14px; }
+  .afg-chat-view form:has(> textarea),
+  .afg-chat-view .rounded-2xl:has(> textarea) {
+    padding: 10px;
+    margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
