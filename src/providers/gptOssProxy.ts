@@ -12,6 +12,7 @@ function config() {
   return {
     baseUrl: (process.env.GPTOSS_BASE_URL?.trim() || '').replace(/\\/+$/, ''),
     apiKey: process.env.GPTOSS_API_KEY?.trim() || '',
+    providerId: process.env.GPTOSS_PROVIDER_ID?.trim() || 'gpt-oss-proxy',
     displayName: process.env.GPTOSS_DISPLAY_NAME?.trim() || 'GPT-OSS Proxy',
   };
 }
@@ -25,8 +26,8 @@ function validBaseUrl(value: string): boolean {
 }
 
 export const gptOssProxy: ChatProviderAdapter = {
-  id: 'gpt-oss-proxy',
-  key: 'gpt-oss-proxy',
+  get id() { return config().providerId; },
+  get key() { return config().providerId; },
   get displayName() { return config().displayName; },
 
   async validateConfig(): Promise<ConfigStatus> {
