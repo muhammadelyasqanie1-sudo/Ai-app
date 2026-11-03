@@ -13,7 +13,8 @@ function safeBaseUrl(value:string): boolean {
   catch { return false; }
 }
 export function createAnthropicAdapter(options:AnthropicAdapterOptions):ChatProviderAdapter {
-  const baseUrl=options.baseUrl.replace(/\/+$/,'');
+  // Accept either the API origin or a URL already ending in /v1; the adapter appends /v1 itself.
+  const baseUrl=options.baseUrl.replace(/\/+$/,'').replace(/\/v1$/i,'');
   const headers={'x-api-key':options.apiKey,'anthropic-version':ANTHROPIC_VERSION,'content-type':'application/json'};
   const toMessages=(messages:ChatRequest['messages'])=>({
     system:messages.filter(m=>m.role==='system').map(m=>m.content).join('\n\n') || undefined,
