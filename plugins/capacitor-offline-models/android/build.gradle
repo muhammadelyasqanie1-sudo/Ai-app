@@ -3,6 +3,7 @@ apply plugin: 'com.android.library'
 android {
     namespace "com.afgai.offlinemodels"
     compileSdk rootProject.ext.compileSdkVersion
+    ndkVersion '29.0.13113456'
     defaultConfig {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
