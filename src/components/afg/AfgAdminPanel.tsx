@@ -76,6 +76,14 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [errorRows,setErrorRows] = useState<any[]>([]);
   const [sessions,setSessions] = useState<any[]>([]);
   const [systemConfig,setSystemConfig] = useState<any[]>([]);
+  const [usageFrom,setUsageFrom] = useState('');
+  const [usageTo,setUsageTo] = useState('');
+  const [usageProvider,setUsageProvider] = useState('');
+  const [usageModel,setUsageModel] = useState('');
+  const [errorFrom,setErrorFrom] = useState('');
+  const [errorTo,setErrorTo] = useState('');
+  const [errorClass,setErrorClass] = useState('');
+  const [errorModel,setErrorModel] = useState('');
   const [announcements,setAnnouncements] = useState<any[]>([]);
   const [configKey,setConfigKey] = useState('daily_cost_threshold_usd');
   const [configValue,setConfigValue] = useState('25');
@@ -218,6 +226,24 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     catch(err){setError(err instanceof Error?err.message:'Model deletion failed.');}
   };
 
+  const loadUsage=async()=>{
+    const params=new URLSearchParams();
+    if(usageFrom)params.set('from',new Date(usageFrom).toISOString());
+    if(usageTo)params.set('to',new Date(usageTo).toISOString());
+    if(usageProvider)params.set('provider',usageProvider);
+    if(usageModel)params.set('model',usageModel);
+    try{const result=await api('/api/admin/usage'+(params.size?'?'+params.toString():''));setUsageRecords(result.records||[]);setUsageSummary(result.summary||null);}
+    catch(err){setError(err instanceof Error?err.message:'Usage data could not be loaded.');}
+  };
+  const loadErrors=async()=>{
+    const params=new URLSearchParams();
+    if(errorFrom)params.set('from',new Date(errorFrom).toISOString());
+    if(errorTo)params.set('to',new Date(errorTo).toISOString());
+    if(errorClass)params.set('class',errorClass);
+    if(errorModel)params.set('model',errorModel);
+    try{const result=await api('/api/admin/errors'+(params.size?'?'+params.toString():''));setErrorRows(result.errors||[]);}
+    catch(err){setError(err instanceof Error?err.message:'Error records could not be loaded.');}
+  };
   const openUserProfile=async(user:UserRow)=>{
     try{const result=await api('/api/admin/users/'+encodeURIComponent(user.id));setSelectedUser(result.user||null);}
     catch(err){setError(err instanceof Error?err.message:'Could not load user profile.');}
@@ -405,7 +431,42 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       <div className={panel}><h2 className="font-bold text-white">Default routing / fallback order</h2><p className="my-2 text-xs text-slate-500">One providerId::modelId per line. First healthy eligible model is preferred.</p><select className={field+' mb-3'} value={fallbackCapability} onChange={e=>setFallbackCapability(e.target.value)}>{['text','vision','imageGen','tts','stt'].map(x=><option key={x}>{x}</option>)}</select><textarea className={field+' font-mono'} rows={5} value={fallbackText} onChange={e=>setFallbackText(e.target.value)}/><button className={primary+' mt-3 flex items-center gap-2'} onClick={()=>void saveFallback()}><Save className="h-4 w-4"/>Save routing order</button></div>
     </div>}
 
-    {tab==='usage'&&<div className="space-y-4"><div className={panel}><h2 className="mb-3 text-lg font-bold text-white">Usage and request errors</h2><div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><div className="rounded-xl bg-slate-900 p-3"><p className="text-xs text-slate-500">Requests 24h</p><b className="text-xl text-white">{fmt(overview?.requests?.total)}</b></div><div className="rounded-xl bg-slate-900 p-3"><p className="text-xs text-slate-500">Success</p><b className="text-xl text-emerald-300">{fmt(overview?.requests?.successful)}</b></div><div className="rounded-xl bg-slate-900 p-3"><p className="text-xs text-slate-500">4xx</p><b className="text-xl text-amber-300">{fmt(overview?.requests?.client_errors)}</b></div><div className="rounded-xl bg-slate-900 p-3"><p className="text-xs text-slate-500">5xx</p><b className="text-xl text-red-300">{fmt(overview?.requests?.server_errors)}</b></div></div></div><div className={panel}><h3 className="mb-3 font-bold text-white">Recent requests · Request IDs</h3><RequestTable rows={requests} language={language}/></div></div>}
+    {tab==='usage'&&<div className="space-y-4">
+      <div className={panel}><h2 className="mb-3 text-lg font-bold text-white">AI usage records</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="rounded-xl bg-slate-900 p-3"><p className="text-xs text-slate-500">Requests</p><b className="text-xl text-white">{fmt(usageSummary?.requests)}</b></div>
+          <div className="rounded-xl bg-slate-900 p-3"><p className="text-xs text-slate-500">Input tokens</p><b className="text-xl text-white">{fmt(usageSummary?.input_tokens)}</b></div>
+          <div className="rounded-xl bg-slate-900 p-3"><p className="text-xs text-slate-500">Output tokens</p><b className="text-xl text-white">{fmt(usageSummary?.output_tokens)}</b></div>
+          <div className="rounded-xl bg-slate-900 p-3"><p className="text-xs text-slate-500">Cost · USD</p><b className="text-xl text-white">${Number(usageSummary?.cost_usd||0).toFixed(4)}</b></div>
+          <div className="rounded-xl bg-slate-900 p-3"><p className="text-xs text-slate-500">Avg latency</p><b className="text-xl text-white">{fmt(usageSummary?.avg_latency_ms)} ms</b></div>
+        </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <input className={field} type="datetime-local" value={usageFrom} onChange={e=>setUsageFrom(e.target.value)}/>
+          <input className={field} type="datetime-local" value={usageTo} onChange={e=>setUsageTo(e.target.value)}/>
+          <select className={field} value={usageProvider} onChange={e=>setUsageProvider(e.target.value)}><option value="">All providers</option>{providers.map(p=><option key={p.id} value={p.id}>{p.displayName}</option>)}</select>
+          <input className={field} value={usageModel} onChange={e=>setUsageModel(e.target.value)} placeholder="Exact model ID"/>
+        </div>
+        <button className={primary+' mt-3'} onClick={()=>void loadUsage()}>Apply usage filters</button>
+      </div>
+      <div className={panel}><h3 className="mb-3 font-bold text-white">Usage detail</h3><div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-xs"><thead className="text-slate-500"><tr>{['Time','User','Provider','Model','Input','Output','Cost','Latency','Status'].map(x=><th key={x} className="border-b border-slate-800 p-3">{x}</th>)}</tr></thead><tbody>{usageRecords.map((row:any)=><tr key={row.id} className="border-b border-slate-900 text-slate-300"><td className="p-3">{date(row.created_at)}</td><td className="p-3">{row.user_id||'Guest'}</td><td className="p-3">{row.provider_key||'—'}</td><td className="p-3 font-mono">{row.model_key||row.model_id||'—'}</td><td className="p-3">{fmt(row.tokens_in)}</td><td className="p-3">{fmt(row.tokens_out)}</td><td className="p-3">${Number(row.cost_usd||0).toFixed(5)}</td><td className="p-3">{fmt(row.latency_ms)} ms</td><td className="p-3">{row.status}</td></tr>)}</tbody></table>{!usageRecords.length&&<p className="py-6 text-center text-xs text-slate-500">No usage records match these filters.</p>}</div></div>
+    </div>}
+
+    {tab==='errors'&&<div className="space-y-4"><div className={panel}>
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">Error monitoring</h2><p className="text-xs text-slate-500">Redacted messages, request IDs and safe metadata only.</p></div><button className={secondary} onClick={exportErrors}>Export CSV</button></div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <input className={field} type="datetime-local" value={errorFrom} onChange={e=>setErrorFrom(e.target.value)}/>
+        <input className={field} type="datetime-local" value={errorTo} onChange={e=>setErrorTo(e.target.value)}/>
+        <select className={field} value={errorClass} onChange={e=>setErrorClass(e.target.value)}><option value="">All error classes</option>{['network','auth','rate_limit','provider_5xx','invalid_request','content_policy','timeout','unavailable','unknown'].map(x=><option key={x}>{x}</option>)}</select>
+        <input className={field} value={errorModel} onChange={e=>setErrorModel(e.target.value)} placeholder="Model ID"/>
+      </div><button className={primary+' mt-3'} onClick={()=>void loadErrors()}>Apply error filters</button>
+      </div>
+      <div className={panel}><div className="space-y-2">{errorRows.map((row:any)=><div key={row.id} className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2"><b className="text-xs text-rose-300">{row.error_class} · {row.error_code}</b><span className="text-[10px] text-slate-500">{date(row.created_at)}</span></div>
+        <p className="mt-1 break-all font-mono text-[10px] text-cyan-200">Request: {row.request_id}</p>
+        <p className="mt-2 text-xs text-slate-300">{row.message_redacted}</p>
+        <p className="mt-1 text-[10px] text-slate-500">{row.provider_key||'—'} · {row.model_id||'—'} · {row.user_id||'Guest'}</p>
+      </div>)}{!errorRows.length&&<p className="py-6 text-center text-xs text-slate-500">No error records match these filters.</p>}</div></div>
+    </div>}
 
     {tab==='limits'&&<div className="space-y-4"><div className={panel}><h2 className="mb-3 text-lg font-bold text-white">Rate-limit policy</h2><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><select className={field} value={rateScope} onChange={e=>setRateScope(e.target.value)}><option value="user">Per user</option><option value="tier">Per tier</option><option value="model">Per model</option></select><input className={field} value={rateKey} onChange={e=>setRateKey(e.target.value)} placeholder="User ID / role (user/admin) / model ID"/><input className={field} type="number" min="1" value={rateRequests} onChange={e=>setRateRequests(e.target.value)} placeholder="Requests"/><input className={field} type="number" min="1" value={rateWindow} onChange={e=>setRateWindow(e.target.value)} placeholder="Window seconds"/></div><button className={primary+' mt-3'} onClick={()=>void saveRate()}>Save policy</button><p className="mt-2 text-xs text-slate-500">User and role-based limits are enforced by the API gateway. Model limits are enforced when the client sends its selected model header.</p></div><div className={panel}><h3 className="mb-3 font-bold text-white">Configured policies</h3><div className="overflow-x-auto"><table className="w-full min-w-[550px] text-left text-xs"><thead className="text-slate-500"><tr>{['Scope','Key','Limit','Window','Status'].map(x=><th key={x} className="border-b border-slate-800 p-3">{x}</th>)}</tr></thead><tbody>{policies.map(p=><tr key={p.id} className="border-b border-slate-900 text-slate-300"><td className="p-3">{p.scope_type}</td><td className="p-3">{p.scope_key}</td><td className="p-3">{p.requests} requests</td><td className="p-3">{p.window_seconds}s</td><td className="p-3">{p.enabled?'Enabled':'Disabled'}</td></tr>)}</tbody></table></div></div></div>}
 
