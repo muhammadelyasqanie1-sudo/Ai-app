@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Menu, 
   Bell, 
@@ -8,7 +8,8 @@ import {
   Crown,
   Sparkles,
   CheckCircle2,
-  Plus
+  Plus,
+  MoreVertical
 } from 'lucide-react';
 import { AfgBrainLogo } from './AfgBrainLogo';
 import type { Language, Theme, UserProfile } from '../../types/afg';
@@ -23,6 +24,7 @@ interface AfgHeaderProps {
   onOpenSettings: () => void;
   onOpenMenu: () => void;
   onNewChat: () => void;
+  onOpenModels?: () => void;
   unreadNotifications?: number;
 }
 
@@ -35,9 +37,11 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
   onOpenSettings,
   onOpenMenu,
   onNewChat,
+  onOpenModels,
   unreadNotifications = 0,
 }) => {
   const t = translations[language];
+  const [modelsMenuOpen, setModelsMenuOpen] = useState(false);
 
   return (
     <header className="afg-app-header sticky top-0 z-40 w-full backdrop-blur-xl bg-[#060b18]/85 dark:bg-[#060b18]/90 light:bg-white/90 border-b border-cyan-900/30 transition-colors">
@@ -104,6 +108,7 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
             )}
           </button>
 
+          <div className="relative"><button type="button" onClick={() => setModelsMenuOpen(value => !value)} aria-label={language === 'dari' ? 'گزینه‌های بیشتر' : 'More options'} aria-expanded={modelsMenuOpen} className="rounded-xl border border-slate-700/40 bg-slate-800/60 p-2 text-slate-300 transition hover:bg-slate-700/70 hover:text-white"><MoreVertical className="h-4 w-4" /></button>{modelsMenuOpen && <div className="absolute end-0 top-12 z-50 min-w-40 rounded-xl border border-cyan-900/40 bg-[#081326] p-1 shadow-2xl"><button type="button" onClick={() => { setModelsMenuOpen(false); onOpenModels?.(); }} className="w-full rounded-lg px-3 py-2.5 text-start text-sm font-semibold text-cyan-100 hover:bg-cyan-500/15">{language === 'dari' ? 'مدل‌ها' : 'Models'}</button></div>}</div>
 
         </div>
 
