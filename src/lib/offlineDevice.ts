@@ -1,3 +1,6 @@
+import { Capacitor } from '@capacitor/core';
+import { AFGDeviceInfo } from '@afg-ai/capacitor-device-info';
+
 export type OfflineDeviceProfile = {
   platform: 'android' | 'ios' | 'desktop' | 'unknown';
   browser: string;
