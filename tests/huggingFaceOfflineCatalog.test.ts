@@ -67,6 +67,7 @@ describe('Hugging Face offline catalog', () => {
     expect(formatModelCategory(['creative-writing'], null)).toContain('creative');
     expect(formatModelCategory([], null)).toEqual(['general']);
     expect(formatModelCategory(['science', 'physics'], null)).toContain('science');
+    expect(formatModelCategory(['science', 'physics'], null)).not.toContain('learning');
     expect(formatModelCategory(['english', 'grammar'], null)).toContain('english');
     expect(formatModelCategory(['robotics'], null)).toContain('robotics');
     expect(formatModelCategory(['mathematics'], null)).toContain('mathematics');
