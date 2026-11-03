@@ -46,11 +46,11 @@ ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS last_health_ok boolean;
 INSERT INTO providers(kind,display_name,enabled,slug,base_url,config_json,source)
 VALUES
  ('cloudflare','Cloudflare Workers AI',false,'cloudflare',NULL,'{"transport":"workers-ai-binding","requires_key":false}'::jsonb,'system'),
- ('deepseek','DeepSeek',false,'deepseek','https://api.deepseek.com/v1','{"protocol":"openai-compatible","requires_key":true}'::jsonb,'system'),
- ('openai','OpenAI',false,'openai','https://api.openai.com/v1','{"protocol":"openai-compatible","requires_key":true}'::jsonb,'system'),
+ ('openai_compat','DeepSeek',false,'deepseek','https://api.deepseek.com/v1','{"protocol":"openai-compatible","requires_key":true}'::jsonb,'system'),
+ ('openai_compat','OpenAI',false,'openai','https://api.openai.com/v1','{"protocol":"openai-compatible","requires_key":true}'::jsonb,'system'),
  ('anthropic','Anthropic',false,'anthropic','https://api.anthropic.com','{"protocol":"anthropic-messages","requires_key":true}'::jsonb,'system'),
- ('google','Google Gemini',false,'google','https://generativelanguage.googleapis.com/v1beta/openai','{"protocol":"openai-compatible","requires_key":true}'::jsonb,'system'),
- ('openrouter','OpenRouter',false,'openrouter','https://openrouter.ai/api/v1','{"protocol":"openai-compatible","requires_key":true}'::jsonb,'system'),
+ ('openai_compat','Google Gemini',false,'google','https://generativelanguage.googleapis.com/v1beta/openai','{"protocol":"openai-compatible","requires_key":true}'::jsonb,'system'),
+ ('openai_compat','OpenRouter',false,'openrouter','https://openrouter.ai/api/v1','{"protocol":"openai-compatible","requires_key":true}'::jsonb,'system'),
  ('ollama','Ollama (Local)',false,'ollama','http://127.0.0.1:11434','{"protocol":"ollama","requires_key":false,"deployment":"desktop-only"}'::jsonb,'system')
 ON CONFLICT(slug) DO UPDATE SET
  display_name=EXCLUDED.display_name,base_url=EXCLUDED.base_url,
