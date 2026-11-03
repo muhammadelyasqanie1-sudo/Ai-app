@@ -1,0 +1,14 @@
+apply plugin: 'com.android.library'
+
+android {
+    namespace "com.afgai.offlinemodels"
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+    }
+}
+
+dependencies {
+    implementation project(':capacitor-android')
+}
