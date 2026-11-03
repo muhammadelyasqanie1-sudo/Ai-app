@@ -41,7 +41,8 @@ export async function refreshDatabaseProviderAdapters(force = false): Promise<vo
         if (!['https:','http:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.hash ||
             (parsed.protocol === 'https:' && (isIP(parsed.hostname)||parsed.hostname==='localhost'||parsed.hostname.endsWith('.local')||parsed.hostname.endsWith('.internal')))||
             (parsed.protocol === 'http:' && (process.env.NODE_ENV==='production'||!['localhost','127.0.0.1'].includes(parsed.hostname)))) continue;
-        if (String(row.kind) === 'anthropic') {
+        const providerConfig=(row.config_json&&typeof row.config_json==='object')?row.config_json as Record<string,unknown>:{};
+        if (String(row.kind) === 'anthropic' || providerConfig.protocol === 'anthropic-messages') {
           next.push(createAnthropicAdapter({id:String(row.slug),displayName:String(row.display_name),baseUrl,apiKey}));
         } else {
           next.push(createOpenAICompatibleAdapter({
