@@ -135,10 +135,10 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
   ];
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-4 sm:py-8 space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+    <div className="afg-home-view w-full max-w-6xl mx-auto px-4 py-4 sm:py-8 space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       
       {/* Hero Welcome Card with Afghan Landmark Illustration Backdrop (Screenshot 2 & 3) */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0c1838] via-[#08122c] to-[#040817] border border-cyan-500/30 p-5 sm:p-8 shadow-[0_15px_40px_rgba(0,0,0,0.6),0_0_25px_rgba(0,229,255,0.15)]">
+      <div className="afg-home-hero relative overflow-hidden rounded-3xl border p-5 sm:p-8">
         
         {/* Background Afghan Mountains & Citadel SVG Graphic */}
         <div className="absolute inset-0 opacity-20 pointer-events-none mix-blend-screen overflow-hidden">
