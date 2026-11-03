@@ -161,3 +161,45 @@
 ### Next action
 
 - Review the remaining admin routes for authorization and data-exposure issues; then continue with backend reliability and model routing gaps.
+
+
+## Milestone 6 — Genuine database-connectivity success signal
+
+**Status:** IMPLEMENTED BUT NOT VERIFIED
+
+### Completed
+
+- The database health check emits `SUCCESS SUPABASE_DATABASE_CONNECTED` only after the configured PostgreSQL pool successfully executes `SELECT 1`.
+- The success signal is emitted once per server process, not merely because `DATABASE_URL` exists.
+- Failed health checks continue to return a generic connection failure and do not emit the success signal.
+
+### Files changed
+
+- `src/api/database.ts`
+
+### Verification
+
+- Source-level review confirms the success log is after the awaited database query.
+- No live Supabase connection is available to this editing session, so no actual connection was established or claimed.
+
+## Milestone 7 — Remove stale implicit Gemini environment guidance
+
+**Status:** IMPLEMENTED BUT NOT VERIFIED
+
+### Completed
+
+- Removed the obsolete `GEMINI_API_KEY` example and misleading comments that described Gemini as an automatically selected provider.
+- The environment example now states that no cloud provider is selected implicitly and that an OpenAI-compatible provider must be configured explicitly.
+
+### Files changed
+
+- `.env.example`
+
+### Verification
+
+- Source-level review confirms the stale environment block is absent.
+- No provider credentials were added or exposed. No provider connectivity test was run.
+
+### Next action
+
+- Inspect and strengthen the next highest-priority backend reliability issue, then update the platform verification evidence and continue toward model routing/offline runtime gaps.
