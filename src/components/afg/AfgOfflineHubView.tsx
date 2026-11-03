@@ -148,6 +148,12 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
     if (busy || runtime !== 'ready') return;
     const target = models.find(item => item.model_id === modelId);
     const fit = target && device ? assessOfflineModelFit(target.vram_required_MB || 0, device) : 'limited';
+    const targetRepo = target ? getHuggingFaceRepo(target) : null;
+    const estimatedDownloadBytes = targetRepo ? modelSizes[targetRepo] : null;
+    const availableStorage = typeof storage.quota === 'number' ? Math.max(0, storage.quota - (storage.usage || 0)) : null;
+    if (isDownload && estimatedDownloadBytes && availableStorage !== null && estimatedDownloadBytes > availableStorage * 0.85) {
+      setRuntimeMessage(dari ? 'فضای ذخیره‌سازی کافی نیست؛ فضای خالی بیشتری ایجاد کن.' : 'Not enough estimated browser storage. Free up space before downloading.'); return;
+    }
     if (fit === 'incompatible') { setRuntimeMessage(dari ? 'این مدل با قابلیت‌های شناسایی‌شده دستگاه سازگار نیست.' : 'This model is incompatible with the detected device capabilities.'); return; }
     setBusy(true); setProgress(0); setProgressText(isDownload ? copy.downloading : copy.loading);
     try {
@@ -175,7 +181,7 @@ export function AfgOfflineHubView({ language }: { language: Language }) {
     } catch (error) {
       setRuntimeMessage(error instanceof Error ? error.message : copy.failed);
     } finally { setBusy(false); setProgress(0); setProgressText(''); }
-  }, [busy, runtime, copy, dari, models, device]);
+  }, [busy, runtime, copy, dari, models, device, modelSizes, storage]);
 
   const sendMessage = async () => {
     const text = prompt.trim();
