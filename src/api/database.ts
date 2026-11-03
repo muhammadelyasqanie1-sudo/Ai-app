@@ -1,12 +1,19 @@
 import { Pool } from 'pg';
 
+export function shouldUseDatabaseTls(connectionString?: string, sslMode?: string): boolean {
+  const mode = sslMode?.trim().toLowerCase();
+  if (mode === 'require') return true;
+  if (mode) return false;
+  try {
+    const hostname = connectionString ? new URL(connectionString).hostname.toLowerCase() : '';
+    return /(^|\.)supabase\.(co|com)$/.test(hostname);
+  } catch {
+    return false;
+  }
+}
+
 const connectionString = process.env.DATABASE_URL?.trim();
-const sslMode = process.env.DATABASE_SSL?.trim().toLowerCase();
-let databaseHostname = '';
-try { databaseHostname = connectionString ? new URL(connectionString).hostname.toLowerCase() : ''; } catch { /* pg reports malformed connection strings through the health check. */ }
-const isSupabasePostgres = /(^|\.)supabase\.(co|com)$/.test(databaseHostname);
-// Supabase Postgres requires TLS. Local and non-Supabase connections remain configurable.
-const useDatabaseTls = sslMode === 'require' || (!sslMode && isSupabasePostgres);
+const useDatabaseTls = shouldUseDatabaseTls(connectionString, process.env.DATABASE_SSL);
 
 export const databaseConfigured = Boolean(connectionString);
 
