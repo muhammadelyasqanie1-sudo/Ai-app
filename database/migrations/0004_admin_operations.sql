@@ -1,4 +1,5 @@
 -- AFG AI admin roles, operational telemetry, and announcement storage.
+ALTER TABLE model_catalog ADD COLUMN IF NOT EXISTS health_checked_at timestamptz;
 INSERT INTO roles(name,permissions_json) VALUES
  ('superadmin','{"*":true,"provider_keys:manage":true,"users:delete":true}'::jsonb)
 ON CONFLICT(name) DO UPDATE SET permissions_json=EXCLUDED.permissions_json;
