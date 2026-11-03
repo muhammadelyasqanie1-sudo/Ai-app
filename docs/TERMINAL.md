@@ -1,49 +1,68 @@
-# AFG AI Terminal — Phase 1
+# AFG AI Terminal
 
-## Status
+## Current experience
 
-The API provides authenticated, owner-scoped Terminal sessions, scoped CLI tokens, a read-only native command surface and append-only command audit records. Shell execution is **disabled**. No shell, PTY, container, worker isolate or arbitrary process is started by the application.
+The main AFG AI app includes a responsive Terminal workspace that is available from the side navigation and from a floating launcher on every app screen after entering the app. Press **Ctrl+Shift+T** (or **Cmd+Shift+T** on macOS) to open it.
 
-## Available commands
+The terminal has:
+- A local virtual workspace rooted at /home/user.
+- File and directory commands, command history, search, keyboard history navigation and command completion.
+- Local text-file upload and download.
+- Multiple authenticated server sessions and an optional scoped CLI-token panel.
+- Account-scoped AFG commands that read the user's own model catalog, conversations and file metadata.
+- A bilingual Dari/English interface.
 
-Commands are sent to `POST /api/terminal/sessions/:id/commands` and are parsed server-side. The Phase 1 allowlist is intentionally limited to:
+## Local workspace commands
 
-- `afg help`
-- `afg version`
-- `afg models list`
-- `afg conv list` (only the signed-in user's conversations)
-- `afg files list` (only the signed-in user's file metadata)
+The browser-only workspace supports:
 
-All other commands are rejected. In particular, `afg term`, shell syntax, pipes, redirects and arbitrary binaries are not supported. No command runs on the application host.
+- Navigation: **pwd**, **ls**, **cd**, **tree**
+- Files: **mkdir**, **touch**, **cat**, **write**, **echo**, **rm**, **cp**, **mv**
+- Search and inspection: **find**, **grep**, **wc**, **head**, **tail**, **stat**
+- Utility: **download**, **whoami**, **hostname**, **uname**, **date**, **history**, **clear**, **version**, **help**
+- Redirection: **echo "text" > file.txt** and **echo "more" >> file.txt**
+
+The workspace is isolated to /home/user. It does not read or modify the web host filesystem. Files are stored in the current browser's local storage under the active account ID; they are not uploaded or synchronized to the server. The local workspace is also available in guest mode.
+
+## Account commands
+
+The following commands require an authenticated browser session and the Terminal API:
+
+- **afg help**
+- **afg version**
+- **afg status**
+- **afg account**
+- **afg models list**
+- **afg conv list**
+- **afg files list**
+
+Conversation and file results are restricted to the authenticated user. Server-side command submissions are written to the user's append-only terminal audit history.
+
+## What is intentionally disabled
+
+This release is a virtual workspace, **not a general-purpose Linux shell**. Commands such as **bash**, **sh**, **sudo**, **python**, **node**, **npm**, **git**, **curl**, **wget**, **ssh**, **apt**, and arbitrary executable files are not run. Pipes, command substitution and command chaining are rejected.
+
+Do not set **TERMINAL_EXEC_ENABLED=true**. That environment variable does not enable execution. There is no production-grade isolated code runner attached yet. Enabling real Bash/Python/Node execution requires a separately deployed sandbox with per-user isolation, no access to application secrets or production databases, restricted network access, CPU/memory/process/disk quotas, hard timeouts, output limits, and audited lifecycle controls. The production API process must never execute user-supplied shell commands directly.
 
 ## CLI token management
 
-A signed-in browser session can create a token with `POST /api/terminal/tokens` using a CSRF token and JSON body:
+A signed-in browser session can create a token with POST /api/terminal/tokens using a CSRF token and JSON body:
 
-```json
+~~~json
 {"name":"My laptop","scopes":["terminal.read"],"ttlDays":30}
-```
+~~~
 
-The raw `afg_cli_` token is returned once. Store it securely; the database stores only its SHA-256 hash. List with `GET /api/terminal/tokens`; revoke with `DELETE /api/terminal/tokens/:id`. Token creation/list/revocation is browser-session-only. CLI tokens cannot mint or revoke other tokens.
+The raw afg_cli_ token is returned once. Store it securely; the database stores only its SHA-256 hash. List with GET /api/terminal/tokens; revoke with DELETE /api/terminal/tokens/:id. Token creation/list/revocation is browser-session-only. CLI tokens cannot mint or revoke other tokens.
 
-The only currently grantable scope is `terminal.read`. Admin scopes and `terminal.exec` are not granted by this endpoint.
+The only grantable scope is terminal.read. Admin scopes and terminal.exec are not granted by this endpoint.
 
-## Sessions and audit
+## Sessions, rate limits and migrations
 
-- `POST /api/terminal/sessions` creates a web session (or a CLI session when authenticated by a CLI token and `surface=cli`).
-- `GET /api/terminal/sessions` lists only the caller's sessions.
-- `DELETE /api/terminal/sessions/:id` revokes an owned session.
-- `GET /api/terminal/sessions/:id/history` returns the caller's audit history.
-- Every submitted command is written to `terminal_audit` with request ID, exit code and duration.
+- POST /api/terminal/sessions creates a web session (or a CLI session when authenticated by a CLI token and surface=cli).
+- GET /api/terminal/sessions lists only the caller's sessions.
+- DELETE /api/terminal/sessions/:id revokes an owned session.
+- GET /api/terminal/sessions/:id/history returns the caller's audit history.
+- Each submitted account command is recorded with request ID, exit code and duration.
+- CLI requests use the per-token hourly request bucket.
 
-Migrations: `database/migrations/0004_terminal_foundation.sql`, `0005_cli_token_rate_limits.sql`, and `0006_terminal_audit_output.sql`. Apply migrations only after a database backup and an explicit operator decision.
-
-## Configuration and disabled execution
-
-`TERMINAL_EXEC_ENABLED` defaults to `false`. Setting it to true does **not** enable execution in this release: a production-grade isolated sandbox adapter has not yet been implemented or configured. Do not enable it. The app deliberately rejects shell execution until a sandbox backend, resource limits, filesystem isolation, network denial, allowlist enforcement and admin control are implemented and reviewed.
-
-`CLI_TOKEN_TTL_DAYS` controls the default token lifetime (maximum 90 days). `CLI_RATE_LIMIT_PER_HOUR` is reserved for the per-token hourly limiter; the dedicated limiter is not yet wired, so rely only on the existing global/IP/user rate limits for now.
-
-## Remaining Phase 1 work
-
-A Node.js companion CLI now exists at `apps/cli` and supports `login`, `logout`, `whoami`, `models list`, `conv list`, and `files list`. Run it with `node apps/cli/src/index.mjs --help` (or `npm run cli -- --help` from the repository root). Supported commands: `afg login --url https://your-host`, `afg logout`, `afg whoami`, `afg models list`, `afg conv list`, `afg files list`, `afg version`, `afg help`. `login` accepts a scoped token through hidden interactive input and stores it in `~/.afg/config.toml` with mode 0600. OS keyring integration and a compiled single-file binary are not implemented. CLI chat streaming, file upload/download, image generation, admin commands, web xterm-style UI, session tabs, scrollback search, keyboard history/completion and full audit drawer are not implemented. A per-token hourly request bucket is now enforced by migration `0005_cli_token_rate_limits.sql`; every CLI HTTP request counts toward that quota. This remains a partial CLI, not the complete command matrix in the product specification.
+Database migrations: database/migrations/0004_terminal_foundation.sql, 0005_cli_token_rate_limits.sql, and 0006_terminal_audit_output.sql. These migrations must be applied to the production database before server-side Terminal sessions, audit history or CLI-token management can work. The local browser workspace does not depend on those tables.
