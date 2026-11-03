@@ -44,37 +44,52 @@ function safeWrite<T>(key: string, value: T): void {
 }
 
 async function request<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const controller = new AbortController();
-  let timedOut = false;
-  const timeout = window.setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, 20000);
-  const abortFromCaller = () => controller.abort();
-  signal?.addEventListener('abort', abortFromCaller, { once: true });
-
-  try {
-    const response = await fetch(url, {
-      method: 'GET',
-      signal: controller.signal,
-      headers: { Accept: 'application/json' },
-      // Public Hugging Face model metadata is anonymous; never send cookies.
-    });
-    if (response.status === 429) throw new Error('Hugging Face rate limit reached. Wait briefly and retry.');
-    if (!response.ok) {
-      const detail = (await response.text()).slice(0, 300);
-      throw new Error('Hugging Face request failed (' + response.status + ')' + (detail ? ': ' + detail : '.'));
+  const maxAttempts = 4;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (signal?.aborted) throw new DOMException('The request was cancelled.', 'AbortError');
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, 20000);
+    const abortFromCaller = () => controller.abort();
+    signal?.addEventListener('abort', abortFromCaller, { once: true });
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: { Accept: 'application/json' },
+      });
+      if (response.status === 429) {
+        throw Object.assign(new Error('Hugging Face rate limit reached. Wait briefly and retry.'), { retryable: false });
+      }
+      if (response.status >= 500 && response.status <= 599) {
+        const detail = (await response.text()).slice(0, 200);
+        throw Object.assign(new Error('Hugging Face server error (' + response.status + ')' + (detail ? ': ' + detail : '.')), { retryable: true });
+      }
+      if (!response.ok) {
+        const detail = (await response.text()).slice(0, 300);
+        throw Object.assign(new Error('Hugging Face request failed (' + response.status + ')' + (detail ? ': ' + detail : '.')), { retryable: false });
+      }
+      return await response.json() as T;
+    } catch (error) {
+      lastError = error;
+      if (signal?.aborted) throw error;
+      if (timedOut) lastError = new Error('Hugging Face request timed out after 20 seconds.');
+      const retryable = timedOut || !(error instanceof Error && 'retryable' in error && (error as Error & { retryable: boolean }).retryable === false);
+      if (!retryable || attempt === maxAttempts - 1) break;
+      const baseDelay = Math.min(8000, 500 * (2 ** attempt));
+      const jitter = Math.floor(Math.random() * Math.max(1, baseDelay * 0.25));
+      await new Promise<void>((resolve, reject) => {
+        const timer = window.setTimeout(resolve, baseDelay + jitter);
+        const cancel = () => { window.clearTimeout(timer); reject(new DOMException('The request was cancelled.', 'AbortError')); };
+        signal?.addEventListener('abort', cancel, { once: true });
+      });
+    } finally {
+      window.clearTimeout(timeout);
+      signal?.removeEventListener('abort', abortFromCaller);
     }
-    return await response.json() as T;
-  } catch (error) {
-    if (timedOut) throw new Error('Hugging Face request timed out after 20 seconds. Check the connection and retry.');
-    if (signal?.aborted) throw error;
-    if (error instanceof Error && error.name === 'AbortError') throw new Error('Hugging Face request was cancelled.');
-    throw error;
-  } finally {
-    window.clearTimeout(timeout);
-    signal?.removeEventListener('abort', abortFromCaller);
   }
+  throw lastError instanceof Error ? lastError : new Error('Hugging Face catalog request failed after retries.');
 }
 
 export async function searchHuggingFaceGGUF(options: {
@@ -148,12 +163,14 @@ export async function getHuggingFaceRepository(repoId: string, signal?: AbortSig
   return result;
 }
 
-export function formatModelCategory(tags: string[], pipeline: string | null): string[] {
-  const source = [...tags, pipeline || ''].join(' ').toLowerCase();
+export function formatModelCategory(tags: string[], pipeline: string | null, modelId = ''): string[] {
+  const source = [modelId, pipeline || '', ...tags].join(' ').toLowerCase().replace(/[-_/.:]+/g, ' ');
   const categories: string[] = [];
-  if (/code|coding|programming/.test(source)) categories.push('coding');
-  if (/math|science|physics|chemistry|biology|education/.test(source)) categories.push('learning');
-  if (/creative|writing|story|poetry/.test(source)) categories.push('creative');
-  if (!categories.length) categories.push('general');
-  return categories;
+  if (/\\b(code|coding|programming|developer|software|debug|javascript|typescript|python|java|rust|sql)\\b/.test(source)) categories.push('coding');
+  if (/\\b(english|grammar|vocabulary|translation|language learning|ielts|toefl|esl)\\b/.test(source)) categories.push('english', 'learning');
+  if (/\\b(robot|robotics|ros|autonomous|navigation|actuator|kinematics|slam)\\b/.test(source)) categories.push('robotics', 'learning');
+  if (/\\b(math|mathematics|algebra|geometry|calculus|arithmetic|theorem|equation)\\b/.test(source)) categories.push('mathematics', 'learning');
+  if (/\\b(science|physics|chemistry|biology|astronomy|geology|scientific)\\b/.test(source)) categories.push('science', 'learning');
+  if (/\\b(creative|writing|story|poetry|novel|screenplay|copywriting)\\b/.test(source)) categories.push('creative');
+  return categories.length ? Array.from(new Set(categories)) : ['general'];
 }
