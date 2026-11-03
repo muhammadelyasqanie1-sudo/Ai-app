@@ -140,6 +140,6 @@ export async function downloadOfflineDiagnosticReport(): Promise<void> {
     anchor.download = 'afg-ai-offline-diagnostics-' + new Date().toISOString().slice(0, 10) + '.json';
     anchor.click();
   } finally {
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 }
