@@ -5,7 +5,7 @@ import { searchHuggingFaceGGUF, getHuggingFaceRepository, formatModelCategory, t
 import { assessOfflineModelFit, scanOfflineDevice, type OfflineDeviceProfile, type ModelFit } from '../../lib/offlineDevice';
 import { downloadGGUF, listOfflineDownloads, pauseGGUFDownload, removeOfflineModel, resumeOfflineDownload, usesNativeOfflineDownloads, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
 import { clearOfflineChatMessages, loadOfflineChatMessages, saveOfflineChatMessages, type OfflineChatMessage } from '../../lib/offlineChatStorage';
-import { generateNativeLlamaResponse, getNativeLlamaRuntimeInfo, loadNativeLlamaModel, unloadNativeLlamaModel } from '../../lib/offlineLlamaRuntime';
+import { generateNativeLlamaResponse, getNativeLlamaRuntimeInfo, loadNativeLlamaModel, unloadNativeLlamaModel, streamNativeLlamaResponse } from '../../lib/offlineLlamaRuntime';
 import { recordOfflineDiagnostic } from '../../lib/offlineDiagnostics';
 import { recordOfflineMetric } from '../../lib/offlineMetrics';
 
@@ -89,9 +89,11 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const [thermalWarning, setThermalWarning] = useState(false);
   const engineRef = useRef<any>(null);
   const engineModelIdRef = useRef('');
+  const nativeEngineRef = useRef(false);
+  const nativeAbortRef = useRef<AbortController | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => () => { const engine = engineRef.current; engineRef.current = null; engineModelIdRef.current = ''; if (engine) void engine.unload().catch(() => undefined); }, []);
+  useEffect(() => () => { nativeAbortRef.current?.abort(); const engine = engineRef.current; engineRef.current = null; engineModelIdRef.current = ''; nativeEngineRef.current = false; if (engine) void engine.unload().catch(() => undefined); }, []);
 
   const copy = dari ? {
     title: 'مرکز هوش مصنوعی آفلاین', subtitle: 'مدل را یک‌بار دانلود کن و در همین دستگاه، بدون اینترنت از آن استفاده کن.',
@@ -348,6 +350,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
         },
       });
       engineRef.current = engine;
+      nativeEngineRef.current = false;
       engineModelIdRef.current = modelId;
       setActiveOfflineModelLabel(modelId);
       setInstalled(previous => previous.includes(modelId) ? previous : [...previous, modelId]);
@@ -371,6 +374,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       const contextSize = lowPowerMode ? 1024 : 2048;
       const threads = Math.max(1, Math.min(4, device?.cpuCores || 4));
       await loadNativeLlamaModel(task.localPath, contextSize, threads);
+      nativeEngineRef.current = true;
       engineRef.current = {
         chat: { completions: { create: async (request: { messages: Array<{ role: string; content: string }>; max_tokens?: number }) => ({ choices: [{ message: { content: await generateNativeLlamaResponse(request.messages, request.max_tokens || 256) } }] }) } },
         unload: async () => unloadNativeLlamaModel(),
@@ -402,22 +406,45 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     setMessages(next); setPrompt(''); setChatBusy(true); setThermalWarning(false);
     const thermalTimer = window.setTimeout(() => setThermalWarning(true), 120000);
     const inferenceStartedAt = Date.now();
+    let streamedAnswer = '';
     void recordOfflineMetric({ name: 'inference_started', modelId: selectedId || null }).catch(() => undefined);
     try {
-      const result = await engineRef.current.chat.completions.create({
-        messages: next.map(item => ({ role: item.role, content: item.content })),
-        temperature: 0.7,
-        max_tokens: lowPowerMode ? 256 : 512,
-      });
-      const answer = result.choices?.[0]?.message?.content;
-      void recordOfflineMetric({ name: 'inference_completed', modelId: selectedId || null, durationMs: Date.now() - inferenceStartedAt }).catch(() => undefined);
-      setMessages(previous => [...previous, { role: 'assistant', content: typeof answer === 'string' ? answer : JSON.stringify(answer || '') }]);
+      if (nativeEngineRef.current) {
+        const controller = new AbortController();
+        nativeAbortRef.current = controller;
+        setMessages([...next, { role: 'assistant', content: '' }]);
+        const result = await streamNativeLlamaResponse(next, lowPowerMode ? 256 : 512, token => {
+          streamedAnswer += token;
+          setMessages(previous => previous.map((message, index) => index === previous.length - 1 ? { ...message, content: streamedAnswer } : message));
+        }, controller.signal);
+        if (result.cancelled) return;
+        if (!streamedAnswer) streamedAnswer = result.text;
+        setMessages(previous => previous.map((message, index) => index === previous.length - 1 ? { ...message, content: streamedAnswer } : message));
+      } else {
+        const result = await engineRef.current.chat.completions.create({
+          messages: next.map(item => ({ role: item.role, content: item.content })),
+          temperature: 0.7,
+          max_tokens: lowPowerMode ? 256 : 512,
+        });
+        const answer = result.choices?.[0]?.message?.content;
+        streamedAnswer = typeof answer === 'string' ? answer : JSON.stringify(answer || '');
+        setMessages(previous => [...previous, { role: 'assistant', content: streamedAnswer }]);
+        void recordOfflineMetric({ name: 'inference_completed', modelId: selectedId || null, durationMs: Date.now() - inferenceStartedAt }).catch(() => undefined);
+      }
     } catch (error) {
-      const outOfMemory = /out of memory|allocation failed|cannot allocate/i.test(error instanceof Error ? error.message : '');
-      void recordOfflineMetric({ name: outOfMemory ? 'out_of_memory' : 'inference_failed', modelId: selectedId || null, durationMs: Date.now() - inferenceStartedAt }).catch(() => undefined);
-      void recordOfflineDiagnostic({ code: outOfMemory ? 'out_of_memory' : 'inference_error', modelId: selectedId || null }).catch(() => undefined);
-      setMessages(previous => [...previous, { role: 'assistant', content: error instanceof Error ? error.message : copy.failed }]);
-    } finally { window.clearTimeout(thermalTimer); setChatBusy(false); setThermalWarning(false); }
+      const cancelled = error instanceof DOMException && error.name === 'AbortError';
+      if (!cancelled) {
+        const outOfMemory = /out of memory|allocation failed|cannot allocate/i.test(error instanceof Error ? error.message : '');
+        void recordOfflineMetric({ name: outOfMemory ? 'out_of_memory' : 'inference_failed', modelId: selectedId || null, durationMs: Date.now() - inferenceStartedAt }).catch(() => undefined);
+        void recordOfflineDiagnostic({ code: outOfMemory ? 'out_of_memory' : 'inference_error', modelId: selectedId || null }).catch(() => undefined);
+        setMessages(previous => [...previous, { role: 'assistant', content: error instanceof Error ? error.message : copy.failed }]);
+      }
+    } finally {
+      nativeAbortRef.current = null;
+      window.clearTimeout(thermalTimer);
+      setChatBusy(false);
+      setThermalWarning(false);
+    }
   };
 
   const selectedFit = selected && device ? assessOfflineModelFit(selected.vram_required_MB || 0, device) : 'limited';
@@ -495,6 +522,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
         {engineRef.current && <div className="flex-1 space-y-3 overflow-y-auto py-3">{messages.map((message,index)=><div key={index} className={'max-w-[92%] whitespace-pre-wrap rounded-2xl p-3 text-sm leading-6 ' + (message.role === 'user' ? 'ms-auto bg-cyan-500/10' : 'me-auto bg-slate-500/10')}>{message.content}</div>)}{chatBusy && <div className="text-xs opacity-60">{dari ? 'در حال تولید پاسخ محلی…' : 'Generating locally…'}</div>}<div ref={chatEndRef}/></div>}
         <form className="mt-3 flex gap-2" onSubmit={event => { event.preventDefault(); void sendMessage(); }}>
           <input value={prompt} onChange={event => setPrompt(event.target.value)} placeholder={copy.input} disabled={!engineRef.current || chatBusy} className="min-w-0 flex-1 rounded-xl border bg-transparent px-3 py-3 text-sm outline-none disabled:opacity-40"/>
+          {chatBusy && nativeEngineRef.current && <button type="button" onClick={() => nativeAbortRef.current?.abort()} className="rounded-xl border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-500">{dari ? 'لغو' : 'Cancel'}</button>}
           <button type="submit" disabled={!engineRef.current || !prompt.trim() || chatBusy} className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-40">{copy.send}</button>
         </form>
         <div className="mt-3 border-t pt-3"><div className="mb-2 text-xs font-semibold opacity-70">{copy.installed}</div>
