@@ -222,7 +222,7 @@ export default function App() {
       const latest = [...messages].reverse().find((message) => message.role === 'user' || (message.role === 'assistant' && message.content.trim()));
       const session = {
         id: currentSessionId,
-        title: existingSession?.title || (firstUser?.content || 'New chat').replace(/\\s+/g, ' ').slice(0, 64),
+        title: existingSession?.title || (firstUser?.content || 'New chat').replace(/\s+/g, ' ').slice(0, 64),
         isPinned: Boolean(existingSession?.isPinned),
         category: existingSession?.category || 'general',
         lastMessage: latest?.content.slice(0, 180) || '',
@@ -298,7 +298,7 @@ export default function App() {
     const response = await apiFetch('/api/conversations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getCsrfHeaders() },
-      body: JSON.stringify({ title: title.trim().replace(/\\s+/g, ' ').slice(0, 64) || 'New chat', model: selectedModel || 'auto' }),
+      body: JSON.stringify({ title: title.trim().replace(/\s+/g, ' ').slice(0, 64) || 'New chat', model: selectedModel || 'auto' }),
     });
     const payload = await response.json() as { conversation?: { id?: string } };
     if (!payload.conversation?.id) throw new Error('Conversation creation returned no ID.');
@@ -490,7 +490,7 @@ export default function App() {
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': decodeURIComponent(csrfToken) },
           body: JSON.stringify({
             type: toolOptions.productivityType,
-            title: text.trim().replace(/\\s+/g, ' ').slice(0, 160) || 'Productivity result',
+            title: text.trim().replace(/\s+/g, ' ').slice(0, 160) || 'Productivity result',
             content: fullContent.slice(0, 20000),
             parameters: toolOptions.productivityParameters || {},
           }),
