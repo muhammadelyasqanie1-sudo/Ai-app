@@ -117,33 +117,49 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     let active = true;
     setDeviceScanBusy(true);
     void scanOfflineDevice().then(result => { if (active) setDevice(result); }).catch(() => {}).finally(() => { if (active) setDeviceScanBusy(false); });
-    (async () => {
+    void (async () => {
+      let nativeAvailable = false;
       try {
-        const gpu = (navigator as Navigator & { gpu?: { requestAdapter: () => Promise<unknown> } }).gpu;
-        if (!gpu) {
-          if (active) { setRuntime('unsupported'); setRuntimeMessage(copy.unsupported); }
-          return;
-        }
+        const nativeInfo = await getNativeLlamaRuntimeInfo();
+        nativeAvailable = nativeInfo.available;
+        if (active) setNativeRuntimeAvailable(nativeAvailable);
+      } catch { if (active) setNativeRuntimeAvailable(false); }
+      if (!active) return;
+      const nativeMessage = dari ? 'موتور بومی llama.cpp آماده است؛ مدل‌های GGUF روی همین دستگاه اجرا می‌شوند.' : 'Native llama.cpp CPU runtime is ready for local GGUF inference.';
+      const gpu = (navigator as unknown as { gpu?: { requestAdapter: () => Promise<unknown> } }).gpu;
+      if (!gpu) {
+        setWebGpuAvailable(false);
+        setRuntime(nativeAvailable ? 'ready' : 'unsupported');
+        setRuntimeMessage(nativeAvailable ? nativeMessage : copy.unsupported);
+        if (navigator.storage?.estimate) { const estimate = await navigator.storage.estimate(); if (active) setStorage({ usage: estimate.usage, quota: estimate.quota }); }
+        return;
+      }
+      try {
         const adapter = await gpu.requestAdapter();
         if (!active) return;
-        if (!adapter) { setRuntime('unsupported'); setRuntimeMessage(copy.unsupported); return; }
+        if (!adapter) {
+          setWebGpuAvailable(false);
+          setRuntime(nativeAvailable ? 'ready' : 'unsupported');
+          setRuntimeMessage(nativeAvailable ? nativeMessage : copy.unsupported);
+          return;
+        }
         const { prebuiltAppConfig } = await import('@mlc-ai/web-llm');
         if (!active) return;
         const catalog = (prebuiltAppConfig.model_list || []) as CatalogModel[];
         setModels(catalog);
-        setSelectedId(catalog[0]?.model_id || '');
+        if (!selectedId) setSelectedId(catalog[0]?.model_id || '');
+        setWebGpuAvailable(true);
         setRuntime('ready');
-        setRuntimeMessage(copy.compatible);
-        if (navigator.storage?.estimate) {
-          const estimate = await navigator.storage.estimate();
-          if (active) setStorage({ usage: estimate.usage, quota: estimate.quota });
-        }
+        setRuntimeMessage(nativeAvailable ? nativeMessage + ' WebGPU is also available.' : copy.compatible);
       } catch {
-        if (active) { setRuntime('error'); setRuntimeMessage(copy.unsupported); }
+        setWebGpuAvailable(false);
+        setRuntime(nativeAvailable ? 'ready' : 'error');
+        setRuntimeMessage(nativeAvailable ? nativeMessage : copy.unsupported);
       }
+      if (navigator.storage?.estimate) { const estimate = await navigator.storage.estimate(); if (active) setStorage({ usage: estimate.usage, quota: estimate.quota }); }
     })();
     return () => { active = false; };
-  }, [copy.compatible, copy.unsupported]);
+  }, [copy.compatible, copy.unsupported, dari]);
 
   useEffect(() => {
     localStorage.setItem(INSTALLED_KEY, JSON.stringify(installed));
