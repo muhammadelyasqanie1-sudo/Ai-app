@@ -2,6 +2,7 @@ export type OfflineDownloadState = {
   id: string;
   repoId: string;
   fileName: string;
+  revision: string;
   url: string;
   expectedBytes: number | null;
   downloadedBytes: number;
@@ -147,12 +148,14 @@ class Sha256 {
 export async function downloadGGUF(options: {
   repoId: string;
   fileName: string;
+  revision?: string;
   expectedBytes?: number | null;
   expectedSha256?: string | null;
   onProgress?: DownloadListener;
   signal?: AbortSignal;
 }): Promise<OfflineDownloadState> {
   const { repoId, fileName } = options;
+  const revision = options.revision || 'main';
   const id = repoId + '/' + fileName;
   if (!/^[^/]+\/[^/]+$/.test(repoId) || !fileName.toLowerCase().endsWith('.gguf') || fileName.split('/').some(part => !part || part === '.' || part === '..')) throw new Error('Invalid GGUF model selection.');
   if (activeTasks.has(id)) throw new Error('This model is already downloading.');
@@ -169,9 +172,12 @@ export async function downloadGGUF(options: {
   let dir: FileSystemDirectoryHandle | null = null;
   try {
     dir = await modelDirectory();
+    const previousTask = await getOfflineDownload(id);
+    if (previousTask?.revision && previousTask.revision !== revision) await dir.removeEntry(partial).catch(() => undefined);
     let offset = await getFileSize(dir, partial);
-    await saveTask({ id, repoId, fileName, url: 'https://huggingface.co/' + repoId + '/resolve/main/' + fileName, expectedBytes, downloadedBytes: offset, expectedSha256, status: 'downloading', updatedAt: Date.now() });
-    let response = await fetch('https://huggingface.co/' + encodeURIComponent(repoId).replace('%2F','/') + '/resolve/main/' + fileName.split('/').map(encodeURIComponent).join('/'), {
+    const modelUrl = 'https://huggingface.co/' + repoId + '/resolve/' + encodeURIComponent(revision) + '/' + fileName.split('/').map(encodeURIComponent).join('/');
+    await saveTask({ id, repoId, fileName, revision, url: modelUrl, expectedBytes, downloadedBytes: offset, expectedSha256, status: 'downloading', updatedAt: Date.now() });
+    let response = await fetch(modelUrl, {
       headers: offset ? { Range: 'bytes=' + offset + '-' } : {},
       signal: controller.signal,
       redirect: 'follow',
@@ -229,7 +235,7 @@ export async function downloadGGUF(options: {
     } catch (error) { await finalWritable.abort().catch(() => undefined); await dir.removeEntry(target).catch(() => undefined); throw error; }
     await dir.removeEntry(partial);
     const result: OfflineDownloadState = {
-      id, repoId, fileName, url: 'https://huggingface.co/' + repoId + '/resolve/main/' + fileName,
+      id, repoId, fileName, revision, url: modelUrl,
       expectedBytes: downloadedBytes, downloadedBytes, expectedSha256, computedSha256: digest,
       hashVerified: Boolean(expectedSha256 && digest === expectedSha256), status: 'installed', updatedAt: Date.now(),
     };
@@ -241,7 +247,7 @@ export async function downloadGGUF(options: {
     const paused = task.paused || controller.signal.aborted;
     const current = dir ? await getFileSize(dir, partial).catch(() => 0) : 0;
     const result: OfflineDownloadState = {
-      id, repoId, fileName, url: 'https://huggingface.co/' + repoId + '/resolve/main/' + fileName,
+      id, repoId, fileName, revision, url: 'https://huggingface.co/' + repoId + '/resolve/' + encodeURIComponent(revision) + '/' + fileName,
       expectedBytes, downloadedBytes: current, expectedSha256, status: paused ? 'paused' : 'error',
       updatedAt: Date.now(), error: paused ? undefined : error instanceof Error ? error.message : String(error),
     };
