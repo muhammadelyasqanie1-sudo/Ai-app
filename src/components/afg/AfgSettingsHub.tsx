@@ -119,7 +119,7 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
       ]);
       setAuthenticated(me.authenticated===true);
       setAdminAllowed(me.authenticated===true && me.user?.role==='admin');
-      setGithub({configured:gh.configured===true,linked:gh.linked===true,username:gh.username||''});
+      setGithub({configured:gh.configured===true || featureData.githubOAuthConfigured===true,linked:gh.linked===true,username:gh.username||''});
       const flagMap:Record<string,boolean> = featureData.verified===true ? (featureData.featureFlags||{}) : {};
       const integrations:Record<string,any> = featureData.verified===true ? (featureData.integrations||{}) : {};
       setFeatureFlags(flagMap);
@@ -134,7 +134,8 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
       next.byok=flagMap.byok===false?'disabled':flagMap.byok===true?'ready':'unknown'; next.router='setup';
       setStatus(next);
       const catalog=await request('/api/models').catch(()=>({models:[]}));
-      const rows=Array.isArray(catalog.models)?catalog.models:[];
+      const rawRows=Array.isArray(cap.modelDescriptors)?cap.modelDescriptors:(Array.isArray(catalog.models)?catalog.models:[]);
+      const rows=rawRows.map((m:any)=>typeof m==='string'?{id:m,displayName:m,selectable:cap.verified===true}:m);
       setModels(rows.filter((m:any)=>m && typeof m.id==='string' && m.selectable!==false));
       const prefs=me.authenticated?await request('/api/account/preferences').catch(()=>({})):({});
       setSelectedModel(prefs.preferences?.default_model||'');
@@ -206,7 +207,8 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
       <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
         <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><selected.icon className="h-5 w-5"/></span><div className="min-w-0 flex-1"><h2 className="font-black text-white">{selected.title}</h2><p className="text-xs text-slate-400">{selected.subtitle}</p></div>{['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(page)&&statusBadge(page)}</div>
       </div>
-      {page==='language'||page==='appearance'||page==='chat'||page==='memory'||page==='coding'||page==='privacy' ? <AfgAccountSettings language={language} theme={theme} onTheme={onSetTheme} onLanguage={onSetLanguage}/> : null}
+      {page==='appearance' ? <AfgAccountSettings language={language} theme={theme} onTheme={onSetTheme} onLanguage={onSetLanguage}/> : null}
+      {(['language','chat','memory','coding','privacy'] as SettingId[]).includes(page) && <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 space-y-3"><p className="text-sm text-slate-300">{page==='language'?t.languageHelp:page==='memory'?'Memory records are managed through your authenticated account preferences and memory controls.':page==='privacy'?'Account sessions, export, password and deletion controls are available in account settings.':page==='coding'?'Terminal execution remains unavailable unless the administrator enables a sandboxed backend.':'Chat response preferences and startup options are managed in account preferences.'}</p><button type="button" onClick={()=>setPage('appearance')} className="rounded-xl bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-950">{t.openAccount}</button></div>}
       {page==='models'&&<div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 space-y-3">
         <h3 className="font-bold text-white">{t.models}</h3>
         {models.length? <><label className="block text-xs text-slate-400">{t.defaultModel}<select value={selectedModel} onChange={e=>setSelectedModel(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-white">{models.map(m=><option key={m.providerId+'::'+m.id} value={m.providerId+'::'+m.id}>{m.displayName||m.id}</option>)}</select></label><button onClick={()=>void saveModel()} className="rounded-xl bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-950">{t.save}</button></>:<p className="text-sm text-slate-400">{t.noModels}</p>}
