@@ -202,7 +202,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
 
   useEffect(() => {
     const controller = new AbortController();
-    void searchHuggingFaceGGUF({ query: 'Spark-X2.6', page: 0, sort: 'downloads', direction: 'desc', signal: controller.signal })
+    void searchHuggingFaceGGUF({ query: 'Spark-X2.6-1.7B-GGUF', page: 0, sort: 'downloads', direction: 'desc', signal: controller.signal })
+      .then(result => result.items.length ? result : searchHuggingFaceGGUF({ query: 'Spark-X2.6', page: 0, sort: 'downloads', direction: 'desc', signal: controller.signal }))
       .then(result => setSparkModels(result.items))
       .catch(() => { if (!controller.signal.aborted) setSparkModels([]); });
     return () => controller.abort();
