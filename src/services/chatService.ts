@@ -6,7 +6,7 @@ import { matchComboModels, resolveRoutingCombo } from './routingCombos.ts';
 const HEALTH_MAX_AGE_MS = 5 * 60 * 1000;
 
 function estimateTokens(messages: ChatInput['messages']): number {
-  return Math.ceil(messages.reduce((sum, message) => sum + message.content.length, 0) / 4);
+  return Math.ceil(messages.reduce((sum, message) => sum + message.content.length + (message.tool_calls||[]).reduce((total,call)=>total+call.function.name.length+call.function.arguments.length,0), 0) / 4);
 }
 
 function compactOlderContext(messages: ChatInput['messages'], contextWindow: number): ChatInput['messages'] {
