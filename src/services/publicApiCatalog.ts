@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
 import { pool } from '../api/database.ts';
 
-const SOURCE = 'https://publicapis.lol/api/apis';
+const DIRECTORY_API = 'https://publicapis.lol/api/apis';
+const REPOSITORY_README = 'https://raw.githubusercontent.com/public-apis/public-apis/master/README.md';
+const REPOSITORY_SOURCE = 'public-apis/public-apis';
 const MAX_PAGES = 100;
 const PAGE_TIMEOUT_MS = 20_000;
-
 type RawApi = Record<string, unknown>;
+
 export type PublicApiRecord = {
   sourceKey: string;
   name: string;
@@ -44,9 +46,13 @@ function text(value: unknown, max: number, fallback = ''): string {
   return fallback;
 }
 
+function stripMarkdown(value: string): string {
+  return value.replace(/[*_]/g, '').replaceAll(String.fromCharCode(96), '').trim();
+}
+
 function triState(value: unknown): string {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  const normalized = text(value, 40, 'Unknown').toLowerCase();
+  const normalized = stripMarkdown(text(value, 40, 'Unknown')).toLowerCase();
   if (['yes','true','1','enabled','supported'].includes(normalized)) return 'Yes';
   if (['no','false','0','none','disabled','not supported'].includes(normalized)) return 'No';
   if (normalized === 'unknown' || normalized === '?') return 'Unknown';
@@ -62,44 +68,6 @@ function safeHttpUrl(value: unknown): string | null {
   } catch { return null; }
 }
 
-function unwrapRows(payload: unknown): { rows: RawApi[]; hasMore: boolean | null } {
-  if (Array.isArray(payload)) return { rows: payload.filter((v): v is RawApi => Boolean(v) && typeof v === 'object' && !Array.isArray(v)), hasMore: null };
-  if (!payload || typeof payload !== 'object') return { rows: [], hasMore: false };
-  const object = payload as Record<string, unknown>;
-  const nested = [object.apis, object.items, object.results, object.data, object.entries]
-    .find((value) => Array.isArray(value));
-  if (Array.isArray(nested)) {
-    return {
-      rows: nested.filter((v): v is RawApi => Boolean(v) && typeof v === 'object' && !Array.isArray(v)),
-      hasMore: typeof object.pages === 'number' && typeof object.page === 'number'
-        ? object.page < object.pages
-        : object.has_more === true || object.hasMore === true || object.next_page !== null && object.next_page !== undefined
-          ? true
-          : object.has_more === false || object.hasMore === false || object.next_page === null
-            ? false
-            : null,
-    };
-  }
-  const data = object.data;
-  if (data && typeof data === 'object' && !Array.isArray(data)) {
-    const child = data as Record<string, unknown>;
-    const rows = [child.apis, child.items, child.results, child.entries].find(Array.isArray);
-    if (Array.isArray(rows)) {
-      return {
-        rows: rows.filter((v): v is RawApi => Boolean(v) && typeof v === 'object' && !Array.isArray(v)),
-        hasMore: typeof child.pages === 'number' && typeof child.page === 'number'
-          ? child.page < child.pages
-          : child.has_more === true || child.hasMore === true || child.next_page !== null && child.next_page !== undefined
-            ? true
-            : child.has_more === false || child.hasMore === false || child.next_page === null
-              ? false
-              : null,
-      };
-    }
-  }
-  return { rows: [], hasMore: false };
-}
-
 function normalize(row: RawApi): PublicApiRecord | null {
   const name = text(field(row, 'API','name','apiName','title'), 160);
   if (!name) return null;
@@ -109,60 +77,72 @@ function normalize(row: RawApi): PublicApiRecord | null {
   const docsUrl = safeHttpUrl(field(row, 'Link','link','docs','documentation','documentationUrl','callThisApi','url')) || homepageUrl;
   const iconUrl = safeHttpUrl(field(row,'iconUrl','icon_url','icon'));
   const imageUrl = safeHttpUrl(field(row,'imageUrl','image_url','image'));
-  const siteName = text(field(row,'siteName','site_name'),160);
-  const siteDescription = text(field(row,'siteDescription','site_description'),1200);
+  const siteName = text(field(row,'siteName','site_name'),160,name);
+  const siteDescription = text(field(row,'siteDescription','site_description'),1200,description);
   const stable = [name.toLowerCase(), category.toLowerCase(), docsUrl || homepageUrl || ''].join('|');
   const sourceKey = createHash('sha256').update(stable).digest('hex');
   const healthValue = text(field(row, 'status','healthStatus','health'), 24).toLowerCase();
   const healthStatus = (['online','slow','offline','error'].includes(healthValue) ? healthValue : 'unknown') as PublicApiRecord['healthStatus'];
   const time = Number(field(row,'responseTimeMs','response_time_ms','latencyMs'));
   return {
-    sourceKey, name, description,
-    auth: field(row,'Auth','auth','authentication') == null ? 'No' : text(field(row,'Auth','auth','authentication'),40,'Unknown'),
-    https: triState(field(row,'HTTPS','https','supportsHttps')),
-    cors: triState(field(row,'CORS','cors','supportsCors')),
-    category, homepageUrl, docsUrl, iconUrl, imageUrl, siteName, siteDescription, healthStatus,
-    responseTimeMs: Number.isInteger(time) && time >= 0 && time <= 600000 ? time : null,
-    raw: row,
+    sourceKey,name,description,auth:stripMarkdown(text(field(row,'Auth','auth','authentication'),40,'No')) || 'No',
+    https:triState(field(row,'HTTPS','https','supportsHttps')),
+    cors:triState(field(row,'CORS','cors','supportsCors')),
+    category,homepageUrl,docsUrl,iconUrl,imageUrl,siteName,siteDescription,healthStatus,
+    responseTimeMs:Number.isInteger(time)&&time>=0&&time<=600000?time:null,raw:row,
   };
 }
 
-const REPOSITORY_README = 'https://raw.githubusercontent.com/public-apis/public-apis/master/README.md';
-const REPOSITORY_SOURCE = 'public-apis/public-apis';
+function unwrapRows(payload: unknown): { rows: RawApi[]; hasMore: boolean | null } {
+  if (Array.isArray(payload)) return { rows: payload.filter((v): v is RawApi => Boolean(v)&&typeof v==='object'&&!Array.isArray(v)),hasMore:null };
+  if (!payload||typeof payload!=='object') return {rows:[],hasMore:false};
+  const object=payload as Record<string,unknown>;
+  const nested=[object.apis,object.items,object.results,object.data,object.entries].find(Array.isArray);
+  if(Array.isArray(nested)){
+    const page=Number(object.page??object.current_page??object.currentPage);
+    const pages=Number(object.pages??object.total_pages??object.totalPages);
+    const total=Number(object.total??object.total_count);
+    const perPage=Number(object.per_page??object.perPage??object.limit);
+    let hasMore:boolean|null=null;
+    if(Number.isFinite(page)&&Number.isFinite(pages)&&pages>0)hasMore=page<pages;
+    else if(typeof object.has_more==='boolean')hasMore=object.has_more;
+    else if(typeof object.hasMore==='boolean')hasMore=object.hasMore;
+    else if(object.next_page===null)hasMore=false;
+    else if(object.next_page!==undefined)hasMore=true;
+    else if(Number.isFinite(total)&&Number.isFinite(page)&&Number.isFinite(perPage)&&perPage>0)hasMore=page*perPage<total;
+    return {rows:nested.filter((v):v is RawApi=>Boolean(v)&&typeof v==='object'&&!Array.isArray(v)),hasMore};
+  }
+  return {rows:[],hasMore:false};
+}
 
 function parseRepositoryReadme(markdown: string): PublicApiRecord[] {
-  const rows: PublicApiRecord[] = [];
-  let category = 'Uncategorized';
-  let inApiTable = false;
-  for (const line of markdown.split(/\r?\n/)) {
-    const heading = line.match(/^###\s+(.+?)\s*$/);
-    if (heading) { category = heading[1].replace(/\s+/g,' ').trim().slice(0,100); inApiTable = false; continue; }
-    if (line.trim().startsWith('|') || /^API\s*\|/i.test(line.trim())) {
-      const cells = line.trim().replace(/^\|/,'').replace(/\|$/,'').split('|').map(value=>value.trim());
-      const normalized = cells.map(value=>value.replace(/\*\*/g,'').replace(/[*_]/g,'').toLowerCase());
-      if (normalized.length >= 5 && normalized[0] === 'api' && normalized[1] === 'description' &&
-          normalized[2] === 'auth' && normalized[3] === 'https' && normalized[4] === 'cors') {
-        inApiTable = true; continue;
+  const rows: PublicApiRecord[]=[];
+  let category='Uncategorized';
+  let inApiTable=false;
+  for(const line of markdown.split(/\r?\n/)){
+    const heading=line.match(/^###\s+(.+?)\s*$/);
+    if(heading){category=heading[1].replace(/\s+/g,' ').trim().slice(0,100);inApiTable=false;continue;}
+    if(line.trim().startsWith('|')||/^API\s*\|/i.test(line.trim())){
+      const cells=line.trim().replace(/^\|/,'').replace(/\|$/,'').split('|').map(value=>value.trim());
+      const normalized=cells.map(value=>stripMarkdown(value).toLowerCase());
+      if(normalized.length>=5&&normalized[0]==='api'&&normalized[1]==='description'&&normalized[2]==='auth'&&normalized[3]==='https'&&normalized[4]==='cors'){
+        inApiTable=true;continue;
       }
-      if (/^:?-{3,}:?$/.test(cells[0]||'')) continue;
-      if (!inApiTable || cells.length < 5) continue;
-      const match = cells[0].match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)/i);
-      if (!match) continue;
-      const name = match[1].replace(/&amp;/g,'&').trim();
-      const url = match[2].trim();
-      const description = cells[1].replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim();
-      const strip = (value:string) => value.replace(/[*_]/g,'').replaceAll(String.fromCharCode(96),'').trim();
-      const auth = strip(cells[2]) || 'No';
-      const https = strip(cells[3]);
-      const cors = strip(cells[4]);
-      const record = normalize({API:name,Description:description,Auth:auth,HTTPS:https,CORS:cors,Category:category,Homepage:url,Link:url,source:REPOSITORY_SOURCE});
-      if (record) rows.push(record);
-    } else if (line.trim() && !line.trim().startsWith('<') && !line.trim().startsWith('*') && !line.trim().startsWith('[')) {
-      if (!line.startsWith(' ')) inApiTable = false;
+      if(/^:?-{3,}:?$/.test(cells[0]||''))continue;
+      if(!inApiTable||cells.length<5)continue;
+      const match=cells[0].match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)/i);
+      if(!match)continue;
+      const name=match[1].replace(/&amp;/g,'&').trim();
+      const url=match[2].trim();
+      const description=cells[1].replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim();
+      const record=normalize({API:name,Description:description,Auth:stripMarkdown(cells[2])||'No',HTTPS:stripMarkdown(cells[3]),CORS:stripMarkdown(cells[4]),Category:category,Homepage:url,Link:url,source:REPOSITORY_SOURCE});
+      if(record)rows.push(record);
+    }else if(line.trim()&&!line.trim().startsWith('<')&&!line.trim().startsWith('*')&&!line.trim().startsWith('[')){
+      if(!line.startsWith(' '))inApiTable=false;
     }
   }
-  const unique = new Map<string,PublicApiRecord>();
-  for (const row of rows) unique.set(row.sourceKey,row);
+  const unique=new Map<string,PublicApiRecord>();
+  for(const row of rows)unique.set(row.sourceKey,row);
   return [...unique.values()];
 }
 
@@ -178,10 +158,9 @@ function parseRepositoryMcpDirectory(markdown:string):RepositoryMcpRecord[] {
   for(const line of markdown.split(/\r?\n/)){
     if(/^##\s+MCP Servers\s*$/i.test(line.trim())){inMcpSection=true;inMcpTable=false;continue;}
     if(/^##\s+/.test(line.trim())&&inMcpSection){inMcpSection=false;inMcpTable=false;}
-    if(!inMcpSection)continue;
-    if(!line.trim().startsWith('|'))continue;
+    if(!inMcpSection||!line.trim().startsWith('|'))continue;
     const cells=line.trim().replace(/^\|/,'').replace(/\|$/,'').split('|').map(value=>value.trim());
-    const normalized=cells.map(value=>value.replace(/[*_]/g,'').replaceAll(String.fromCharCode(96),'').toLowerCase());
+    const normalized=cells.map(value=>stripMarkdown(value).toLowerCase());
     if(normalized.length>=5&&normalized[0]==='name'&&normalized[1]==='description'&&normalized[2]==='auth'&&normalized[3]==='transport'&&normalized[4]==='install'){
       inMcpTable=true;continue;
     }
@@ -194,19 +173,18 @@ function parseRepositoryMcpDirectory(markdown:string):RepositoryMcpRecord[] {
     const name=first[1].trim();
     const slug=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,80);
     output.push({slug,name,description:cells[1].replace(/<[^>]*>/g,'').trim().slice(0,1200),
-      authType:cells[2].replaceAll(String.fromCharCode(96),'').trim()||'Unknown',
-      transports:[...new Set(transports)],websiteUrl:first[2],installUrl:install?.[1]||null,sourceUrl:REPOSITORY_README});
+      authType:stripMarkdown(cells[2])||'Unknown',transports:[...new Set(transports)],
+      websiteUrl:first[2],installUrl:install?.[1]||null,sourceUrl:REPOSITORY_README});
   }
   const unique=new Map<string,RepositoryMcpRecord>();
   for(const item of output)unique.set(item.slug,item);
   return [...unique.values()];
 }
 
-async function fetchRepositoryReadme(): Promise<{rows:PublicApiRecord[];hasMore:false}> {
-  const response = await fetch(REPOSITORY_README,{
+async function fetchRepositoryReadme():Promise<{rows:PublicApiRecord[];hasMore:false}> {
+  const response=await fetch(REPOSITORY_README,{
     headers:{Accept:'text/plain','User-Agent':'AFG-AI-API-Hub/1.0'},
-    signal:AbortSignal.timeout(30_000),
-    redirect:'error',
+    signal:AbortSignal.timeout(30_000),redirect:'error',
   });
   if(!response.ok)throw new Error('Public APIs GitHub README returned HTTP '+response.status+'.');
   const markdown=await response.text();
@@ -216,95 +194,95 @@ async function fetchRepositoryReadme(): Promise<{rows:PublicApiRecord[];hasMore:
   return {rows,hasMore:false};
 }
 
-async function fetchPage(page: number): Promise<{ rows: PublicApiRecord[]; hasMore: boolean | null }> {
-  const url = new URL(SOURCE);
-  url.searchParams.set('page', String(page));
-  const response = await fetch(url, {
-    headers: { Accept: 'application/json', 'User-Agent': 'AFG-AI-API-Hub/1.0' },
-    signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
-    redirect: 'error',
+async function fetchDirectoryApiPage(page:number):Promise<{rows:PublicApiRecord[];hasMore:boolean|null}> {
+  const url=new URL(DIRECTORY_API);
+  url.searchParams.set('page',String(page));
+  const response=await fetch(url,{
+    headers:{Accept:'application/json','User-Agent':'AFG-AI-API-Hub/1.0'},
+    signal:AbortSignal.timeout(PAGE_TIMEOUT_MS),redirect:'error',
   });
-  if (!response.ok) throw new Error(`Public API directory returned HTTP ${response.status} on page ${page}.`);
-  const body = await response.text();
-  if (body.length > 5_000_000) throw new Error('Public API directory page exceeded the 5 MB safety limit.');
-  let payload: unknown;
-  try { payload = JSON.parse(body); } catch { throw new Error('Public API directory returned invalid JSON.'); }
-  const extracted = unwrapRows(payload);
-  return { rows: extracted.rows.map(normalize).filter((row): row is PublicApiRecord => row !== null), hasMore: extracted.hasMore };
+  if(!response.ok)throw new Error('Public API directory returned HTTP '+response.status+' on page '+page+'.');
+  const body=await response.text();
+  if(body.length>5_000_000)throw new Error('Public API directory page exceeded the 5 MB safety limit.');
+  let payload:unknown;
+  try{payload=JSON.parse(body);}catch{throw new Error('Public API directory returned invalid JSON.');}
+  const extracted=unwrapRows(payload);
+  return {rows:extracted.rows.map(normalize).filter((row):row is PublicApiRecord=>row!==null),hasMore:extracted.hasMore};
 }
 
-let syncInFlight: Promise<{ imported: number; pages: number; complete: boolean }> | null = null;
+let syncInFlight:Promise<{imported:number;pages:number;complete:boolean}>|null=null;
 
-export async function syncPublicApiCatalog(): Promise<{ imported: number; pages: number; complete: boolean }> {
-  if (!pool) throw new Error('The API catalog requires the PostgreSQL database.');
-  if (syncInFlight) return syncInFlight;
-  syncInFlight = (async () => {
-    await pool.query("INSERT INTO public_api_sync_state(source,status,last_started_at,last_error,updated_at) VALUES($1,'running',now(),NULL,now()) ON CONFLICT(source) DO UPDATE SET status='running',last_started_at=now(),last_error=NULL,updated_at=now()", [REPOSITORY_SOURCE]);
-    let imported = 0;
-    let pages = 0;
-    let complete = false;
-    try {
-      let sourcePages: Array<{rows:PublicApiRecord[];hasMore:boolean|null}> = [];
-      try {
-        sourcePages = [await fetchRepositoryReadme()];
-      } catch (repositoryError) {
+async function persistApiBatch(rows:PublicApiRecord[]):Promise<void> {
+  if(!pool)throw new Error('The API catalog requires PostgreSQL.');
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    for(let offset=0;offset<rows.length;offset+=80){
+      const batch=rows.slice(offset,offset+80);
+      const values:unknown[]=[];
+      const tuples=batch.map((item,index)=>{
+        const base=index*17;
+        values.push(item.sourceKey,item.name,item.description,item.auth,item.https,item.cors,item.category,
+          item.homepageUrl,item.docsUrl,item.iconUrl,item.imageUrl,item.siteName,item.siteDescription,
+          item.healthStatus,item.responseTimeMs,JSON.stringify(item.raw),true);
+        return '('+Array.from({length:17},(_,i)=>'$'+(base+i+1)).join(',')+',now(),now())';
+      });
+      const sql='INSERT INTO public_api_catalog '+
+        '(source_key,name,description,auth,https,cors,category,homepage_url,docs_url,icon_url,image_url,site_name,site_description,health_status,response_time_ms,source_payload,is_active,imported_at,updated_at) '+
+        'VALUES '+tuples.join(',')+
+        ' ON CONFLICT(source_key) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,'+
+        'auth=EXCLUDED.auth,https=EXCLUDED.https,cors=EXCLUDED.cors,category=EXCLUDED.category,'+
+        'homepage_url=EXCLUDED.homepage_url,docs_url=EXCLUDED.docs_url,'+
+        'icon_url=EXCLUDED.icon_url,image_url=EXCLUDED.image_url,site_name=EXCLUDED.site_name,site_description=EXCLUDED.site_description,'+
+        'health_status=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.health_status ELSE public_api_catalog.health_status END,'+
+        'response_time_ms=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.response_time_ms ELSE public_api_catalog.response_time_ms END,'+
+        'source_payload=EXCLUDED.source_payload,is_active=true,imported_at=now(),updated_at=now()';
+      await client.query(sql,values);
+    }
+    await client.query('COMMIT');
+  }catch(error){await client.query('ROLLBACK');throw error;}
+  finally{client.release();}
+}
+
+export async function syncPublicApiCatalog():Promise<{imported:number;pages:number;complete:boolean}> {
+  if(!pool)throw new Error('The API catalog requires PostgreSQL.');
+  if(syncInFlight)return syncInFlight;
+  syncInFlight=(async()=>{
+    await pool.query("INSERT INTO public_api_sync_state(source,status,last_started_at,last_error,updated_at) VALUES($1,'running',now(),NULL,now()) ON CONFLICT(source) DO UPDATE SET status='running',last_started_at=now(),last_error=NULL,updated_at=now()",[REPOSITORY_SOURCE]);
+    let imported=0;
+    let pages=0;
+    let complete=false;
+    try{
+      let sourcePages:Array<{rows:PublicApiRecord[];hasMore:boolean|null}>=[];
+      try{sourcePages=[await fetchRepositoryReadme()];}
+      catch(repositoryError){
         console.warn('AFG_PUBLIC_API_REPOSITORY_README_UNAVAILABLE',JSON.stringify({error:repositoryError instanceof Error?repositoryError.message:'unknown'}));
-        for (let page = 1; page <= MAX_PAGES; page++) {
-          const result = await fetchPage(page);
+        for(let page=1;page<=MAX_PAGES;page++){
+          const result=await fetchDirectoryApiPage(page);
           sourcePages.push(result);
-          if (!result.rows.length) { complete = true; break; }
-          if (result.hasMore === false) { complete = true; break; }
+          if(!result.rows.length){complete=true;break;}
+          if(result.hasMore===false){complete=true;break;}
         }
       }
-      for (const result of sourcePages) {
+      for(const result of sourcePages){
         pages++;
-        if (!result.rows.length) { complete = true; break; }
-        const client = await pool.connect();
-        try {
-          await client.query('BEGIN');
-          for (let offset = 0; offset < result.rows.length; offset += 80) {
-            const batch = result.rows.slice(offset, offset + 80);
-            const values: unknown[] = [];
-            const tuples = batch.map((item, index) => {
-              const base = index * 17;
-              values.push(item.sourceKey,item.name,item.description,item.auth,item.https,item.cors,item.category,
-                item.homepageUrl,item.docsUrl,item.iconUrl,item.imageUrl,item.siteName,item.siteDescription,
-                item.healthStatus,item.responseTimeMs,JSON.stringify(item.raw),true);
-              const placeholders = Array.from({length:17},(_,i)=>'$'+(base+i+1)).join(',');
-              return '('+placeholders+',now(),now())';
-            });
-            const sql = 'INSERT INTO public_api_catalog '+
-              '(source_key,name,description,auth,https,cors,category,homepage_url,docs_url,icon_url,image_url,site_name,site_description,health_status,response_time_ms,source_payload,is_active,imported_at,updated_at) '+
-              'VALUES '+tuples.join(',')+
-              ' ON CONFLICT(source_key) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,'+
-              'auth=EXCLUDED.auth,https=EXCLUDED.https,cors=EXCLUDED.cors,category=EXCLUDED.category,'+
-              'homepage_url=EXCLUDED.homepage_url,docs_url=EXCLUDED.docs_url,'+
-              'icon_url=EXCLUDED.icon_url,image_url=EXCLUDED.image_url,site_name=EXCLUDED.site_name,site_description=EXCLUDED.site_description,'+
-              'health_status=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.health_status ELSE public_api_catalog.health_status END,'+
-              'response_time_ms=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.response_time_ms ELSE public_api_catalog.response_time_ms END,'+
-              'source_payload=EXCLUDED.source_payload,is_active=true,imported_at=now(),updated_at=now()';
-            await client.query(sql,values);
-          }
-          await client.query('COMMIT');
-        } catch (error) {
-          await client.query('ROLLBACK');
-          throw error;
-        } finally { client.release(); }
-        imported += result.rows.length;
-        if (result.hasMore === false) complete = true;
+        if(!result.rows.length){complete=true;break;}
+        await persistApiBatch(result.rows);
+        imported+=result.rows.length;
+        if(result.hasMore===false)complete=true;
       }
-      const status = complete ? 'success' : 'partial';
+      const status=complete?'success':'partial';
       await pool.query("UPDATE public_api_sync_state SET status=$2,items_imported=$3,pages_fetched=$4,last_completed_at=now(),last_error=NULL,updated_at=now() WHERE source=$1",
         [REPOSITORY_SOURCE,status,imported,pages]);
-      return { imported, pages, complete };
-    } catch (error) {
-      const message = error instanceof Error ? error.message.slice(0,500) : 'Catalog sync failed.';
+      return {imported,pages,complete};
+    }catch(error){
+      const message=error instanceof Error?error.message.slice(0,500):'Catalog sync failed.';
       await pool.query("UPDATE public_api_sync_state SET status='error',items_imported=$2,pages_fetched=$3,last_completed_at=now(),last_error=$4,updated_at=now() WHERE source=$1",
-        [REPOSITORY_SOURCE,imported,pages,message]).catch(() => {});
+        [REPOSITORY_SOURCE,imported,pages,message]).catch(()=>{});
       throw error;
     }
   })();
-  try { return await syncInFlight; } finally { syncInFlight = null; }
+  try{return await syncInFlight;}finally{syncInFlight=null;}
 }
 
 export async function syncPublicMcpCatalog():Promise<{imported:number}> {
@@ -317,7 +295,7 @@ export async function syncPublicMcpCatalog():Promise<{imported:number}> {
   const markdown=await response.text();
   if(markdown.length>5_000_000)throw new Error('Public APIs GitHub README exceeded the 5 MB safety limit.');
   const records=parseRepositoryMcpDirectory(markdown);
-  if(records.length<1)throw new Error('No MCP servers were parsed from the upstream repository README.');
+  if(!records.length)throw new Error('No MCP servers were parsed from the upstream repository README.');
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
@@ -327,123 +305,7 @@ export async function syncPublicMcpCatalog():Promise<{imported:number}> {
       const tuples=batch.map((item,index)=>{
         const base=index*8;
         values.push(item.slug,item.name,item.description,item.authType,item.transports,item.websiteUrl,item.installUrl,item.sourceUrl);
-        return '('+Array.from({length:8},(_,i)=>'
-  q?: string; category?: string; auth?: string; https?: string; cors?: string; page?: number; pageSize?: number;
-}) {
-  if (!pool) throw new Error('The API catalog requires the PostgreSQL database.');
-  const page = Math.max(1, Math.min(100000, Math.trunc(filters.page || 1)));
-  const pageSize = Math.max(1, Math.min(100, Math.trunc(filters.pageSize || 24)));
-  const where: string[] = ['is_active=true'];
-  const values: unknown[] = [];
-  const add = (value: unknown) => { values.push(value); return '$' + values.length; };
-  if (filters.q?.trim()) {
-    const needle = '%' + filters.q.trim().slice(0,120).replace(/[\\%_]/g, '\\$&') + '%';
-    const param = add(needle);
-    where.push(`(name ILIKE ${param} OR description ILIKE ${param} OR category ILIKE ${param})`);
-  }
-  if (filters.category && filters.category !== 'all') where.push('category=$' + (values.push(filters.category.slice(0,100))));
-  if (filters.auth && filters.auth !== 'all') where.push('lower(auth)=lower($' + values.push(filters.auth.slice(0,40)) + ')');
-  if (filters.https && filters.https !== 'all') where.push('lower(https)=lower($' + values.push(filters.https==='true'?'Yes':'No') + ')');
-  if (filters.cors && filters.cors !== 'all') where.push('lower(cors)=lower($' + values.push(filters.cors==='true'?'Yes':'No') + ')');
-  const clause = where.join(' AND ');
-  const count = await pool.query(`SELECT count(*)::int AS total FROM public_api_catalog WHERE ${clause}`, values);
-  const rows = await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,
-      icon_url,image_url,site_name,site_description,health_status,response_time_ms,last_health_check,imported_at
-    FROM public_api_catalog WHERE ${clause} ORDER BY category,name LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`, values);
-  return { items: rows.rows, page, pageSize, total: Number(count.rows[0]?.total || 0), categories: await listPublicApiCategories() };
-}
-
-export async function listPublicApiCategories() {
-  if (!pool) return [];
-  const result = await pool.query(`SELECT category,count(*)::int AS count
-    FROM public_api_catalog WHERE is_active=true GROUP BY category ORDER BY category`);
-  return result.rows;
-}
-
-export async function getPublicApiSyncStatus() {
-  if (!pool) return { configured: false, status: 'unavailable' };
-  const result = await pool.query(`SELECT source,status,items_imported,pages_fetched,last_started_at,last_completed_at,last_error
-    FROM public_api_sync_state WHERE source=$1 LIMIT 1`,[REPOSITORY_SOURCE]);
-  return { configured: true, sync: result.rows[0] || null };
-}
-+(base+i+1)).join(',')},now(),now())`;
-            });
-            await client.query(`INSERT INTO public_api_catalog
-              (source_key,name,description,auth,https,cors,category,homepage_url,docs_url,health_status,response_time_ms,source_payload,is_active,imported_at,updated_at)
-              VALUES ${tuples.join(',')}
-              ON CONFLICT(source_key) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,
-                auth=EXCLUDED.auth,https=EXCLUDED.https,cors=EXCLUDED.cors,category=EXCLUDED.category,
-                homepage_url=EXCLUDED.homepage_url,docs_url=EXCLUDED.docs_url,
-                health_status=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.health_status ELSE public_api_catalog.health_status END,
-                response_time_ms=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.response_time_ms ELSE public_api_catalog.response_time_ms END,
-                source_payload=EXCLUDED.source_payload,is_active=true,imported_at=now(),updated_at=now()`, values);
-          }
-          await client.query('COMMIT');
-        } catch (error) {
-          await client.query('ROLLBACK');
-          throw error;
-        } finally { client.release(); }
-        imported += result.rows.length;
-        if (result.hasMore === false) { complete = true; break; }
-        if (result.hasMore === null && result.rows.length < 10) { complete = true; break; }
-      }
-      if (!complete && pages < MAX_PAGES) complete = true;
-      const status = complete ? 'success' : 'partial';
-      await pool.query(`UPDATE public_api_sync_state SET status=$2,items_imported=$3,pages_fetched=$4,
-        last_completed_at=now(),last_error=NULL,updated_at=now() WHERE source='publicapis.lol'`,
-        [SOURCE,status,imported,pages]);
-      return { imported, pages, complete };
-    } catch (error) {
-      const message = error instanceof Error ? error.message.slice(0,500) : 'Catalog sync failed.';
-      await pool.query(`UPDATE public_api_sync_state SET status='error',items_imported=$2,pages_fetched=$3,
-        last_completed_at=now(),last_error=$4,updated_at=now() WHERE source='publicapis.lol'`,
-        [SOURCE,imported,pages,message]).catch(() => {});
-      throw error;
-    }
-  })();
-  try { return await syncInFlight; } finally { syncInFlight = null; }
-}
-
-export async function queryPublicApiCatalog(filters: {
-  q?: string; category?: string; auth?: string; https?: string; cors?: string; page?: number; pageSize?: number;
-}) {
-  if (!pool) throw new Error('The API catalog requires the PostgreSQL database.');
-  const page = Math.max(1, Math.min(100000, Math.trunc(filters.page || 1)));
-  const pageSize = Math.max(1, Math.min(100, Math.trunc(filters.pageSize || 24)));
-  const where: string[] = ['is_active=true'];
-  const values: unknown[] = [];
-  const add = (value: unknown) => { values.push(value); return '$' + values.length; };
-  if (filters.q?.trim()) {
-    const needle = '%' + filters.q.trim().slice(0,120).replace(/[\\%_]/g, '\\$&') + '%';
-    const param = add(needle);
-    where.push(`(name ILIKE ${param} OR description ILIKE ${param} OR category ILIKE ${param})`);
-  }
-  if (filters.category && filters.category !== 'all') where.push('category=$' + (values.push(filters.category.slice(0,100))));
-  if (filters.auth && filters.auth !== 'all') where.push('lower(auth)=lower($' + values.push(filters.auth.slice(0,40)) + ')');
-  if (filters.https && filters.https !== 'all') where.push('lower(https)=lower($' + values.push(filters.https==='true'?'Yes':'No') + ')');
-  if (filters.cors && filters.cors !== 'all') where.push('lower(cors)=lower($' + values.push(filters.cors==='true'?'Yes':'No') + ')');
-  const clause = where.join(' AND ');
-  const count = await pool.query(`SELECT count(*)::int AS total FROM public_api_catalog WHERE ${clause}`, values);
-  const rows = await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,
-      health_status,response_time_ms,last_health_check,imported_at
-    FROM public_api_catalog WHERE ${clause} ORDER BY category,name LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`, values);
-  return { items: rows.rows, page, pageSize, total: Number(count.rows[0]?.total || 0), categories: await listPublicApiCategories() };
-}
-
-export async function listPublicApiCategories() {
-  if (!pool) return [];
-  const result = await pool.query(`SELECT category,count(*)::int AS count
-    FROM public_api_catalog WHERE is_active=true GROUP BY category ORDER BY category`);
-  return result.rows;
-}
-
-export async function getPublicApiSyncStatus() {
-  if (!pool) return { configured: false, status: 'unavailable' };
-  const result = await pool.query(`SELECT source,status,items_imported,pages_fetched,last_started_at,last_completed_at,last_error
-    FROM public_api_sync_state WHERE source='publicapis.lol' LIMIT 1`);
-  return { configured: true, sync: result.rows[0] || null };
-}
-+(base+i+1)).join(',')+',NULL,true,now())';
+        return '('+Array.from({length:8},(_,i)=>'$'+(base+i+1)).join(',')+',NULL,true,now())';
       });
       await client.query('INSERT INTO mcp_directory_catalog(slug,name,description,auth_type,transports,website_url,install_url,source_url,endpoint_url,is_active,updated_at) VALUES '+
         tuples.join(',')+
@@ -455,119 +317,37 @@ export async function getPublicApiSyncStatus() {
   return {imported:records.length};
 }
 
-export async function queryPublicApiCatalog(filters: {
-  q?: string; category?: string; auth?: string; https?: string; cors?: string; page?: number; pageSize?: number;
-}) {
-  if (!pool) throw new Error('The API catalog requires the PostgreSQL database.');
-  const page = Math.max(1, Math.min(100000, Math.trunc(filters.page || 1)));
-  const pageSize = Math.max(1, Math.min(100, Math.trunc(filters.pageSize || 24)));
-  const where: string[] = ['is_active=true'];
-  const values: unknown[] = [];
-  const add = (value: unknown) => { values.push(value); return '$' + values.length; };
-  if (filters.q?.trim()) {
-    const needle = '%' + filters.q.trim().slice(0,120).replace(/[\\%_]/g, '\\$&') + '%';
-    const param = add(needle);
-    where.push(`(name ILIKE ${param} OR description ILIKE ${param} OR category ILIKE ${param})`);
+export async function queryPublicApiCatalog(filters:{
+  q?:string;category?:string;auth?:string;https?:string;cors?:string;page?:number;pageSize?:number;
+}){
+  if(!pool)throw new Error('The API catalog requires PostgreSQL.');
+  const page=Math.max(1,Math.min(100000,Math.trunc(filters.page||1)));
+  const pageSize=Math.max(1,Math.min(100,Math.trunc(filters.pageSize||24)));
+  const where:string[]=['is_active=true'];
+  const values:unknown[]=[];
+  const add=(value:unknown)=>{values.push(value);return '$'+values.length;};
+  if(filters.q?.trim()){
+    const needle='%'+filters.q.trim().slice(0,120).replace(/[\\%_]/g,'\\$&')+'%';
+    where.push('(name ILIKE '+add(needle)+' OR description ILIKE '+add(needle)+' OR category ILIKE '+add(needle)+')');
   }
-  if (filters.category && filters.category !== 'all') where.push('category=$' + (values.push(filters.category.slice(0,100))));
-  if (filters.auth && filters.auth !== 'all') where.push('lower(auth)=lower($' + values.push(filters.auth.slice(0,40)) + ')');
-  if (filters.https && filters.https !== 'all') where.push('lower(https)=lower($' + values.push(filters.https==='true'?'Yes':'No') + ')');
-  if (filters.cors && filters.cors !== 'all') where.push('lower(cors)=lower($' + values.push(filters.cors==='true'?'Yes':'No') + ')');
-  const clause = where.join(' AND ');
-  const count = await pool.query(`SELECT count(*)::int AS total FROM public_api_catalog WHERE ${clause}`, values);
-  const rows = await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,
-      icon_url,image_url,site_name,site_description,health_status,response_time_ms,last_health_check,imported_at
-    FROM public_api_catalog WHERE ${clause} ORDER BY category,name LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`, values);
-  return { items: rows.rows, page, pageSize, total: Number(count.rows[0]?.total || 0), categories: await listPublicApiCategories() };
+  if(filters.category&&filters.category!=='all')where.push('category='+add(filters.category.slice(0,100)));
+  if(filters.auth&&filters.auth!=='all')where.push('lower(auth)=lower('+add(filters.auth.slice(0,40))+')');
+  if(filters.https&&filters.https!=='all')where.push('lower(https)=lower('+add(filters.https==='true'?'Yes':'No')+')');
+  if(filters.cors&&filters.cors!=='all')where.push('lower(cors)=lower('+add(filters.cors==='true'?'Yes':'No')+')');
+  const clause=where.join(' AND ');
+  const count=await pool.query('SELECT count(*)::int AS total FROM public_api_catalog WHERE '+clause,values);
+  const rows=await pool.query('SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,icon_url,image_url,site_name,site_description,health_status,response_time_ms,last_health_check,imported_at FROM public_api_catalog WHERE '+clause+' ORDER BY category,name LIMIT '+pageSize+' OFFSET '+((page-1)*pageSize),values);
+  return {items:rows.rows,page,pageSize,total:Number(count.rows[0]?.total||0),categories:await listPublicApiCategories()};
 }
 
-export async function listPublicApiCategories() {
-  if (!pool) return [];
-  const result = await pool.query(`SELECT category,count(*)::int AS count
-    FROM public_api_catalog WHERE is_active=true GROUP BY category ORDER BY category`);
+export async function listPublicApiCategories(){
+  if(!pool)return [];
+  const result=await pool.query('SELECT category,count(*)::int AS count FROM public_api_catalog WHERE is_active=true GROUP BY category ORDER BY category');
   return result.rows;
 }
 
-export async function getPublicApiSyncStatus() {
-  if (!pool) return { configured: false, status: 'unavailable' };
-  const result = await pool.query(`SELECT source,status,items_imported,pages_fetched,last_started_at,last_completed_at,last_error
-    FROM public_api_sync_state WHERE source=$1 LIMIT 1`,[REPOSITORY_SOURCE]);
-  return { configured: true, sync: result.rows[0] || null };
-}
-+(base+i+1)).join(',')},now(),now())`;
-            });
-            await client.query(`INSERT INTO public_api_catalog
-              (source_key,name,description,auth,https,cors,category,homepage_url,docs_url,health_status,response_time_ms,source_payload,is_active,imported_at,updated_at)
-              VALUES ${tuples.join(',')}
-              ON CONFLICT(source_key) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,
-                auth=EXCLUDED.auth,https=EXCLUDED.https,cors=EXCLUDED.cors,category=EXCLUDED.category,
-                homepage_url=EXCLUDED.homepage_url,docs_url=EXCLUDED.docs_url,
-                health_status=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.health_status ELSE public_api_catalog.health_status END,
-                response_time_ms=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.response_time_ms ELSE public_api_catalog.response_time_ms END,
-                source_payload=EXCLUDED.source_payload,is_active=true,imported_at=now(),updated_at=now()`, values);
-          }
-          await client.query('COMMIT');
-        } catch (error) {
-          await client.query('ROLLBACK');
-          throw error;
-        } finally { client.release(); }
-        imported += result.rows.length;
-        if (result.hasMore === false) { complete = true; break; }
-        if (result.hasMore === null && result.rows.length < 10) { complete = true; break; }
-      }
-      if (!complete && pages < MAX_PAGES) complete = true;
-      const status = complete ? 'success' : 'partial';
-      await pool.query(`UPDATE public_api_sync_state SET status=$2,items_imported=$3,pages_fetched=$4,
-        last_completed_at=now(),last_error=NULL,updated_at=now() WHERE source='publicapis.lol'`,
-        [SOURCE,status,imported,pages]);
-      return { imported, pages, complete };
-    } catch (error) {
-      const message = error instanceof Error ? error.message.slice(0,500) : 'Catalog sync failed.';
-      await pool.query(`UPDATE public_api_sync_state SET status='error',items_imported=$2,pages_fetched=$3,
-        last_completed_at=now(),last_error=$4,updated_at=now() WHERE source='publicapis.lol'`,
-        [SOURCE,imported,pages,message]).catch(() => {});
-      throw error;
-    }
-  })();
-  try { return await syncInFlight; } finally { syncInFlight = null; }
-}
-
-export async function queryPublicApiCatalog(filters: {
-  q?: string; category?: string; auth?: string; https?: string; cors?: string; page?: number; pageSize?: number;
-}) {
-  if (!pool) throw new Error('The API catalog requires the PostgreSQL database.');
-  const page = Math.max(1, Math.min(100000, Math.trunc(filters.page || 1)));
-  const pageSize = Math.max(1, Math.min(100, Math.trunc(filters.pageSize || 24)));
-  const where: string[] = ['is_active=true'];
-  const values: unknown[] = [];
-  const add = (value: unknown) => { values.push(value); return '$' + values.length; };
-  if (filters.q?.trim()) {
-    const needle = '%' + filters.q.trim().slice(0,120).replace(/[\\%_]/g, '\\$&') + '%';
-    const param = add(needle);
-    where.push(`(name ILIKE ${param} OR description ILIKE ${param} OR category ILIKE ${param})`);
-  }
-  if (filters.category && filters.category !== 'all') where.push('category=$' + (values.push(filters.category.slice(0,100))));
-  if (filters.auth && filters.auth !== 'all') where.push('lower(auth)=lower($' + values.push(filters.auth.slice(0,40)) + ')');
-  if (filters.https && filters.https !== 'all') where.push('lower(https)=lower($' + values.push(filters.https==='true'?'Yes':'No') + ')');
-  if (filters.cors && filters.cors !== 'all') where.push('lower(cors)=lower($' + values.push(filters.cors==='true'?'Yes':'No') + ')');
-  const clause = where.join(' AND ');
-  const count = await pool.query(`SELECT count(*)::int AS total FROM public_api_catalog WHERE ${clause}`, values);
-  const rows = await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,
-      health_status,response_time_ms,last_health_check,imported_at
-    FROM public_api_catalog WHERE ${clause} ORDER BY category,name LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`, values);
-  return { items: rows.rows, page, pageSize, total: Number(count.rows[0]?.total || 0), categories: await listPublicApiCategories() };
-}
-
-export async function listPublicApiCategories() {
-  if (!pool) return [];
-  const result = await pool.query(`SELECT category,count(*)::int AS count
-    FROM public_api_catalog WHERE is_active=true GROUP BY category ORDER BY category`);
-  return result.rows;
-}
-
-export async function getPublicApiSyncStatus() {
-  if (!pool) return { configured: false, status: 'unavailable' };
-  const result = await pool.query(`SELECT source,status,items_imported,pages_fetched,last_started_at,last_completed_at,last_error
-    FROM public_api_sync_state WHERE source='publicapis.lol' LIMIT 1`);
-  return { configured: true, sync: result.rows[0] || null };
+export async function getPublicApiSyncStatus(){
+  if(!pool)return {configured:false,status:'unavailable'};
+  const result=await pool.query('SELECT source,status,items_imported,pages_fetched,last_started_at,last_completed_at,last_error FROM public_api_sync_state WHERE source=$1 LIMIT 1',[REPOSITORY_SOURCE]);
+  return {configured:true,sync:result.rows[0]||null};
 }
