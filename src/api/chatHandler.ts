@@ -400,7 +400,11 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         }
         toolRound++;
         toolMessages.push({role:'assistant',content:'',tool_calls:calls});
-        for (const call of calls.slice(0,5)) {
+        for (const [callIndex,call] of calls.entries()) {
+          if (callIndex >= 5) {
+            toolMessages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:JSON.stringify({error:'The per-turn API tool execution limit is five calls.'})});
+            continue;
+          }
           if (!toolDefinitions.some((definition:any)=>definition.function?.name===call.function.name)) {
             toolMessages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:JSON.stringify({error:'Tool is not enabled for this account.'})});
             continue;
