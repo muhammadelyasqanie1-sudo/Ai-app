@@ -393,12 +393,6 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
       return;
     }
 
-    if (req.method === 'GET' && pathname === '/api/capabilities') {
-      const snapshot = await getCapabilitySnapshot();
-      sendJson(res, snapshot.verified ? 200 : 503, snapshot, requestId);
-      return;
-    }
-
     if (pathname.startsWith('/api/')) {
       sendJson(res, 404, { error: 'API route not found.' }, requestId);
       return;
