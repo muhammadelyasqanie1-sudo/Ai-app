@@ -736,7 +736,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
         {tab==='connections'&&<AfgConnectionsPanel/>}
         {tab==='api-hub'&&<AfgApiHubPanel language={language} adminMode/>}
         {tab==='mcp'&&<AfgMcpPanel language={language}/>}
-        {tab==='9router'&&<AfgNineRouterPanel language={language}/ >}
+        {tab==='9router'&&<AfgNineRouterPanel language={language}/>}
         {tab==='terminal'&&<AfgOnlineAdminTerminal language={language}/> }
 
         {tab==='security'&&<div className="space-y-4"><div className={panel}><h2 className="mb-1 text-lg font-bold text-white">Active sessions</h2><p className="mb-4 text-xs text-slate-500">Session metadata only; raw session tokens are never returned.</p><div className="space-y-2">{sessions.map((session:any)=><div key={session.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3"><div><b className="text-xs text-white">{session.email}</b><p className="mt-1 text-[10px] text-slate-400">{session.user_agent||'Unknown device'} · IP {session.ip||'—'}</p><p className="mt-1 text-[10px] text-slate-500">Last seen {date(session.last_seen_at)} · Expires {date(session.expires_at)}</p></div><button className="rounded-xl border border-red-500/40 px-3 py-2 text-xs text-red-300" onClick={()=>void revokeSession(session)}>Revoke session</button></div>)}{!sessions.length&&<p className="text-sm text-slate-500">No active sessions found.</p>}</div></div>
