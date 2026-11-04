@@ -522,7 +522,11 @@ export default function App() {
           const response = await fetch(`${API_BASE_URL}/api/chat`, {
             method: 'POST',
             credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              // Cookie-authenticated POST requests must include the matching double-submit CSRF token.
+              'X-CSRF-Token': decodeURIComponent(document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || ''),
+            },
             body: JSON.stringify({
               messages: [...baseMessages, userMessage].map((m) => ({ role: m.role, content: m.content })),
               model: modelToUse,
