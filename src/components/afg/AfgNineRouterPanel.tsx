@@ -45,11 +45,21 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
  const [ttsModel,setTtsModel]=useState('');
  const [ttsText,setTtsText]=useState('');
  const [ttsAudio,setTtsAudio]=useState('');
+ const [voices,setVoices]=useState<any[]>([]);
+ const [voiceProvider,setVoiceProvider]=useState('edge-tts');
+ const [voiceLanguage,setVoiceLanguage]=useState('en');
+ const [modelInfo,setModelInfo]=useState<any>(null);
  const [sttModel,setSttModel]=useState('');
  const [sttFile,setSttFile]=useState<File|null>(null);
  const [sttText,setSttText]=useState('');
  const [videoModel,setVideoModel]=useState('');
  const [videoPrompt,setVideoPrompt]=useState('');
+ const [videoMode,setVideoMode]=useState<'generate'|'edit'|'extend'>('generate');
+ const [videoDuration,setVideoDuration]=useState('8');
+ const [videoAspect,setVideoAspect]=useState('16:9');
+ const [videoResolution,setVideoResolution]=useState('720p');
+ const [videoImageFile,setVideoImageFile]=useState<File|null>(null);
+ const [videoSourceUrl,setVideoSourceUrl]=useState('');
  const [videoJob,setVideoJob]=useState<any>(null);
  const [videoConnection,setVideoConnection]=useState('');
  const [visionModel,setVisionModel]=useState('');
@@ -112,6 +122,8 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
   const {data}=await call('/api/9router/embeddings',{method:'POST',body:JSON.stringify({model:embeddingModel,input:input.length>1?input:input[0]})});
   setEmbeddingResult({model:data.model,usage:data.usage,count:data.data?.length,dimensions:data.data?.[0]?.embedding?.length,preview:data.data?.[0]?.embedding?.slice(0,12)});
  });
+ const loadVoices=()=>run('voices',async()=>{if(!voiceProvider.trim())throw new Error('Choose a TTS provider.');const {data}=await call('/api/9router/audio/voices?provider='+encodeURIComponent(voiceProvider)+'&lang='+encodeURIComponent(voiceLanguage));const list=Array.isArray(data.data)?data.data:Array.isArray(data.voices)?data.voices:[];setVoices(list);if(!list.length)throw new Error('No voices were returned for this provider and language.');});
+ const inspectModel=()=>run('model-info',async()=>{const id=kind==='image'?imageModel:kind==='tts'?ttsModel:kind==='stt'?sttModel:kind==='embedding'?embeddingModel:searchModel;if(!id)throw new Error('Select a model first.');const {data}=await call('/api/9router/models/info?id='+encodeURIComponent(id)+'&kind='+encodeURIComponent(kind));setModelInfo(data);});
  const synthesize=()=>run('tts',async()=>{
   if(!ttsModel||!ttsText.trim())throw new Error('Choose a voice model and enter text.');
   const {data}=await call('/api/9router/audio/speech?response_format=json',{method:'POST',body:JSON.stringify({model:ttsModel,input:ttsText.slice(0,5000)})});
