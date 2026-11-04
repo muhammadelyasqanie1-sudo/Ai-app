@@ -112,14 +112,26 @@ export async function handleTerminalApi(req: IncomingMessage, res: ServerRespons
     const scopes = [...new Set(requested.filter(s=>allowed.has(s)))];
     if (!scopes.includes('terminal.read')) scopes.push('terminal.read');
     const token = 'afg_cli_' + randomBytes(32).toString('base64url');
-    const saved = await pool.query(
-      `INSERT INTO cli_tokens(user_id,token_hash,token_prefix,name,scopes,expires_at)
-       VALUES($1,$2,$3,$4,$5,now()+($6::text||' days')::interval)
-       RETURNING id,name,scopes,created_at,expires_at`,
-      [auth.user.id,hash(token),token.slice(0,16),name,scopes,String(days)],
-    );
-    await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',[auth.user.id,'terminal.cli_token.created','cli_token',saved.rows[0].id,JSON.stringify({scopes})]);
-    send(res,201,{token,tokenRecord:saved.rows[0],warning:'Copy this token now. It will not be shown again.'},requestId); return true;
+    const client = await pool.connect();
+    let tokenRecord;
+    try {
+      await client.query('BEGIN');
+      const saved = await client.query(
+        `INSERT INTO cli_tokens(user_id,token_hash,token_prefix,name,scopes,expires_at)
+         VALUES($1,$2,$3,$4,$5,now()+($6::text||' days')::interval)
+         RETURNING id,name,scopes,created_at,expires_at`,
+        [auth.user.id,hash(token),token.slice(0,16),name,scopes,String(days)],
+      );
+      tokenRecord = saved.rows[0];
+      await client.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',[auth.user.id,'terminal.cli_token.created','cli_token',tokenRecord.id,JSON.stringify({scopes})]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    send(res,201,{token,tokenRecord,warning:'Copy this token now. It will not be shown again.'},requestId); return true;
   }
 
   if (pathname === '/api/terminal/tokens' && method === 'GET') {
@@ -130,9 +142,25 @@ export async function handleTerminalApi(req: IncomingMessage, res: ServerRespons
   const tokenMatch = pathname.match(/^\/api\/terminal\/tokens\/([0-9a-f-]{36})$/i);
   if (tokenMatch && method === 'DELETE') {
     if (parseBearer(req)) { send(res,403,{error:'Token revocation requires a browser session.'},requestId); return true; }
-    const result = await pool.query('UPDATE cli_tokens SET revoked_at=now() WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL RETURNING id',[tokenMatch[1],auth.user.id]);
-    if (!result.rowCount) { send(res,404,{error:'Active token not found.'},requestId); return true; }
-    await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id) VALUES($1,$2,$3,$4)',[auth.user.id,'terminal.cli_token.revoked','cli_token',tokenMatch[1]]);
+    const client = await pool.connect();
+    let revoked = false;
+    try {
+      await client.query('BEGIN');
+      const result = await client.query('UPDATE cli_tokens SET revoked_at=now() WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL RETURNING id',[tokenMatch[1],auth.user.id]);
+      if (!result.rowCount) {
+        await client.query('ROLLBACK');
+      } else {
+        await client.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id) VALUES($1,$2,$3,$4)',[auth.user.id,'terminal.cli_token.revoked','cli_token',tokenMatch[1]]);
+        await client.query('COMMIT');
+        revoked = true;
+      }
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    if (!revoked) { send(res,404,{error:'Active token not found.'},requestId); return true; }
     send(res,200,{revoked:true},requestId); return true;
   }
 
