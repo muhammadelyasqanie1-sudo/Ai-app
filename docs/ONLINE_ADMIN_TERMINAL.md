@@ -38,6 +38,10 @@ Create a second service from the same GitHub repository and branch:
 
 Do not copy browser cookies, personal account passwords, or session tokens into the worker. Do not enable `TERMINAL_EXEC_ENABLED`. The existing web terminal remains a browser-isolated workspace.
 
+## Admin dashboard
+
+The authenticated Admin panel includes an **Online Admin Terminal** tab. It displays the last worker heartbeat, queue counts, recent jobs, job status, provider/model identity, and completed text output. It can submit an administrator AI request and refreshes status every eight seconds while the tab is open. The dashboard is not a shell and has no arbitrary command execution.
+
 ## Current delivery boundary
 
-This milestone adds the durable queue, worker process, and admin-only API. It does not yet route ordinary end-user `/api/chat` traffic through the queue and does not add the admin UI controls. Those are separate follow-up changes. The worker is not online until the database migration is applied and the separate Railway service is created and deployed.
+This milestone adds the durable queue, worker process, admin-only API, and administrator dashboard. It does not yet route ordinary end-user `/api/chat` traffic through the queue. The worker is not online until the database migration is applied and the separate Railway service is created and deployed. The dashboard will honestly show the worker as offline until a heartbeat is received.
