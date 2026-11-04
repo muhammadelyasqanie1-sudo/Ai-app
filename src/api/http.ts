@@ -17,6 +17,7 @@ import { handleAccountApi } from './account.ts';
 import { handleConversationsApi } from './conversations.ts';
 import { handleFilesApi } from './files.ts';
 import { handleTerminalApi } from './terminal.ts';
+import { handlePersonalGatewayApi } from './personalGateway.ts';
 
 type ApiRequest = IncomingMessage & { originalUrl?: string };
 
@@ -283,6 +284,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     }
 
     if (await handleAuthApi(req, res, pathname)) return;
+    if (await handlePersonalGatewayApi(req, res, pathname, requestId)) return;
     if (await handleBeatApiApi(req, res)) return;
     if (await handleUserIntegrationApi(req, res, pathname)) return;
     if (await handleAccountApi(req, res, pathname)) return;
