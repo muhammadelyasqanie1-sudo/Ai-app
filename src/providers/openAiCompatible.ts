@@ -209,7 +209,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
 
     async *streamChat(input: ChatRequest): AsyncIterable<ChatChunk> {
       const current = currentConfig();
-      if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
+      if (!current.baseUrl || (!current.apiKey && !current.allowEmptyApiKey) || !validBaseUrl(current.baseUrl)) {
         throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
       }
       let response: Response;
