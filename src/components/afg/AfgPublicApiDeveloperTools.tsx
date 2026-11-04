@@ -36,7 +36,7 @@ function zodOf(value:any):string{
  if(typeof value==='boolean')return 'z.boolean()';return 'z.unknown()';
 }
 function bytesToB64(bytes:Uint8Array):string{let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(binary);}
-function b64ToBytes(value:string):Uint8Array{const binary=atob(value.replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from(binary,c=>c.charCodeAt(0));}
+function b64ToBytes(value:string):Uint8Array{let normalized=value.replace(/-/g,'+').replace(/_/g,'/').replace(/\\s/g,'');normalized+='='.repeat((4-normalized.length%4)%4);const binary=atob(normalized);return Uint8Array.from(binary,c=>c.charCodeAt(0));}
 function tokenizeShell(input:string):string[]{
  const result:string[]=[];let token='',quote='',escaped=false,active=false;
  for(const ch of input){
@@ -122,6 +122,7 @@ export const AfgPublicApiDeveloperTools:React.FC<{language:Language}>=({language
  const [timestampZone,setTimestampZone]=useState('local');
  const [uuidVersion,setUuidVersion]=useState<'v4'|'v7'>('v7');
  const [file,setFile]=useState<File|null>(null);
+ const [base64Url,setBase64Url]=useState(false);
  const [jwtKey,setJwtKey]=useState('');
  const [jwt,setJwt]=useState('');
  const [uuidCount,setUuidCount]=useState(5);
@@ -143,7 +144,7 @@ export const AfgPublicApiDeveloperTools:React.FC<{language:Language}>=({language
  const convertTimestamp=()=>run(()=>{
   const raw=timestamp.trim();if(!/^-?\\d{1,24}$/.test(raw))throw new Error('Enter an integer Unix timestamp.');
   const value=BigInt(raw),digits=raw.replace('-','').length;
-  const unit=digits<=10?'seconds':digits<=13?'milliseconds':digits<=16?'microseconds':'nanoseconds';
+  const unit=digits<=11?'seconds':digits<=14?'milliseconds':digits<=17?'microseconds':'nanoseconds';
   const milliseconds=unit==='seconds'?value*1000n:unit==='milliseconds'?value:unit==='microseconds'?value/1000n:value/1000000n;
   const ms=Number(milliseconds);if(!Number.isFinite(ms)||Math.abs(ms)>8.64e15)throw new Error('Timestamp is outside the supported JavaScript Date range.');
   const date=new Date(ms);const iso=date.toISOString();
@@ -151,7 +152,7 @@ export const AfgPublicApiDeveloperTools:React.FC<{language:Language}>=({language
   return JSON.stringify({detectedUnit:unit,iso,utc,local,unixSeconds:String(BigInt(Math.trunc(ms/1000))),unixMilliseconds:String(Math.trunc(ms)),unixMicroseconds:String(BigInt(Math.trunc(ms))*1000n),unixNanoseconds:String(BigInt(Math.trunc(ms))*1000000n)},null,2);
  });
  const dateToTimestamp=()=>run(()=>{
-  const date=new Date(timestampDate);if(!Number.isFinite(date.getTime()))throw new Error('Choose a valid date and time.');
+  const date=new Date(timestampZone==='utc'?(timestampDate.length===16?timestampDate+':00Z':timestampDate+'Z'):timestampDate);if(!Number.isFinite(date.getTime()))throw new Error('Choose a valid date and time.');
   const ms=date.getTime();return JSON.stringify({iso:date.toISOString(),unixSeconds:Math.floor(ms/1000),unixMilliseconds:ms,unixMicroseconds:String(BigInt(ms)*1000n),unixNanoseconds:String(BigInt(ms)*1000000n),selectedTimezone:timestampZone==='utc'?'UTC':'Device local timezone'},null,2);
  });
  const encodeFile=async()=>{setMessage('');setOutput('');if(!file){setMessage('Choose a file first.');return;}if(file.size>10*1024*1024){setMessage('File must be 10 MB or smaller.');return;}try{const dataUrl=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(new Error('Could not read the file.'));reader.readAsDataURL(file);});setOutput(JSON.stringify({name:file.name,type:file.type||'application/octet-stream',sizeBytes:file.size,dataUrl},null,2));}catch(e){setMessage(e instanceof Error?e.message:'Could not encode file.');}};
@@ -198,7 +199,7 @@ export const AfgPublicApiDeveloperTools:React.FC<{language:Language}>=({language
   }catch(e){setMessage(e instanceof Error?e.message:'JWT verification failed.');}
  };
 
- const base64=()=>run(()=>{if(active==='base64'){try{return new TextDecoder().decode(b64ToBytes(input));}catch{throw new Error('Invalid Base64/Base64URL text.');}}return bytesToB64(new TextEncoder().encode(input));});
+ const base64=()=>run(()=>{if(active==='base64'){try{return new TextDecoder().decode(b64ToBytes(input));}catch{throw new Error('Invalid Base64/Base64URL text.');}}const encoded=bytesToB64(new TextEncoder().encode(input));return base64Url?encoded.replace(/=/g,'').replace(/\\+/g,'-').replace(/\\//g,'_'):encoded;});
  const convertCurl=()=>run(()=>{const result=curlToCode(curl);return ['--- JavaScript fetch ---',result.js,'--- Axios ---',result.axios,'--- Python requests ---',result.python,'--- Go ---',result.go,'--- PHP ---',result.php,'--- Ruby ---',result.ruby].join('\n\n');});
  const explainCron=()=>run(()=>{const parts=cron.trim().split(/\s+/);if(parts.length!==5)throw new Error('Use five fields: minute hour day month weekday.');const next=nextCron(cron);return 'Minute: '+parts[0]+'\nHour: '+parts[1]+'\nDay of month: '+parts[2]+'\nMonth: '+parts[3]+'\nDay of week: '+parts[4]+'\n\nNext matching local runs:\n'+next.map((v,i)=>(i+1)+'. '+v).join('\n');});
  const generateTool=()=>run(()=>{const schema=JSON.parse(toolSchema);if(schema.type!=='object'||!schema.properties)throw new Error('Tool schema needs type object and properties.');const properties={type:'object',properties:schema.properties,required:schema.required||[],additionalProperties:false};const fn={type:'function',function:{name:toolName,description:toolDescription,parameters:properties}};const mcp={name:toolName,description:toolDescription,inputSchema:properties};return JSON.stringify({openaiTool:fn,mcpTool:mcp,httpRequestTemplate:{method:toolMethod,url:toolUrl,security:'Keep credentials in server-side secret storage.'}},null,2);});
