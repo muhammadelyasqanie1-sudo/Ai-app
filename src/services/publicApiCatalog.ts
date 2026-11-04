@@ -276,12 +276,17 @@ export async function syncPublicApiCatalog():Promise<{imported:number;pages:numb
           if(result.hasMore===false){complete=true;break;}
         }
       }
+      const allKeys=new Set<string>();
       for(const result of sourcePages){
         pages++;
         if(!result.rows.length){complete=true;break;}
         await persistApiBatch(result.rows);
+        for(const row of result.rows)allKeys.add(row.sourceKey);
         imported+=result.rows.length;
         if(result.hasMore===false)complete=true;
+      }
+      if(complete&&allKeys.size){
+        await pool.query('UPDATE public_api_catalog SET is_active=false,updated_at=now() WHERE NOT (source_key = ANY($1::text[]))',[Array.from(allKeys)]);
       }
       const status=complete?'success':'partial';
       await pool.query("UPDATE public_api_sync_state SET status=$2,items_imported=$3,pages_fetched=$4,last_completed_at=now(),last_error=NULL,updated_at=now() WHERE source=$1",
@@ -326,6 +331,7 @@ export async function syncPublicMcpCatalog():Promise<{imported:number}> {
     await client.query('COMMIT');
   }catch(error){await client.query('ROLLBACK');throw error;}
   finally{client.release();}
+  await pool.query('UPDATE mcp_directory_catalog SET is_active=false,updated_at=now() WHERE NOT (slug = ANY($1::text[]))',[records.map(item=>item.slug)]);
   return {imported:records.length};
 }
 
