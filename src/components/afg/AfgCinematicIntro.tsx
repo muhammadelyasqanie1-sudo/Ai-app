@@ -332,12 +332,6 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
     };
   }, []);
 
-  useEffect(() => () => {
-    const audio = audioContextRef.current;
-    if (audio && audio.state !== 'closed') void audio.close().catch(() => undefined);
-    audioContextRef.current = null;
-  }, []);
-
   const playDigitalChime = async () => {
     if (!soundEnabled || typeof window === 'undefined' || !('AudioContext' in window)) return;
     try {
@@ -350,6 +344,7 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
       master.gain.exponentialRampToValueAtTime(0.16, now + 0.06);
       master.gain.exponentialRampToValueAtTime(0.0001, now + 1.9);
       master.connect(audio.destination);
+      let endedOscillators = 0;
       [523.25, 659.25, 783.99, 1046.5].forEach((frequency, index) => {
         const oscillator = audio.createOscillator();
         const gain = audio.createGain();
@@ -361,7 +356,8 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
         oscillator.connect(gain);
         gain.connect(master);
         oscillator.onended = () => {
-          if (audioContextRef.current === audio) {
+          endedOscillators += 1;
+          if (endedOscillators === 4 && audioContextRef.current === audio) {
             audioContextRef.current = null;
             void audio.close().catch(() => undefined);
           }
@@ -370,6 +366,9 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
         oscillator.stop(now + 1.95);
       });
     } catch {
+      const audio = audioContextRef.current;
+      audioContextRef.current = null;
+      if (audio && audio.state !== 'closed') void audio.close().catch(() => undefined);
       // Audio is decorative; entry must work even when sound is unavailable.
     }
   };
@@ -379,7 +378,7 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
   return (
     <main
       className={`afg-boot-screen ${reducedMotion ? 'is-reduced' : ''}`}
-      lang={isRtl ? (language === 'dari' ? 'fa-AF' : language) : 'en'}
+      lang={isRtl ? ({ dari: 'fa-AF', persian: 'fa', pashto: 'ps', arabic: 'ar', urdu: 'ur' } as Partial<Record<Language, string>>)[language] || 'fa' : 'en'}
       dir={isRtl ? 'rtl' : 'ltr'}
       aria-label={isRtl ? 'خوش‌آمدگویی سینمایی AFG AI' : 'AFG AI cinematic welcome'}
     >
