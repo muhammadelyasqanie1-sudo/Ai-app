@@ -172,7 +172,7 @@ export async function authenticateRequest(req: IncomingMessage): Promise<Authent
     id: row.id,
     email: row.email || '',
     displayName: row.display_name || '',
-    role: row.role === 'superadmin' ? 'superadmin' : row.role === 'admin' ? 'admin' : 'user',
+    role: typeof row.role === 'string' ? row.role : 'user',
     status: row.status,
     defaultModel: row.default_model || null,
   };
