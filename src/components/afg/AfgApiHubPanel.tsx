@@ -5,7 +5,7 @@ import { AfgApiConnectorPanel } from './AfgApiConnectorPanel.tsx';
 
 type CatalogItem={source_key:string;name:string;description:string;auth:string;https:string;cors:string;category:string;homepage_url:string|null;docs_url:string|null;icon_url:string|null;image_url:string|null;site_name:string|null;site_description:string|null;health_status:string;response_time_ms:number|null;last_health_check:string|null};
 type CatalogResponse={items:CatalogItem[];page:number;pageSize:number;total:number;categories:Array<{category:string;count:number}>};
-type SyncState={configured?:boolean;sync?:{status:string;items_imported:number;pages_fetched:number;last_started_at:string|null;last_completed_at:string|null;last_error:string|null}|null};
+type SyncState={configured?:boolean;sync?:{status:string;items_imported:number;pages_fetched:number;last_started_at:string|null;last_completed_at:string|null;last_error:string|null}|null;mcpDirectory?:{total:number}};
 type Provider={id:string;displayName:string;configured:boolean;enabled:boolean};
 const csrf=()=>decodeURIComponent(document.cookie.split('; ').find(x=>x.startsWith('afg_csrf='))?.slice(9)||'');
 async function request(path:string,init:RequestInit={}){
@@ -60,7 +60,7 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean}>=({l
    setRefreshing(true);setError('');setNotice('');
    try{
      const result=await request('/api/admin/api-hub/sync',{method:'POST',body:'{}'});
-     setNotice(dari?'همگام‌سازی فهرست انجام شد.':'Catalog synchronization finished.');
+     const apiCount=Number(result.result?.catalog?.imported||0);const mcpCount=Number(result.result?.mcpDirectory?.imported||0);\n     setNotice(dari?('همگام‌سازی تکمیل شد: '+apiCount+' API و '+mcpCount+' سرور MCP.'):('Synced '+apiCount+' APIs and '+mcpCount+' MCP servers from GitHub.'));
      setPage(1);
      await load();
      if(result.status==='partial')setNotice(dari?'همگام‌سازی ناقص بود؛ وضعیت را بررسی کنید.':'Catalog sync was partial; review the sync status.');
@@ -101,7 +101,7 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean}>=({l
     {adminMode&&<button disabled={refreshing} onClick={()=>void syncNow()} className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-50"><RefreshCw className={'h-4 w-4 '+(refreshing?'animate-spin':'')}/>{label('Sync catalog','همگام‌سازی فهرست')}</button>}
    </div>
    <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
-    <a href="https://publicapis.lol/no-api-key" target="_blank" rel="noreferrer noopener" className="rounded-lg border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-slate-300">No API key ↗</a>
+    <a href="https://github.com/public-apis/public-apis" target="_blank" rel="noreferrer noopener" className="rounded-lg border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-slate-300">GitHub source ↗</a>\n    <a href="https://publicapis.lol/no-api-key" target="_blank" rel="noreferrer noopener" className="rounded-lg border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-slate-300">No API key ↗</a>
     <a href="https://publicapis.lol/trending" target="_blank" rel="noreferrer noopener" className="rounded-lg border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-slate-300">Trending ↗</a>
     <a href="https://publicapis.lol/status" target="_blank" rel="noreferrer noopener" className="rounded-lg border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-slate-300">Daily status ↗</a>
     <a href="https://publicapis.lol/mcp" target="_blank" rel="noreferrer noopener" className="rounded-lg border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-slate-300">MCP directory ↗</a>
@@ -111,12 +111,12 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean}>=({l
    </div>
    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
     <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('Catalog entries','تعداد APIها')}</p><b className="text-xl text-white">{(data?.total||0).toLocaleString()}</b></div>
-    <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('Categories','دسته‌ها')}</p><b className="text-xl text-white">{(data?.categories?.length||0).toLocaleString()}</b></div>
+    <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('Categories','دسته‌ها')}</p><b className="text-xl text-white">{(data?.categories?.length||0).toLocaleString()}</b></div>\n    <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('MCP servers','سرورهای MCP')}</p><b className="text-xl text-white">{(sync?.mcpDirectory?.total||0).toLocaleString()}</b></div>
     <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('Catalog sync','وضعیت همگام‌سازی')}</p><b className="text-sm text-white">{sync?.sync?.status||'—'}</b></div>
     <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">9Router Gateway</p><b className={'text-sm '+(gateway?.configured?'text-emerald-300':'text-amber-300')}>{gateway?.configured?label('Configured','تنظیم شده'):label('Not configured','تنظیم نشده')}</b></div>
    </div>
    {sync?.sync?.last_error&&<p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-2 text-xs text-amber-300">{sync.sync.last_error}</p>}
-   {!gateway?.configured&&<p className="mt-3 text-[11px] text-slate-400">{label('Set NINEROUTER_BASE_URL and NINEROUTER_API_KEY as server-only environment variables, then apply migration 0012.','متغیرهای NINEROUTER_BASE_URL و NINEROUTER_API_KEY را فقط در محیط سرور تنظیم کنید و مهاجرت 0012 را اجرا کنید.')}</p>}
+   {!gateway?.configured&&<p className="mt-3 text-[11px] text-slate-400">{label('Set NINEROUTER_BASE_URL on the server; NINEROUTER_API_KEY is optional when 9Router authentication is disabled. Apply migrations 0012–0013.','NINEROUTER_BASE_URL را فقط در سرور تنظیم کنید؛ NINEROUTER_API_KEY فقط در صورت فعال‌بودن احراز هویت 9Router لازم است. مهاجرت‌های 0012 تا 0013 را اجرا کنید.')}</p>}
   </section>
   {error&&<div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>}
   {notice&&<div role="status" className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-300">{notice}</div>}
