@@ -158,6 +158,42 @@ export const AfgPublicApiDeveloperTools:React.FC<{language:Language}>=({language
   return JSON.stringify({header,payload,signaturePresent:Boolean(parts[2]),signatureVerified:false,note:'This tool only decodes header and payload. It does not verify the signature.'},null,2);
  });
  const makeUuids=()=>run(()=>Array.from({length:Math.max(1,Math.min(100,uuidCount))},()=>uuidVersion==='v4'?uuidV4():uuidV7()).join('\n'));
+ const verifyJwt=async()=>{
+  setOutput('');setMessage('');
+  try{
+   const parts=jwt.trim().split('.');if(parts.length!==3)throw new Error('A JWT must contain three segments.');
+   const decodePart=(part:string)=>JSON.parse(new TextDecoder().decode(b64ToBytes(part)));
+   const header=decodePart(parts[0]),payload=decodePart(parts[1]),algorithm=String(header.alg||'');
+   if(!jwtKey.trim())throw new Error('Enter the HMAC secret or public key.');
+   const input=new TextEncoder().encode(parts[0]+'.'+parts[1]),signature=b64ToBytes(parts[2]);
+   const hashName=algorithm.endsWith('256')?'SHA-256':algorithm.endsWith('384')?'SHA-384':algorithm.endsWith('512')?'SHA-512':'';
+   if(!hashName)throw new Error('Only HS, RS, PS and ES JWT algorithms with SHA-256/384/512 are supported.');
+   let key:CryptoKey,verifyAlgorithm:AlgorithmIdentifier|RsaPssParams|EcdsaParams;
+   if(algorithm.startsWith('HS')){
+    key=await crypto.subtle.importKey('raw',new TextEncoder().encode(jwtKey),{name:'HMAC',hash:hashName},false,['verify']);
+    verifyAlgorithm={name:'HMAC'};
+   }else{
+    if(jwtKey.includes('PRIVATE KEY'))throw new Error('Only a public key can be used for JWT verification.');
+    const pem=jwtKey.replace(/-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\s/g,'');
+    const binary=atob(pem),der=Uint8Array.from(binary,c=>c.charCodeAt(0));
+    if(algorithm.startsWith('RS')||algorithm.startsWith('PS')){
+     const name=algorithm.startsWith('PS')?'RSA-PSS':'RSASSA-PKCS1-v1_5';
+     key=await crypto.subtle.importKey('spki',der,{name,modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:hashName},false,['verify']);
+     verifyAlgorithm=algorithm.startsWith('PS')?{name:'RSA-PSS',saltLength:Number(hashName.slice(5))/8}:{name:'RSASSA-PKCS1-v1_5'};
+    }else if(algorithm.startsWith('ES')){
+     const namedCurve=algorithm==='ES256'?'P-256':algorithm==='ES384'?'P-384':algorithm==='ES512'?'P-521':'';
+     if(!namedCurve)throw new Error('Unsupported ECDSA curve.');
+     key=await crypto.subtle.importKey('spki',der,{name:'ECDSA',namedCurve},false,['verify']);
+     verifyAlgorithm={name:'ECDSA',hash:hashName};
+    }else throw new Error('Unsupported JWT algorithm.');
+   }
+   const verified=await crypto.subtle.verify(verifyAlgorithm,key,signature,input);
+   const now=Math.floor(Date.now()/1000);
+   const exp=typeof payload.exp==='number'?payload.exp:null,nbf=typeof payload.nbf==='number'?payload.nbf:null;
+   setOutput(JSON.stringify({header,payload,algorithm,signatureVerified:verified,claims:{expired:exp===null?null:now>=exp,notYetValid:nbf===null?null:now<nbf,expiresAt:exp===null?null:new Date(exp*1000).toISOString(),notBefore:nbf===null?null:new Date(nbf*1000).toISOString()},verificationKeyWasSentToServer:false},null,2));
+  }catch(e){setMessage(e instanceof Error?e.message:'JWT verification failed.');}
+ };
+
  const base64=()=>run(()=>{if(active==='base64'){try{return new TextDecoder().decode(b64ToBytes(input));}catch{throw new Error('Invalid Base64/Base64URL text.');}}return bytesToB64(new TextEncoder().encode(input));});
  const convertCurl=()=>run(()=>{const result=curlToCode(curl);return result.js+'\n\n--- Python requests ---\n'+result.python;});
  const explainCron=()=>run(()=>{const parts=cron.trim().split(/\s+/);if(parts.length!==5)throw new Error('Use five fields: minute hour day month weekday.');const next=nextCron(cron);return 'Minute: '+parts[0]+'\nHour: '+parts[1]+'\nDay of month: '+parts[2]+'\nMonth: '+parts[3]+'\nDay of week: '+parts[4]+'\n\nNext matching local runs:\n'+next.map((v,i)=>(i+1)+'. '+v).join('\n');});
