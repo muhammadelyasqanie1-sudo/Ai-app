@@ -22,6 +22,20 @@ type ApiRequest = IncomingMessage & { originalUrl?: string };
 
 const localIpRateCounters = new Map<string, { count: number; resetAt: number }>();
 
+let capabilitySnapshotCache: { expiresAt: number; value: Awaited<ReturnType<typeof getCapabilitySnapshot>> } | null = null;
+let capabilitySnapshotPending: Promise<Awaited<ReturnType<typeof getCapabilitySnapshot>>> | null = null;
+async function getCachedCapabilitySnapshot() {
+  if (capabilitySnapshotCache && capabilitySnapshotCache.expiresAt > Date.now()) return capabilitySnapshotCache.value;
+  if (capabilitySnapshotPending) return capabilitySnapshotPending;
+  capabilitySnapshotPending = getCapabilitySnapshot();
+  try {
+    const value = await capabilitySnapshotPending;
+    capabilitySnapshotCache = { value, expiresAt: Date.now() + 15_000 };
+    return value;
+  } finally { capabilitySnapshotPending = null; }
+}
+
+
 function corsHeaders(req: IncomingMessage) {
   const origin = req.headers.origin;
   const configured = (process.env.APP_ORIGIN || '').split(',').map((value) => value.trim()).filter(Boolean);
@@ -217,7 +231,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     }
     if (await enforceAdminConfiguredRateLimits(req, res, pathname, requestId)) return;
     if (req.method === 'GET' && pathname === '/api/bootstrap') {
-      const snapshot = await applyModelAccess(req, await getCapabilitySnapshot());
+      const snapshot = await applyModelAccess(req, await getCachedCapabilitySnapshot());
       const database = await checkDatabase();
       sendJson(res, 200, { ...snapshot, service: { status: snapshot.verified ? 'live' : 'degraded', database }, bootstrappedAt: new Date().toISOString() }, requestId);
       return;
