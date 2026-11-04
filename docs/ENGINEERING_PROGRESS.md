@@ -452,7 +452,7 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 
 ## Milestone 16 — Backend-enforced staff RBAC and Supabase TLS defaults
 
-- Added migration `0008_staff_rbac_foundation.sql` with server-side permission maps for provider managers, model managers, support staff, moderators, analysts, and read-only staff.
+- Added migration `0009_staff_rbac_foundation.sql` with server-side permission maps for provider managers, model managers, support staff, moderators, analysts, and read-only staff.
 - Admin API authorization now resolves each staff member's permissions from `roles.permissions_json`; frontend role claims are not trusted. Root roles remain `admin` and `superadmin`.
 - Staff permission edits are root-only and audited. Role changes verify registered roles, and user suspension/reactivation is permission-gated. Existing root-account protections are retained.
 - Added regression coverage for permission-to-route mapping and user-action authorization.
