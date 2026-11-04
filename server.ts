@@ -56,6 +56,10 @@ app.use((req, res, next) => {
   next();
 });
 
+// Lightweight liveness endpoint used by the client keepalive; does not trigger provider discovery.
+app.head('/api/health', (_req, res) => { res.setHeader('Cache-Control', 'no-store'); res.status(204).end(); });
+app.get('/api/health', (_req, res) => { res.setHeader('Cache-Control', 'no-store'); res.status(200).json({ status: 'ok' }); });
+
 // Keep one route table and one request boundary for Vite development and Express production.
 app.use('/api', (req, res) => {
   void handleApiRequest(req, res);

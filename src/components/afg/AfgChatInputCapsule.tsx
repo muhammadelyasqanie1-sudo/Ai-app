@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { Language, ChatAttachment, AfgModelOption } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
+import { AfgModelSelector } from './AfgModelSelector';
 import { formatFileSize } from '../../utils/i18n';
 
 interface AfgChatInputCapsuleProps {
@@ -294,34 +295,10 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
         </div>
       )}
 
-      {/* Model picker stays with the composer so the active model is always visible. */}
+      {/* Compact Claude-inspired model trigger with grouped bottom sheet. */}
       <div className="afg-model-chip flex items-center justify-between gap-2 px-3 py-1.5 mb-2 rounded-full border">
-        <div className="flex min-w-0 flex-wrap items-center gap-2"><span className="text-xs text-cyan-300 font-semibold">{language === 'dari' ? 'مدل هوش مصنوعی' : 'AI model'}</span>{(planMode || thinkingLevel !== 'standard') && <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-1 text-[9px] font-semibold text-cyan-200">{planMode ? (language === 'dari' ? 'برنامه‌ریزی' : 'Plan mode') : '🧠 ' + thinkingLevel}</span>}<span className="hidden sm:inline rounded-full border border-slate-500/30 px-2 py-1 text-[9px] text-slate-400">{permissionLevel.toUpperCase()}</span></div>
-        <select
-          value={selectedModel}
-          onChange={(event) => onSelectModel(event.target.value)}
-          disabled={modelsLoading}
-          aria-label={language === 'dari' ? 'انتخاب مدل هوش مصنوعی' : 'Select AI model'}
-          className="min-w-0 max-w-[72%] rounded-xl border border-cyan-700/50 bg-slate-900 px-2.5 py-2 text-[11px] text-cyan-100 outline-none focus:border-cyan-400 disabled:opacity-60"
-        >
-          {modelOptions.length > 0 ? <>
-            <option value="auto">{language === 'dari' ? 'خودکار — ارزان‌ترین مدل قیمت‌گذاری‌شده؛ در غیر آن مدل سالم پیش‌فرض' : 'Auto — lowest priced when configured; otherwise healthy default'}</option>
-            {[...new Set(modelOptions.map((model) => model.providerId))].map((providerId) => (
-              <optgroup key={providerId} label={providerId}>
-                {modelOptions.filter((model) => model.providerId === providerId).map((model) => (
-                  <option key={providerId + ':' + model.id} value={model.providerId + '::' + model.id} disabled={!model.selectable} title={model.selectable ? model.displayName : (model.disabledReason || 'Provider not reachable.')}>
-                    {model.displayName} · {Object.entries(model.capabilities || {}).filter(([, enabled]) => enabled).map(([capability]) => capability === 'vision' ? 'Vision' : capability === 'text' ? 'Text' : capability === 'image' ? 'Image' : capability).slice(0,3).join(' / ')}{model.selectable ? '' : ' — ' + (model.disabledReason || 'Provider not reachable.')}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </> : availableModels.length > 0 ? <>
-            <option value="auto">Auto — lowest-cost healthy model</option>
-            {availableModels.map((model) => <option key={model} value={model}>{model}</option>)}
-          </> : (
-            <option value="auto">{language === 'dari' ? 'خودکار — انتخاب مدل سالم در سرور' : 'Auto — server selects a healthy model'}</option>
-          )}
-        </select>
+        <div className="flex min-w-0 flex-wrap items-center gap-2"><span className="text-xs font-semibold">{language === 'dari' ? 'مدل' : 'Model'}</span>{(planMode || thinkingLevel !== 'standard') && <span className="rounded-full border px-2 py-1 text-[9px] font-semibold">{planMode ? (language === 'dari' ? 'برنامه‌ریزی' : 'Plan mode') : '🧠 ' + thinkingLevel}</span>}</div>
+        <AfgModelSelector models={modelOptions} selectedModel={selectedModel} onSelect={onSelectModel} language={language} loading={modelsLoading} />
       </div>
 
       {/* The Signature AFG AI Capsule Input Container (Matching Screenshot 1) */}
