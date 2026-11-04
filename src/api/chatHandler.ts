@@ -147,6 +147,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     if (abortController.signal.aborted) return 'network';
     if (error instanceof ProviderAdapterError) {
       if (error.status === 401 || error.status === 403) return 'auth';
+      if (error.status === 402 || /insufficient_funds|quota_exhausted/i.test(error.code)) return 'quota_exhausted';
       if (error.status === 429 || /rate_limit|quota/i.test(error.code)) return 'rate_limit';
       if (error.status >= 500) return 'provider_5xx';
       if (/model_not_verified|provider_not_registered|provider_not_configured/i.test(error.code)) return 'unavailable_model';
@@ -392,7 +393,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       await persistUsage(timedOut?'timeout':'error');
       await persistError(error);
       const streamErrorCode = classifyError(error);
-      const streamRetryable = !['invalid_request','content_policy','auth','rate_limit'].includes(streamErrorCode);
+      const streamRetryable = !['invalid_request','content_policy','auth','rate_limit','quota_exhausted'].includes(streamErrorCode);
       console.error('AI_PROVIDER_STREAM_FAILED', JSON.stringify({
         requestId: id,
         provider: activeModelId.split('::')[0] || prepared.providerId,
@@ -406,7 +407,9 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       if (!res.destroyed && !res.writableEnded) {
         res.write(`data: ${JSON.stringify({
           type: 'error',
-          error: 'The AI response stream was interrupted. Your prompt is still available to retry.',
+          error: streamErrorCode === 'quota_exhausted'
+            ? 'The selected provider has exhausted its monthly token allowance and account balance. Switch to another provider or wait for the allowance to reset.'
+            : 'The AI response stream was interrupted. Your prompt is still available to retry.',
           errorCode: streamErrorCode,
           retryable: streamRetryable,
           requestId: id,
