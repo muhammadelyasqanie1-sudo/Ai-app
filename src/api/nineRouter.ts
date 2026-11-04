@@ -14,11 +14,35 @@ for(const [address,prefix] of [
  ['::',128],['::1',128],['::ffff:0:0',96],['64:ff9b::',96],['100::',64],
  ['2001:db8::',32],['fc00::',7],['fe80::',10],['ff00::',8]
 ] as const)blocked.addSubnet(address,prefix,'ipv6');
+const blockedIpv4Ranges:readonly [string,number][]=[
+ ['0.0.0.0',8],['10.0.0.0',8],['100.64.0.0',10],['127.0.0.0',8],['169.254.0.0',16],
+ ['172.16.0.0',12],['192.0.0.0',24],['192.0.2.0',24],['192.88.99.0',24],['192.168.0.0',16],
+ ['198.18.0.0',15],['198.51.100.0',24],['203.0.113.0',24],['224.0.0.0',4],['240.0.0.0',4]
+];
+function ipv4Number(address:string):number|null{
+ const parts=address.split('.');
+ if(parts.length!==4)return null;
+ let value=0;
+ for(const part of parts){
+  if(!/^\\d{1,3}$/.test(part))return null;
+  const octet=Number(part);if(octet>255)return null;
+  value=(value*256)+octet;
+ }
+ return value>>>0;
+}
+function isBlockedIpv4(address:string):boolean{
+ const value=ipv4Number(address);if(value===null)return true;
+ return blockedIpv4Ranges.some(([network,prefix])=>{
+  const base=ipv4Number(network);if(base===null)return true;
+  const mask=prefix===0?0:(0xffffffff<<(32-prefix))>>>0;
+  return (value&mask)===(base&mask);
+ });
+}
 function isPublicAddress(address:string):boolean{
  const family=isIP(address);if(!family)return false;
- if(family===4)return !blocked.check(address,'ipv4');
+ if(family===4)return !isBlockedIpv4(address);
  const lower=address.toLowerCase();
- if(lower.startsWith('::ffff:')){const mapped=lower.slice(7);if(isIP(mapped)===4)return !blocked.check(mapped,'ipv4');}
+ if(lower.startsWith('::ffff:')){const mapped=lower.slice(7);if(isIP(mapped)===4)return !isBlockedIpv4(mapped);}
  return !blocked.check(address,'ipv6');
 }
 async function routerBase():Promise<URL>{
