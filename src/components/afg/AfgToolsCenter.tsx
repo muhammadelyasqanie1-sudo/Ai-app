@@ -25,6 +25,7 @@ import { translations } from '../../utils/afgTranslations';
 import { AfgProductivityCenter } from './AfgProductivityCenter';
 import { AfgApiHubPanel } from './AfgApiHubPanel';
 import { AfgMcpPanel } from './AfgMcpPanel';
+import { AfgNineRouterPanel } from './AfgNineRouterPanel';
 
 interface AfgToolsCenterProps {
   language: Language;
@@ -237,6 +238,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   };
 
   const toolCards = [
+    { id: '9router' as ToolSubTab, title: '9Router Gateway', desc: language === 'dari' ? 'گفتگو، تصویر، صدا، ویدیو، جستجو و مدل‌های چندرسانه‌ای' : 'Chat, image, audio, video, search and multimodal models', ready: true, icon: Sparkles, color: 'text-fuchsia-300', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-400/40' },
     { id: 'api-hub' as ToolSubTab, title: language === 'dari' ? 'مرکز جامع API' : 'Universal API Hub', desc: language === 'dari' ? 'کاتالوگ Public APIs، اتصال سرویس‌ها و ساخت ابزار هوشمند' : 'Discover Public APIs, connect services and create AI tools', ready: true, icon: Network, color: 'text-cyan-300', bg: 'bg-cyan-500/10', border: 'border-cyan-400/40' },
     { id: 'mcp' as ToolSubTab, title: language === 'dari' ? 'ابزارها و سرورهای MCP' : 'MCP Servers & Tools', desc: language === 'dari' ? 'اتصال امن ابزارهای استاندارد هوش مصنوعی' : 'Connect secure, standardized AI tools', ready: true, icon: PlugZap, color: 'text-violet-300', bg: 'bg-violet-500/10', border: 'border-violet-400/40' },
     { id: 'productivity' as ToolSubTab, title: language === 'dari' ? 'مرکز بهره‌وری' : 'Productivity Center', desc: language === 'dari' ? 'یادداشت، وظایف، آموزش، جلسه و برنامه‌ریزی' : 'Notes, tasks, study, meetings and planning', ready: Boolean(capabilities.chat), icon: Sparkles, color: 'text-cyan-300', bg: 'bg-cyan-500/10', border: 'border-cyan-400/40' },
@@ -313,6 +315,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
       {activeSubTab === 'productivity' && <AfgProductivityCenter language={language} onRunTool={onRunTool} />}
       {activeSubTab === 'api-hub' && <AfgApiHubPanel language={language}/>}
       {activeSubTab === 'mcp' && <AfgMcpPanel language={language}/>}
+      {activeSubTab === '9router' && <AfgNineRouterPanel language={language}/>}
 
       {/* Tool 1: Interactive Translator (Text & Voice) */}
       {activeSubTab === 'translate' && (
