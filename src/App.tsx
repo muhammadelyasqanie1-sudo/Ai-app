@@ -248,6 +248,21 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const onCatalog = (event: Event) => {
+      const data = (event as CustomEvent<any>).detail;
+      if (!data || !Array.isArray(data.modelDescriptors) || !data.capabilities) return;
+      const options = data.modelDescriptors as AfgModelOption[];
+      setModelOptions(options);
+      setAvailableModels(Array.isArray(data.models) ? data.models : []);
+      setCapabilitySnapshot(data as AfgCapabilitySnapshot);
+      setSelectedModel((current) => current === 'auto' || data.models?.includes(current)
+        ? current : (data.models?.[0] || 'auto'));
+    };
+    window.addEventListener('afg-model-catalog', onCatalog);
+    return () => window.removeEventListener('afg-model-catalog', onCatalog);
+  }, []);
+
+  useEffect(() => {
     if (user.email) return;
     try {
       const stored = JSON.parse(localStorage.getItem('afg_sessions') || '[]');
