@@ -75,6 +75,8 @@ See [.env.example](.env.example) for the complete variable list. Main groups:
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | Cloudflare Workers AI provider |
 | `BEATAPI_API_KEY`, `BEATAPI_BASE_URL` | BeatAPI model provider and authenticated read-only catalog; default base URL is `https://api.beatapi.io` |
 | `OPENAI_COMPAT_BASE_URL`, `OPENAI_COMPAT_API_KEY`, `OPENAI_COMPAT_PROVIDER_ID`, `OPENAI_COMPAT_DISPLAY_NAME` | Optional OpenAI-compatible provider |
+| `NINEROUTER_BASE_URL`, `NINEROUTER_API_KEY` | Optional separate 9Router gateway; API key only when 9Router `requireApiKey` is enabled |
+| `AFG_INTEGRATION_ENCRYPTION_KEY` | 32-byte server-side key for encrypting user API connector and remote MCP credentials |
 | `APP_ORIGIN` | Canonical HTTPS origin and trusted browser origins |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Google OAuth |
 | `RESEND_API_KEY`, `EMAIL_FROM`, `AFG_EMAIL_CODE_PEPPER` | Email verification and password-reset delivery/code hashing |
@@ -91,7 +93,7 @@ Cloudflare credentials are obtained from the Cloudflare dashboard/API Tokens wit
 
 ## Provider behavior
 
-- The gateway registers Cloudflare Workers AI, an optional OpenAI-compatible adapter, GPT-OSS proxy, and BeatAPI when `BEATAPI_API_KEY` is configured.
+- The gateway registers Cloudflare Workers AI, an optional OpenAI-compatible adapter, GPT-OSS proxy, BeatAPI when `BEATAPI_API_KEY` is configured, and 9Router when `NINEROUTER_BASE_URL` is configured. 9Router's API key is optional only when its own `requireApiKey` setting is disabled.
 - A model is selectable only after live catalog discovery and a recent successful health check, and when the model is enabled and advertises streaming text capability.
 - The gateway can fall back to another verified text model unless the request disables fallback.
 - BeatAPI uses its OpenAI-compatible `/v1/chat/completions` text endpoint and `/v1/models` catalog. BeatAPI health verification is catalog-only so routine model discovery never sends a billable generation probe.
@@ -99,6 +101,15 @@ Cloudflare credentials are obtained from the Cloudflare dashboard/API Tokens wit
 - A configured provider key alone is not evidence that a model or optional capability works.
 - The currently implemented Cloudflare and OpenAI-compatible adapters declare chat/streaming only. Do not assume image, vision, OCR, voice, tools or video support from these adapters.
 - Provider calls and secrets remain server-side.
+
+## Universal API Hub, Public APIs and 9Router
+
+- The **Universal API Hub** imports the API tables from the upstream [Public APIs repository](https://github.com/public-apis/public-apis) README, with the companion JSON directory as a fallback. It also imports the repository's MCP Servers table into the separate MCP directory.
+- The catalog is metadata and discovery only. It does not blindly call documentation/homepage URLs. Create a server-side API connector with a verified endpoint, JSON Schema, authentication, and a successful connection test before enabling a third-party API as an AI tool.
+- The **9Router AI Gateway** is a separately hosted service. AFG AI proxies its documented chat, model discovery, image, TTS, STT, embeddings, web search/fetch, video-job and response utility endpoints without exposing the upstream key in the browser.
+- 9Router's RTK/Headroom token saving, Ponytail/Caveman prompt compression, multi-account rotation, quota tracking, token refresh, provider translation, combos, request logs and cloud sync remain managed by the 9Router dashboard. AFG AI links to that dashboard; it does not bypass provider limits or subscription terms.
+- Admin navigation includes **Universal API Hub**, **MCP Tools & Servers**, and **9Router AI Gateway**. Remote MCP servers require owner consent and a successful secure handshake; STDIO execution remains disabled.
+- Apply migrations 0012 and 0013 before using the API/MCP catalogs. Set `AFG_INTEGRATION_ENCRYPTION_KEY` before storing API or MCP credentials. See [Universal API Hub integration notes](docs/UNIVERSAL_API_HUB.md).
 
 ## Database
 
