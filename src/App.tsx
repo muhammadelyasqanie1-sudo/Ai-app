@@ -322,6 +322,50 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!user.email || !hasEnteredApp) return;
+    let active = true;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 15000);
+    setIsInitialChatLoading(true);
+    setProfileLoadError('');
+    const load = async () => {
+      try {
+        const [profileResponse, historyResponse] = await Promise.all([
+          fetch(API_BASE_URL + '/api/auth/me', { credentials:'include', cache:'no-store', signal:controller.signal }),
+          fetch(API_BASE_URL + '/api/conversations', { credentials:'include', cache:'no-store', signal:controller.signal }),
+        ]);
+        if (!profileResponse.ok || !historyResponse.ok) throw new Error('Profile or history request failed');
+        const profile = await profileResponse.json();
+        const history = await historyResponse.json();
+        if (!profile?.authenticated || !profile?.user) throw new Error('Profile unavailable');
+        if (!active) return;
+        setUser((current) => ({ ...current, name:profile.user.displayName || current.name, nameEn:profile.user.displayName || current.nameEn, email:profile.user.email || current.email, avatar:profile.user.avatarUrl || current.avatar }));
+        const conversations = Array.isArray(history?.conversations) ? history.conversations : [];
+        if (conversations.length) {
+          const latest = conversations[0];
+          const messagesResponse = await fetch(API_BASE_URL + '/api/conversations/' + encodeURIComponent(latest.id) + '/messages', { credentials:'include', cache:'no-store', signal:controller.signal });
+          if (!messagesResponse.ok) throw new Error('Chat history unavailable');
+          const payload = await messagesResponse.json();
+          if (!active) return;
+          const restored: AfgMessage[] = (Array.isArray(payload?.messages) ? payload.messages : [])
+            .filter((item: any) => item?.role === 'user' || item?.role === 'assistant')
+            .map((item: any) => ({ id:String(item.id), role:item.role, content:String(item.content || ''), timestamp:item.createdAt ? new Date(item.createdAt).getTime() : Date.now(), isError:item.status === 'failed' }));
+          setMessages(restored);
+          setCurrentSessionId(String(latest.id));
+          serverConversationRef.current = String(latest.id);
+        }
+      } catch {
+        if (active) setProfileLoadError(language === 'dari' ? 'بارگذاری پروفایل یا تاریخچه ناموفق بود. لطفاً دوباره تلاش کنید.' : 'Failed to load profile. Please try again.');
+      } finally {
+        window.clearTimeout(timer);
+        if (active) setIsInitialChatLoading(false);
+      }
+    };
+    void load();
+    return () => { active = false; controller.abort(); window.clearTimeout(timer); };
+  }, [user.email, hasEnteredApp, language]);
+
+  useEffect(() => {
     serverConversationRef.current = null;
   }, [user.email]);
 
@@ -677,6 +721,10 @@ export default function App() {
         onOpenModels={() => setCurrentTab('offline-models')}
       />
 
+      {profileLoadError && <div role="alert" className="mx-auto mt-2 w-[min(94%,48rem)] rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
+        {profileLoadError}
+        <button type="button" className="ms-3 underline font-semibold" onClick={() => { window.dispatchEvent(new Event('afg-auth-change')); }}>{language === 'dari' ? 'تلاش دوباره' : 'Retry'}</button>
+      </div>}
       {/* Main Content Area */}
       <main className="min-h-0 flex-1 w-full overflow-y-auto pb-4 pt-2 md:ms-0">
         <ErrorBoundary>
