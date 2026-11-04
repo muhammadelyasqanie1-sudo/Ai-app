@@ -1,6 +1,7 @@
 import React,{useCallback,useEffect,useMemo,useState} from 'react';
 import { Activity, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, Database, Globe, RefreshCw, Search, ShieldCheck, XCircle } from 'lucide-react';
 import type { Language } from '../../types/afg';
+import { AfgApiConnectorPanel } from './AfgApiConnectorPanel.tsx';
 
 type CatalogItem={source_key:string;name:string;description:string;auth:string;https:string;cors:string;category:string;homepage_url:string|null;docs_url:string|null;health_status:string;response_time_ms:number|null;last_health_check:string|null};
 type CatalogResponse={items:CatalogItem[];page:number;pageSize:number;total:number;categories:Array<{category:string;count:number}>};
@@ -103,5 +104,6 @@ export const AfgApiHubPanel:React.FC<{language:Language}>=({language})=>{
   {data&&data.items.length===0&&!loading&&<div className="rounded-xl border border-slate-800 p-8 text-center text-sm text-slate-400">{label('No APIs match these filters.','هیچ API مطابق این فیلترها یافت نشد.')}</div>}
   <div className="flex items-center justify-center gap-3"><button disabled={page<=1||loading} onClick={()=>setPage(v=>Math.max(1,v-1))} className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 disabled:opacity-40"><ChevronLeft className="h-4 w-4"/>{label('Previous','قبلی')}</button><span className="text-xs text-slate-400">{page} / {pageCount}</span><button disabled={page>=pageCount||loading} onClick={()=>setPage(v=>Math.min(pageCount,v+1))} className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 disabled:opacity-40">{label('Next','بعدی')}<ChevronRight className="h-4 w-4"/></button></div>
   <p className="text-[10px] leading-5 text-slate-500">{label('Importing this directory does not grant credentials or permission to call every service. API contracts, authentication, rate limits and terms must be reviewed before a connector is enabled.','واردکردن این فهرست به معنی دسترسی به کلید یا مجوز اجرای سرویس‌ها نیست. قرارداد API، احراز هویت، سهمیه و شرایط استفاده باید پیش از فعال‌سازی اتصال بررسی شوند.')}</p>
+  <AfgApiConnectorPanel language={language}/>
  </div>;
 };
