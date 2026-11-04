@@ -33,10 +33,10 @@ import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescript
 const openAICompatible = createOpenAICompatibleAdapter();
 // Optional external 9Router instance. It is only registered when both server-side
 // credentials are present; the AFG client never sees this API key.
-const nineRouterKey = (process.env.NINEROUTER_API_KEY?.trim() || '').replace(/^Bearer\\s+/i, '').trim();
-const configuredNineRouterBase = (process.env.NINEROUTER_BASE_URL?.trim() || '').replace(/\\/+$/, '');
+const nineRouterKey = (process.env.NINEROUTER_API_KEY?.trim() || '').replace(/^Bearer\s+/i, '').trim();
+const configuredNineRouterBase = (process.env.NINEROUTER_BASE_URL?.trim() || '').replace(/\/+$/, '');
 const nineRouterBase = configuredNineRouterBase
-  ? (/\\/v1$/i.test(configuredNineRouterBase) ? configuredNineRouterBase : configuredNineRouterBase + '/v1')
+  ? (/\/v1$/i.test(configuredNineRouterBase) ? configuredNineRouterBase : configuredNineRouterBase + '/v1')
   : '';
 const nineRouterAdapter = nineRouterBase && nineRouterKey
   ? createOpenAICompatibleAdapter({
