@@ -9,7 +9,7 @@ async function request(path:string,init:RequestInit={}){
  const response=await fetch(path,{...init,headers,credentials:'include',cache:'no-store'});
  const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||('HTTP '+response.status));return data;
 }
-export const AfgApiConnectorPanel:React.FC<{language:Language}>=({language})=>{
+export const AfgApiConnectorPanel:React.FC<{language:Language;catalogSelection?:{source_key:string;name:string;description:string;auth:string;docs_url:string|null;homepage_url:string|null}|null}>=({language,catalogSelection=null})=>{
  const dari=language==='dari'||language==='persian',t=(en:string,fa:string)=>dari?fa:en;
  const [rows,setRows]=useState<Connector[]>([]);
  const [encryption,setEncryption]=useState(false);
@@ -21,6 +21,7 @@ export const AfgApiConnectorPanel:React.FC<{language:Language}>=({language})=>{
  const [sample,setSample]=useState('{}');const [sourceKey,setSourceKey]=useState('');
  const [busy,setBusy]=useState('');const [error,setError]=useState('');const [notice,setNotice]=useState('');
  const [argumentsJson,setArgumentsJson]=useState<Record<string,string>>({});
+ useEffect(()=>{if(!catalogSelection)return;setName(catalogSelection.name.slice(0,120));setToolName(catalogSelection.name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,64)||'api_tool');setDescription(catalogSelection.description.slice(0,1000));setSourceKey(catalogSelection.source_key);setEndpoint('');setCredential('');setAuthType(/api.?key|key/i.test(catalogSelection.auth)?'header_key':/oauth|bearer/i.test(catalogSelection.auth)?'bearer':'none');setAuthHeader('X-API-Key');},[catalogSelection]);
  const [results,setResults]=useState<Record<string,string>>({});
  const load=useCallback(async()=>{const data=await request('/api/api-hub/connectors');setRows(data.connectors||[]);setEncryption(Boolean(data.encryptionConfigured));},[]);
  useEffect(()=>{void load().catch(e=>setError(e instanceof Error?e.message:'Could not load connectors.'));},[load]);
@@ -50,7 +51,7 @@ export const AfgApiConnectorPanel:React.FC<{language:Language}>=({language})=>{
   <p className={'text-[11px] '+(encryption?'text-emerald-300':'text-amber-300')}>{encryption?t('Credential encryption is configured.','رمزگذاری کلیدها فعال است.'):t('Configure AFG_INTEGRATION_ENCRYPTION_KEY before adding API keys.','پیش از افزودن کلید API، متغیر AFG_INTEGRATION_ENCRYPTION_KEY را تنظیم کنید.')}</p>
   {error&&<div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-300">{error}</div>}
   {notice&&<div role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2 text-xs text-emerald-300">{notice}</div>}
-  <details className="rounded-xl border border-slate-800 bg-slate-900/60 p-3" open={rows.length===0}>
+  <details className="rounded-xl border border-slate-800 bg-slate-900/60 p-3" open={rows.length===0||Boolean(catalogSelection)}>
    <summary className="cursor-pointer text-sm font-bold text-white">{t('Create API tool','ساخت ابزار API')}</summary>
    <div className="mt-3 grid gap-2 sm:grid-cols-2">
     <input className={field} value={name} onChange={e=>setName(e.target.value)} placeholder={t('Display name','نام نمایشی')}/>
