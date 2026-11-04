@@ -29,7 +29,7 @@ const copy = {
 };
 
 export const AfgAuthGate: React.FC<Props> = ({ language, onContinueGuest, onAuthenticated }) => {
-  const t = copy[language];
+  const t = language === 'dari' ? copy.dari : copy.english;
   const [mode,setMode] = useState<Mode>(() => {
     const requested = sessionStorage.getItem('afg_auth_mode_after_signout');
     sessionStorage.removeItem('afg_auth_mode_after_signout');
