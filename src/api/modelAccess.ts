@@ -31,7 +31,8 @@ async function accountTier(req: IncomingMessage): Promise<string> {
  * Older installations without required_tier remain compatible and do not invent paywalls.
  */
 export async function applyModelAccess(req: IncomingMessage, snapshot: any): Promise<any> {
-  const tier = await accountTier(req);
+  const account = await authenticateRequest(req).catch(() => null);
+  const tier = account ? await accountTier(req) : 'free';
   let metadata = new Map<string, any>();
   if (pool) {
     try {
@@ -74,7 +75,7 @@ export async function applyModelAccess(req: IncomingMessage, snapshot: any): Pro
           : model.disabledReason),
     };
   }) : [];
-  return { ...snapshot, modelDescriptors: models, account: { tier, authenticated: tier !== 'free' } };
+  return { ...snapshot, modelDescriptors: models, account: { tier, authenticated: Boolean(account) } };
 }
 
 /** Enforces optional model_catalog.required_tier/access_tier on the server before provider use. */
