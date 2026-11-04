@@ -21,10 +21,19 @@ async function request(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers || {});
   if (init.body) headers.set('Content-Type', 'application/json');
   if (init.method && init.method !== 'GET') headers.set('X-CSRF-Token', csrf());
-  const response = await fetch(API + path, { ...init, headers, credentials: 'include' });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'Request failed.');
-  return data;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(API + path, { ...init, headers, credentials: 'include', signal: controller.signal });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Request failed.');
+    return data;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw new Error('The integration status check timed out. Please retry.');
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 const ITEMS: Item[] = [
@@ -248,7 +257,8 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
       </div>}
       {page==='github'&&<div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 space-y-3">
         <p className="text-sm text-slate-300">{github.linked?'GitHub account linked: @'+github.username:github.configured?t.githubReady:t.setupText}</p>
-        {github.linked?<button onClick={()=>void unlinkGithub()} className="rounded-xl border border-rose-500/30 px-4 py-2 text-sm text-rose-300">{t.githubDisconnect}</button>:<button disabled={!github.configured||!authenticated} onClick={()=>void openGithub()} className="rounded-xl bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">{t.githubConnect}</button>}
+        {!github.configured && <p id="github-not-configured" className="text-xs text-rose-300" role="status">GitHub integration is not configured by the administrator.</p>}
+        {github.linked?<button onClick={()=>void unlinkGithub()} className="rounded-xl border border-rose-500/30 px-4 py-2 text-sm text-rose-300">{t.githubDisconnect}</button>:<button disabled={!github.configured||!authenticated} title={!github.configured ? 'GitHub integration is not configured by the administrator.' : !authenticated ? 'Sign in to connect GitHub.' : t.githubConnect} aria-describedby={!github.configured ? 'github-not-configured' : undefined} onClick={()=>void openGithub()} className="rounded-xl bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">{t.githubConnect}</button>}
       </div>}
       {(['local','voice','telegram','ftp','mcp','byok','router'] as SettingId[]).includes(page)&&<div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 space-y-2">
         <p className="text-sm font-semibold text-slate-200">{status[page]==='disabled'?t.disabledText:status[page]==='ready'||status[page]==='active'?t.available:t.setupText}</p>
