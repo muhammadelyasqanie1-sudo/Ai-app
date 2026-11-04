@@ -30,7 +30,8 @@ async function routerBase():Promise<URL>{
  if(isIP(url.hostname)){if(!isPublicAddress(url.hostname))throw new Error('9Router resolves to a blocked network address.');}
  else{
   const records=await lookup(url.hostname,{all:true,verbatim:true});
-  if(!records.length||records.some(record=>!isPublicAddress(record.address)))throw new Error('9Router host resolves to a private or reserved network address.');
+  const validation=records.map(record=>({address:record.address,family:record.family,public:isPublicAddress(record.address)}));
+   if(!records.length||validation.some(record=>!record.public)){console.error('NINEROUTER_DNS_VALIDATION',JSON.stringify({hostname:url.hostname,records:validation}));throw new Error('9Router host resolves to a private or reserved network address.');}
  }
  return url;
 }
