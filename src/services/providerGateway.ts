@@ -31,6 +31,21 @@ import { decryptProviderSecret } from '../security/providerVault.ts';
 import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescriptor, CapabilityFlags } from '../providers/providerTypes.ts';
 
 const openAICompatible = createOpenAICompatibleAdapter();
+// Optional external 9Router instance. It is only registered when both server-side
+// credentials are present; the AFG client never sees this API key.
+const nineRouterKey = (process.env.NINEROUTER_API_KEY?.trim() || '').replace(/^Bearer\\s+/i, '').trim();
+const configuredNineRouterBase = (process.env.NINEROUTER_BASE_URL?.trim() || '').replace(/\\/+$/, '');
+const nineRouterBase = configuredNineRouterBase
+  ? (/\\/v1$/i.test(configuredNineRouterBase) ? configuredNineRouterBase : configuredNineRouterBase + '/v1')
+  : '';
+const nineRouterAdapter = nineRouterBase && nineRouterKey
+  ? createOpenAICompatibleAdapter({
+      id: '9router',
+      displayName: '9Router Gateway',
+      baseUrl: nineRouterBase,
+      apiKey: nineRouterKey,
+    })
+  : null;
 // Accept either a raw API key or the common "Bearer <key>" form pasted from API docs.
 const beatApiKey = (process.env.BEATAPI_API_KEY?.trim() || '').replace(/^Bearer\s+/i, '').trim();
 // BeatAPI's OpenAI-compatible endpoints live under /v1. Normalize both host-only and /v1 values.
@@ -60,7 +75,7 @@ const cleanApisAdapter = cleanApisKey
       apiKey: cleanApisKey,
     })
   : null;
-const staticProviderRegistry: ChatProviderAdapter[] = [openAICompatible, gptOssProxy, ...(beatApiAdapter ? [beatApiAdapter] : []), ...(cleanApisAdapter ? [cleanApisAdapter] : [])];
+const staticProviderRegistry: ChatProviderAdapter[] = [openAICompatible, gptOssProxy, ...(nineRouterAdapter ? [nineRouterAdapter] : []), ...(beatApiAdapter ? [beatApiAdapter] : []), ...(cleanApisAdapter ? [cleanApisAdapter] : [])];
 let databaseProviderRegistry: ChatProviderAdapter[] = [];
 let databaseProviderRefreshAt = 0;
 const DATABASE_PROVIDER_REFRESH_MS = 15_000;
