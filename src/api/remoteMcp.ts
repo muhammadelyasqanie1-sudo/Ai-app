@@ -143,6 +143,60 @@ async function recordAudit(userId:string,action:string,id:string,metadata:Json={
  await pool!.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
   [userId,action,'mcp_server',id,JSON.stringify(metadata)]).catch(()=>{});
 }
+function modelToolName(serverId:string,toolName:string):string {
+ const prefix='mcp_'+serverId.replace(/-/g,'').slice(0,8)+'_';
+ const suffix=toolName.toLowerCase().replace(/[^a-z0-9_]/g,'_').replace(/^[^a-z]+/,'tool');
+ return (prefix+suffix).slice(0,64);
+}
+export async function getEnabledRemoteMcpToolDefinitions(userId:string){
+ if(!pool||!userId)return [];
+ try{
+  const result=await pool.query(`SELECT id,name,tools_json FROM user_mcp_servers
+   WHERE user_id=$1 AND enabled=true AND status='verified' ORDER BY created_at DESC LIMIT 12`,[userId]);
+  const definitions:any[]=[];
+  for(const row of result.rows){
+   const tools=Array.isArray(row.tools_json)?row.tools_json:[];
+   for(const tool of tools){
+    if(!validTool(tool)||definitions.length>=12)continue;
+    definitions.push({type:'function' as const,function:{
+     name:modelToolName(String(row.id),tool.name),
+     description:(String(tool.description||('Call remote MCP tool '+tool.name))+' (MCP server: '+String(row.name||'Remote server')+')').slice(0,1000),
+     parameters:tool.inputSchema&&typeof tool.inputSchema==='object'?tool.inputSchema:{type:'object',properties:{},additionalProperties:true},
+    }});
+   }
+   if(definitions.length>=12)break;
+  }
+  return definitions;
+ }catch(error){
+  console.warn('AFG_REMOTE_MCP_TOOL_DISCOVERY_UNAVAILABLE',JSON.stringify({error:error instanceof Error?error.message:'unknown'}));
+  return [];
+ }
+}
+export async function executeRemoteMcpTool(userId:string,toolName:string,args:unknown){
+ if(!pool||!userId)throw new Error('Sign in to use remote MCP tools.');
+ if(!/^mcp_[a-f0-9]{8}_[a-z0-9_]{1,48}$/.test(toolName))throw new Error('Invalid MCP tool name.');
+ if(!args||typeof args!=='object'||Array.isArray(args)||JSON.stringify(args).length>48_000)throw new Error('Invalid MCP tool arguments.');
+ const prefix=toolName.split('_').slice(1,2)[0];
+ const result=await pool.query(`SELECT id,name,endpoint_url,auth_type,credential_encrypted,enabled,status,
+  protocol_version,session_id_encrypted,tools_json FROM user_mcp_servers
+  WHERE user_id=$1 AND replace(id::text,'-','') LIKE $2 AND enabled=true AND status='verified'`,[userId,prefix+'%']);
+ const row=result.rows.find((candidate:any)=>(Array.isArray(candidate.tools_json)?candidate.tools_json:[]).some((tool:any)=>validTool(tool)&&modelToolName(String(candidate.id),tool.name)===toolName));
+ if(!row)throw new Error('This MCP tool is no longer enabled for your account.');
+ const original=(row.tools_json as Json[]).find((tool:any)=>validTool(tool)&&modelToolName(String(row.id),tool.name)===toolName);
+ if(!original)throw new Error('MCP tool is not in the verified tool catalog.');
+ const token=row.credential_encrypted?decrypt(row.credential_encrypted):null;
+ const session=row.session_id_encrypted?decrypt(row.session_id_encrypted):null;
+ const protocol=String(row.protocol_version||VERSION_LEGACY);
+ const response=await rpc(row.endpoint_url,token,protocol,session,
+  requestMessage(randomUUID(),'tools/call',{name:original.name,arguments:args},protocol===VERSION_MODERN));
+ const payload=response.payload?.result;
+ if(!payload)throw new Error('MCP tool returned no result.');
+ const serialized=JSON.stringify(payload);
+ if(serialized.length>16_000)return {truncated:true,responsePreview:serialized.slice(0,16_000),isError:Boolean(payload.isError)};
+ await recordAudit(userId,payload.isError?'mcp.tool.call_failed':'mcp.tool.call',String(row.id),{tool:original.name,source:'ai_chat'});
+ return payload;
+}
+
 export async function handleRemoteMcpApi(req:IncomingMessage,res:ServerResponse,pathname:string):Promise<boolean>{
  if(!pathname.startsWith('/api/mcp/'))return false;
  if(!pool){sendAuthJson(res,503,{error:'Remote MCP connections require PostgreSQL and migration 0013.'});return true;}
