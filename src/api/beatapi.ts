@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { authenticateRequest } from './auth.ts';
 
-const BASE_URL = (process.env.BEATAPI_BASE_URL?.trim() || 'https://api.beatapi.io').replace(/\\/+$/, '');
+const BASE_URL = (process.env.BEATAPI_BASE_URL?.trim() || 'https://api.beatapi.io').replace(/\/+$/, '');
 const API_KEY = process.env.BEATAPI_API_KEY?.trim() || '';
 
 function send(res: ServerResponse, status: number, payload: unknown, requestId: string) {
