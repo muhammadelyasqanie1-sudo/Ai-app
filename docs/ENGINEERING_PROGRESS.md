@@ -373,3 +373,9 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 - Per-account file quota checks and inserts are serialized with a PostgreSQL advisory lock to prevent concurrent uploads from exceeding the 100-file / 100 MB limits.
 - Deletion revalidates the canonical quarantine directory before unlinking a stored path.
 - These source changes have not been built, tested, migrated, or deployed.
+
+## Milestone 13 — Branded PWA install icon
+
+- Added the shared AFG AI SVG icon and registered it as the PWA manifest icon with maskable support.
+- Updated the document favicon to use the shared asset.
+- Browser installability and Android/iOS launcher rendering still require device verification.
