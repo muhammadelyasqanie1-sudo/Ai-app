@@ -112,6 +112,9 @@ export interface AfgModelOption {
   selectable: boolean;
   disabledReason: string | null;
   verifiedAt: string | null;
+  pricing?: { inputPerMillion: number | null; outputPerMillion: number | null; currency?: string };
+  requiresSubscription?: boolean;
+  accessTier?: 'free' | 'pro' | 'max' | 'ultra' | 'unknown';
 }
 
 export interface AfgCapabilitySnapshot {
