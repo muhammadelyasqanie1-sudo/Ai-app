@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
 import { authenticateRequest, readJsonBody } from './auth.ts';
 
-type User = { id: string; role: 'user' | 'admin' | 'superadmin'; status: string };
+type User = { id: string; role: string; status: string };
 type Auth = { user: User; tokenId: string | null; scopes: string[] };
 
 function send(res: ServerResponse, status: number, body: Record<string, unknown>, requestId: string) {
