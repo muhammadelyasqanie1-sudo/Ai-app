@@ -16,6 +16,10 @@ export type PublicApiRecord = {
   category: string;
   homepageUrl: string | null;
   docsUrl: string | null;
+  iconUrl: string | null;
+  imageUrl: string | null;
+  siteName: string;
+  siteDescription: string;
   healthStatus: 'unknown' | 'online' | 'slow' | 'offline' | 'error';
   responseTimeMs: number | null;
   raw: RawApi;
@@ -103,6 +107,10 @@ function normalize(row: RawApi): PublicApiRecord | null {
   const category = text(field(row, 'Category','category','categoryName','categorySlug','group'), 100, 'Uncategorized');
   const homepageUrl = safeHttpUrl(field(row, 'Homepage','homepage','website','siteUrl','websiteUrl'));
   const docsUrl = safeHttpUrl(field(row, 'Link','link','docs','documentation','documentationUrl','callThisApi','url')) || homepageUrl;
+  const iconUrl = safeHttpUrl(field(row,'iconUrl','icon_url','icon'));
+  const imageUrl = safeHttpUrl(field(row,'imageUrl','image_url','image'));
+  const siteName = text(field(row,'siteName','site_name'),160);
+  const siteDescription = text(field(row,'siteDescription','site_description'),1200);
   const stable = [name.toLowerCase(), category.toLowerCase(), docsUrl || homepageUrl || ''].join('|');
   const sourceKey = createHash('sha256').update(stable).digest('hex');
   const healthValue = text(field(row, 'status','healthStatus','health'), 24).toLowerCase();
@@ -113,7 +121,7 @@ function normalize(row: RawApi): PublicApiRecord | null {
     auth: field(row,'Auth','auth','authentication') == null ? 'No' : text(field(row,'Auth','auth','authentication'),40,'Unknown'),
     https: triState(field(row,'HTTPS','https','supportsHttps')),
     cors: triState(field(row,'CORS','cors','supportsCors')),
-    category, homepageUrl, docsUrl, healthStatus,
+    category, homepageUrl, docsUrl, iconUrl, imageUrl, siteName, siteDescription, healthStatus,
     responseTimeMs: Number.isInteger(time) && time >= 0 && time <= 600000 ? time : null,
     raw: row,
   };
@@ -160,10 +168,88 @@ export async function syncPublicApiCatalog(): Promise<{ imported: number; pages:
             const batch = result.rows.slice(offset, offset + 80);
             const values: unknown[] = [];
             const tuples = batch.map((item, index) => {
-              const base = index * 13;
+              const base = index * 17;
               values.push(item.sourceKey,item.name,item.description,item.auth,item.https,item.cors,item.category,
-                item.homepageUrl,item.docsUrl,item.healthStatus,item.responseTimeMs,JSON.stringify(item.raw),true);
-              return `(${Array.from({length:13},(_,i)=>'$'+(base+i+1)).join(',')},now(),now())`;
+                item.homepageUrl,item.docsUrl,item.iconUrl,item.imageUrl,item.siteName,item.siteDescription,item.healthStatus,item.responseTimeMs,JSON.stringify(item.raw),true);
+              return `(${Array.from({length:17},(_,i)=>'
+            });
+            await client.query(`INSERT INTO public_api_catalog
+              (source_key,name,description,auth,https,cors,category,homepage_url,docs_url,icon_url,image_url,site_name,site_description,health_status,response_time_ms,source_payload,is_active,imported_at,updated_at)
+              VALUES ${tuples.join(',')}
+              ON CONFLICT(source_key) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,
+                auth=EXCLUDED.auth,https=EXCLUDED.https,cors=EXCLUDED.cors,category=EXCLUDED.category,
+                homepage_url=EXCLUDED.homepage_url,docs_url=EXCLUDED.docs_url,
+                icon_url=EXCLUDED.icon_url,image_url=EXCLUDED.image_url,site_name=EXCLUDED.site_name,site_description=EXCLUDED.site_description,
+                health_status=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.health_status ELSE public_api_catalog.health_status END,
+                response_time_ms=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.response_time_ms ELSE public_api_catalog.response_time_ms END,
+                source_payload=EXCLUDED.source_payload,is_active=true,imported_at=now(),updated_at=now()`, values);
+          }
+          await client.query('COMMIT');
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        } finally { client.release(); }
+        imported += result.rows.length;
+        if (result.hasMore === false) { complete = true; break; }
+        if (result.hasMore === null && result.rows.length < 10) { complete = true; break; }
+      }
+      if (!complete && pages < MAX_PAGES) complete = true;
+      const status = complete ? 'success' : 'partial';
+      await pool.query(`UPDATE public_api_sync_state SET status=$2,items_imported=$3,pages_fetched=$4,
+        last_completed_at=now(),last_error=NULL,updated_at=now() WHERE source='publicapis.lol'`,
+        [SOURCE,status,imported,pages]);
+      return { imported, pages, complete };
+    } catch (error) {
+      const message = error instanceof Error ? error.message.slice(0,500) : 'Catalog sync failed.';
+      await pool.query(`UPDATE public_api_sync_state SET status='error',items_imported=$2,pages_fetched=$3,
+        last_completed_at=now(),last_error=$4,updated_at=now() WHERE source='publicapis.lol'`,
+        [SOURCE,imported,pages,message]).catch(() => {});
+      throw error;
+    }
+  })();
+  try { return await syncInFlight; } finally { syncInFlight = null; }
+}
+
+export async function queryPublicApiCatalog(filters: {
+  q?: string; category?: string; auth?: string; https?: string; cors?: string; page?: number; pageSize?: number;
+}) {
+  if (!pool) throw new Error('The API catalog requires the PostgreSQL database.');
+  const page = Math.max(1, Math.min(100000, Math.trunc(filters.page || 1)));
+  const pageSize = Math.max(1, Math.min(100, Math.trunc(filters.pageSize || 24)));
+  const where: string[] = ['is_active=true'];
+  const values: unknown[] = [];
+  const add = (value: unknown) => { values.push(value); return '$' + values.length; };
+  if (filters.q?.trim()) {
+    const needle = '%' + filters.q.trim().slice(0,120).replace(/[\\%_]/g, '\\$&') + '%';
+    const param = add(needle);
+    where.push(`(name ILIKE ${param} OR description ILIKE ${param} OR category ILIKE ${param})`);
+  }
+  if (filters.category && filters.category !== 'all') where.push('category=$' + (values.push(filters.category.slice(0,100))));
+  if (filters.auth && filters.auth !== 'all') where.push('lower(auth)=lower($' + values.push(filters.auth.slice(0,40)) + ')');
+  if (filters.https && filters.https !== 'all') where.push('lower(https)=lower($' + values.push(filters.https==='true'?'Yes':'No') + ')');
+  if (filters.cors && filters.cors !== 'all') where.push('lower(cors)=lower($' + values.push(filters.cors==='true'?'Yes':'No') + ')');
+  const clause = where.join(' AND ');
+  const count = await pool.query(`SELECT count(*)::int AS total FROM public_api_catalog WHERE ${clause}`, values);
+  const rows = await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,
+      health_status,response_time_ms,last_health_check,imported_at
+    FROM public_api_catalog WHERE ${clause} ORDER BY category,name LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`, values);
+  return { items: rows.rows, page, pageSize, total: Number(count.rows[0]?.total || 0), categories: await listPublicApiCategories() };
+}
+
+export async function listPublicApiCategories() {
+  if (!pool) return [];
+  const result = await pool.query(`SELECT category,count(*)::int AS count
+    FROM public_api_catalog WHERE is_active=true GROUP BY category ORDER BY category`);
+  return result.rows;
+}
+
+export async function getPublicApiSyncStatus() {
+  if (!pool) return { configured: false, status: 'unavailable' };
+  const result = await pool.query(`SELECT source,status,items_imported,pages_fetched,last_started_at,last_completed_at,last_error
+    FROM public_api_sync_state WHERE source='publicapis.lol' LIMIT 1`);
+  return { configured: true, sync: result.rows[0] || null };
+}
++(base+i+1)).join(',')},now(),now())`;
             });
             await client.query(`INSERT INTO public_api_catalog
               (source_key,name,description,auth,https,cors,category,homepage_url,docs_url,health_status,response_time_ms,source_payload,is_active,imported_at,updated_at)
