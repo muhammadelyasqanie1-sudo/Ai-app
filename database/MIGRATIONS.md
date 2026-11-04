@@ -25,4 +25,4 @@ Set `AFG_UPLOAD_QUARANTINE_DIR` to an **absolute path on a private persistent di
 Uploads are signature-checked and stored under generated filenames, then marked `quarantined`. The current product does not include malware scanning or safe document extraction, so files cannot be downloaded, parsed, or sent to AI yet. Keep chat file attachments disabled until a scanner and approved-file delivery pipeline are implemented.
 
 
-Migration `0008_staff_rbac_foundation.sql` adds backend-enforced staff roles and their initial permission maps. Apply it with `npm run db:migrate` only after reviewing the backup and deployment plan.
+Migration `0009_staff_rbac_foundation.sql` adds backend-enforced staff roles and their initial permission maps. Apply it with `npm run db:migrate` only after reviewing the backup and deployment plan.
