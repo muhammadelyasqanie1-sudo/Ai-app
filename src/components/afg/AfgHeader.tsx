@@ -68,7 +68,7 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
             <AfgBrainLogo size="sm" showBadge={false} />
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5">
-                <span className="text-xl font-black tracking-tight bg-gradient-to-r from-white via-cyan-200 to-sky-400 bg-clip-text text-transparent">
+                <span className="text-xl font-black tracking-tight text-[var(--text-primary)]">
                   {t.brandName}
                 </span>
                 <span className="text-xs">🇦🇫</span>
