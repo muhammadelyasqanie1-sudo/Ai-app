@@ -37,10 +37,15 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
  const [searchModel,setSearchModel]=useState('');
  const [searchQuery,setSearchQuery]=useState('');
  const [searchType,setSearchType]=useState('web');
+ const [searchCountry,setSearchCountry]=useState('');
+ const [searchLanguage,setSearchLanguage]=useState('');
+ const [searchTimeRange,setSearchTimeRange]=useState('');
+ const [searchDomainFilter,setSearchDomainFilter]=useState('');
  const [searchResult,setSearchResult]=useState<any>(null);
  const [fetchModel,setFetchModel]=useState('');
  const [fetchUrl,setFetchUrl]=useState('');
  const [fetchFormat,setFetchFormat]=useState<'markdown'|'text'|'html'>('markdown');
+ const [fetchMaxCharacters,setFetchMaxCharacters]=useState('12000');
  const [fetchResult,setFetchResult]=useState<any>(null);
  const [embeddingModel,setEmbeddingModel]=useState('');
  const [embeddingInput,setEmbeddingInput]=useState('');
@@ -68,6 +73,7 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
  const [videoResolution,setVideoResolution]=useState('720p');
  const [videoImageFile,setVideoImageFile]=useState<File|null>(null);
  const [videoSourceUrl,setVideoSourceUrl]=useState('');
+ const [videoSourceType,setVideoSourceType]=useState<'url'|'file_id'>('url');
  const [videoJob,setVideoJob]=useState<any>(null);
  const [videoConnection,setVideoConnection]=useState('');
  const [visionModel,setVisionModel]=useState('');
@@ -115,12 +121,12 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
  });
  const search=()=>run('search',async()=>{
   if(!searchModel||!searchQuery.trim())throw new Error('Choose a search model and enter a query.');
-  const {data}=await call('/api/9router/search',{method:'POST',body:JSON.stringify({model:searchModel,query:searchQuery,max_results:8,search_type:searchType})});
+  const searchBody:any={model:searchModel,query:searchQuery,max_results:8,search_type:searchType};\n  if(searchCountry.trim())searchBody.country=searchCountry.trim();\n  if(searchLanguage.trim())searchBody.language=searchLanguage.trim();\n  if(searchTimeRange)searchBody.time_range=searchTimeRange;\n  if(searchDomainFilter.trim())searchBody.domain_filter=searchDomainFilter.split(',').map(v=>v.trim()).filter(Boolean);\n  const {data}=await call('/api/9router/search',{method:'POST',body:JSON.stringify(searchBody)});
   setSearchResult(data);
  });
  const fetchPage=()=>run('fetch',async()=>{
   if(!fetchModel||!/^https:\/\//i.test(fetchUrl))throw new Error('Choose a fetch model and enter an HTTPS URL.');
-  const {data}=await call('/api/9router/web/fetch',{method:'POST',body:JSON.stringify({model:fetchModel,url:fetchUrl,format:fetchFormat,max_characters:12000})});
+  const maxCharacters=Number(fetchMaxCharacters);if(!Number.isInteger(maxCharacters)||maxCharacters<0||maxCharacters>100000)throw new Error('Maximum characters must be between 0 and 100000.');\n  const {data}=await call('/api/9router/web/fetch',{method:'POST',body:JSON.stringify({model:fetchModel,url:fetchUrl,format:fetchFormat,max_characters:maxCharacters})});
   setFetchResult(data);
  });
  const embed=()=>run('embedding',async()=>{
