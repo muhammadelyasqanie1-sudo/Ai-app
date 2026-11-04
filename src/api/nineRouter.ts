@@ -119,6 +119,18 @@ export async function handleNineRouterApi(req:IncomingMessage,res:ServerResponse
   reply(res,503,{available:false,error:'9Router is not configured on the server.'},requestId);return true;
  }
  try{
+  if(req.method==='GET'&&pathname==='/api/9router/status'){
+   const base=await routerBase();
+   const healthUrl=new URL('/api/health',base.origin);
+   try{
+    const response=await fetch(healthUrl.toString(),{headers:{Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(8000)});
+    const health=await response.json().catch(()=>null);
+    reply(res,response.ok?200:503,{configured:true,reachable:response.ok,health,dashboardUrl:new URL('/dashboard',base.origin).toString()},requestId);
+   }catch{
+    reply(res,503,{configured:true,reachable:false,error:'The 9Router health endpoint could not be reached.'},requestId);
+   }
+   return true;
+  }
   const base=await routerBase();
   if(req.method==='GET'&&(pathname==='/api/9router/models'||pathname==='/api/9router/models/info')){
    const incoming=new URL(req.url||'/', 'http://localhost');
