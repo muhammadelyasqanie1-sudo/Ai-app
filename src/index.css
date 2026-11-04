@@ -916,3 +916,11 @@ html.neon {
 .afg-chat-view [class*="bg-slate-900"] { background-color: var(--bg-surface) !important; }
 .afg-chat-view [class*="border-slate-800"],
 .afg-chat-view [class*="border-slate-700"] { border-color: var(--border-color) !important; }
+
+.afg-app-header .bg-slate-800\/80,
+.afg-app-header .bg-slate-800\/60,
+.afg-app-header .bg-slate-700\/80,
+.afg-app-header .bg-slate-700\/70 {
+  background-color: var(--bg-surface-subtle) !important;
+}
+.afg-app-header .border-slate-700\/40 { border-color: var(--border-color) !important; }
