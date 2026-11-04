@@ -109,7 +109,7 @@ Cloudflare credentials are obtained from the Cloudflare dashboard/API Tokens wit
 - The **9Router AI Gateway** is a separately hosted service. AFG AI proxies its documented chat, model discovery, image, TTS, STT, embeddings, web search/fetch, video-job and response utility endpoints without exposing the upstream key in the browser.
 - 9Router's RTK/Headroom token saving, Ponytail/Caveman prompt compression, multi-account rotation, quota tracking, token refresh, provider translation, combos, request logs and cloud sync remain managed by the 9Router dashboard. AFG AI links to that dashboard; it does not bypass provider limits or subscription terms.
 - Admin navigation includes **Universal API Hub**, **MCP Tools & Servers**, and **9Router AI Gateway**. Remote MCP servers require owner consent and a successful secure handshake; STDIO execution remains disabled.
-- Apply migrations 0012 and 0013 before using the API/MCP catalogs. Set `AFG_INTEGRATION_ENCRYPTION_KEY` before storing API or MCP credentials. See [Universal API Hub integration notes](docs/UNIVERSAL_API_HUB.md).
+- Apply migrations 0012 through 0015 before using the API/MCP catalogs. Set `AFG_INTEGRATION_ENCRYPTION_KEY` before storing API or MCP credentials. See [Universal API Hub integration notes](docs/UNIVERSAL_API_HUB.md).
 
 ## Database
 
