@@ -80,6 +80,9 @@ export default function App() {
   // Show the full-screen cinematic motion intro on every fresh app launch.
   const [isIntroVisible, setIsIntroVisible] = useState(true);
   const [hasEnteredApp, setHasEnteredApp] = useState(() => localStorage.getItem('afg_entry_mode') === 'guest');
+  const [authCheckResolved, setAuthCheckResolved] = useState(false);
+  const [isInitialChatLoading, setIsInitialChatLoading] = useState(false);
+  const [profileLoadError, setProfileLoadError] = useState('');
 
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('afg_theme');
@@ -298,7 +301,7 @@ export default function App() {
             localStorage.removeItem('afg_voice_enabled');
             window.dispatchEvent(new Event('afg-voice-preference-change'));
           }
-        }).catch(() => {});
+        }).catch(() => {}).finally(() => setAuthCheckResolved(true));
     };
     const handleSignOut = () => {
       wasAuthenticatedRef.current = false;
@@ -308,6 +311,7 @@ export default function App() {
       setUser(DEFAULT_USER);
       setCurrentTab('chat');
       setHasEnteredApp(false);
+      setAuthCheckResolved(true);
       localStorage.removeItem('afg_entry_mode');
     };
     window.addEventListener('afg-auth-change', syncAccount);
@@ -653,6 +657,7 @@ export default function App() {
   }
 
   if (!hasEnteredApp) {
+    if (!authCheckResolved) return <div className="min-h-screen grid place-items-center bg-[var(--bg-main)] text-[var(--text-secondary)]" role="status" aria-live="polite">{language === 'dari' ? 'در حال بررسی ورود…' : 'Checking your session…'}</div>;
     return <AfgAuthGate language={language} onContinueGuest={() => { localStorage.setItem('afg_entry_mode', 'guest'); setHasEnteredApp(true); }} onAuthenticated={() => { localStorage.setItem('afg_entry_mode', 'account'); setHasEnteredApp(true); window.dispatchEvent(new Event('afg-auth-change')); }} />;
   }
 
@@ -703,6 +708,7 @@ export default function App() {
             onBranchMessage={handleBranchMessage}
             onDeleteMessage={handleDeleteMessage}
             isLoading={isLoading}
+            isInitialLoading={isInitialChatLoading}
             language={language}
             user={user}
             initialPrompt={initialPromptForChat}
