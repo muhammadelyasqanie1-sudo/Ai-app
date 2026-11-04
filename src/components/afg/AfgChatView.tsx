@@ -83,6 +83,12 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
 }) => {
   const t = translations[language];
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isSlowResponse, setIsSlowResponse] = useState(false);
+  useEffect(() => {
+    if (!isLoading) { setIsSlowResponse(false); return; }
+    const timer = window.setTimeout(() => setIsSlowResponse(true), 10000);
+    return () => window.clearTimeout(timer);
+  }, [isLoading]);
   
   // Speech synthesis state (Read Aloud)
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
@@ -407,7 +413,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
             </div>
             <div className="p-3.5 rounded-2xl bg-[#0b142c] border border-cyan-900/40 text-cyan-300 flex items-center gap-2 text-xs">
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-              <span>{language === 'dari' ? 'AFG AI در حال پردازش و پاسخگویی...' : 'AFG AI is generating a thoughtful response...'}</span>
+              <span>{language === 'dari' ? '{isSlowResponse ? 'هنوز در حال فکر کردن…' : 'AFG AI در حال پردازش و پاسخگویی...'}' : '{isSlowResponse ? 'Still thinking…' : 'AFG AI is generating a thoughtful response...'}'}</span>
             </div>
           </div>
         )}
