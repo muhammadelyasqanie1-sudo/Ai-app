@@ -32,10 +32,10 @@ import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescript
 
 const openAICompatible = createOpenAICompatibleAdapter();
 // Accept either a raw API key or the common "Bearer <key>" form pasted from API docs.
-const beatApiKey = (process.env.BEATAPI_API_KEY?.trim() || '').replace(/^Bearer\\s+/i, '').trim();
+const beatApiKey = (process.env.BEATAPI_API_KEY?.trim() || '').replace(/^Bearer\s+/i, '').trim();
 // BeatAPI's OpenAI-compatible endpoints live under /v1. Normalize both host-only and /v1 values.
-const configuredBeatApiBaseUrl = (process.env.BEATAPI_BASE_URL?.trim() || 'https://direct.beatapi.io').replace(/\\/+$/, '');
-const beatApiBaseUrl = /\\/v1$/i.test(configuredBeatApiBaseUrl)
+const configuredBeatApiBaseUrl = (process.env.BEATAPI_BASE_URL?.trim() || 'https://direct.beatapi.io').replace(/\/+$/, '');
+const beatApiBaseUrl = /\/v1$/i.test(configuredBeatApiBaseUrl)
   ? configuredBeatApiBaseUrl
   : configuredBeatApiBaseUrl + '/v1';
 const beatApiAdapter = beatApiKey
