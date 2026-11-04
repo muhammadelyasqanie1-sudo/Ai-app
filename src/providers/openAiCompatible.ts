@@ -217,8 +217,22 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
         throw new ProviderAdapterError('Could not contact the OpenAI-compatible provider.', 502, 'provider_unreachable');
       }
       if (!response.ok || !response.body) {
-        console.error('AI_PROVIDER_CHAT_REJECTED', JSON.stringify({ provider: current.id, model: input.model, status: response.status }));
-        throw new ProviderAdapterError('The OpenAI-compatible provider rejected the chat request.', response.status >= 400 && response.status < 500 ? response.status : 502, 'provider_request_rejected');
+        const upstreamError = await response.clone().json().then((body: any) => ({
+          code: typeof body?.error?.code === 'string' ? body.error.code : undefined,
+          type: typeof body?.error?.type === 'string' ? body.error.type : undefined,
+        })).catch(() => ({}));
+        const errorCode = response.status === 402 ? 'insufficient_funds'
+          : response.status === 429 ? 'rate_limit_exceeded'
+          : upstreamError.code || 'provider_request_rejected';
+        console.error('AI_PROVIDER_CHAT_REJECTED', JSON.stringify({
+          provider: current.id, model: input.model, status: response.status,
+          ...(upstreamError.code ? { upstreamCode: upstreamError.code } : {}),
+          ...(upstreamError.type ? { upstreamType: upstreamError.type } : {}),
+        }));
+        const message = response.status === 402
+          ? 'The provider monthly token allowance and account balance are exhausted.'
+          : 'The OpenAI-compatible provider rejected the chat request.';
+        throw new ProviderAdapterError(message, response.status >= 400 && response.status < 500 ? response.status : 502, errorCode);
       }
 
       const reader = response.body.getReader();
