@@ -17,6 +17,7 @@ import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { ErrorBoundary } from './components/afg/AfgDesignSystem';
 import { applyDocumentLocale } from './utils/i18n';
 import { apiFetch } from './lib/apiClient';
+import { useAlwaysLiveConnection } from './hooks/useAlwaysLiveConnection';
 
 import type { 
   Language, 
@@ -73,6 +74,7 @@ const detectDeviceLanguage = (): Language => {
 const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 export default function App() {
+  useAlwaysLiveConnection();
   // App State
   const [language, setLanguage] = useState<Language>(() => { const saved = localStorage.getItem('afg_language'); const supported: Language[] = ['dari','english','pashto','persian','arabic','urdu','turkish','russian','french','spanish','german','chinese','hindi','bengali','indonesian','portuguese','japanese','korean']; return supported.includes(saved as Language) ? saved as Language : detectDeviceLanguage(); });
   // Language is detected from the device/browser; no manual language gate on startup.
