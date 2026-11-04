@@ -23,6 +23,7 @@ import { handleRoutingComboApi } from './routingCombos.ts';
 import { handleApiHubApi } from './apiHub.ts';
 import { handleRemoteMcpApi } from './remoteMcp.ts';
 import { handleUserApiConnectorApi } from './userApiConnectors.ts';
+import { handleNineRouterApi } from './nineRouter.ts';
 
 type ApiRequest = IncomingMessage & { originalUrl?: string };
 
@@ -289,6 +290,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     }
 
     if (await handleUserApiConnectorApi(req, res, pathname)) return;
+    if (await handleNineRouterApi(req, res, pathname)) return;
     if (await handleApiHubApi(req, res, pathname)) return;
     if (await handleRemoteMcpApi(req, res, pathname)) return;
     if (await handleAuthApi(req, res, pathname)) return;
