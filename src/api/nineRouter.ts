@@ -88,12 +88,40 @@ async function proxy(req:IncomingMessage,res:ServerResponse,target:URL,key:strin
   body=await readRequestBody(req,MAX_BODY_BYTES);
   if(!headers.has('Content-Type'))headers.set('Content-Type','application/json');
  }
- const response=await fetch(target.toString(),{
-  method,headers,body,redirect:'error',signal:AbortSignal.timeout(180_000),
- });
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(new Error('9Router request timed out.')),180_000);
+ const abortClient=()=>controller.abort(new Error('Client disconnected.'));
+ req.once('aborted',abortClient);
+ res.once('close',()=>{if(!res.writableEnded)controller.abort(new Error('Client disconnected.'));});
+ let response:Response;
+ try{
+  response=await fetch(target.toString(),{method,headers,body,redirect:'error',signal:controller.signal});
+ }finally{clearTimeout(timeout);}
  const type=cleanContentType(response.headers.get('content-type'));
  const length=response.headers.get('content-length');
  if(length&&Number(length)>MAX_RESPONSE_BYTES)throw new Error('9Router response exceeded the 30 MB size limit.');
+ if(response.ok&&type.toLowerCase().includes('text/event-stream')&&response.body){
+  const allowedHeaders=['content-type','cache-control','retry-after','x-request-id'];
+  const out:Record<string,string>={'Cache-Control':'no-store','X-Request-Id':requestId};
+  for(const name of allowedHeaders){const value=response.headers.get(name);if(value)out[name]=value.slice(0,500);}
+  res.writeHead(response.status,out);
+  const reader=response.body.getReader();let total=0;
+  try{
+   while(true){
+    const chunk=await reader.read();if(chunk.done)break;
+    total+=chunk.value.byteLength;
+    if(total>MAX_RESPONSE_BYTES){await reader.cancel();res.destroy(new Error('9Router stream exceeded the 30 MB size limit.'));return;}
+    if(res.destroyed){await reader.cancel();return;}
+    if(!res.write(Buffer.from(chunk.value)))await new Promise<void>((resolve,reject)=>{
+      const done=()=>{res.off('error',failed);resolve();};
+      const failed=(error:Error)=>{res.off('drain',done);reject(error);};
+      res.once('drain',done);res.once('error',failed);
+    });
+   }
+   res.end();
+  }catch(error){await reader.cancel().catch(()=>{});if(!res.destroyed)res.destroy(error instanceof Error?error:undefined);}
+  return;
+ }
  const bytes=Buffer.from(await response.arrayBuffer());
  if(bytes.length>MAX_RESPONSE_BYTES)throw new Error('9Router response exceeded the 30 MB size limit.');
  if(!response.ok){
