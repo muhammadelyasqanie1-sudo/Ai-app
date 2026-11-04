@@ -1,15 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ShieldCheck, LockKeyhole, RefreshCw, LogOut, LayoutDashboard, Users, Network,
+  ShieldCheck, LockKeyhole, RefreshCw, LogOut, LayoutDashboard, Users, Network, TerminalSquare,
   Cpu, Activity, Gauge, HardDrive, Flag, ClipboardList, ShieldAlert, CheckCircle2,
   Search, Play, Power, Save, Plus, AlertTriangle, Settings, FileWarning, KeyRound, PlugZap
 } from 'lucide-react';
 import { AfgConnectionsPanel } from './AfgConnectionsPanel.tsx';
+import { AfgOnlineAdminTerminal } from './AfgOnlineAdminTerminal.tsx';
 import type { Language } from '../../types/afg';
 import { getIntlLocale } from '../../utils/i18n';
 
 interface AfgAdminPanelProps { language: Language; }
-type Tab = 'overview'|'users'|'staff'|'providers'|'models'|'usage'|'errors'|'limits'|'health'|'config'|'flags'|'audit'|'security'|'connections';
+type Tab = 'overview'|'users'|'staff'|'providers'|'models'|'usage'|'errors'|'limits'|'health'|'config'|'flags'|'audit'|'security'|'connections'|'terminal';
 type ProviderRow = {
   id:string; displayName:string; enabled:boolean; configured:boolean; kind?:string;
   base_url?:string|null; config_json?:Record<string,any>; keyHint?:string|null;
@@ -45,6 +46,7 @@ const NAV: {id:Tab;labelEn:string;labelFa:string;icon:any}[] = [
   {id:'flags',labelEn:'Flags & Announcements',labelFa:'امکانات و اطلاعیه‌ها',icon:Flag},
   {id:'health',labelEn:'System Health',labelFa:'سلامت سیستم',icon:HardDrive},
   {id:'connections',labelEn:'Connections',labelFa:'اتصال‌ها و یکپارچه‌سازی',icon:PlugZap},
+  {id:'terminal',labelEn:'Online Admin Terminal',labelFa:'ترمینال مدیر آنلاین',icon:TerminalSquare},
 ];
 const CAPABILITIES = ['text','streaming','vision','imageGen','imageEdit','ocr','tts','stt','tools','jsonMode'];
 const STAFF_PERMISSIONS = ['providers:read','providers:manage','models:read','models:manage','routing:read','routing:manage','users:read','users:manage','users:suspend','audit:read','security:read','security:manage','dashboard:read','usage:read','system:read','settings:read','settings:manage','subscriptions:read','subscriptions:manage','notifications:broadcast'];
@@ -726,6 +728,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
         {tab==='audit'&&<div className={panel}><h2 className="mb-1 text-lg font-bold text-white">Immutable audit log</h2><p className="mb-4 text-xs text-slate-500">Append-only database trigger blocks application UPDATE and DELETE. Before/after state is retained for admin mutations.</p><div className="mb-4 grid gap-2 sm:grid-cols-3"><input className={field} type="datetime-local" value={auditFrom} onChange={e=>setAuditFrom(e.target.value)}/><input className={field} type="datetime-local" value={auditTo} onChange={e=>setAuditTo(e.target.value)}/><div className="flex gap-2"><input className={field} value={auditActor} onChange={e=>setAuditActor(e.target.value)} placeholder="Actor email or ID"/><button className={primary} onClick={()=>void loadAudit()}>Filter</button></div></div><div className="space-y-2">{audit.map((event:any)=><div key={event.id} className="rounded-xl border border-slate-800 bg-slate-900/70 p-3"><div className="flex flex-wrap justify-between gap-2"><b className="text-xs text-cyan-200">{event.action}</b><span className="text-[10px] text-slate-500">{date(event.created_at)}</span></div><p className="mt-1 text-xs text-slate-300">{event.actor_email||'System'} · {event.actor_role||'system'} · {event.target_type||'—'} / {event.target_id||'—'}</p>{event.before_json!=null&&<details className="mt-2"><summary className="cursor-pointer text-[10px] text-slate-400">Before state</summary><pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">{JSON.stringify(event.before_json,null,2)}</pre></details>}{event.after_json!=null&&<details className="mt-2"><summary className="cursor-pointer text-[10px] text-slate-400">After state</summary><pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">{JSON.stringify(event.after_json,null,2)}</pre></details>}<pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">{JSON.stringify(event.metadata)}</pre></div>)}{!audit.length&&<p className="text-sm text-slate-500">No audit events match these filters.</p>}</div></div>}
 
         {tab==='connections'&&<AfgConnectionsPanel/>}
+        {tab==='terminal'&&<AfgOnlineAdminTerminal language={language}/> }
 
         {tab==='security'&&<div className="space-y-4"><div className={panel}><h2 className="mb-1 text-lg font-bold text-white">Active sessions</h2><p className="mb-4 text-xs text-slate-500">Session metadata only; raw session tokens are never returned.</p><div className="space-y-2">{sessions.map((session:any)=><div key={session.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3"><div><b className="text-xs text-white">{session.email}</b><p className="mt-1 text-[10px] text-slate-400">{session.user_agent||'Unknown device'} · IP {session.ip||'—'}</p><p className="mt-1 text-[10px] text-slate-500">Last seen {date(session.last_seen_at)} · Expires {date(session.expires_at)}</p></div><button className="rounded-xl border border-red-500/40 px-3 py-2 text-xs text-red-300" onClick={()=>void revokeSession(session)}>Revoke session</button></div>)}{!sessions.length&&<p className="text-sm text-slate-500">No active sessions found.</p>}</div></div>
           <div className={panel}><h2 className="mb-1 text-lg font-bold text-white">Security events</h2><p className="mb-4 text-xs text-slate-500">Authentication denials and API failures. Sensitive credential values are excluded.</p><div className="space-y-2">{security.map((event:any)=><div key={event.id} className="rounded-xl border border-slate-800 bg-slate-900 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-cyan-300"/><b className="text-sm text-white">{event.event_type}</b></div><span className="text-[10px] text-slate-500">{date(event.created_at)}</span></div><p className="mt-1 text-[10px] text-slate-400">Severity: {event.severity} · User: {event.user_id||'unknown'} · Request: {event.request_id||'—'}</p><pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">{JSON.stringify(event.metadata)}</pre></div>)}{!security.length&&<p className="text-sm text-slate-500">No security events recorded.</p>}</div></div>
