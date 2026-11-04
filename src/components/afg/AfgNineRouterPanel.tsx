@@ -84,9 +84,8 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
    setTtsModel(v=>v||first('tts'));
    setSttModel(v=>v||first('stt'));
    setEmbeddingModel(v=>v||first('embedding'));
-   setSearchModel(v=>v||first('web'));
-   setFetchModel(v=>v||first('web'));
-   setVideoModel(v=>v||first('image'));
+   setSearchModel(v=>v||map.web?.find(m=>m.kind==='webSearch'||m.id.endsWith('/search'))?.id||'');
+   setFetchModel(v=>v||map.web?.find(m=>m.kind==='webFetch'||m.id.endsWith('/fetch'))?.id||'');
   }catch(e){setError(e instanceof Error?e.message:'Could not load 9Router models.');}
   finally{setLoading(false);}
  },[]);
