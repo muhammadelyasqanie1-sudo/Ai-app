@@ -795,3 +795,28 @@ body {
 .afg-composer-shell .text-cyan-200,
 .afg-composer-shell .text-cyan-300 { color: var(--accent-cyan) !important; }
 .afg-composer-shell .border-cyan-500\/30 { border-color: var(--border-color) !important; }
+
+
+/* AFG AI routing/UI bugfixes: assistant contrast, header controls and RTL cards. */
+html.dark .afg-chat-view .afg-assistant-bubble,
+html.neon .afg-chat-view .afg-assistant-bubble {
+  background: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: rgba(148,163,184,.22) !important;
+}
+html:not(.dark):not(.neon) .afg-chat-view .afg-assistant-bubble {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+.afg-chat-view .afg-assistant-bubble :where(p,li,blockquote,code,pre,strong,em) { color: inherit; }
+.afg-app-header button {
+  background-color: transparent !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+.afg-app-header button:hover { background-color: var(--bg-surface-hover) !important; }
+.afg-chat-view .afg-prompt-card { text-align: start; }
+.afg-chat-view[dir="rtl"] .afg-prompt-card { direction: rtl; text-align: right; }
+.afg-chat-view[dir="rtl"] .afg-prompt-card > span { justify-content: flex-start; }
+.afg-chat-view[dir="rtl"] .afg-prompt-card > span:last-child { text-align: right; }

@@ -39,6 +39,7 @@ interface AfgChatViewProps {
   onBranchMessage: (messageId: string) => void;
   onDeleteMessage: (messageId: string) => void;
   isLoading: boolean;
+  isInitialLoading?: boolean;
   language: Language;
   user: UserProfile;
   initialPrompt?: string;
@@ -64,6 +65,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   onBranchMessage,
   onDeleteMessage,
   isLoading,
+  isInitialLoading = false,
   language,
   user,
   initialPrompt,
@@ -81,6 +83,12 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
 }) => {
   const t = translations[language];
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isSlowResponse, setIsSlowResponse] = useState(false);
+  useEffect(() => {
+    if (!isLoading) { setIsSlowResponse(false); return; }
+    const timer = window.setTimeout(() => setIsSlowResponse(true), 10000);
+    return () => window.clearTimeout(timer);
+  }, [isLoading]);
   
   // Speech synthesis state (Read Aloud)
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
@@ -167,7 +175,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   ];
 
   return (
-    <div style={{ maxWidth: "var(--afg-chat-width, 64rem)" }} className="afg-chat-view flex h-[calc(100dvh-5.25rem)] min-h-0 flex-col mx-auto w-full px-2 sm:px-4">
+    <div style={{ maxWidth: "var(--afg-chat-width, 64rem)" }} className="afg-chat-view flex h-[calc(100dvh-5.25rem)] min-h-0 flex-col mx-auto w-full px-2 sm:px-4" dir={["dari","pashto","persian","arabic","urdu"].includes(language) ? "rtl" : "ltr"}>
       
       {/* Top Session Status Bar */}
       <div className="afg-chat-statusbar sticky top-0 z-20 flex items-center justify-between py-2 px-3 border-b border-cyan-900/30 mb-2 bg-inherit/90 backdrop-blur-xl">
@@ -192,8 +200,9 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
       {/* Messages Scroll Area */}
       <div className="flex-1 overflow-y-auto px-1 sm:px-3 py-4 space-y-5">
         
-        {/* If no messages yet, show welcome prompt cards (Matching Screenshot 2 & 4) */}
-        {messages.length === 0 && (
+        {isInitialLoading && <div className="mx-auto w-full max-w-2xl space-y-5 py-8" aria-label={language === 'dari' ? 'در حال بارگذاری گفتگو' : 'Loading conversation'} role="status"><div className="h-7 w-2/3 rounded-lg afg-skeleton-line"/><div className="h-24 w-full rounded-2xl afg-skeleton-line"/><div className="ms-auto h-20 w-4/5 rounded-2xl afg-skeleton-line"/><div className="h-28 w-full rounded-2xl afg-skeleton-line"/></div>}
+        {/* If no messages yet, show welcome prompt cards. */}
+        {!isInitialLoading && messages.length === 0 && (
           <div className="afg-chat-welcome flex flex-col items-center justify-center min-h-[60vh] text-center max-w-2xl mx-auto space-y-6 animate-in fade-in duration-500">
             <div className="relative">
               <AfgBrainLogo size="xl" showBadge />
@@ -204,12 +213,12 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
               <p className="text-sm text-cyan-300 font-medium mt-2">{language === 'dari' ? 'با یک ایده شروع کنید یا پروژه تازه‌ای بسازید.' : 'Start with an idea or create a new project.'}</p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full text-start">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full text-start" dir={['dari','pashto','persian','arabic','urdu'].includes(language) ? 'rtl' : 'ltr'}>
               {promptSuggestions.map((prompt, idx) => (
                 <button
                   key={idx}
                   onClick={() => onSendMessage(prompt, [])}
-                  className="afg-prompt-card p-3 rounded-2xl bg-slate-900/70 hover:bg-cyan-950/40 border border-cyan-900/50 hover:border-cyan-500/50 text-xs text-start text-slate-300 hover:text-cyan-200 transition-all group shadow-md"
+                  className="afg-prompt-card p-3 rounded-2xl bg-slate-900/70 hover:bg-cyan-950/40 border border-cyan-900/50 hover:border-cyan-500/50 text-xs text-start text-slate-300 hover:text-cyan-200 transition-all group shadow-md" dir={['dari','pashto','persian','arabic','urdu'].includes(language) ? 'rtl' : 'ltr'}
                 >
                   <span className="flex items-center gap-2 font-semibold mb-1 group-hover:text-cyan-300">
                     {idx === 0 ? <Code2 className="h-4 w-4 text-cyan-400"/> : idx === 1 ? <FolderSearch className="h-4 w-4 text-cyan-400"/> : idx === 2 ? <Globe className="h-4 w-4 text-cyan-400"/> : <FilePlus2 className="h-4 w-4 text-cyan-400"/>}
@@ -293,7 +302,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                   className={`rounded-2xl px-4 py-3 text-sm sm:text-base leading-relaxed shadow-lg ${
                     isUser
                       ? 'bg-gradient-to-r from-sky-600 to-cyan-600 text-white rounded-tr-none'
-                      : 'bg-[#0b142c] text-slate-100 border border-cyan-900/40 rounded-tl-none shadow-[0_4px_20px_rgba(0,0,0,0.3)]'
+                       : 'afg-assistant-bubble border rounded-tl-none shadow-[0_4px_20px_rgba(0,0,0,0.3)]'
                   }`}
                 >
                   {/* Attachments preview inside message */}
@@ -404,7 +413,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
             </div>
             <div className="p-3.5 rounded-2xl bg-[#0b142c] border border-cyan-900/40 text-cyan-300 flex items-center gap-2 text-xs">
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-              <span>{language === 'dari' ? 'AFG AI در حال پردازش و پاسخگویی...' : 'AFG AI is generating a thoughtful response...'}</span>
+              <span>{language === 'dari' ? (isSlowResponse ? 'هنوز در حال فکر کردن…' : 'AFG AI در حال پردازش و پاسخگویی...') : (isSlowResponse ? 'Still thinking…' : 'AFG AI is generating a thoughtful response...')}</span>
             </div>
           </div>
         )}
