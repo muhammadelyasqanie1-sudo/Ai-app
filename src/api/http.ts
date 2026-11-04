@@ -258,7 +258,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
       void emit();
       const timer = setInterval(() => { void emit(); }, 60_000);
       const heartbeat = setInterval(() => { if (!closed && !res.writableEnded) res.write(': keepalive\\n\\n'); }, 15_000);
-      req.on('close', () => { closed = true; clearInterval(timer); clearInterval(heartbeat); });
+      res.on('close', () => { closed = true; clearInterval(timer); clearInterval(heartbeat); });
       return;
     }
 
