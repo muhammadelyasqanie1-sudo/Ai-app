@@ -134,11 +134,11 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  if(query.size)url.search=query.toString();
  const headers=new Headers({Accept:'application/json'});
  const secrets:string[]=[];
- if(row.auth_type==='bearer'||row.auth_type==='header_key'){
+ if(row.auth_type==='bearer'||row.auth_type==='header_key'||row.auth_type==='query_key'){
   if(!row.credential_encrypted)throw new Error('API connector credential is missing.');
   const secret=decrypt(row.credential_encrypted);secrets.push(secret);
-  const key=row.auth_type==='bearer'?'Authorization':String(row.auth_header_name||'X-API-Key');
-  headers.set(key,row.auth_type==='bearer'?'Bearer '+secret:secret);
+  if(row.auth_type==='query_key')query.set(String(row.auth_header_name||'api_key'),secret);
+  else {const key=row.auth_type==='bearer'?'Authorization':String(row.auth_header_name||'X-API-Key');headers.set(key,row.auth_type==='bearer'?'Bearer '+secret:secret);}
  }
  const init:RequestInit={method:row.http_method,headers,redirect:'error',signal:AbortSignal.timeout(timeoutMs)};
  if(['POST','PUT','PATCH'].includes(row.http_method)){headers.set('Content-Type','application/json');init.body=JSON.stringify(body);}
@@ -230,9 +230,9 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    const authHeader=String(body.authHeaderName||'X-API-Key');
    const secret=typeof body.credential==='string'?body.credential.trim():'';
    if(name.length<2||name.length>120||!/^[a-z][a-z0-9_]{1,63}$/.test(toolName)||description.length>2000||
-    !['GET','POST','PUT','PATCH','DELETE'].includes(method)||!['none','bearer','header_key'].includes(authType)||
+    !['GET','POST','PUT','PATCH','DELETE'].includes(method)||!['none','bearer','header_key','query_key'].includes(authType)||
     (authType==='none'&&secret)||(authType!=='none'&&!secret)||
-    (authType==='header_key'&&!/^[A-Za-z0-9-]{1,64}$/.test(authHeader))){
+    ((authType==='header_key'||authType==='query_key')&&!/^[A-Za-z0-9_.-]{1,64}$/.test(authHeader))){
     sendAuthJson(res,400,{error:'Invalid API connector settings.'});return true;
    }
    await safeEndpoint(endpoint);
