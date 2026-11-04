@@ -148,7 +148,7 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
         request('/api/features/status').catch(()=>({verified:false,featureFlags:{},integrations:{}})),
       ]);
       setAuthenticated(me.authenticated===true);
-      setAdminAllowed(me.authenticated===true && me.user?.role==='admin');
+      setAdminAllowed(me.authenticated===true && ['admin','superadmin'].includes(me.user?.role));
       setGithub({configured:gh.configured===true || featureData.githubOAuthConfigured===true,linked:gh.linked===true,username:gh.username||''});
       const flagMap:Record<string,boolean> = featureData.verified===true ? (featureData.featureFlags||{}) : {};
       const integrations:Record<string,any> = featureData.verified===true ? (featureData.integrations||{}) : {};
@@ -179,8 +179,9 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
   const filtered = useMemo(()=>ITEMS.filter(item=>{
     const q=query.trim().toLowerCase();
     if(item.id==='byok' && featureFlags.byok===false) return false;
+    if(item.id==='9router' && !adminAllowed) return false;
     return !q || [item.title,item.subtitle,item.group,...item.keywords].join(' ').toLowerCase().includes(q);
-  }),[query,featureFlags]);
+  }),[query,featureFlags,adminAllowed]);
   const groups = ['Personalize','Your Assistant','Connections','Special Providers'];
   const statusLabel=(id:SettingId)=>{
     if(statusLoading)return t.checking;
