@@ -239,25 +239,25 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
         try {
           const snapshot = await applyModelAccess(req, await getCapabilitySnapshot());
           if (!closed && !res.writableEnded) {
-            res.write('event: catalog.updated\\n');
-            res.write('data: ' + JSON.stringify(snapshot) + '\\n\\n');
+            res.write('event: catalog.updated\n');
+            res.write('data: ' + JSON.stringify(snapshot) + '\n\n');
           }
           const database = await checkDatabase();
           if (!closed && !res.writableEnded) {
-            res.write('event: system.health\\n');
-            res.write('data: ' + JSON.stringify({ status: snapshot.verified ? 'live' : 'degraded', database }) + '\\n\\n');
+            res.write('event: system.health\n');
+            res.write('data: ' + JSON.stringify({ status: snapshot.verified ? 'live' : 'degraded', database }) + '\n\n');
           }
         } catch {
           if (!closed && !res.writableEnded) {
-            res.write('event: system.health\\n');
-            res.write('data: ' + JSON.stringify({ status: 'degraded' }) + '\\n\\n');
+            res.write('event: system.health\n');
+            res.write('data: ' + JSON.stringify({ status: 'degraded' }) + '\n\n');
           }
         } finally { refreshing = false; }
       };
-      res.write('retry: 5000\\n\\n');
+      res.write('retry: 5000\n\n');
       void emit();
       const timer = setInterval(() => { void emit(); }, 60_000);
-      const heartbeat = setInterval(() => { if (!closed && !res.writableEnded) res.write(': keepalive\\n\\n'); }, 15_000);
+      const heartbeat = setInterval(() => { if (!closed && !res.writableEnded) res.write(': keepalive\n\n'); }, 15_000);
       res.on('close', () => { closed = true; clearInterval(timer); clearInterval(heartbeat); });
       return;
     }
