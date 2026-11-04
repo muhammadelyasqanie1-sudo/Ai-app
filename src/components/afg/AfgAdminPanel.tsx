@@ -9,7 +9,7 @@ import type { Language } from '../../types/afg';
 import { getIntlLocale } from '../../utils/i18n';
 
 interface AfgAdminPanelProps { language: Language; }
-type Tab = 'overview'|'users'|'providers'|'models'|'usage'|'errors'|'limits'|'health'|'config'|'flags'|'audit'|'security'|'connections';
+type Tab = 'overview'|'users'|'staff'|'providers'|'models'|'usage'|'errors'|'limits'|'health'|'config'|'flags'|'audit'|'security'|'connections';
 type ProviderRow = {
   id:string; displayName:string; enabled:boolean; configured:boolean; kind?:string;
   base_url?:string|null; config_json?:Record<string,any>; keyHint?:string|null;
@@ -33,6 +33,7 @@ const API = ((import.meta as any).env?.VITE_API_BASE_URL || '').replace(/\/$/, '
 const NAV: {id:Tab;labelEn:string;labelFa:string;icon:any}[] = [
   {id:'overview',labelEn:'Dashboard',labelFa:'نمای کلی',icon:LayoutDashboard},
   {id:'users',labelEn:'Users',labelFa:'کاربران',icon:Users},
+  {id:'staff',labelEn:'Staff & Permissions',labelFa:'کارکنان و دسترسی‌ها',icon:ShieldCheck},
   {id:'providers',labelEn:'Providers',labelFa:'ارائه‌دهندگان',icon:Network},
   {id:'models',labelEn:'Models',labelFa:'مدل‌ها',icon:Cpu},
   {id:'usage',labelEn:'Usage',labelFa:'مصرف',icon:Activity},
@@ -46,6 +47,7 @@ const NAV: {id:Tab;labelEn:string;labelFa:string;icon:any}[] = [
   {id:'connections',labelEn:'Connections',labelFa:'اتصال‌ها و یکپارچه‌سازی',icon:PlugZap},
 ];
 const CAPABILITIES = ['text','streaming','vision','imageGen','imageEdit','ocr','tts','stt','tools','jsonMode'];
+const STAFF_PERMISSIONS = ['providers:read','providers:manage','models:read','models:manage','routing:read','routing:manage','users:read','users:manage','users:suspend','audit:read','security:read','security:manage','dashboard:read','usage:read','system:read','settings:read','settings:manage','subscriptions:read','subscriptions:manage','notifications:broadcast'];
 
 function csrfCookie(): string {
   const match = document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='));
@@ -83,6 +85,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [providers,setProviders] = useState<ProviderRow[]>([]);
   const [models,setModels] = useState<ModelRow[]>([]);
   const [users,setUsers] = useState<UserRow[]>([]);
+  const [staffRoles,setStaffRoles] = useState<any[]>([]);
   const [overview,setOverview] = useState<Overview|null>(null);
   const [requests,setRequests] = useState<RequestRow[]>([]);
   const [security,setSecurity] = useState<any[]>([]);
@@ -178,6 +181,8 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       setSessions(values[12].sessions||[]);
       setSystemConfig(values[13].config||[]);
       setAnnouncements(values[14].announcements||[]);
+      const staffData = await adminApi('/api/admin/staff/roles').catch(()=>({roles:[]}));
+      setStaffRoles(staffData.roles||[]);
       setAuthenticated(true);
       return true;
     }catch(err){
@@ -235,6 +240,14 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       await adminApi('/api/admin/users',{method:'PATCH',body:JSON.stringify({userId:user.id,...patch})});
       await reloadNotice('User access updated.');
     }catch(err){setError(err instanceof Error?err.message:'User update failed.');}
+  };
+
+  const saveStaffRole=async(role:any)=>{
+    setError('');
+    try{
+      await adminApi('/api/admin/staff/roles',{method:'PATCH',body:JSON.stringify({role:role.name,permissions:role.permissions_json||{}})});
+      await reloadNotice('Staff permissions saved.');
+    }catch(err){setError(err instanceof Error?err.message:'Could not save staff permissions.');}
   };
 
   const confirmUserChange=async(user:UserRow,patch:Record<string,string>)=>{
@@ -603,8 +616,9 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
               <button className={secondary} onClick={()=>void openUserProfile(user)}>Profile</button>
               {user.status!=='deleted'&&<button className={secondary} onClick={()=>void sendPasswordReset(user)}>Reset password</button>}
               {user.id!==selectedUser?.id&&user.status!=='deleted'&&<button className={secondary} onClick={()=>void confirmUserChange(user,{status:user.status==='active'?'suspended':'active'})}>{user.status==='active'?'Suspend':'Reactivate'}</button>}
-              {user.role!=='superadmin'&&user.status!=='deleted'&&<button className={secondary} onClick={()=>void confirmUserChange(user,{role:user.role==='admin'?'user':'admin'})}>{user.role==='admin'?'Demote':'Make admin'}</button>}
-              {isSuperadmin&&user.role!=='superadmin'&&user.status!=='deleted'&&<button className={secondary} onClick={()=>void confirmUserChange(user,{role:'superadmin'})}>Make superadmin</button>}
+              {(adminRole==='admin'||isSuperadmin)&&user.status!=='deleted'&&<select aria-label="Assign user role" className={field+' max-w-44'} value={user.role} onChange={event=>{const nextRole=event.target.value;if(nextRole!==user.role)void confirmUserChange(user,{role:nextRole});}}>
+                {['user','admin',...(isSuperadmin?['superadmin']:[]),...staffRoles.map((role:any)=>role.name).filter((name:string)=>!['user','admin','superadmin'].includes(name))].filter((role,index,all)=>all.indexOf(role)===index).map(role=><option key={role} value={role}>{role.replaceAll('_',' ')}</option>)}
+              </select>}
               {isSuperadmin&&user.status!=='deleted'&&<button className="rounded-xl border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-300" onClick={()=>void confirmUserChange(user,{status:'deleted'})}>Soft delete</button>}
             </div></td></tr>)}
           </tbody></table>{!filteredUsers.length&&<p className="py-8 text-center text-sm text-slate-500">No users match these filters.</p>}</div>
@@ -614,6 +628,20 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
             <div className="mt-3 grid gap-3 text-xs text-slate-300 sm:grid-cols-2 lg:grid-cols-3"><p>Email: {selectedUser.email||'—'}</p><p>Role: {selectedUser.role}</p><p>Status: {selectedUser.status}</p><p>Joined: {date(selectedUser.created_at)}</p><p>Last login: {date(selectedUser.last_login)}</p><p>Conversations: {fmt(selectedUser.conversationCount)}</p><p>Input tokens: {fmt(selectedUser.usage?.input_tokens)}</p><p>Output tokens: {fmt(selectedUser.usage?.output_tokens)}</p><p>Total known cost: {money(selectedUser.usage?.total_cost)}</p></div>
             {selectedUser.activity?.length>0&&<div className="mt-4 border-t border-slate-800 pt-3"><h4 className="mb-2 text-sm font-bold text-white">Recent AI activity</h4><div className="space-y-2">{selectedUser.activity.map((item:any)=><div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-950 p-2 text-[10px]"><span className="text-slate-300">{item.provider_key||'—'} · {item.model_key||'—'} · {item.status}</span><span className="text-slate-500">{date(item.created_at)} · {fmt(item.tokens_in)} in / {fmt(item.tokens_out)} out · {money(item.cost_usd,5)}</span></div>)}</div></div>}
           </div>}
+        </div>}
+
+        {tab==='staff'&&<div className="space-y-4">
+          <div className={panel}>
+            <h2 className="text-lg font-bold text-white">Staff roles and permissions</h2>
+            <p className="my-2 text-xs text-slate-500">Permissions are checked by the backend. Only root administrators can edit role permission maps. Root roles cannot be assigned through these role editors.</p>
+            <div className="space-y-4">
+              {staffRoles.filter((role:any)=>!['user','admin','superadmin'].includes(role.name)).map((role:any)=><div key={role.name} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3"><h3 className="font-bold text-white">{role.name.replaceAll('_',' ')}</h3><button className={primary} onClick={()=>void saveStaffRole(role)}>Save permissions</button></div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{STAFF_PERMISSIONS.map(permission=><label key={permission} className="flex items-center gap-2 rounded-lg border border-slate-800 px-2 py-2 text-[11px] text-slate-300"><input type="checkbox" checked={role.permissions_json?.[permission]===true} onChange={event=>setStaffRoles(previous=>previous.map(item=>item.name===role.name?{...item,permissions_json:{...(item.permissions_json||{}),[permission]:event.target.checked}}:item))}/>{permission}</label>)}</div>
+              </div>)}
+            </div>
+            {!staffRoles.some((role:any)=>!['user','admin','superadmin'].includes(role.name))&&<p className="py-6 text-center text-sm text-slate-500">Staff roles will appear after database migration 0008 is applied.</p>}
+          </div>
         </div>}
 
         {tab==='providers'&&<div className="space-y-4">

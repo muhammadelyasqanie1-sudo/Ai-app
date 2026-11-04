@@ -16,6 +16,10 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: TypeScript validation
         run: npm run lint
+      - name: Database configuration regression tests
+        run: npm run test:database-config
+      - name: Admin RBAC regression tests
+        run: npm run test:admin-rbac
       - name: Offline SHA-256 regression tests
         run: npm run test:offline-sha
       - name: Production web build
