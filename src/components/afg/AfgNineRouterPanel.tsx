@@ -22,6 +22,7 @@ async function call(path:string,options:RequestInit={}){
 export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
  const dari=language==='dari'||language==='persian',t=(en:string,fa:string)=>dari?fa:en;
  const [models,setModels]=useState<ModelMap>({});
+ const [gateway,setGateway]=useState<{configured:boolean;reachable:boolean;dashboardUrl?:string}|null>(null);
  const [kind,setKind]=useState<Kind>('image');
  const [loading,setLoading]=useState(false);
  const [error,setError]=useState('');
@@ -80,6 +81,7 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
   finally{setLoading(false);}
  },[]);
  useEffect(()=>{void loadModels();},[loadModels]);
+ useEffect(()=>{call('/api/9router/status').then(r=>setGateway(r.data)).catch(()=>setGateway({configured:false,reachable:false}));},[]);
  const run=async(key:string,fn:()=>Promise<void>)=>{
   setBusy(key);setError('');setNotice('');
   try{await fn();setNotice(t('Request completed.','درخواست انجام شد.'));}
@@ -149,6 +151,7 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
  const kinds=[{id:'image',label:t('Image generation','تولید تصویر'),icon:ImageIcon},{id:'image-to-text',label:t('Vision','درک تصویر'),icon:Activity},{id:'web',label:t('Search & fetch','جستجو و استخراج وب'),icon:Search},{id:'tts',label:t('Text to speech','متن به گفتار'),icon:AudioLines},{id:'stt',label:t('Speech to text','گفتار به متن'),icon:Mic},{id:'embedding',label:t('Embeddings','بردارهای معنایی'),icon:Activity}] as const;
  return <div className="space-y-4 rounded-2xl border border-cyan-500/20 bg-slate-950/70 p-4 sm:p-5">
   <header className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-black text-white">9Router · Multimodal AI Gateway</h2><p className="mt-1 text-xs leading-5 text-slate-400">{t('Use one configured gateway for chat models, images, audio, embeddings, web search and web extraction. Providers and models appear only when 9Router reports them.','با یک درگاه تنظیم‌شده از مدل‌های گفتگو، تصویر، صدا، Embedding، جستجوی وب و استخراج محتوا استفاده کنید. فقط مدل‌هایی نمایش داده می‌شوند که 9Router گزارش کند.')}</p></div><button onClick={()=>void loadModels()} disabled={loading} className="rounded-xl border border-slate-700 p-2 text-slate-300"><RefreshCw className={'h-4 w-4 '+(loading?'animate-spin':'')}/></button></header>
+  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3"><span className={'inline-flex items-center gap-2 text-xs '+(gateway?.reachable?'text-emerald-300':'text-amber-300')}><span className={'h-2 w-2 rounded-full '+(gateway?.reachable?'bg-emerald-400':'bg-amber-400')}/>{gateway?.reachable?t('9Router is reachable','ارتباط با 9Router برقرار است'):gateway?.configured?t('9Router configured but unreachable','9Router تنظیم شده ولی در دسترس نیست'):t('9Router is not configured','9Router تنظیم نشده است')}</span>{gateway?.dashboardUrl&&<a href={gateway.dashboardUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-xs text-cyan-300">{t('Open 9Router dashboard','بازکردن داشبورد 9Router')}<ExternalLink className="h-3 w-3"/></a>}</div>
   {error&&<div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">{error}</div>}
   {notice&&<div role="status" className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-2 text-xs text-emerald-300">{notice}</div>}
   <nav className="grid grid-cols-2 gap-2 sm:grid-cols-5">{kinds.map(item=>{const Icon=item.icon;return <button key={item.id} onClick={()=>setKind(item.id)} className={'flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border p-2 text-center text-[11px] '+(kind===item.id?'border-cyan-400/50 bg-cyan-400/10 text-cyan-200':'border-slate-800 bg-slate-900 text-slate-400')}><Icon className="h-4 w-4"/>{item.label}</button>;})}</nav>
