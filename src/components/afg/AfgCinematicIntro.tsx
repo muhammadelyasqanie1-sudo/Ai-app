@@ -52,7 +52,7 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
   const [nodeState, setNodeState] = useState<NodeState>('checking');
   const [latency, setLatency] = useState<number | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
-  const t = copy[language];
+  const t = language === 'dari' ? copy.dari : copy.english;
   const isRtl = language === 'dari';
 
   useEffect(() => {
