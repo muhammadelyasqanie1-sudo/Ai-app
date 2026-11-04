@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useState} from 'react';
-import { Activity, ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, Database, Globe, RefreshCw, Search, ShieldCheck, XCircle } from 'lucide-react';
+import { Activity, ArrowUpRight, ChevronLeft, ChevronRight, Database, Globe, RefreshCw, Search, Sparkles } from 'lucide-react';
 import type { Language } from '../../types/afg';
 import { AfgApiConnectorPanel } from './AfgApiConnectorPanel.tsx';
 
