@@ -119,7 +119,7 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean}>=({l
     <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">9Router Gateway</p><b className={'text-sm '+(gateway?.configured?'text-emerald-300':'text-amber-300')}>{gateway?.configured?label('Configured','تنظیم شده'):label('Not configured','تنظیم نشده')}</b></div>
    </div>
    {sync?.sync?.last_error&&<p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-2 text-xs text-amber-300">{sync.sync.last_error}</p>}
-   {!gateway?.configured&&<p className="mt-3 text-[11px] text-slate-400">{label('Set NINEROUTER_BASE_URL on the server; NINEROUTER_API_KEY is optional when 9Router authentication is disabled. Apply migrations 0012–0015.','NINEROUTER_BASE_URL را فقط در سرور تنظیم کنید؛ NINEROUTER_API_KEY فقط در صورت فعال‌بودن احراز هویت 9Router لازم است. مهاجرت‌های 0012 تا 0013 را اجرا کنید.')}</p>}
+   {!gateway?.configured&&<p className="mt-3 text-[11px] text-slate-400">{label('Set NINEROUTER_BASE_URL on the server; NINEROUTER_API_KEY is optional when 9Router authentication is disabled. Apply migrations 0012–0015.','NINEROUTER_BASE_URL را فقط در سرور تنظیم کنید؛ NINEROUTER_API_KEY فقط در صورت فعال‌بودن احراز هویت 9Router لازم است. مهاجرت‌های 0012 تا 0015 را اجرا کنید.')}</p>}
   </section>
   {error&&<div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>}
   {notice&&<div role="status" className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-300">{notice}</div>}
