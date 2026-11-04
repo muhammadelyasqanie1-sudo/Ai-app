@@ -10,7 +10,6 @@ import {
   CheckCircle2,
   Plus,
   MoreVertical,
-  Wifi, WifiOff
 } from 'lucide-react';
 import { AfgBrainLogo } from './AfgBrainLogo';
 import type { Language, Theme, UserProfile } from '../../types/afg';
