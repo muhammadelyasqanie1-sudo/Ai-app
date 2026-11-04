@@ -47,9 +47,31 @@ export interface HealthStatus {
   message?: string;
 }
 
+export type ChatToolDefinition = {
+  type: 'function';
+  function: { name: string; description?: string; parameters: Record<string, unknown> };
+};
+
+export type ChatToolCallDelta = {
+  index: number;
+  id?: string;
+  type?: 'function';
+  function?: { name?: string; arguments?: string };
+};
+
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  name?: string;
+  tool_call_id?: string;
+  tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>;
+}
+
 export interface ChatRequest {
   model: string;
-  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+  messages: ChatMessage[];
+  tools?: ChatToolDefinition[];
+  userId?: string | null;
   signal?: AbortSignal;
   noFallback?: boolean;
   onModelSelected?: (providerId: string, modelId: string) => void | Promise<void>;
@@ -57,6 +79,7 @@ export interface ChatRequest {
 
 export interface ChatChunk {
   content: string;
+  toolCalls?: ChatToolCallDelta[];
 }
 
 export type ImageStyleId = 'realistic' | 'digital-art' | 'anime' | '3d' | 'logo' | 'wallpaper' | 'social';
