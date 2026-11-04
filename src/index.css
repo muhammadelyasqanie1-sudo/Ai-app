@@ -820,3 +820,37 @@ html:not(.dark):not(.neon) .afg-chat-view .afg-assistant-bubble {
 .afg-chat-view[dir="rtl"] .afg-prompt-card { direction: rtl; text-align: right; }
 .afg-chat-view[dir="rtl"] .afg-prompt-card > span { justify-content: flex-start; }
 .afg-chat-view[dir="rtl"] .afg-prompt-card > span:last-child { text-align: right; }
+
+
+/* Standardized AFG AI surfaces and accessible theme-aware navigation. */
+:root {
+  --bg-main: #f5f7fa; --bg-surface: #ffffff; --bg-surface-subtle: #f1f5f9;
+  --bg-surface-hover: #eaf0f6; --border-color: #e2e8f0; --text-primary: #172033;
+  --text-secondary: #526176; --text-muted: #718096; --accent-cyan: #0891b2;
+  --accent-blue: #0e7490; --accent-glow: rgba(8,145,178,.16);
+  --card-shadow: 0 2px 12px rgba(15,23,42,.05);
+}
+.dark {
+  --bg-main: #101827; --bg-surface: #182334; --bg-surface-subtle: #202e42;
+  --bg-surface-hover: #26364b; --border-color: #304158; --text-primary: #edf2f7;
+  --text-secondary: #a7b5c7; --text-muted: #8292a8; --accent-cyan: #22b8cf;
+  --accent-blue: #1596b4; --accent-glow: rgba(34,184,207,.18);
+  --card-shadow: 0 2px 14px rgba(0,0,0,.18);
+}
+.afg-drawer-root { background: transparent !important; }
+.afg-drawer-panel {
+  background: var(--bg-surface) !important; color: var(--text-primary) !important;
+  border-inline-start: 1px solid var(--border-color);
+  box-shadow: 0 18px 60px rgba(15,23,42,.18); overflow: hidden;
+}
+.afg-drawer-panel > div, .afg-drawer-panel nav,
+.afg-drawer-panel nav > div { background-color: transparent; }
+.afg-drawer-panel .text-white { color: var(--text-primary) !important; }
+.afg-drawer-panel .text-slate-300,
+.afg-drawer-panel .text-slate-400 { color: var(--text-secondary) !important; }
+.afg-brand-official { background: var(--bg-surface-subtle); border: 1px solid var(--border-color); }
+.afg-brand-official img { width: 19px; height: 19px; object-fit: contain; }
+.afg-brand-fallback { background: var(--bg-surface-subtle); color: var(--text-secondary); border: 1px solid var(--border-color); font-size: 10px; }
+.afg-premium-badge { display:inline-flex; align-items:center; border:1px solid color-mix(in srgb,var(--accent-cyan) 35%,transparent); border-radius:999px; padding:.2rem .5rem; color:var(--accent-cyan); font-size:.65rem; font-weight:700; }
+.afg-model-row.is-disabled { opacity:.55; }
+.afg-model-row.is-disabled .afg-model-cost { color:var(--text-muted); }
