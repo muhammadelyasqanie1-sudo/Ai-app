@@ -83,6 +83,7 @@ export default function App() {
   const [authCheckResolved, setAuthCheckResolved] = useState(false);
   const [isInitialChatLoading, setIsInitialChatLoading] = useState(false);
   const [profileLoadError, setProfileLoadError] = useState('');
+  const [chatLoadAttempt, setChatLoadAttempt] = useState(0);
 
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('afg_theme');
@@ -363,7 +364,7 @@ export default function App() {
     };
     void load();
     return () => { active = false; controller.abort(); window.clearTimeout(timer); };
-  }, [user.email, hasEnteredApp, language]);
+  }, [user.email, hasEnteredApp, language, chatLoadAttempt]);
 
   useEffect(() => {
     serverConversationRef.current = null;
@@ -723,7 +724,7 @@ export default function App() {
 
       {profileLoadError && <div role="alert" className="mx-auto mt-2 w-[min(94%,48rem)] rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
         {profileLoadError}
-        <button type="button" className="ms-3 underline font-semibold" onClick={() => { window.dispatchEvent(new Event('afg-auth-change')); }}>{language === 'dari' ? 'تلاش دوباره' : 'Retry'}</button>
+        <button type="button" className="ms-3 underline font-semibold" onClick={() => { setChatLoadAttempt((value) => value + 1); window.dispatchEvent(new Event('afg-auth-change')); }}>{language === 'dari' ? 'تلاش دوباره' : 'Retry'}</button>
       </div>}
       {/* Main Content Area */}
       <main className="min-h-0 flex-1 w-full overflow-y-auto pb-4 pt-2 md:ms-0">
