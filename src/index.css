@@ -854,3 +854,28 @@ html:not(.dark):not(.neon) .afg-chat-view .afg-assistant-bubble {
 .afg-premium-badge { display:inline-flex; align-items:center; border:1px solid color-mix(in srgb,var(--accent-cyan) 35%,transparent); border-radius:999px; padding:.2rem .5rem; color:var(--accent-cyan); font-size:.65rem; font-weight:700; }
 .afg-model-row.is-disabled { opacity:.55; }
 .afg-model-row.is-disabled .afg-model-cost { color:var(--text-muted); }
+
+
+/* Admin Control Plane follows the same global theme tokens as chat. */
+.afg-admin-panel { color: var(--text-primary); }
+.afg-admin-panel .text-white { color: var(--text-primary) !important; }
+.afg-admin-panel .text-slate-300,
+.afg-admin-panel .text-slate-400 { color: var(--text-secondary) !important; }
+.afg-admin-panel .text-slate-500,
+.afg-admin-panel .text-slate-600 { color: var(--text-muted) !important; }
+.afg-admin-panel .bg-slate-950,
+.afg-admin-panel .bg-slate-900,
+.afg-admin-panel .bg-slate-900\/50,
+.afg-admin-panel .bg-slate-900\/70 { background-color: var(--bg-surface) !important; }
+.afg-admin-panel .border-slate-800,
+.afg-admin-panel .border-slate-700 { border-color: var(--border-color) !important; }
+.afg-admin-panel input,
+.afg-admin-panel textarea,
+.afg-admin-panel select {
+  background-color: var(--bg-surface-subtle);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+.afg-admin-panel .rounded-3xl,
+.afg-admin-panel .rounded-2xl,
+.afg-admin-panel .rounded-xl { box-shadow: var(--card-shadow); }
