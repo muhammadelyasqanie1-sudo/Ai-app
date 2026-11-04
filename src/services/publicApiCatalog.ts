@@ -203,15 +203,24 @@ export async function syncPublicApiCatalog(): Promise<{ imported: number; pages:
   if (!pool) throw new Error('The API catalog requires the PostgreSQL database.');
   if (syncInFlight) return syncInFlight;
   syncInFlight = (async () => {
-    await pool.query(`INSERT INTO public_api_sync_state(source,status,last_started_at,last_error,updated_at)
-      VALUES('publicapis.lol','running',now(),NULL,now())
-      ON CONFLICT(source) DO UPDATE SET status='running',last_started_at=now(),last_error=NULL,updated_at=now()`);
+    await pool.query("INSERT INTO public_api_sync_state(source,status,last_started_at,last_error,updated_at) VALUES($1,'running',now(),NULL,now()) ON CONFLICT(source) DO UPDATE SET status='running',last_started_at=now(),last_error=NULL,updated_at=now()", [REPOSITORY_SOURCE]);
     let imported = 0;
     let pages = 0;
     let complete = false;
     try {
-      for (let page = 1; page <= MAX_PAGES; page++) {
-        const result = await fetchPage(page);
+      let sourcePages: Array<{rows:PublicApiRecord[];hasMore:boolean|null}> = [];
+      try {
+        sourcePages = [await fetchRepositoryReadme()];
+      } catch (repositoryError) {
+        console.warn('AFG_PUBLIC_API_REPOSITORY_README_UNAVAILABLE',JSON.stringify({error:repositoryError instanceof Error?repositoryError.message:'unknown'}));
+        for (let page = 1; page <= MAX_PAGES; page++) {
+          const result = await fetchPage(page);
+          sourcePages.push(result);
+          if (!result.rows.length) { complete = true; break; }
+          if (result.hasMore === false) { complete = true; break; }
+        }
+      }
+      for (const result of sourcePages) {
         pages++;
         if (!result.rows.length) { complete = true; break; }
         const client = await pool.connect();
@@ -223,19 +232,22 @@ export async function syncPublicApiCatalog(): Promise<{ imported: number; pages:
             const tuples = batch.map((item, index) => {
               const base = index * 17;
               values.push(item.sourceKey,item.name,item.description,item.auth,item.https,item.cors,item.category,
-                item.homepageUrl,item.docsUrl,item.iconUrl,item.imageUrl,item.siteName,item.siteDescription,item.healthStatus,item.responseTimeMs,JSON.stringify(item.raw),true);
-              return `(${Array.from({length:17},(_,i)=>'
+                item.homepageUrl,item.docsUrl,item.iconUrl,item.imageUrl,item.siteName,item.siteDescription,
+                item.healthStatus,item.responseTimeMs,JSON.stringify(item.raw),true);
+              const placeholders = Array.from({length:17},(_,i)=>'$'+(base+i+1)).join(',');
+              return '('+placeholders+',now(),now())';
             });
-            await client.query(`INSERT INTO public_api_catalog
-              (source_key,name,description,auth,https,cors,category,homepage_url,docs_url,icon_url,image_url,site_name,site_description,health_status,response_time_ms,source_payload,is_active,imported_at,updated_at)
-              VALUES ${tuples.join(',')}
-              ON CONFLICT(source_key) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,
-                auth=EXCLUDED.auth,https=EXCLUDED.https,cors=EXCLUDED.cors,category=EXCLUDED.category,
-                homepage_url=EXCLUDED.homepage_url,docs_url=EXCLUDED.docs_url,
-                icon_url=EXCLUDED.icon_url,image_url=EXCLUDED.image_url,site_name=EXCLUDED.site_name,site_description=EXCLUDED.site_description,
-                health_status=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.health_status ELSE public_api_catalog.health_status END,
-                response_time_ms=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.response_time_ms ELSE public_api_catalog.response_time_ms END,
-                source_payload=EXCLUDED.source_payload,is_active=true,imported_at=now(),updated_at=now()`, values);
+            const sql = 'INSERT INTO public_api_catalog '+
+              '(source_key,name,description,auth,https,cors,category,homepage_url,docs_url,icon_url,image_url,site_name,site_description,health_status,response_time_ms,source_payload,is_active,imported_at,updated_at) '+
+              'VALUES '+tuples.join(',')+
+              ' ON CONFLICT(source_key) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,'+
+              'auth=EXCLUDED.auth,https=EXCLUDED.https,cors=EXCLUDED.cors,category=EXCLUDED.category,'+
+              'homepage_url=EXCLUDED.homepage_url,docs_url=EXCLUDED.docs_url,'+
+              'icon_url=EXCLUDED.icon_url,image_url=EXCLUDED.image_url,site_name=EXCLUDED.site_name,site_description=EXCLUDED.site_description,'+
+              'health_status=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.health_status ELSE public_api_catalog.health_status END,'+
+              'response_time_ms=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.response_time_ms ELSE public_api_catalog.response_time_ms END,'+
+              'source_payload=EXCLUDED.source_payload,is_active=true,imported_at=now(),updated_at=now()';
+            await client.query(sql,values);
           }
           await client.query('COMMIT');
         } catch (error) {
@@ -243,20 +255,16 @@ export async function syncPublicApiCatalog(): Promise<{ imported: number; pages:
           throw error;
         } finally { client.release(); }
         imported += result.rows.length;
-        if (result.hasMore === false) { complete = true; break; }
-        if (result.hasMore === null && result.rows.length < 10) { complete = true; break; }
+        if (result.hasMore === false) complete = true;
       }
-      if (!complete && pages < MAX_PAGES) complete = true;
       const status = complete ? 'success' : 'partial';
-      await pool.query(`UPDATE public_api_sync_state SET status=$2,items_imported=$3,pages_fetched=$4,
-        last_completed_at=now(),last_error=NULL,updated_at=now() WHERE source='publicapis.lol'`,
-        [SOURCE,status,imported,pages]);
+      await pool.query("UPDATE public_api_sync_state SET status=$2,items_imported=$3,pages_fetched=$4,last_completed_at=now(),last_error=NULL,updated_at=now() WHERE source=$1",
+        [REPOSITORY_SOURCE,status,imported,pages]);
       return { imported, pages, complete };
     } catch (error) {
       const message = error instanceof Error ? error.message.slice(0,500) : 'Catalog sync failed.';
-      await pool.query(`UPDATE public_api_sync_state SET status='error',items_imported=$2,pages_fetched=$3,
-        last_completed_at=now(),last_error=$4,updated_at=now() WHERE source='publicapis.lol'`,
-        [SOURCE,imported,pages,message]).catch(() => {});
+      await pool.query("UPDATE public_api_sync_state SET status='error',items_imported=$2,pages_fetched=$3,last_completed_at=now(),last_error=$4,updated_at=now() WHERE source=$1",
+        [REPOSITORY_SOURCE,imported,pages,message]).catch(() => {});
       throw error;
     }
   })();
@@ -299,7 +307,7 @@ export async function listPublicApiCategories() {
 export async function getPublicApiSyncStatus() {
   if (!pool) return { configured: false, status: 'unavailable' };
   const result = await pool.query(`SELECT source,status,items_imported,pages_fetched,last_started_at,last_completed_at,last_error
-    FROM public_api_sync_state WHERE source='publicapis.lol' LIMIT 1`);
+    FROM public_api_sync_state WHERE source=$1 LIMIT 1`,[REPOSITORY_SOURCE]);
   return { configured: true, sync: result.rows[0] || null };
 }
 +(base+i+1)).join(',')},now(),now())`;
