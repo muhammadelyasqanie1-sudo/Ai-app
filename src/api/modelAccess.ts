@@ -18,7 +18,7 @@ async function accountTier(userId: string | null): Promise<string> {
         WHERE s.user_id=$1 AND s.status IN ('active','trialing')
           AND (s.ends_at IS NULL OR s.ends_at>now())
         ORDER BY s.starts_at DESC LIMIT 1`,
-      [account.id],
+      [userId],
     );
     return String(result.rows[0]?.plan_key || 'free').toLowerCase();
   } catch {
@@ -43,7 +43,7 @@ export async function applyModelAccess(req: IncomingMessage, snapshot: any): Pro
       const tierColumn = available.has('required_tier') ? 'required_tier'
         : available.has('access_tier') ? 'access_tier' : null;
       const priceColumns = ['input_cost_per_million','output_cost_per_million'].filter((name) => available.has(name));
-      const selected = ['provider_key','model_key', ...(tierColumn ? [tierColumn] : []), ...priceColumns];
+      const selected = ['provider_key','model_key','pricing_json', ...(tierColumn ? [tierColumn] : []), ...priceColumns];
       if (selected.length > 2) {
         const rows = await pool.query(`SELECT ${selected.join(',')} FROM model_catalog`);
         metadata = new Map(rows.rows.map((row: any) => [
@@ -56,7 +56,7 @@ export async function applyModelAccess(req: IncomingMessage, snapshot: any): Pro
   }
   const models = Array.isArray(snapshot?.modelDescriptors) ? snapshot.modelDescriptors.map((model: any) => {
     const row = metadata.get(String(model.providerId) + '::' + String(model.id));
-    const requiredTier = String(row?.required_tier ?? row?.access_tier ?? 'free').toLowerCase();
+    const requiredTier = String(row?.required_tier ?? row?.access_tier ?? row?.pricing_json?.requiredTier ?? 'free').toLowerCase();
     const requiresSubscription = requiredTier !== 'free' && requiredTier !== 'unknown';
     const hasAccess = !requiresSubscription || rank(tier) >= rank(requiredTier);
     const input = row?.input_cost_per_million;
@@ -80,16 +80,8 @@ export async function applyModelAccess(req: IncomingMessage, snapshot: any): Pro
 /** Enforces optional model_catalog.required_tier/access_tier on the server before provider use. */
 export async function enforceModelSubscription(userId: string | null, providerId: string, modelId: string): Promise<void> {
   if (!pool) return;
-  const columns = await pool.query(
-    `SELECT column_name FROM information_schema.columns
-      WHERE table_schema=current_schema() AND table_name='model_catalog'`,
-  );
-  const available = new Set(columns.rows.map((row: any) => String(row.column_name)));
-  const tierColumn = available.has('required_tier') ? 'required_tier'
-    : available.has('access_tier') ? 'access_tier' : null;
-  if (!tierColumn) return;
   const model = await pool.query(
-    `SELECT ${tierColumn} AS required_tier FROM model_catalog WHERE provider_key=$1 AND model_key=$2 LIMIT 1`,
+    "SELECT pricing_json->>'requiredTier' AS required_tier FROM model_catalog WHERE provider_key=$1 AND model_key=$2 LIMIT 1",
     [providerId, modelId],
   );
   const required = String(model.rows[0]?.required_tier || 'free').toLowerCase();
