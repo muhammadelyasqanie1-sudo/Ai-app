@@ -3,7 +3,10 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { authenticateRequest } from './auth.ts';
 
-const BASE_URL = (process.env.BEATAPI_BASE_URL?.trim() || 'https://api.beatapi.io').replace(/\/+$/, '');
+const configuredBaseUrl = (process.env.BEATAPI_BASE_URL?.trim() || 'https://api.beatapi.io').replace(/\/+$/, '');
+// The model gateway uses an OpenAI-compatible base URL ending in /v1, while these
+// integration routes append /v1 themselves. Normalize both accepted forms here.
+const BASE_URL = configuredBaseUrl.replace(/\/v1$/i, '').replace(/\/+$/, '');
 const API_KEY = process.env.BEATAPI_API_KEY?.trim() || '';
 
 function send(res: ServerResponse, status: number, payload: unknown, requestId: string) {
