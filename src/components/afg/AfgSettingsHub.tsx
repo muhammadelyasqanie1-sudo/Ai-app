@@ -8,10 +8,12 @@ import type { Language, Theme, UserProfile } from '../../types/afg';
 import { AfgAccountSettings } from './AfgAccountSettings';
 import { AfgAdminPanel } from './AfgAdminPanel';
 import { AfgFileLibrary } from './AfgFileLibrary';
+import { AfgApiHubPanel } from './AfgApiHubPanel';
+import { AfgNineRouterPanel } from './AfgNineRouterPanel';
 import { getHubUi } from '../../utils/localeUi';
 
 type Context = 'user' | 'admin';
-type SettingId = 'language'|'appearance'|'chat'|'memory'|'coding'|'privacy'|'files'|'models'|'local'|'voice'|'github'|'telegram'|'ftp'|'mcp'|'byok'|'router';
+type SettingId = 'language'|'appearance'|'chat'|'memory'|'coding'|'privacy'|'files'|'models'|'local'|'voice'|'github'|'telegram'|'ftp'|'mcp'|'byok'|'router'|'api-hub'|'9router';
 type Item = { id: SettingId; group: string; title: string; subtitle: string; icon: React.ElementType; keywords: string[] };
 type Status = 'active'|'ready'|'setup'|'disabled'|'unknown';
 
@@ -50,9 +52,11 @@ const ITEMS: Item[] = [
   {id:'github',group:'Connections',title:'GitHub',subtitle:'Link your account to import repositories and publish changes.',icon:Github,keywords:['oauth','repository','git']},
   {id:'telegram',group:'Connections',title:'Telegram',subtitle:'Pair your account with the AFG AI Telegram bot.',icon:Send,keywords:['bot','pairing']},
   {id:'ftp',group:'Connections',title:'FTP / SFTP sync',subtitle:'Connect a remote workspace for file transfer.',icon:Server,keywords:['sftp','ftp','upload','download']},
+  {id:'api-hub',group:'Connections',title:'Public APIs & API keys',subtitle:'Discover APIs, store your own credentials securely and enable AI tools.',icon:KeyRound,keywords:['public apis','api key','connector','rest','http','mashape','bearer','authentication']},
   {id:'mcp',group:'Connections',title:'Connected tools (MCP)',subtitle:'Tools exposed by a supported desktop runtime.',icon:Network,keywords:['mcp','tools','servers']},
   {id:'byok',group:'Special Providers',title:'Connected accounts (BYOK)',subtitle:'Use your own provider credentials when enabled.',icon:KeyRound,keywords:['openai','anthropic','claude','deepseek','api key']},
   {id:'router',group:'Special Providers',title:'9Router / local router',subtitle:'Connect a local OpenAI-compatible model router.',icon:Router,keywords:['litellm','ollama','localhost','proxy']},
+  {id:'9router',group:'Special Providers',title:'9Router AI Gateway',subtitle:'Chat models, image, video, speech, web search and embeddings through 9Router.',icon:Router,keywords:['9router','multimodal','image generation','video','tts','stt','search','embeddings']},
 ];
 
 const copy = {
@@ -144,7 +148,7 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
         request('/api/features/status').catch(()=>({verified:false,featureFlags:{},integrations:{}})),
       ]);
       setAuthenticated(me.authenticated===true);
-      setAdminAllowed(me.authenticated===true && me.user?.role==='admin');
+      setAdminAllowed(me.authenticated===true && ['admin','superadmin'].includes(me.user?.role));
       setGithub({configured:gh.configured===true || featureData.githubOAuthConfigured===true,linked:gh.linked===true,username:gh.username||''});
       const flagMap:Record<string,boolean> = featureData.verified===true ? (featureData.featureFlags||{}) : {};
       const integrations:Record<string,any> = featureData.verified===true ? (featureData.integrations||{}) : {};
@@ -175,8 +179,9 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
   const filtered = useMemo(()=>ITEMS.filter(item=>{
     const q=query.trim().toLowerCase();
     if(item.id==='byok' && featureFlags.byok===false) return false;
+    if(item.id==='9router' && !adminAllowed) return false;
     return !q || [item.title,item.subtitle,item.group,...item.keywords].join(' ').toLowerCase().includes(q);
-  }),[query,featureFlags]);
+  }),[query,featureFlags,adminAllowed]);
   const groups = ['Personalize','Your Assistant','Connections','Special Providers'];
   const statusLabel=(id:SettingId)=>{
     if(statusLoading)return t.checking;
@@ -209,7 +214,7 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
   const statusBadge=(id:SettingId)=><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${status[id]==='active'?'bg-emerald-500/15 text-emerald-300':status[id]==='disabled'?'bg-slate-700 text-slate-400':'bg-amber-500/10 text-amber-300'}`}>{statusLabel(id)}</span>;
   const row=(item:Item)=><button key={item.id} type="button" disabled={isDisabled(item.id)} onClick={()=>{setPage(item.id);setError('');setNotice('');}} className={`group flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-cyan-400/5 disabled:cursor-not-allowed disabled:opacity-50 ${fa?'text-right':''}`}>
     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/15 bg-cyan-500/5 text-cyan-300"><item.icon className="h-5 w-5"/></span>
-    <span className="min-w-0 flex-1"><span className="block text-sm font-bold text-white">{item.title}</span><span className="mt-0.5 block text-xs leading-5 text-slate-400">{item.subtitle}</span></span>
+    <span className="min-w-0 flex-1"><span className="block text-sm font-bold text-white">{item.id==='api-hub'&&fa?'فهرست APIها و کلیدها':item.id==='9router'&&fa?'درگاه هوش مصنوعی 9Router':item.title}</span><span className="mt-0.5 block text-xs leading-5 text-slate-400">{item.id==='api-hub'&&fa?'کشف APIها، ذخیره امن کلیدهای خود و فعال‌سازی ابزارهای هوشمند.':item.id==='9router'&&fa?'مدل‌های گفتگو، تصویر، ویدیو، صدا، جستجوی وب و Embedding.':item.subtitle}</span></span>
     <span className="flex shrink-0 items-center gap-2">{(status[item.id]||item.id==='github')&&['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(item.id)&&statusBadge(item.id)}<ChevronRight className={`h-4 w-4 text-slate-500 ${fa?'rotate-180':''}`}/></span>
   </button>;
 
@@ -232,9 +237,11 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
     {page&&selected ? <div className="space-y-4 animate-in slide-in-from-right-2">
       <button type="button" onClick={()=>setPage(null)} className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-300"><ArrowLeft className={`h-4 w-4 ${fa?'rotate-180':''}`}/>{t.back}</button>
       <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
-        <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><selected.icon className="h-5 w-5"/></span><div className="min-w-0 flex-1"><h2 className="font-black text-white">{selected.title}</h2><p className="text-xs text-slate-400">{selected.subtitle}</p></div>{['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(page)&&statusBadge(page)}</div>
+        <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><selected.icon className="h-5 w-5"/></span><div className="min-w-0 flex-1"><h2 className="font-black text-white">{selected.id==='api-hub'&&fa?'فهرست APIها و کلیدها':selected.id==='9router'&&fa?'درگاه هوش مصنوعی 9Router':selected.title}</h2><p className="text-xs text-slate-400">{selected.subtitle}</p></div>{['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(page)&&statusBadge(page)}</div>
       </div>
       {page==='files' && <AfgFileLibrary language={language}/>}
+      {page==='api-hub'&&<AfgApiHubPanel language={language}/>}
+      {page==='9router'&&<AfgNineRouterPanel language={language}/>}
       {(['appearance','language','chat','memory','coding','privacy'] as SettingId[]).includes(page) && <>
         <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-3">
           <p className="text-sm font-semibold text-cyan-100">{page==='language'?t.language:page==='appearance'?'Appearance':page==='chat'?'Chat preferences':page==='memory'?'Personal memory':page==='coding'?'Coding workspace':'Privacy & security'}</p>

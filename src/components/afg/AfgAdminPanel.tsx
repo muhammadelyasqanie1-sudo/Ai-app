@@ -5,12 +5,15 @@ import {
   Search, Play, Power, Save, Plus, AlertTriangle, Settings, FileWarning, KeyRound, PlugZap
 } from 'lucide-react';
 import { AfgConnectionsPanel } from './AfgConnectionsPanel.tsx';
+import { AfgApiHubPanel } from './AfgApiHubPanel.tsx';
+import { AfgMcpPanel } from './AfgMcpPanel.tsx';
+import { AfgNineRouterPanel } from './AfgNineRouterPanel.tsx';
 import { AfgOnlineAdminTerminal } from './AfgOnlineAdminTerminal.tsx';
 import type { Language } from '../../types/afg';
 import { getIntlLocale } from '../../utils/i18n';
 
 interface AfgAdminPanelProps { language: Language; }
-type Tab = 'overview'|'users'|'staff'|'providers'|'models'|'usage'|'errors'|'limits'|'health'|'config'|'flags'|'audit'|'security'|'connections'|'terminal';
+type Tab = 'overview'|'users'|'staff'|'providers'|'models'|'usage'|'errors'|'limits'|'health'|'config'|'flags'|'audit'|'security'|'connections'|'api-hub'|'mcp'|'9router'|'terminal';
 type ProviderRow = {
   id:string; displayName:string; enabled:boolean; configured:boolean; kind?:string;
   base_url?:string|null; config_json?:Record<string,any>; keyHint?:string|null;
@@ -46,6 +49,9 @@ const NAV: {id:Tab;labelEn:string;labelFa:string;icon:any}[] = [
   {id:'flags',labelEn:'Flags & Announcements',labelFa:'امکانات و اطلاعیه‌ها',icon:Flag},
   {id:'health',labelEn:'System Health',labelFa:'سلامت سیستم',icon:HardDrive},
   {id:'connections',labelEn:'Connections',labelFa:'اتصال‌ها و یکپارچه‌سازی',icon:PlugZap},
+  {id:'api-hub',labelEn:'Universal API Hub',labelFa:'مرکز جامع APIها',icon:Network},
+  {id:'mcp',labelEn:'MCP Tools & Servers',labelFa:'ابزارها و سرورهای MCP',icon:PlugZap},
+  {id:'9router',labelEn:'9Router AI Gateway',labelFa:'درگاه هوش مصنوعی 9Router',icon:Activity},
   {id:'terminal',labelEn:'Online Admin Terminal',labelFa:'ترمینال مدیر آنلاین',icon:TerminalSquare},
 ];
 const CAPABILITIES = ['text','streaming','vision','imageGen','imageEdit','ocr','tts','stt','tools','jsonMode'];
@@ -728,6 +734,9 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
         {tab==='audit'&&<div className={panel}><h2 className="mb-1 text-lg font-bold text-white">Immutable audit log</h2><p className="mb-4 text-xs text-slate-500">Append-only database trigger blocks application UPDATE and DELETE. Before/after state is retained for admin mutations.</p><div className="mb-4 grid gap-2 sm:grid-cols-3"><input className={field} type="datetime-local" value={auditFrom} onChange={e=>setAuditFrom(e.target.value)}/><input className={field} type="datetime-local" value={auditTo} onChange={e=>setAuditTo(e.target.value)}/><div className="flex gap-2"><input className={field} value={auditActor} onChange={e=>setAuditActor(e.target.value)} placeholder="Actor email or ID"/><button className={primary} onClick={()=>void loadAudit()}>Filter</button></div></div><div className="space-y-2">{audit.map((event:any)=><div key={event.id} className="rounded-xl border border-slate-800 bg-slate-900/70 p-3"><div className="flex flex-wrap justify-between gap-2"><b className="text-xs text-cyan-200">{event.action}</b><span className="text-[10px] text-slate-500">{date(event.created_at)}</span></div><p className="mt-1 text-xs text-slate-300">{event.actor_email||'System'} · {event.actor_role||'system'} · {event.target_type||'—'} / {event.target_id||'—'}</p>{event.before_json!=null&&<details className="mt-2"><summary className="cursor-pointer text-[10px] text-slate-400">Before state</summary><pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">{JSON.stringify(event.before_json,null,2)}</pre></details>}{event.after_json!=null&&<details className="mt-2"><summary className="cursor-pointer text-[10px] text-slate-400">After state</summary><pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">{JSON.stringify(event.after_json,null,2)}</pre></details>}<pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">{JSON.stringify(event.metadata)}</pre></div>)}{!audit.length&&<p className="text-sm text-slate-500">No audit events match these filters.</p>}</div></div>}
 
         {tab==='connections'&&<AfgConnectionsPanel/>}
+        {tab==='api-hub'&&<AfgApiHubPanel language={language} adminMode canSync={isSuperadmin}/>}
+        {tab==='mcp'&&<AfgMcpPanel language={language}/>}
+        {tab==='9router'&&<AfgNineRouterPanel language={language}/>}
         {tab==='terminal'&&<AfgOnlineAdminTerminal language={language}/> }
 
         {tab==='security'&&<div className="space-y-4"><div className={panel}><h2 className="mb-1 text-lg font-bold text-white">Active sessions</h2><p className="mb-4 text-xs text-slate-500">Session metadata only; raw session tokens are never returned.</p><div className="space-y-2">{sessions.map((session:any)=><div key={session.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3"><div><b className="text-xs text-white">{session.email}</b><p className="mt-1 text-[10px] text-slate-400">{session.user_agent||'Unknown device'} · IP {session.ip||'—'}</p><p className="mt-1 text-[10px] text-slate-500">Last seen {date(session.last_seen_at)} · Expires {date(session.expires_at)}</p></div><button className="rounded-xl border border-red-500/40 px-3 py-2 text-xs text-red-300" onClick={()=>void revokeSession(session)}>Revoke session</button></div>)}{!sessions.length&&<p className="text-sm text-slate-500">No active sessions found.</p>}</div></div>

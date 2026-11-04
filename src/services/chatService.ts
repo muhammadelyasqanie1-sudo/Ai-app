@@ -1,12 +1,12 @@
 import { getConfiguredFallbackModelIds, getProviderAdapter, getVerifiedModelDescriptors, selectCheapestModel } from './providerGateway.ts';
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
-import type { ChatInput, ModelDescriptor } from '../providers/providerTypes.ts';
+import type { ChatInput, ChatChunk, ModelDescriptor } from '../providers/providerTypes.ts';
 import { matchComboModels, resolveRoutingCombo } from './routingCombos.ts';
 
 const HEALTH_MAX_AGE_MS = 5 * 60 * 1000;
 
 function estimateTokens(messages: ChatInput['messages']): number {
-  return Math.ceil(messages.reduce((sum, message) => sum + message.content.length, 0) / 4);
+  return Math.ceil(messages.reduce((sum, message) => sum + message.content.length + (message.tool_calls||[]).reduce((total,call)=>total+call.function.name.length+call.function.arguments.length,0), 0) / 4);
 }
 
 function compactOlderContext(messages: ChatInput['messages'], contextWindow: number): ChatInput['messages'] {
@@ -22,7 +22,7 @@ function compactOlderContext(messages: ChatInput['messages'], contextWindow: num
   const recent: typeof conversation = [];
   let used = estimateTokens(system);
   const latestMessage = conversation[conversation.length - 1];
-  if (latestMessage?.role === 'user') {
+  if (latestMessage && (latestMessage.role === 'user' || latestMessage.role === 'tool')) {
     const latestCost = estimateTokens([latestMessage]);
     if (used + latestCost > budget) {
       throw new ProviderAdapterError(
@@ -78,7 +78,7 @@ function waitWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-async function* reliableStream(candidates: ModelDescriptor[], input: ChatInput): AsyncIterable<{ content: string }> {
+async function* reliableStream(candidates: ModelDescriptor[], input: ChatInput): AsyncIterable<ChatChunk> {
   let lastError: unknown;
   for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex++) {
     const candidate = candidates[candidateIndex];
@@ -89,9 +89,9 @@ async function* reliableStream(candidates: ModelDescriptor[], input: ChatInput):
       if (input.signal?.aborted) throw new ProviderAdapterError('The request was cancelled.', 499, 'request_aborted');
       let emitted = false;
       try {
-        const stream = provider.streamChat({ ...input, model: candidate.id, messages: compactOlderContext(input.messages, candidate.contextWindow) });
+        const stream = provider.streamChat({ ...input, ...(candidate.capabilities.tools?{}:{tools:undefined}), model: candidate.id, messages: compactOlderContext(input.messages, candidate.contextWindow) });
         for await (const chunk of stream) {
-          if (chunk.content) emitted = true;
+          if (chunk.content || (chunk.toolCalls && chunk.toolCalls.length)) emitted = true;
           yield chunk;
         }
         if (!emitted) throw new ProviderAdapterError('The provider returned an empty response.', 502, 'empty_response');
@@ -116,7 +116,7 @@ async function* reliableStream(candidates: ModelDescriptor[], input: ChatInput):
   throw new ProviderAdapterError('No healthy model could complete the request.', 503, 'model_unavailable');
 }
 
-export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerId: string; modelId: string; stream: AsyncIterable<{ content: string }> }> {
+export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerId: string; modelId: string; stream: AsyncIterable<ChatChunk> }> {
   const descriptors = await getVerifiedModelDescriptors();
   const comboPrefix = 'combo::';
   const comboSlug = input.model.startsWith(comboPrefix) ? input.model.slice(comboPrefix.length) : '';

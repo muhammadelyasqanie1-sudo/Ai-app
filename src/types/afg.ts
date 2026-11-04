@@ -28,7 +28,11 @@ export type ToolSubTab =
   | 'writing-studio'
   | 'research'
   | 'summarizer'
-  | 'productivity';
+  | 'productivity'
+  | 'api-hub'
+  | 'mcp'
+  | '9router'
+  | 'developer-tools';
 
 export interface UserProfile {
   name: string;
