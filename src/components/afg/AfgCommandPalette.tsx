@@ -202,7 +202,6 @@ export const AfgCommandPalette: React.FC<AfgCommandPaletteProps> = (props) => {
                 <div className="afg-command-group">
                   <div className="afg-command-section">{dari?'ابزارهای توسعه':'DEVELOPER TOOLS'}</div>
                   {features.terminal_exec_enabled && action(<Terminal size={18}/>,dari?'ترمینل':'Terminal',dari?'ترمینل فقط‌خواندنی فعال‌شده توسط مدیر':'Admin-enabled read-only terminal',()=>{onOpenTerminal();onClose();})}
-                  {features.web_preview_enabled && action(<MonitorPlay size={18}/>,'Web preview','Active local preview session',()=>{})}
                   {action(<Undo2 size={18}/>,dari?'بازگردانی تغییرات فایل':'Undo file changes',features.undo_file_changes_enabled?'Restore last AI file edit':(dari?'در این گفتگو تغییری در فایل ثبت نشده':'No reversible AI file edits in this session'),()=>{},<Lock size={15}/>,!features.undo_file_changes_enabled)}
                 </div>
                 <div className="afg-command-group afg-command-bottom">
