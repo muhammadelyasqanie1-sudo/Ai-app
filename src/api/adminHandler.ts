@@ -805,6 +805,11 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/system-health') {
+      const healthPool = pool;
+      if (!healthPool) {
+        sendAuthJson(res, 503, { error: 'System health requires the database connection.' });
+        return true;
+      }
       const started = Date.now();
       await pool.query('SELECT 1');
       const databaseLatencyMs = Date.now() - started;
@@ -820,8 +825,8 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
             catalogReachable=true;modelCount=models.length;latencyMs=Date.now()-before;
           }
         }catch{latencyMs=Date.now()-before;}
-        const status=await pool.query(`SELECT last_health_at,last_health_ok FROM providers WHERE slug=$1 LIMIT 1`,[provider.id]).catch(()=>({rows:[] as any[]}));
-        const fallback=await pool.query(`SELECT max(health_checked_at) AS last_health_at,
+        const status=await healthPool.query(`SELECT last_health_at,last_health_ok FROM providers WHERE slug=$1 LIMIT 1`,[provider.id]).catch(()=>({rows:[] as any[]}));
+        const fallback=await healthPool.query(`SELECT max(health_checked_at) AS last_health_at,
           bool_or(last_health_ok=true AND verified_at>now()-interval '24 hours' AND enabled=true) AS last_health_ok
           FROM model_catalog WHERE provider_key=$1`,[provider.id]).catch(()=>({rows:[] as any[]}));
         const lastHealthAt=status.rows[0]?.last_health_at||fallback.rows[0]?.last_health_at||null;
