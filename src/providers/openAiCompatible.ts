@@ -152,7 +152,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
     async healthCheck(modelId: string): Promise<HealthStatus> {
       const current = currentConfig();
       const checkedAt = new Date().toISOString();
-      if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
+      if (!current.baseUrl || (!current.apiKey && !current.allowEmptyApiKey) || !validBaseUrl(current.baseUrl)) {
         return { healthy: false, checkedAt, message: 'Provider not reachable.' };
       }
       try {
@@ -160,7 +160,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
         // verify only authenticated catalog access and model visibility.
         if (options?.catalogOnlyHealthCheck || current.id === 'iteracompute') {
           const response = await fetch(current.catalogBaseUrl + '/models', {
-            headers: { Authorization: 'Bearer ' + current.apiKey, Accept: 'application/json' },
+            headers: { ...(current.apiKey ? { Authorization: 'Bearer ' + current.apiKey } : {}), Accept: 'application/json' },
             signal: AbortSignal.timeout(15_000), redirect: 'error',
           });
           if (!response.ok) {
