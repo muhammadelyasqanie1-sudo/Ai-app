@@ -166,6 +166,42 @@ function parseRepositoryReadme(markdown: string): PublicApiRecord[] {
   return [...unique.values()];
 }
 
+type RepositoryMcpRecord = {
+  slug:string;name:string;description:string;authType:string;transports:string[];
+  websiteUrl:string|null;installUrl:string|null;sourceUrl:string;
+};
+
+function parseRepositoryMcpDirectory(markdown:string):RepositoryMcpRecord[] {
+  const output:RepositoryMcpRecord[]=[];
+  let inMcpSection=false;
+  let inMcpTable=false;
+  for(const line of markdown.split(/\r?\n/)){
+    if(/^##\s+MCP Servers\s*$/i.test(line.trim())){inMcpSection=true;inMcpTable=false;continue;}
+    if(/^##\s+/.test(line.trim())&&inMcpSection){inMcpSection=false;inMcpTable=false;}
+    if(!inMcpSection)continue;
+    if(!line.trim().startsWith('|'))continue;
+    const cells=line.trim().replace(/^\|/,'').replace(/\|$/,'').split('|').map(value=>value.trim());
+    const normalized=cells.map(value=>value.replace(/[*_]/g,'').replaceAll(String.fromCharCode(96),'').toLowerCase());
+    if(normalized.length>=5&&normalized[0]==='name'&&normalized[1]==='description'&&normalized[2]==='auth'&&normalized[3]==='transport'&&normalized[4]==='install'){
+      inMcpTable=true;continue;
+    }
+    if(/^:?-{3,}:?$/.test(cells[0]||''))continue;
+    if(!inMcpTable||cells.length<5)continue;
+    const first=cells[0].match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)/i);
+    if(!first)continue;
+    const install=cells[4].match(/\]\((https?:\/\/[^)]+)\)/i);
+    const transports=cells[3].replaceAll(String.fromCharCode(96),'').split(/[,\s]+/).map(value=>value.toLowerCase()).filter(value=>['stdio','http'].includes(value));
+    const name=first[1].trim();
+    const slug=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,80);
+    output.push({slug,name,description:cells[1].replace(/<[^>]*>/g,'').trim().slice(0,1200),
+      authType:cells[2].replaceAll(String.fromCharCode(96),'').trim()||'Unknown',
+      transports:[...new Set(transports)],websiteUrl:first[2],installUrl:install?.[1]||null,sourceUrl:REPOSITORY_README});
+  }
+  const unique=new Map<string,RepositoryMcpRecord>();
+  for(const item of output)unique.set(item.slug,item);
+  return [...unique.values()];
+}
+
 async function fetchRepositoryReadme(): Promise<{rows:PublicApiRecord[];hasMore:false}> {
   const response = await fetch(REPOSITORY_README,{
     headers:{Accept:'text/plain','User-Agent':'AFG-AI-API-Hub/1.0'},
@@ -269,6 +305,154 @@ export async function syncPublicApiCatalog(): Promise<{ imported: number; pages:
     }
   })();
   try { return await syncInFlight; } finally { syncInFlight = null; }
+}
+
+export async function syncPublicMcpCatalog():Promise<{imported:number}> {
+  if(!pool)throw new Error('The MCP directory requires PostgreSQL.');
+  const response=await fetch(REPOSITORY_README,{
+    headers:{Accept:'text/plain','User-Agent':'AFG-AI-API-Hub/1.0'},
+    signal:AbortSignal.timeout(30_000),redirect:'error',
+  });
+  if(!response.ok)throw new Error('Public APIs GitHub README returned HTTP '+response.status+' while syncing MCP servers.');
+  const markdown=await response.text();
+  if(markdown.length>5_000_000)throw new Error('Public APIs GitHub README exceeded the 5 MB safety limit.');
+  const records=parseRepositoryMcpDirectory(markdown);
+  if(records.length<1)throw new Error('No MCP servers were parsed from the upstream repository README.');
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    for(let offset=0;offset<records.length;offset+=50){
+      const batch=records.slice(offset,offset+50);
+      const values:unknown[]=[];
+      const tuples=batch.map((item,index)=>{
+        const base=index*8;
+        values.push(item.slug,item.name,item.description,item.authType,item.transports,item.websiteUrl,item.installUrl,item.sourceUrl);
+        return '('+Array.from({length:8},(_,i)=>'
+  q?: string; category?: string; auth?: string; https?: string; cors?: string; page?: number; pageSize?: number;
+}) {
+  if (!pool) throw new Error('The API catalog requires the PostgreSQL database.');
+  const page = Math.max(1, Math.min(100000, Math.trunc(filters.page || 1)));
+  const pageSize = Math.max(1, Math.min(100, Math.trunc(filters.pageSize || 24)));
+  const where: string[] = ['is_active=true'];
+  const values: unknown[] = [];
+  const add = (value: unknown) => { values.push(value); return '$' + values.length; };
+  if (filters.q?.trim()) {
+    const needle = '%' + filters.q.trim().slice(0,120).replace(/[\\%_]/g, '\\$&') + '%';
+    const param = add(needle);
+    where.push(`(name ILIKE ${param} OR description ILIKE ${param} OR category ILIKE ${param})`);
+  }
+  if (filters.category && filters.category !== 'all') where.push('category=$' + (values.push(filters.category.slice(0,100))));
+  if (filters.auth && filters.auth !== 'all') where.push('lower(auth)=lower($' + values.push(filters.auth.slice(0,40)) + ')');
+  if (filters.https && filters.https !== 'all') where.push('lower(https)=lower($' + values.push(filters.https==='true'?'Yes':'No') + ')');
+  if (filters.cors && filters.cors !== 'all') where.push('lower(cors)=lower($' + values.push(filters.cors==='true'?'Yes':'No') + ')');
+  const clause = where.join(' AND ');
+  const count = await pool.query(`SELECT count(*)::int AS total FROM public_api_catalog WHERE ${clause}`, values);
+  const rows = await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,
+      icon_url,image_url,site_name,site_description,health_status,response_time_ms,last_health_check,imported_at
+    FROM public_api_catalog WHERE ${clause} ORDER BY category,name LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`, values);
+  return { items: rows.rows, page, pageSize, total: Number(count.rows[0]?.total || 0), categories: await listPublicApiCategories() };
+}
+
+export async function listPublicApiCategories() {
+  if (!pool) return [];
+  const result = await pool.query(`SELECT category,count(*)::int AS count
+    FROM public_api_catalog WHERE is_active=true GROUP BY category ORDER BY category`);
+  return result.rows;
+}
+
+export async function getPublicApiSyncStatus() {
+  if (!pool) return { configured: false, status: 'unavailable' };
+  const result = await pool.query(`SELECT source,status,items_imported,pages_fetched,last_started_at,last_completed_at,last_error
+    FROM public_api_sync_state WHERE source=$1 LIMIT 1`,[REPOSITORY_SOURCE]);
+  return { configured: true, sync: result.rows[0] || null };
+}
++(base+i+1)).join(',')},now(),now())`;
+            });
+            await client.query(`INSERT INTO public_api_catalog
+              (source_key,name,description,auth,https,cors,category,homepage_url,docs_url,health_status,response_time_ms,source_payload,is_active,imported_at,updated_at)
+              VALUES ${tuples.join(',')}
+              ON CONFLICT(source_key) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,
+                auth=EXCLUDED.auth,https=EXCLUDED.https,cors=EXCLUDED.cors,category=EXCLUDED.category,
+                homepage_url=EXCLUDED.homepage_url,docs_url=EXCLUDED.docs_url,
+                health_status=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.health_status ELSE public_api_catalog.health_status END,
+                response_time_ms=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.response_time_ms ELSE public_api_catalog.response_time_ms END,
+                source_payload=EXCLUDED.source_payload,is_active=true,imported_at=now(),updated_at=now()`, values);
+          }
+          await client.query('COMMIT');
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        } finally { client.release(); }
+        imported += result.rows.length;
+        if (result.hasMore === false) { complete = true; break; }
+        if (result.hasMore === null && result.rows.length < 10) { complete = true; break; }
+      }
+      if (!complete && pages < MAX_PAGES) complete = true;
+      const status = complete ? 'success' : 'partial';
+      await pool.query(`UPDATE public_api_sync_state SET status=$2,items_imported=$3,pages_fetched=$4,
+        last_completed_at=now(),last_error=NULL,updated_at=now() WHERE source='publicapis.lol'`,
+        [SOURCE,status,imported,pages]);
+      return { imported, pages, complete };
+    } catch (error) {
+      const message = error instanceof Error ? error.message.slice(0,500) : 'Catalog sync failed.';
+      await pool.query(`UPDATE public_api_sync_state SET status='error',items_imported=$2,pages_fetched=$3,
+        last_completed_at=now(),last_error=$4,updated_at=now() WHERE source='publicapis.lol'`,
+        [SOURCE,imported,pages,message]).catch(() => {});
+      throw error;
+    }
+  })();
+  try { return await syncInFlight; } finally { syncInFlight = null; }
+}
+
+export async function queryPublicApiCatalog(filters: {
+  q?: string; category?: string; auth?: string; https?: string; cors?: string; page?: number; pageSize?: number;
+}) {
+  if (!pool) throw new Error('The API catalog requires the PostgreSQL database.');
+  const page = Math.max(1, Math.min(100000, Math.trunc(filters.page || 1)));
+  const pageSize = Math.max(1, Math.min(100, Math.trunc(filters.pageSize || 24)));
+  const where: string[] = ['is_active=true'];
+  const values: unknown[] = [];
+  const add = (value: unknown) => { values.push(value); return '$' + values.length; };
+  if (filters.q?.trim()) {
+    const needle = '%' + filters.q.trim().slice(0,120).replace(/[\\%_]/g, '\\$&') + '%';
+    const param = add(needle);
+    where.push(`(name ILIKE ${param} OR description ILIKE ${param} OR category ILIKE ${param})`);
+  }
+  if (filters.category && filters.category !== 'all') where.push('category=$' + (values.push(filters.category.slice(0,100))));
+  if (filters.auth && filters.auth !== 'all') where.push('lower(auth)=lower($' + values.push(filters.auth.slice(0,40)) + ')');
+  if (filters.https && filters.https !== 'all') where.push('lower(https)=lower($' + values.push(filters.https==='true'?'Yes':'No') + ')');
+  if (filters.cors && filters.cors !== 'all') where.push('lower(cors)=lower($' + values.push(filters.cors==='true'?'Yes':'No') + ')');
+  const clause = where.join(' AND ');
+  const count = await pool.query(`SELECT count(*)::int AS total FROM public_api_catalog WHERE ${clause}`, values);
+  const rows = await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,
+      health_status,response_time_ms,last_health_check,imported_at
+    FROM public_api_catalog WHERE ${clause} ORDER BY category,name LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`, values);
+  return { items: rows.rows, page, pageSize, total: Number(count.rows[0]?.total || 0), categories: await listPublicApiCategories() };
+}
+
+export async function listPublicApiCategories() {
+  if (!pool) return [];
+  const result = await pool.query(`SELECT category,count(*)::int AS count
+    FROM public_api_catalog WHERE is_active=true GROUP BY category ORDER BY category`);
+  return result.rows;
+}
+
+export async function getPublicApiSyncStatus() {
+  if (!pool) return { configured: false, status: 'unavailable' };
+  const result = await pool.query(`SELECT source,status,items_imported,pages_fetched,last_started_at,last_completed_at,last_error
+    FROM public_api_sync_state WHERE source='publicapis.lol' LIMIT 1`);
+  return { configured: true, sync: result.rows[0] || null };
+}
++(base+i+1)).join(',')+',NULL,true,now())';
+      });
+      await client.query('INSERT INTO mcp_directory_catalog(slug,name,description,auth_type,transports,website_url,install_url,source_url,endpoint_url,is_active,updated_at) VALUES '+
+        tuples.join(',')+
+        ' ON CONFLICT(slug) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,auth_type=EXCLUDED.auth_type,transports=EXCLUDED.transports,website_url=EXCLUDED.website_url,install_url=EXCLUDED.install_url,source_url=EXCLUDED.source_url,is_active=true,updated_at=now()',values);
+    }
+    await client.query('COMMIT');
+  }catch(error){await client.query('ROLLBACK');throw error;}
+  finally{client.release();}
+  return {imported:records.length};
 }
 
 export async function queryPublicApiCatalog(filters: {
