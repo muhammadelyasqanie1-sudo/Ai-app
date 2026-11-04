@@ -971,7 +971,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     if (req.method === 'GET' && pathname === '/api/admin/models') {
       const descriptors = await getVerifiedModelDescriptors();
       const rows = await pool.query(`SELECT m.provider_key,m.model_key,m.display_name,m.description,m.enabled,m.context_window,
-          COALESCE(m.capabilities_override,m.capabilities) AS capabilities,m.input_cost_per_million,m.output_cost_per_million,
+          COALESCE(m.capabilities_override,m.capabilities) AS capabilities,m.input_cost_per_million,m.output_cost_per_million,m.pricing_json,
           m.verified_at,m.last_health_ok,m.discovered_at,m.max_output,m.pricing_json
         FROM model_catalog m ORDER BY m.provider_key,m.display_name`);
       const descriptorMap = new Map(descriptors.map((model)=>[`${model.providerId}:${model.id}`,model]));
@@ -985,6 +985,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           lastHealthOk:Boolean(row.last_health_ok),discoveredAt:row.discovered_at,
           capabilities:descriptor?.capabilities || Object.fromEntries(['text','streaming','vision','imageGen','imageEdit','ocr','tts','stt','tools','jsonMode'].map((key)=>[key,caps.includes(key)])),
           inputCostPerMillion:row.input_cost_per_million??null,outputCostPerMillion:row.output_cost_per_million??null,
+          requiredTier:row.pricing_json?.requiredTier||'free',
         };
       })});return true;
     }
@@ -1093,6 +1094,10 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const enabled = body.enabled;
       const inputCost = body.inputCostPerMillion;
       const outputCost = body.outputCostPerMillion;
+      const requiredTier = body.requiredTier;
+      if (requiredTier !== undefined && !['free','pro','max','ultra'].includes(String(requiredTier))) {
+        sendAuthJson(res,400,{error:'Required model tier must be free, pro, max, or ultra.'});return true;
+      }
       const capabilityNames = ['text','streaming','vision','imageGen','imageEdit','ocr','tts','stt','tools','jsonMode'];
       const capabilities = body.capabilities === undefined ? null : body.capabilities;
       if (capabilities !== null && (!Array.isArray(capabilities) || capabilities.some((item: unknown) => typeof item !== 'string' || !capabilityNames.includes(item)))) {
@@ -1141,12 +1146,19 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
             enabled, descriptor?.contextWindow ?? Number(storedModel.rows[0].context_window) ?? 0, inputCost ?? null, outputCost ?? null,
             descriptor?.verifiedAt ?? null, Boolean(descriptor?.verifiedAt), capabilities],
         );
+        if (requiredTier !== undefined) {
+          await client.query(
+            `UPDATE model_catalog SET pricing_json=jsonb_set(COALESCE(pricing_json,'{}'::jsonb),'{requiredTier}',to_jsonb($3::text),true),updated_at=now()
+              WHERE provider_key=$1 AND model_key=$2`,
+            [providerId,modelId,String(requiredTier)],
+          );
+        }
         const updatedModel=await client.query('SELECT display_name,context_window,capabilities,enabled,verified_at,last_health_ok,input_cost_per_million,output_cost_per_million,capabilities_override FROM model_catalog WHERE provider_key=$1 AND model_key=$2',[providerId,modelId]);
         await client.query(
           'INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
           [user.id,user.role,'model.update','model',`${providerId}:${modelId}`,
             storedModel.rows[0]?JSON.stringify(storedModel.rows[0]):null,JSON.stringify(updatedModel.rows[0]),
-            JSON.stringify({enabled,inputCostPerMillion:inputCost??null,outputCostPerMillion:outputCost??null})],
+            JSON.stringify({enabled,inputCostPerMillion:inputCost??null,outputCostPerMillion:outputCost??null,requiredTier:requiredTier??null})],
         );
         await client.query('COMMIT');
       } catch (error) {

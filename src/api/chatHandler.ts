@@ -6,6 +6,7 @@ import { buildToolModePrompt } from '../services/toolModes.ts';
 import { getProductivityPrompt } from './productivity.ts';
 import { authenticateRequest } from './auth.ts';
 import { pool } from './database.ts';
+import { enforceModelSubscription } from './modelAccess.ts';
 import { redactSecret } from '../security/providerVault.ts';
 import { ChatRequestSchema } from '../../packages/shared/src/schemas';
 
@@ -147,6 +148,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     if (abortController.signal.aborted) return 'network';
     if (error instanceof ProviderAdapterError) {
       if (error.status === 401 || error.status === 403) return 'auth';
+      if (error.code === 'premium_required') return 'premium_required';
       if (error.status === 402 || /insufficient_funds|quota_exhausted/i.test(error.code)) return 'quota_exhausted';
       if (error.status === 429 || /rate_limit|quota/i.test(error.code)) return 'rate_limit';
       if (error.status >= 500) return 'provider_5xx';
@@ -337,6 +339,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     requestTimer = setTimeout(() => { timedOut = true; abortController.abort(); }, 60_000);
     const prepared = await prepareVerifiedChat({ model, messages: upstreamMessages, signal: abortController.signal, noFallback: body.no_fallback === true, onModelSelected: async (selectedProviderId, selectedModelId) => {
       const selectedKey = selectedProviderId + '::' + selectedModelId;
+      await enforceModelSubscription(requestUserId, selectedProviderId, selectedModelId);
       if (activeModelId !== selectedKey) {
         activeModelId = selectedKey;
         if (res.headersSent && !res.writableEnded) res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: selectedKey })}\n\n`);
@@ -393,7 +396,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       await persistUsage(timedOut?'timeout':'error');
       await persistError(error);
       const streamErrorCode = classifyError(error);
-      const streamRetryable = !['invalid_request','content_policy','auth','rate_limit','quota_exhausted'].includes(streamErrorCode);
+      const streamRetryable = !['invalid_request','content_policy','auth','rate_limit','quota_exhausted','premium_required'].includes(streamErrorCode);
       console.error('AI_PROVIDER_STREAM_FAILED', JSON.stringify({
         requestId: id,
         provider: activeModelId.split('::')[0] || prepared.providerId,

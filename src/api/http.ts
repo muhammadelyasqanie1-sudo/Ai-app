@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { handleChatApi } from './chatHandler.ts';
 import { handleBeatApiApi } from './beatapi.ts';
 import { checkDatabase, pool } from './database.ts';
+import { applyModelAccess } from './modelAccess.ts';
 import { getProviderModelCatalog } from './modelCatalog.ts';
 import { getCapabilitySnapshot, getImageStudioSnapshot, getFileAssistantSnapshot } from '../services/providerGateway.ts';
 import { authenticateRequest, handleAuthApi, verifyCsrf } from './auth.ts';
@@ -21,6 +22,20 @@ type ApiRequest = IncomingMessage & { originalUrl?: string };
 
 const localIpRateCounters = new Map<string, { count: number; resetAt: number }>();
 
+let capabilitySnapshotCache: { expiresAt: number; value: Awaited<ReturnType<typeof getCapabilitySnapshot>> } | null = null;
+let capabilitySnapshotPending: Promise<Awaited<ReturnType<typeof getCapabilitySnapshot>>> | null = null;
+async function getCachedCapabilitySnapshot() {
+  if (capabilitySnapshotCache && capabilitySnapshotCache.expiresAt > Date.now()) return capabilitySnapshotCache.value;
+  if (capabilitySnapshotPending) return capabilitySnapshotPending;
+  capabilitySnapshotPending = getCapabilitySnapshot();
+  try {
+    const value = await capabilitySnapshotPending;
+    capabilitySnapshotCache = { value, expiresAt: Date.now() + 15_000 };
+    return value;
+  } finally { capabilitySnapshotPending = null; }
+}
+
+
 function corsHeaders(req: IncomingMessage) {
   const origin = req.headers.origin;
   const configured = (process.env.APP_ORIGIN || '').split(',').map((value) => value.trim()).filter(Boolean);
@@ -37,7 +52,7 @@ function sendJson(res: ServerResponse, status: number, body: unknown, requestId:
 }
 
 async function enforceAdminConfiguredRateLimits(req: IncomingMessage, res: ServerResponse, pathname: string, requestId: string): Promise<boolean> {
-  if (!pool || !pathname.startsWith('/api/') || ['/api/health','/api/ready'].includes(pathname)) return false;
+  if (!pool || !pathname.startsWith('/api/') || ['/api/health','/api/ready','/api/events'].includes(pathname)) return false;
   // Guest requests have no authenticated identity or subscription policy. Avoid
   // querying session tables for them so public chat remains available during DB setup.
   if (!/(?:^|;)\\s*afg_session=/.test(req.headers.cookie || '')) return false;
@@ -215,6 +230,58 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
       return;
     }
     if (await enforceAdminConfiguredRateLimits(req, res, pathname, requestId)) return;
+    if (req.method === 'GET' && pathname === '/api/bootstrap') {
+      const snapshot = await applyModelAccess(req, await getCachedCapabilitySnapshot());
+      const database = await checkDatabase();
+      sendJson(res, 200, { ...snapshot, service: { status: snapshot.verified ? 'live' : 'degraded', database }, bootstrappedAt: new Date().toISOString() }, requestId);
+      return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/events') {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+        ...corsHeaders(req),
+      });
+      let closed = false;
+      let refreshing = false;
+      const emit = async () => {
+        if (closed || refreshing || res.destroyed) return;
+        refreshing = true;
+        try {
+          const snapshot = await applyModelAccess(req, await getCapabilitySnapshot());
+          if (!closed && !res.writableEnded) {
+            res.write('event: catalog.updated\n');
+            res.write('data: ' + JSON.stringify(snapshot) + '\n\n');
+          }
+          const database = await checkDatabase();
+          if (!closed && !res.writableEnded) {
+            res.write('event: system.health\n');
+            res.write('data: ' + JSON.stringify({ status: snapshot.verified ? 'live' : 'degraded', database }) + '\n\n');
+          }
+        } catch {
+          if (!closed && !res.writableEnded) {
+            res.write('event: system.health\n');
+            res.write('data: ' + JSON.stringify({ status: 'degraded' }) + '\n\n');
+          }
+        } finally { refreshing = false; }
+      };
+      res.write('retry: 5000\n\n');
+      void emit();
+      const timer = setInterval(() => { void emit(); }, 60_000);
+      const heartbeat = setInterval(() => { if (!closed && !res.writableEnded) res.write(': keepalive\n\n'); }, 15_000);
+      res.on('close', () => { closed = true; clearInterval(timer); clearInterval(heartbeat); });
+      return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/capabilities') {
+      const snapshot = await applyModelAccess(req, await getCapabilitySnapshot());
+      sendJson(res, snapshot.verified ? 200 : 503, snapshot, requestId);
+      return;
+    }
+
     if (await handleAuthApi(req, res, pathname)) return;
     if (await handleBeatApiApi(req, res)) return;
     if (await handleUserIntegrationApi(req, res, pathname)) return;
@@ -323,12 +390,6 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     if (req.method === 'GET' && pathname === '/api/files/status') {
       const snapshot = await getFileAssistantSnapshot();
       sendJson(res, 200, snapshot, requestId);
-      return;
-    }
-
-    if (req.method === 'GET' && pathname === '/api/capabilities') {
-      const snapshot = await getCapabilitySnapshot();
-      sendJson(res, snapshot.verified ? 200 : 503, snapshot, requestId);
       return;
     }
 

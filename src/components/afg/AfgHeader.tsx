@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Menu, 
   Bell, 
@@ -9,7 +9,7 @@ import {
   Sparkles,
   CheckCircle2,
   Plus,
-  MoreVertical
+  MoreVertical,
 } from 'lucide-react';
 import { AfgBrainLogo } from './AfgBrainLogo';
 import type { Language, Theme, UserProfile } from '../../types/afg';
@@ -42,9 +42,15 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
 }) => {
   const t = translations[language];
   const [modelsMenuOpen, setModelsMenuOpen] = useState(false);
+  const [connection, setConnection] = useState<'live'|'degraded'|'offline'|'connecting'>(() => (document.documentElement.dataset.afgConnection as any) || 'connecting');
+  useEffect(() => {
+    const update = (event: Event) => setConnection((event as CustomEvent<string>).detail as any);
+    window.addEventListener('afg-connection-state', update);
+    return () => window.removeEventListener('afg-connection-state', update);
+  }, []);
 
   return (
-    <header className="afg-app-header sticky top-0 z-40 w-full backdrop-blur-xl bg-[#060b18]/85 dark:bg-[#060b18]/90 light:bg-white/90 border-b border-cyan-900/30 transition-colors">
+    <header className="afg-app-header sticky top-0 z-40 w-full backdrop-blur-xl transition-colors">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
         
         {/* Left Section: Menu Toggle + Brand Logo & Title */}
@@ -62,7 +68,7 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
             <AfgBrainLogo size="sm" showBadge={false} />
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5">
-                <span className="text-xl font-black tracking-tight bg-gradient-to-r from-white via-cyan-200 to-sky-400 bg-clip-text text-transparent">
+                <span className="text-xl font-black tracking-tight text-[var(--text-primary)]">
                   {t.brandName}
                 </span>
                 <span className="text-xs">🇦🇫</span>
@@ -76,6 +82,8 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
 
         {/* Right Section: Language Switch, Theme, Notifications & User Avatar */}
         <div className="flex items-center gap-1.5 sm:gap-2.5">
+
+          <div className={'afg-connection-indicator hidden sm:flex ' + (connection==='live'?'is-live':connection==='offline'?'is-offline':'is-degraded')} title={connection==='live'?'API and model catalogue reachable':connection==='offline'?'No network connection':'Connection is being checked'}><span className="afg-connection-dot"/>{connection==='live'?'Live':connection==='offline'?'Offline':connection==='connecting'?'Connecting':'Degraded'}</div>
 
           <button type="button" onClick={onNewChat} className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-800/40 bg-cyan-500/10 px-2.5 py-2 text-xs font-semibold text-cyan-200 transition-colors hover:bg-cyan-500/20" aria-label={language === 'dari' ? 'گفت‌وگوی جدید' : 'New chat'} title={language === 'dari' ? 'گفت‌وگوی جدید' : 'New chat'}>
             <Plus className="h-4 w-4" />
