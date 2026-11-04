@@ -60,7 +60,8 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean}>=({l
    setRefreshing(true);setError('');setNotice('');
    try{
      const result=await request('/api/admin/api-hub/sync',{method:'POST',body:'{}'});
-     const apiCount=Number(result.result?.catalog?.imported||0);const mcpCount=Number(result.result?.mcpDirectory?.imported||0);\n     setNotice(dari?('همگام‌سازی تکمیل شد: '+apiCount+' API و '+mcpCount+' سرور MCP.'):('Synced '+apiCount+' APIs and '+mcpCount+' MCP servers from GitHub.'));
+     const apiCount=Number(result.result?.catalog?.imported||0);const mcpCount=Number(result.result?.mcpDirectory?.imported||0);
+     setNotice(dari?('همگام‌سازی تکمیل شد: '+apiCount+' API و '+mcpCount+' سرور MCP.'):('Synced '+apiCount+' APIs and '+mcpCount+' MCP servers from GitHub.'));
      setPage(1);
      await load();
      if(result.status==='partial')setNotice(dari?'همگام‌سازی ناقص بود؛ وضعیت را بررسی کنید.':'Catalog sync was partial; review the sync status.');
@@ -101,7 +102,8 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean}>=({l
     {adminMode&&<button disabled={refreshing} onClick={()=>void syncNow()} className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-50"><RefreshCw className={'h-4 w-4 '+(refreshing?'animate-spin':'')}/>{label('Sync catalog','همگام‌سازی فهرست')}</button>}
    </div>
    <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
-    <a href="https://github.com/public-apis/public-apis" target="_blank" rel="noreferrer noopener" className="rounded-lg border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-slate-300">GitHub source ↗</a>\n    <a href="https://publicapis.lol/no-api-key" target="_blank" rel="noreferrer noopener" className="rounded-lg border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-slate-300">No API key ↗</a>
+    <a href="https://github.com/public-apis/public-apis" target="_blank" rel="noreferrer noopener" className="rounded-lg border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-slate-300">GitHub source ↗</a>
+    <a href="https://publicapis.lol/no-api-key" target="_blank" rel="noreferrer noopener" className="rounded-lg border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-slate-300">No API key ↗</a>
     <a href="https://publicapis.lol/trending" target="_blank" rel="noreferrer noopener" className="rounded-lg border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-slate-300">Trending ↗</a>
     <a href="https://publicapis.lol/status" target="_blank" rel="noreferrer noopener" className="rounded-lg border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-slate-300">Daily status ↗</a>
     <a href="https://publicapis.lol/mcp" target="_blank" rel="noreferrer noopener" className="rounded-lg border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-slate-300">MCP directory ↗</a>
