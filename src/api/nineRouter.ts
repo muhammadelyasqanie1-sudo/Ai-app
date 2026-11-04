@@ -207,7 +207,7 @@ export async function handleNineRouterApi(req:IncomingMessage,res:ServerResponse
       reply(res,400,{error:'Video edits and extensions require an HTTPS video URL or a valid video file_id.'},requestId);return true;
      }
     }
-    const headers=new Headers({'Content-Type':'application/json','Accept':'application/json','Authorization':'Bearer '+key,'X-Request-Id':requestId});
+    const headers=new Headers({'Content-Type':'application/json','Accept':'application/json','X-Request-Id':requestId});if(key)headers.set('Authorization','Bearer '+key);
     const target=new URL(base.toString());target.pathname=base.pathname+POST_ENDPOINTS.get(pathname)!;
     const response=await fetch(target.toString(),{method:'POST',headers,body:JSON.stringify(body),redirect:'error',signal:AbortSignal.timeout(180_000)});
     const bytes=Buffer.from(await response.arrayBuffer());
@@ -236,7 +236,7 @@ export async function handleNineRouterApi(req:IncomingMessage,res:ServerResponse
    const connection=incoming.searchParams.get('connectionId');
    if(connection){reply(res,400,{error:'Video connection id must be supplied in X-9Router-Connection-Id header.'},requestId);return true;}
    const connectionHeader=req.headers['x-9router-connection-id'];
-   const headers=new Headers({Authorization:'Bearer '+key,Accept:'application/json'});
+   const headers=new Headers({Accept:'application/json'});if(key)headers.set('Authorization','Bearer '+key);
    if(typeof connectionHeader==='string'&&connectionHeader.length<=200)headers.set('x-connection-id',connectionHeader);
    const response=await fetch(target.toString(),{headers,redirect:'error',signal:AbortSignal.timeout(45_000)});
    const bytes=Buffer.from(await response.arrayBuffer());if(bytes.length>2_000_000)throw new Error('Video status response exceeded the safety limit.');
