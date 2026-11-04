@@ -1,7 +1,9 @@
 import { Pool } from 'pg';
+import { shouldUseDatabaseTls } from './databaseTls.ts';
+export { shouldUseDatabaseTls } from './databaseTls.ts';
 
 const connectionString = process.env.DATABASE_URL?.trim();
-const sslMode = process.env.DATABASE_SSL;
+const useDatabaseTls = shouldUseDatabaseTls(connectionString, process.env.DATABASE_SSL);
 
 export const databaseConfigured = Boolean(connectionString);
 
@@ -13,7 +15,7 @@ export const pool = connectionString
       max: Number(process.env.DATABASE_POOL_MAX || 5),
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
-      ...(sslMode === 'require' ? { ssl: { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false' } } : {}),
+      ...(useDatabaseTls ? { ssl: { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false' } } : {}),
     })
   : null;
 
