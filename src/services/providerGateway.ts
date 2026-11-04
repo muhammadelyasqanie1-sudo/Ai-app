@@ -38,12 +38,13 @@ const configuredNineRouterBase = (process.env.NINEROUTER_BASE_URL?.trim() || '')
 const nineRouterBase = configuredNineRouterBase
   ? (/\/v1$/i.test(configuredNineRouterBase) ? configuredNineRouterBase : configuredNineRouterBase + '/v1')
   : '';
-const nineRouterAdapter = nineRouterBase && nineRouterKey
+const nineRouterAdapter = nineRouterBase
   ? createOpenAICompatibleAdapter({
       id: '9router',
       displayName: '9Router Gateway',
       baseUrl: nineRouterBase,
       apiKey: nineRouterKey,
+      allowEmptyApiKey: true,
     })
   : null;
 // Accept either a raw API key or the common "Bearer <key>" form pasted from API docs.
