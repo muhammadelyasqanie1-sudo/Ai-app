@@ -30,17 +30,22 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
  const [prompt,setPrompt]=useState('');
  const [imageSize,setImageSize]=useState('1024x1024');
  const [imageCount,setImageCount]=useState(1);
+ const [imageQuality,setImageQuality]=useState('standard');
+ const [imageResponseFormat,setImageResponseFormat]=useState('url');
  const [imageModel,setImageModel]=useState('');
- const [generatedImage,setGeneratedImage]=useState('');
+ const [generatedImages,setGeneratedImages]=useState<string[]>([]);
  const [searchModel,setSearchModel]=useState('');
  const [searchQuery,setSearchQuery]=useState('');
  const [searchType,setSearchType]=useState('web');
  const [searchResult,setSearchResult]=useState<any>(null);
  const [fetchModel,setFetchModel]=useState('');
  const [fetchUrl,setFetchUrl]=useState('');
+ const [fetchFormat,setFetchFormat]=useState<'markdown'|'text'|'html'>('markdown');
  const [fetchResult,setFetchResult]=useState<any>(null);
  const [embeddingModel,setEmbeddingModel]=useState('');
  const [embeddingInput,setEmbeddingInput]=useState('');
+ const [embeddingDimensions,setEmbeddingDimensions]=useState('');
+ const [embeddingFormat,setEmbeddingFormat]=useState<'float'|'base64'>('float');
  const [embeddingResult,setEmbeddingResult]=useState<any>(null);
  const [ttsModel,setTtsModel]=useState('');
  const [ttsText,setTtsText]=useState('');
@@ -52,6 +57,9 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
  const [sttModel,setSttModel]=useState('');
  const [sttFile,setSttFile]=useState<File|null>(null);
  const [sttText,setSttText]=useState('');
+ const [sttLanguage,setSttLanguage]=useState('');
+ const [sttPrompt,setSttPrompt]=useState('');
+ const [sttResponseFormat,setSttResponseFormat]=useState('json');
  const [videoModel,setVideoModel]=useState('xai/grok-imagine-video');
  const [videoPrompt,setVideoPrompt]=useState('');
  const [videoMode,setVideoMode]=useState<'generate'|'edit'|'extend'>('generate');
@@ -99,11 +107,11 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
  };
  const generateImage=()=>run('image',async()=>{
   if(!imageModel||!prompt.trim())throw new Error('Choose an image model and enter a prompt.');
-  const {data}=await call('/api/9router/images/generations',{method:'POST',body:JSON.stringify({model:imageModel,prompt,n:imageCount,size:imageSize})});
-  const item=data?.data?.[0];if(!item)throw new Error('The image provider returned no image.');
-  if(item.url)setGeneratedImage(item.url);
-  else if(item.b64_json)setGeneratedImage('data:image/png;base64,'+item.b64_json);
-  else throw new Error('The provider returned an unsupported image format.');
+  const {data}=await call('/api/9router/images/generations',{method:'POST',body:JSON.stringify({model:imageModel,prompt,n:imageCount,size:imageSize,quality:imageQuality,response_format:imageResponseFormat})});
+  const items=Array.isArray(data?.data)?data.data:[];
+  const images=items.map((item:any)=>item.url|| (item.b64_json?'data:image/png;base64,'+item.b64_json:'')).filter(Boolean);
+  if(!images.length)throw new Error('The image provider returned no supported image output.');
+  setGeneratedImages(images);
  });
  const search=()=>run('search',async()=>{
   if(!searchModel||!searchQuery.trim())throw new Error('Choose a search model and enter a query.');
@@ -112,13 +120,13 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
  });
  const fetchPage=()=>run('fetch',async()=>{
   if(!fetchModel||!/^https:\/\//i.test(fetchUrl))throw new Error('Choose a fetch model and enter an HTTPS URL.');
-  const {data}=await call('/api/9router/web/fetch',{method:'POST',body:JSON.stringify({model:fetchModel,url:fetchUrl,format:'markdown',max_characters:12000})});
+  const {data}=await call('/api/9router/web/fetch',{method:'POST',body:JSON.stringify({model:fetchModel,url:fetchUrl,format:fetchFormat,max_characters:12000})});
   setFetchResult(data);
  });
  const embed=()=>run('embedding',async()=>{
   if(!embeddingModel||!embeddingInput.trim())throw new Error('Choose an embedding model and enter text.');
   const input=embeddingInput.split('\n').map(v=>v.trim()).filter(Boolean);
-  const {data}=await call('/api/9router/embeddings',{method:'POST',body:JSON.stringify({model:embeddingModel,input:input.length>1?input:input[0]})});
+  const body:any={model:embeddingModel,input:input.length>1?input:input[0],encoding_format:embeddingFormat};\n  if(embeddingDimensions.trim()){const dimensions=Number(embeddingDimensions);if(!Number.isInteger(dimensions)||dimensions<1||dimensions>65536)throw new Error('Embedding dimensions must be an integer between 1 and 65536.');body.dimensions=dimensions;}\n  const {data}=await call('/api/9router/embeddings',{method:'POST',body:JSON.stringify(body)});
   setEmbeddingResult({model:data.model,usage:data.usage,count:data.data?.length,dimensions:data.data?.[0]?.embedding?.length,preview:data.data?.[0]?.embedding?.slice(0,12)});
  });
  const loadVoices=()=>run('voices',async()=>{if(!voiceProvider.trim())throw new Error('Choose a TTS provider.');const {data}=await call('/api/9router/audio/voices?provider='+encodeURIComponent(voiceProvider)+'&lang='+encodeURIComponent(voiceLanguage));const list=Array.isArray(data.data)?data.data:Array.isArray(data.voices)?data.voices:[];setVoices(list);if(!list.length)throw new Error('No voices were returned for this provider and language.');});
@@ -132,7 +140,7 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
  const transcribe=()=>run('stt',async()=>{
   if(!sttModel||!sttFile)throw new Error('Choose a speech model and an audio file.');
   if(sttFile.size>20*1024*1024)throw new Error('Audio file must be 20 MB or smaller.');
-  const form=new FormData();form.append('model',sttModel);form.append('file',sttFile);
+  const form=new FormData();form.append('model',sttModel);form.append('file',sttFile);\n  if(sttLanguage.trim())form.append('language',sttLanguage.trim());\n  if(sttPrompt.trim())form.append('prompt',sttPrompt.trim());\n  form.append('response_format',sttResponseFormat);
   const {data}=await call('/api/9router/audio/transcriptions',{method:'POST',body:form});
   setSttText(typeof data==='string'?data:(data.text||JSON.stringify(data,null,2)));
  });
