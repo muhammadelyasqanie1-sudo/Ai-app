@@ -145,9 +145,20 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
   setVisionAnswer(data.choices?.[0]?.message?.content||JSON.stringify(data,null,2));
  });
  const createVideo=()=>run('video',async()=>{
-  if(!videoModel||!videoPrompt.trim())throw new Error('Choose a video model and enter a prompt.');
-  const {data,response}=await call('/api/9router/videos/generations',{method:'POST',body:JSON.stringify({model:videoModel,prompt:videoPrompt})});
-  const jobId=data.id||data.request_id||data.requestId;
+  if(!videoModel.trim())throw new Error('Enter the 9Router video model ID.');
+  const body:any={model:videoModel.trim()};
+  if(videoMode==='generate'){
+   if(!videoPrompt.trim()&&!videoImageFile)throw new Error('Enter a prompt or select an image for image-to-video.');
+   if(videoPrompt.trim())body.prompt=videoPrompt.trim();
+   if(videoImageFile){if(videoImageFile.size>8*1024*1024)throw new Error('Video reference image must be 8 MB or smaller.');body.image={url:await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(new Error('Could not read reference image.'));reader.readAsDataURL(videoImageFile);})};}
+  }else{
+   if(!/^https:\/\//i.test(videoSourceUrl.trim()))throw new Error('Provide a public HTTPS source video URL.');
+   body.video={url:videoSourceUrl.trim()};if(videoPrompt.trim())body.prompt=videoPrompt.trim();
+  }
+  body.duration=Number(videoDuration);body.aspect_ratio=videoAspect;body.resolution=videoResolution;
+  const endpoint=videoMode==='generate'?'generations':videoMode==='edit'?'edits':'extensions';
+  const {data,response}=await call('/api/9router/videos/'+endpoint,{method:'POST',body:JSON.stringify(body)});
+  const jobId=data.request_id||data.id||data.requestId;
   if(!jobId)throw new Error('9Router did not return a video job identifier.');
   setVideoJob(data);setVideoConnection(response.headers.get('X-9Router-Connection-Id')||'');
  });
