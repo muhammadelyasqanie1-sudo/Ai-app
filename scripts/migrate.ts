@@ -4,18 +4,18 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
+import { shouldUseDatabaseTls } from '../src/api/databaseTls.ts';
 
 const connectionString = process.env.DATABASE_URL?.trim();
 if (!connectionString) {
   console.error('DATABASE_URL is required to run migrations.');
   process.exitCode = 1;
 } else {
+  const useDatabaseTls = shouldUseDatabaseTls(connectionString, process.env.DATABASE_SSL);
   const pool = new Pool({
     connectionString,
     max: 1,
-    ...(process.env.DATABASE_SSL === 'require'
-      ? { ssl: { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false' } }
-      : {}),
+    ...(useDatabaseTls ? { ssl: { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false' } } : {}),
   });
   const here = path.dirname(fileURLToPath(import.meta.url));
   const directory = path.join(here, '..', 'database', 'migrations');
