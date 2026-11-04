@@ -167,7 +167,7 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
   if(sttPrompt.trim())form.append('prompt',sttPrompt.trim());
   form.append('response_format',sttResponseFormat);
   const {data}=await call('/api/9router/audio/transcriptions',{method:'POST',body:form});
-  setSttText(typeof data==='string'?data:(data.text||JSON.stringify(data,null,2)));
+  setSttText(data instanceof ArrayBuffer?new TextDecoder().decode(data):typeof data==='string'?data:(data.text||JSON.stringify(data,null,2)));
  });
  const vision=()=>run('vision',async()=>{
   if(!visionModel||!visionFile)throw new Error('Choose a vision model and an image.');
