@@ -9,9 +9,8 @@ function rank(value: unknown): number {
   return TIER_RANK[key] ?? 0;
 }
 
-async function accountTier(req: IncomingMessage): Promise<string> {
-  const account = await authenticateRequest(req).catch(() => null);
-  if (!account || !pool) return 'free';
+async function accountTier(userId: string | null): Promise<string> {
+  if (!userId || !pool) return 'free';
   try {
     const result = await pool.query(
       `SELECT p.plan_key FROM user_subscriptions s
@@ -32,7 +31,7 @@ async function accountTier(req: IncomingMessage): Promise<string> {
  */
 export async function applyModelAccess(req: IncomingMessage, snapshot: any): Promise<any> {
   const account = await authenticateRequest(req).catch(() => null);
-  const tier = account ? await accountTier(req) : 'free';
+  const tier = await accountTier(account?.id || null);
   let metadata = new Map<string, any>();
   if (pool) {
     try {
@@ -80,7 +79,7 @@ export async function applyModelAccess(req: IncomingMessage, snapshot: any): Pro
 
 /** Enforces optional model_catalog.required_tier/access_tier on the server before provider use. */
 export async function enforceModelSubscription(userId: string | null, providerId: string, modelId: string): Promise<void> {
-  if (!pool || !userId) return;
+  if (!pool) return;
   const columns = await pool.query(
     `SELECT column_name FROM information_schema.columns
       WHERE table_schema=current_schema() AND table_name='model_catalog'`,
@@ -95,14 +94,14 @@ export async function enforceModelSubscription(userId: string | null, providerId
   );
   const required = String(model.rows[0]?.required_tier || 'free').toLowerCase();
   if (required === 'free' || required === 'unknown') return;
-  const subscription = await pool.query(
+  const subscription = userId ? await pool.query(
     `SELECT p.plan_key FROM user_subscriptions s
        JOIN subscription_plans p ON p.id=s.plan_id
       WHERE s.user_id=$1 AND s.status IN ('active','trialing')
         AND (s.ends_at IS NULL OR s.ends_at>now())
       ORDER BY s.starts_at DESC LIMIT 1`,
     [userId],
-  );
+  ) : { rows: [] as any[] };
   const current = String(subscription.rows[0]?.plan_key || 'free').toLowerCase();
   if (rank(current) < rank(required)) {
     const { ProviderAdapterError } = await import('../providers/providerTypes.ts');
