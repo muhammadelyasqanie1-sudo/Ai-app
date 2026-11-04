@@ -225,6 +225,13 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
 
     const messages = body.messages as ChatMessage[] | undefined;
     const requestedLanguage = body.language === 'dari' ? 'dari' : 'english';
+    const responseLanguageNames: Record<string, string> = {
+      dari: 'Dari Persian', english: 'English', pashto: 'Pashto', persian: 'Persian (Farsi)',
+      arabic: 'Arabic', urdu: 'Urdu', turkish: 'Turkish', russian: 'Russian', french: 'French',
+      spanish: 'Spanish', german: 'German', chinese: 'Chinese', hindi: 'Hindi', bengali: 'Bengali',
+      indonesian: 'Indonesian', portuguese: 'Portuguese', japanese: 'Japanese', korean: 'Korean',
+    };
+    const responseLanguage = responseLanguageNames[String(body.language || 'english')] || 'English';
     const model = typeof body.model === 'string' ? body.model.trim() : '';
 
     if (!Array.isArray(messages) || messages.length === 0 || messages.length > 100) {
@@ -289,9 +296,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     ].filter(Boolean).join(' ');
 
     const systemMessages = [
-      requestedLanguage === 'dari'
-        ? 'Respond in clear, natural Dari Persian. Keep the entire response in Dari unless the user explicitly requests another language.'
-        : 'Respond in clear English unless the user explicitly requests another language.',
+      `Respond in clear, natural ${responseLanguage}. Keep the entire response in ${responseLanguage} unless the user explicitly requests another language.`,
       'You are AFG AI. Be honest about uncertainty and limitations. Never fabricate citations, URLs, quotations, sources, or tool results. Cite only sources actually supplied or retrieved in this request. If no verifiable source is available, say so clearly. Distinguish confirmed facts from estimates and opinions.',
       toolMode.prompt,
       advancedModePrompt,
