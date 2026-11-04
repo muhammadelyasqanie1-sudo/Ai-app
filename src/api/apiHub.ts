@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './auth.ts';
-import { getPublicApiSyncStatus, queryPublicApiCatalog, syncPublicApiCatalog } from '../services/publicApiCatalog.ts';
+import { getPublicApiSyncStatus, queryPublicApiCatalog, syncPublicApiCatalog, syncPublicMcpCatalog } from '../services/publicApiCatalog.ts';
 
 export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
   if (!pathname.startsWith('/api/api-hub') && !pathname.startsWith('/api/admin/api-hub')) return false;
@@ -72,16 +72,21 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
       sendAuthJson(res,200,{item,alternatives:alternatives.rows}); return true;
     }
     if (req.method === 'GET' && pathname === '/api/admin/api-hub/status') {
-      sendAuthJson(res,200,await getPublicApiSyncStatus()); return true;
+      const status=await getPublicApiSyncStatus();
+      const mcp=await pool.query('SELECT count(*)::int AS total FROM mcp_directory_catalog WHERE is_active=true');
+      sendAuthJson(res,200,{...status,mcpDirectory:{total:Number(mcp.rows[0]?.total||0)}}); return true;
     }
     if (req.method === 'POST' && pathname === '/api/admin/api-hub/sync') {
       const body = await readJsonBody(req,1000);
       if (Object.keys(body).length) { sendAuthJson(res,400,{error:'The sync endpoint does not accept custom source URLs or options.'}); return true; }
       if (user.role !== 'superadmin') { sendAuthJson(res,403,{error:'Superadmin access is required to refresh the global API catalog.'}); return true; }
-      const result = await syncPublicApiCatalog();
+      const catalog=await syncPublicApiCatalog();
+      const mcpDirectory=await syncPublicMcpCatalog();
+      const complete=catalog.complete&&mcpDirectory.imported>0;
+      const result={catalog,mcpDirectory,complete};
       await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
-        [user.id,user.role,'api_hub.catalog.sync','api_catalog','publicapis.lol',JSON.stringify(result)]);
-      sendAuthJson(res,result.complete?200:206,{result,status:result.complete?'success':'partial'}); return true;
+        [user.id,user.role,'api_hub.catalog.sync','api_catalog','public-apis/public-apis',JSON.stringify(result)]);
+      sendAuthJson(res,complete?200:206,{result,status:complete?'success':'partial'}); return true;
     }
     sendAuthJson(res,404,{error:'API Hub route not found.'}); return true;
   } catch (error) {
