@@ -180,14 +180,20 @@ async function syncDiscoveredModels(provider: ChatProviderAdapter, models: Model
     await pool.query(
       `INSERT INTO model_catalog
         (provider_key, model_key, display_name, capabilities, enabled, context_window)
-       VALUES ($1, $2, $3, $4, false, $5)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (provider_key, model_key) DO UPDATE SET
          display_name = EXCLUDED.display_name,
          capabilities = COALESCE(model_catalog.capabilities_override, EXCLUDED.capabilities),
          context_window = EXCLUDED.context_window,
+         -- Only bootstrap the selected BeatAPI model before an admin health-check decision exists.
+         enabled = CASE
+           WHEN EXCLUDED.enabled AND model_catalog.health_checked_at IS NULL THEN true
+           ELSE model_catalog.enabled
+         END,
          updated_at = now()`,
       [provider.id, model.id, model.displayName,
         Object.entries(model.capabilities).filter(([, enabled]) => enabled).map(([key]) => key),
+        provider.id === 'beatapi' && model.id === 'glm-5.3-flash',
         model.contextWindow],
     );
   }
