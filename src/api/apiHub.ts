@@ -5,7 +5,7 @@ import { getPublicApiSyncStatus, queryPublicApiCatalog, syncPublicApiCatalog, sy
 
 export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
   if (!pathname.startsWith('/api/api-hub') && !pathname.startsWith('/api/admin/api-hub')) return false;
-  if (!pool) { sendAuthJson(res,503,{error:'The API Hub requires DATABASE_URL and the 0012 migration.'}); return true; }
+  if (!pool) { sendAuthJson(res,503,{error:'The API Hub requires DATABASE_URL and migrations 0012–0013.'}); return true; }
   const user = await authenticateRequest(req).catch(() => null);
   if (!user) { sendAuthJson(res,401,{error:'Sign in is required.'}); return true; }
   const admin = ['admin','superadmin'].includes(user.role);
@@ -73,15 +73,18 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
     }
     if (req.method === 'GET' && pathname === '/api/admin/api-hub/status') {
       const status=await getPublicApiSyncStatus();
-      const mcp=await pool.query('SELECT count(*)::int AS total FROM mcp_directory_catalog WHERE is_active=true');
-      sendAuthJson(res,200,{...status,mcpDirectory:{total:Number(mcp.rows[0]?.total||0)}}); return true;
+      let mcpDirectory:{total:number;configured:boolean}={total:0,configured:false};
+      try{const mcp=await pool.query('SELECT count(*)::int AS total FROM mcp_directory_catalog WHERE is_active=true');mcpDirectory={total:Number(mcp.rows[0]?.total||0),configured:true};}catch{}
+      sendAuthJson(res,200,{...status,mcpDirectory}); return true;
     }
     if (req.method === 'POST' && pathname === '/api/admin/api-hub/sync') {
       const body = await readJsonBody(req,1000);
       if (Object.keys(body).length) { sendAuthJson(res,400,{error:'The sync endpoint does not accept custom source URLs or options.'}); return true; }
       if (user.role !== 'superadmin') { sendAuthJson(res,403,{error:'Superadmin access is required to refresh the global API catalog.'}); return true; }
       const catalog=await syncPublicApiCatalog();
-      const mcpDirectory=await syncPublicMcpCatalog();
+      let mcpDirectory:{imported:number;error?:string};
+      try{mcpDirectory=await syncPublicMcpCatalog();}
+      catch{mcpDirectory={imported:0,error:'MCP directory sync requires migration 0013 and access to the upstream repository README.'};}
       const complete=catalog.complete&&mcpDirectory.imported>0;
       const result={catalog,mcpDirectory,complete};
       await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
