@@ -50,7 +50,17 @@ const beatApiAdapter = beatApiKey
       catalogOnlyHealthCheck: true,
     })
   : null;
-const staticProviderRegistry: ChatProviderAdapter[] = [openAICompatible, gptOssProxy, ...(beatApiAdapter ? [beatApiAdapter] : [])];
+const cleanApisKey = (process.env.CLEANAPIS_API_KEY?.trim() || '').replace(/^Bearer\\s+/i, '').trim();
+const cleanApisAdapter = cleanApisKey
+  ? createOpenAICompatibleAdapter({
+      id: 'cleanapis',
+      displayName: 'Clean APIs',
+      baseUrl: 'https://cleanapis.com/v1',
+      catalogOnlyHealthCheck: true,
+      apiKey: cleanApisKey,
+    })
+  : null;
+const staticProviderRegistry: ChatProviderAdapter[] = [openAICompatible, gptOssProxy, ...(beatApiAdapter ? [beatApiAdapter] : []), ...(cleanApisAdapter ? [cleanApisAdapter] : [])];
 let databaseProviderRegistry: ChatProviderAdapter[] = [];
 let databaseProviderRefreshAt = 0;
 const DATABASE_PROVIDER_REFRESH_MS = 15_000;
