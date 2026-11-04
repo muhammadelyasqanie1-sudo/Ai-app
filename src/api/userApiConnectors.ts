@@ -166,7 +166,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    const method=String(body.method||'GET').toUpperCase(),authType=String(body.authType||'none');
    const authHeader=String(body.authHeaderName||'X-API-Key');
    const secret=typeof body.credential==='string'?body.credential.trim():'';
-   if(name.length<2||name.length>120||!^[a-z][a-z0-9_]{1,63}$/.test(toolName)||description.length>2000||
+   if(name.length<2||name.length>120||!/^[a-z][a-z0-9_]{1,63}$/.test(toolName)||description.length>2000||
     !['GET','POST','PUT','PATCH','DELETE'].includes(method)||!['none','bearer','header_key'].includes(authType)||
     (authType==='none'&&secret)||(authType!=='none'&&!secret)||
     (authType==='header_key'&&!/^[A-Za-z0-9-]{1,64}$/.test(authHeader))){
