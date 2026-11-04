@@ -186,7 +186,10 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
           method: 'POST',
           headers: { Authorization: 'Bearer ' + current.apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify(probePayload),
-          signal: AbortSignal.timeout(15_000), redirect: 'error',
+          // IteraCompute's free inference tier can have a long cold-start queue.
+          // Allow extra time for its verification probe so a slow first token does
+          // not incorrectly lock the only free model in the catalogue.
+          signal: AbortSignal.timeout(current.id === 'iteracompute' ? 90_000 : 15_000), redirect: 'error',
         });
         if (!response.ok) {
           console.warn('AI_PROVIDER_HEALTH_CHECK_FAILED', JSON.stringify({ provider: current.id, model: modelId, status: response.status }));
