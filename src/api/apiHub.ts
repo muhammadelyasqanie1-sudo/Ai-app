@@ -53,12 +53,12 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
       }
       sendAuthJson(res,200,{saved:true,sourceKey}); return true;
     }
-    const favoriteMatch = pathname.match(/^\\/api\\/api-hub\\/favorites\\/([a-f0-9]{64})$/i);
+    const favoriteMatch = pathname.match(/^\/api\/api-hub\/favorites\/([a-f0-9]{64})$/i);
     if (req.method === 'DELETE' && favoriteMatch) {
       const result = await pool.query('DELETE FROM user_public_api_favorites WHERE user_id=$1 AND source_key=$2 RETURNING source_key',[user.id,favoriteMatch[1]]);
       sendAuthJson(res,200,{deleted:Boolean(result.rows[0])}); return true;
     }
-    const detailMatch = pathname.match(/^\\/api\\/api-hub\\/catalog\\/([a-f0-9]{64})$/i);
+    const detailMatch = pathname.match(/^\/api\/api-hub\/catalog\/([a-f0-9]{64})$/i);
     if (req.method === 'GET' && detailMatch) {
       const result = await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,icon_url,image_url,site_name,site_description,
         health_status,response_time_ms,last_health_check,source_payload
