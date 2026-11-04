@@ -49,6 +49,9 @@ async function readRequestBody(req:IncomingMessage,maxBytes:number):Promise<Buff
 }
 const MODEL_KINDS=new Set(['llm','image','tts','embedding','web','stt','image-to-text']);
 const POST_ENDPOINTS=new Map<string,string>([
+ ['/api/9router/chat/completions','/chat/completions'],
+ ['/api/9router/messages','/messages'],
+ ['/api/9router/responses','/responses'],
  ['/api/9router/images/generations','/images/generations'],
  ['/api/9router/audio/speech','/audio/speech'],
  ['/api/9router/audio/transcriptions','/audio/transcriptions'],
@@ -56,6 +59,8 @@ const POST_ENDPOINTS=new Map<string,string>([
  ['/api/9router/search','/search'],
  ['/api/9router/web/fetch','/web/fetch'],
  ['/api/9router/videos/generations','/videos/generations'],
+ ['/api/9router/videos/edits','/videos/edits'],
+ ['/api/9router/videos/extensions','/videos/extensions'],
 ]);
 const MAX_BODY_BYTES=22*1024*1024;
 const MAX_RESPONSE_BYTES=30*1024*1024;
@@ -140,15 +145,15 @@ export async function handleNineRouterApi(req:IncomingMessage,res:ServerResponse
    await proxy(req,res,url,key,requestId);return true;
   }
   if(req.method==='POST'&&POST_ENDPOINTS.has(pathname)){
-   if(pathname==='/api/9router/videos/generations'){
+   if(pathname.startsWith('/api/9router/videos/')){
     const requestBytes=await readRequestBody(req,MAX_BODY_BYTES);
     let body:Json;
     try{body=JSON.parse(requestBytes.toString('utf8')) as Json;}catch{reply(res,400,{error:'Video generation requires a JSON body.'},requestId);return true;}
-    if(!body||typeof body!=='object'||typeof body.model!=='string'||typeof body.prompt!=='string'){
+    if(!body||typeof body!=='object'||(pathname==='/api/9router/videos/generations'&&typeof body.prompt!=='string')){
      reply(res,400,{error:'Provide a video model and prompt.'},requestId);return true;
     }
     const headers=new Headers({'Content-Type':'application/json','Accept':'application/json','Authorization':'Bearer '+key,'X-Request-Id':requestId});
-    const target=new URL(base.toString());target.pathname=base.pathname+'/videos/generations';
+    const target=new URL(base.toString());target.pathname=base.pathname+POST_ENDPOINTS.get(pathname)!;
     const response=await fetch(target.toString(),{method:'POST',headers,body:JSON.stringify(body),redirect:'error',signal:AbortSignal.timeout(180_000)});
     const bytes=Buffer.from(await response.arrayBuffer());
     if(bytes.length>2_000_000)throw new Error('9Router video job response exceeded the safety limit.');
@@ -186,7 +191,7 @@ export async function handleNineRouterApi(req:IncomingMessage,res:ServerResponse
   reply(res,405,{error:'Method or 9Router capability is not supported by this proxy route.'},requestId);return true;
  }catch(error){
   const message=error instanceof Error?error.message:'9Router request failed.';
-  const tooLarge=message.includes('too large');
+  const tooLarge=message.includes('too large')||message.includes('too_large');
   reply(res,tooLarge?413:502,{available:false,error:message.slice(0,240)},requestId);return true;
  }
 }
