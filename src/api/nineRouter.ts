@@ -23,7 +23,7 @@ function isPublicAddress(address:string):boolean{
 }
 async function routerBase():Promise<URL>{
  const configured=(process.env.NINEROUTER_BASE_URL||'').trim().replace(/\/+$/,'');
- if(!configured)throw new Error('9Router is not configured. Set NINEROUTER_BASE_URL and NINEROUTER_API_KEY.');
+ if(!configured)throw new Error('9Router is not configured. Set NINEROUTER_BASE_URL.');
  let url:URL;try{url=new URL(configured);}catch{throw new Error('9Router base URL is invalid.');}
  if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash)throw new Error('9Router must use a public HTTPS base URL.');
  if(!url.pathname.endsWith('/v1'))url.pathname=url.pathname.replace(/\/+$/,'')+'/v1';
@@ -83,7 +83,7 @@ async function proxy(req:IncomingMessage,res:ServerResponse,target:URL,key:strin
  const contentType=typeof req.headers['content-type']==='string'?req.headers['content-type']:'';
  if(contentType)headers.set('Content-Type',contentType);
  headers.set('Accept',typeof req.headers.accept==='string'?req.headers.accept:'application/json');
- headers.set('Authorization','Bearer '+key);
+ if(key)headers.set('Authorization','Bearer '+key);
  headers.set('X-Request-Id',requestId);
  const method=(req.method||'GET').toUpperCase();
  let body:Buffer|undefined;
@@ -146,15 +146,15 @@ export async function handleNineRouterApi(req:IncomingMessage,res:ServerResponse
  if(req.method!=='GET'&&!verifyCsrf(req)){reply(res,403,{error:'CSRF validation failed.'},requestId);return true;}
  if(!rateLimit(user.id)){reply(res,429,{error:'9Router proxy limit is 20 requests per minute per user.'},requestId);return true;}
  const key=(process.env.NINEROUTER_API_KEY||'').trim().replace(/^Bearer\s+/i,'').trim();
- if(!key||!process.env.NINEROUTER_BASE_URL?.trim()){
-  reply(res,503,{available:false,error:'9Router is not configured on the server.'},requestId);return true;
+ if(!process.env.NINEROUTER_BASE_URL?.trim()){
+  reply(res,503,{available:false,error:'9Router is not configured on the server. Set NINEROUTER_BASE_URL; set NINEROUTER_API_KEY only when 9Router API authentication is enabled.'},requestId);return true;
  }
  try{
   if(req.method==='GET'&&pathname==='/api/9router/status'){
    const base=await routerBase();
    const healthUrl=new URL('/api/health',base.origin);
    try{
-    const response=await fetch(healthUrl.toString(),{headers:{Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(8000)});
+    const healthHeaders=new Headers({Accept:'application/json'});if(key)healthHeaders.set('Authorization','Bearer '+key);\n    const response=await fetch(healthUrl.toString(),{headers:healthHeaders,redirect:'error',signal:AbortSignal.timeout(8000)});
     const health=await response.json().catch(()=>null);
     reply(res,response.ok?200:503,{configured:true,reachable:response.ok,health,dashboardUrl:new URL('/dashboard',base.origin).toString()},requestId);
    }catch{
@@ -192,8 +192,19 @@ export async function handleNineRouterApi(req:IncomingMessage,res:ServerResponse
     const requestBytes=await readRequestBody(req,MAX_BODY_BYTES);
     let body:Json;
     try{body=JSON.parse(requestBytes.toString('utf8')) as Json;}catch{reply(res,400,{error:'Video generation requires a JSON body.'},requestId);return true;}
-    if(!body||typeof body!=='object'||(pathname==='/api/9router/videos/generations'&&typeof body.prompt!=='string')){
-     reply(res,400,{error:'Provide a video model and prompt.'},requestId);return true;
+    if(!body||typeof body!=='object'||Array.isArray(body)){
+     reply(res,400,{error:'Provide a valid video request body.'},requestId);return true;
+    }
+    if(pathname==='/api/9router/videos/generations'){
+     const hasPrompt=typeof body.prompt==='string'&&body.prompt.trim().length>0;
+     const hasImage=body.image&&typeof body.image==='object'&&typeof body.image.url==='string'&&
+       (/^https:\/\//i.test(body.image.url)||/^data:image\/(png|jpeg|webp);base64,/i.test(body.image.url));
+     if(!hasPrompt&&!hasImage){reply(res,400,{error:'Text-to-video requires a prompt; image-to-video requires a valid HTTPS or image data URL.'},requestId);return true;}
+    }else{
+     const source=body.video;
+     if(!source||typeof source!=='object'||(!/^https:\/\//i.test(String(source.url||''))&&!/^[A-Za-z0-9_-]{1,180}$/.test(String(source.file_id||'')))){
+      reply(res,400,{error:'Video edits and extensions require an HTTPS video URL or a valid video file_id.'},requestId);return true;
+     }
     }
     const headers=new Headers({'Content-Type':'application/json','Accept':'application/json','Authorization':'Bearer '+key,'X-Request-Id':requestId});
     const target=new URL(base.toString());target.pathname=base.pathname+POST_ENDPOINTS.get(pathname)!;
@@ -203,8 +214,9 @@ export async function handleNineRouterApi(req:IncomingMessage,res:ServerResponse
     if(!response.ok){reply(res,response.status>=400&&response.status<500?response.status:502,{error:'9Router video generation could not be started.'},requestId);return true;}
     const data=JSON.parse(bytes.toString('utf8'));
     const connectionId=response.headers.get('x-9router-connection-id');
-    if(connectionId)res.setHeader('X-9Router-Connection-Id',connectionId.slice(0,200));
-    res.writeHead(response.status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Request-Id':requestId});
+    const responseHeaders:Record<string,string>={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Request-Id':requestId};
+    if(connectionId)responseHeaders['X-9Router-Connection-Id']=connectionId.slice(0,200);
+    res.writeHead(response.status,responseHeaders);
     res.end(JSON.stringify({...data,requestId}));return true;
    }
    const suffix=POST_ENDPOINTS.get(pathname)!;
