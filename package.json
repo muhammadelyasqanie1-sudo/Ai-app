@@ -17,7 +17,8 @@
     "prebuild": "npm run i18n:check",
     "test:offline-sha": "tsx scripts/test-offline-sha.ts",
     "test:database-config": "tsx scripts/test-database-config.ts",
-    "test:admin-rbac": "tsx scripts/test-admin-rbac.ts"
+    "test:admin-rbac": "tsx scripts/test-admin-rbac.ts",
+    "terminal:worker": "tsx apps/admin-terminal/worker.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
