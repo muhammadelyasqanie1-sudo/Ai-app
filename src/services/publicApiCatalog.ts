@@ -119,17 +119,28 @@ function parseRepositoryReadme(markdown: string): PublicApiRecord[] {
   const rows: PublicApiRecord[]=[];
   let category='Uncategorized';
   let inApiTable=false;
+  let inApilayerTable=false;
   for(const line of markdown.split(/\r?\n/)){
     const heading=line.match(/^###\s+(.+?)\s*$/);
     if(heading){category=heading[1].replace(/\s+/g,' ').trim().slice(0,100);inApiTable=false;continue;}
-    if(/^##\s+/.test(line.trim())){inApiTable=false;continue;}
+    if(/^##\s+/.test(line.trim())){inApiTable=false;inApilayerTable=/^##\s+APILayer APIs\s*$/i.test(line.trim());continue;}
     if(line.trim().startsWith('|')||/^API\s*\|/i.test(line.trim())){
       const cells=line.trim().replace(/^\|/,'').replace(/\|$/,'').split('|').map(value=>value.trim());
       const normalized=cells.map(value=>stripMarkdown(value).toLowerCase());
+      if(inApilayerTable&&normalized.length>=3&&normalized[0]==='api'&&normalized[1]==='description'&&normalized[2]==='call this api')continue;
       if(normalized.length>=5&&normalized[0]==='api'&&normalized[1]==='description'&&normalized[2]==='auth'&&normalized[3]==='https'&&normalized[4]==='cors'){
         inApiTable=true;continue;
       }
       if(/^:?-{3,}:?$/.test(cells[0]||''))continue;
+      if(inApilayerTable&&cells.length>=3){
+        const layer=cells[0].match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)/i);
+        if(layer){
+          const callLink=cells[2].match(/\]\((https?:\/\/[^)]+)\)/i);
+          const record=normalize({API:layer[1],Description:cells[1].replace(/<[^>]*>/g,'').trim(),Auth:'Unknown',HTTPS:'Unknown',CORS:'Unknown',Category:'APILayer Suite',Homepage:layer[2],Link:callLink?.[1]||layer[2],source:REPOSITORY_SOURCE});
+          if(record)rows.push(record);
+        }
+        continue;
+      }
       if(!inApiTable||cells.length<5)continue;
       const match=cells[0].match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)/i);
       if(!match)continue;
