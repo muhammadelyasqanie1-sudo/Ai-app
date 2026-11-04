@@ -50,6 +50,6 @@ ON CONFLICT (source) DO NOTHING;
 -- server environment variables. No API key or endpoint is seeded into the DB.
 INSERT INTO providers(kind,display_name,enabled,slug,base_url,config_json,source)
 VALUES ('openai_compat','9Router Gateway',true,'9router',NULL,
-        '{"protocol":"openai-compatible","managedBy":"environment","requires_key":true}'::jsonb,
+        '{"protocol":"openai-compatible","managedBy":"environment","requires_key":false,"api_key_optional":true}'::jsonb,
         'system')
 ON CONFLICT (slug) DO NOTHING;
