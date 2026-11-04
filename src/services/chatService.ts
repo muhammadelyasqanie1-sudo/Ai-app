@@ -1,6 +1,7 @@
 import { getConfiguredFallbackModelIds, getProviderAdapter, getVerifiedModelDescriptors, selectCheapestModel } from './providerGateway.ts';
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
 import type { ChatInput, ModelDescriptor } from '../providers/providerTypes.ts';
+import { matchComboModels, resolveRoutingCombo } from './routingCombos.ts';
 
 const HEALTH_MAX_AGE_MS = 5 * 60 * 1000;
 
@@ -117,11 +118,22 @@ async function* reliableStream(candidates: ModelDescriptor[], input: ChatInput):
 
 export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerId: string; modelId: string; stream: AsyncIterable<{ content: string }> }> {
   const descriptors = await getVerifiedModelDescriptors();
-  const separator = input.model.indexOf('::');
-  const requestedProviderId = separator >= 0 ? input.model.slice(0, separator) : '';
-  const requestedModelId = separator >= 0 ? input.model.slice(separator + 2) : input.model;
+  const comboPrefix = 'combo::';
+  const comboSlug = input.model.startsWith(comboPrefix) ? input.model.slice(comboPrefix.length) : '';
+  let comboCandidates: ModelDescriptor[] = [];
   let selected: ModelDescriptor | undefined;
-  if (input.model === 'auto') {
+
+  if (comboSlug) {
+    const combo = await resolveRoutingCombo(comboSlug);
+    if (!combo) {
+      throw new ProviderAdapterError('The selected routing combo does not exist or is disabled.', 404, 'routing_combo_unavailable');
+    }
+    comboCandidates = matchComboModels(combo, descriptors);
+    if (!comboCandidates.length) {
+      throw new ProviderAdapterError('No model in this routing combo is currently healthy and available.', 503, 'routing_combo_no_healthy_models');
+    }
+    selected = comboCandidates[0];
+  } else if (input.model === 'auto') {
     const automaticId = await selectCheapestModel('text', false);
     if (automaticId) {
       const split = automaticId.indexOf('::');
@@ -132,6 +144,9 @@ export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerI
       );
     }
   } else {
+    const separator = input.model.indexOf('::');
+    const requestedProviderId = separator >= 0 ? input.model.slice(0, separator) : '';
+    const requestedModelId = separator >= 0 ? input.model.slice(separator + 2) : input.model;
     selected = descriptors.find((model) =>
       model.id === requestedModelId && (!requestedProviderId || model.providerId === requestedProviderId) && verified(model),
     );
@@ -168,9 +183,12 @@ export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerI
       );
     })
     .filter((model): model is ModelDescriptor => Boolean(model));
+  const additionalCandidates = comboSlug
+    ? comboCandidates.slice(1)
+    : configuredFallbacks;
   const candidates = [
     selected,
-    ...configuredFallbacks.filter((model) =>
+    ...additionalCandidates.filter((model) =>
       model.providerId !== selected!.providerId || model.id !== selected!.id,
     ),
   ];
