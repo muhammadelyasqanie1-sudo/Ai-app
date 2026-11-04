@@ -1,0 +1,53 @@
+name: Feature request
+description: Propose a concrete AFG AI capability or product improvement.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem or unmet need should be solved?
+      placeholder: Describe the current behavior and who it affects.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the real end-to-end behavior, not just the UI.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable conditions that must be true before this is complete.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and file ownership
+      description: Suggested paths/modules, integrations, and the person or agent responsible. Identify shared files before parallel work.
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: What should explicitly not change in this task?
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and configuration
+      description: Provider/API credentials (names only, never values), permissions, migrations, external services, and dependent issues/PRs.
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification plan
+      description: What should be inspected or tested after explicit authorization? Include deployment and database checks only when relevant.
