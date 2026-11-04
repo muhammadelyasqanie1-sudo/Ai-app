@@ -113,7 +113,8 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean}>=({l
    </div>
    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
     <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('Catalog entries','تعداد APIها')}</p><b className="text-xl text-white">{(data?.total||0).toLocaleString()}</b></div>
-    <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('Categories','دسته‌ها')}</p><b className="text-xl text-white">{(data?.categories?.length||0).toLocaleString()}</b></div>\n    <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('MCP servers','سرورهای MCP')}</p><b className="text-xl text-white">{(sync?.mcpDirectory?.total||0).toLocaleString()}</b></div>
+    <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('Categories','دسته‌ها')}</p><b className="text-xl text-white">{(data?.categories?.length||0).toLocaleString()}</b></div>
+    <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('MCP servers','سرورهای MCP')}</p><b className="text-xl text-white">{(sync?.mcpDirectory?.total||0).toLocaleString()}</b></div>
     <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('Catalog sync','وضعیت همگام‌سازی')}</p><b className="text-sm text-white">{sync?.sync?.status||'—'}</b></div>
     <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">9Router Gateway</p><b className={'text-sm '+(gateway?.configured?'text-emerald-300':'text-amber-300')}>{gateway?.configured?label('Configured','تنظیم شده'):label('Not configured','تنظیم نشده')}</b></div>
    </div>
