@@ -1,0 +1,193 @@
+import type {IncomingMessage,ServerResponse} from 'http';
+import {randomUUID} from 'node:crypto';
+import {lookup} from 'node:dns/promises';
+import {BlockList,isIP} from 'node:net';
+import {authenticateRequest,sendAuthJson,verifyCsrf} from './auth.ts';
+
+const blocked=new BlockList();
+for(const [address,prefix] of [
+ ['0.0.0.0',8],['10.0.0.0',8],['100.64.0.0',10],['127.0.0.0',8],['169.254.0.0',16],
+ ['172.16.0.0',12],['192.0.0.0',24],['192.0.2.0',24],['192.168.0.0',16],
+ ['198.18.0.0',15],['198.51.100.0',24],['203.0.113.0',24],['224.0.0.0',4],['240.0.0.0',4]
+] as const)blocked.addSubnet(address,prefix,'ipv4');
+for(const [address,prefix] of [
+ ['::',128],['::1',128],['::ffff:0:0',96],['64:ff9b::',96],['100::',64],
+ ['2001:db8::',32],['fc00::',7],['fe80::',10],['ff00::',8]
+] as const)blocked.addSubnet(address,prefix,'ipv6');
+function isPublicAddress(address:string):boolean{
+ const family=isIP(address);if(!family)return false;
+ if(family===4)return !blocked.check(address,'ipv4');
+ const lower=address.toLowerCase();
+ if(lower.startsWith('::ffff:')){const mapped=lower.slice(7);if(isIP(mapped)===4)return !blocked.check(mapped,'ipv4');}
+ return !blocked.check(address,'ipv6');
+}
+async function routerBase():Promise<URL>{
+ const configured=(process.env.NINEROUTER_BASE_URL||'').trim().replace(/\/+$/,'');
+ if(!configured)throw new Error('9Router is not configured. Set NINEROUTER_BASE_URL and NINEROUTER_API_KEY.');
+ let url:URL;try{url=new URL(configured);}catch{throw new Error('9Router base URL is invalid.');}
+ if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash)throw new Error('9Router must use a public HTTPS base URL.');
+ if(!url.pathname.endsWith('/v1'))url.pathname=url.pathname.replace(/\/+$/,'')+'/v1';
+ if(isIP(url.hostname)){if(!isPublicAddress(url.hostname))throw new Error('9Router resolves to a blocked network address.');}
+ else{
+  const records=await lookup(url.hostname,{all:true,verbatim:true});
+  if(!records.length||records.some(record=>!isPublicAddress(record.address)))throw new Error('9Router host resolves to a private or reserved network address.');
+ }
+ return url;
+}
+function reply(res:ServerResponse,status:number,payload:unknown,requestId:string){
+ res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Request-Id':requestId});
+ res.end(JSON.stringify({...payload as object,requestId}));
+}
+async function readRequestBody(req:IncomingMessage,maxBytes:number):Promise<Buffer>{
+ const chunks:Buffer[]=[];let size=0;
+ for await(const part of req){
+  const chunk=Buffer.isBuffer(part)?part:Buffer.from(part);size+=chunk.length;
+  if(size>maxBytes)throw new Error('request_too_large');
+  chunks.push(chunk);
+ }
+ return Buffer.concat(chunks);
+}
+const MODEL_KINDS=new Set(['llm','image','tts','embedding','web','stt','image-to-text']);
+const POST_ENDPOINTS=new Map<string,string>([
+ ['/api/9router/images/generations','/images/generations'],
+ ['/api/9router/audio/speech','/audio/speech'],
+ ['/api/9router/audio/transcriptions','/audio/transcriptions'],
+ ['/api/9router/embeddings','/embeddings'],
+ ['/api/9router/search','/search'],
+ ['/api/9router/web/fetch','/web/fetch'],
+ ['/api/9router/videos/generations','/videos/generations'],
+]);
+const MAX_BODY_BYTES=22*1024*1024;
+const MAX_RESPONSE_BYTES=30*1024*1024;
+const active=new Map<string,{count:number;started:number}>();
+function rateLimit(userId:string):boolean{
+ const now=Date.now(),row=active.get(userId);
+ if(!row||now-row.started>=60_000){active.set(userId,{count:1,started:now});return true;}
+ if(row.count>=20)return false;
+ row.count++;return true;
+}
+function cleanContentType(value:string|null):string{
+ if(!value)return 'application/octet-stream';
+ return value.slice(0,150).replace(/[\r\n]/g,'');
+}
+async function proxy(req:IncomingMessage,res:ServerResponse,target:URL,key:string,requestId:string){
+ const headers=new Headers();
+ const contentType=typeof req.headers['content-type']==='string'?req.headers['content-type']:'';
+ if(contentType)headers.set('Content-Type',contentType);
+ headers.set('Accept',typeof req.headers.accept==='string'?req.headers.accept:'application/json');
+ headers.set('Authorization','Bearer '+key);
+ headers.set('X-Request-Id',requestId);
+ const method=(req.method||'GET').toUpperCase();
+ let body:Buffer|undefined;
+ if(method==='POST'){
+  body=await readRequestBody(req,MAX_BODY_BYTES);
+  if(!headers.has('Content-Type'))headers.set('Content-Type','application/json');
+ }
+ const response=await fetch(target.toString(),{
+  method,headers,body,redirect:'error',signal:AbortSignal.timeout(180_000),
+ });
+ const type=cleanContentType(response.headers.get('content-type'));
+ const length=response.headers.get('content-length');
+ if(length&&Number(length)>MAX_RESPONSE_BYTES)throw new Error('9Router response exceeded the 30 MB size limit.');
+ const bytes=Buffer.from(await response.arrayBuffer());
+ if(bytes.length>MAX_RESPONSE_BYTES)throw new Error('9Router response exceeded the 30 MB size limit.');
+ if(!response.ok){
+  let code='upstream_rejected';
+  if(type.includes('json')){try{const parsed=JSON.parse(bytes.toString('utf8'));const candidate=parsed?.error?.code||parsed?.error?.type;if(typeof candidate==='string'&&/^[a-z0-9_.-]{1,80}$/i.test(candidate))code=candidate;}catch{}}
+  reply(res,response.status>=400&&response.status<500?response.status:502,{error:'9Router could not complete this request.',code},requestId);return;
+ }
+ const allowedHeaders=['content-type','content-disposition','cache-control','retry-after','x-9router-connection-id','x-request-id'];
+ const out:Record<string,string>={'Cache-Control':'no-store','X-Request-Id':requestId};
+ for(const name of allowedHeaders){const value=response.headers.get(name);if(value)out[name]=value.slice(0,500);}
+ res.writeHead(response.status,out);
+ res.end(bytes);
+}
+export async function handleNineRouterApi(req:IncomingMessage,res:ServerResponse,pathname:string):Promise<boolean>{
+ if(!pathname.startsWith('/api/9router/'))return false;
+ const requestId=randomUUID();
+ const user=await authenticateRequest(req).catch(()=>null);
+ if(!user){reply(res,401,{available:false,error:'Sign in is required.'},requestId);return true;}
+ if(req.method!=='GET'&&!verifyCsrf(req)){reply(res,403,{error:'CSRF validation failed.'},requestId);return true;}
+ if(!rateLimit(user.id)){reply(res,429,{error:'9Router proxy limit is 20 requests per minute per user.'},requestId);return true;}
+ const key=(process.env.NINEROUTER_API_KEY||'').trim().replace(/^Bearer\s+/i,'').trim();
+ if(!key||!process.env.NINEROUTER_BASE_URL?.trim()){
+  reply(res,503,{available:false,error:'9Router is not configured on the server.'},requestId);return true;
+ }
+ try{
+  const base=await routerBase();
+  if(req.method==='GET'&&(pathname==='/api/9router/models'||pathname==='/api/9router/models/info')){
+   const incoming=new URL(req.url||'/', 'http://localhost');
+   const suffix=pathname.endsWith('/info')?'/models/info':'/models';
+   if(suffix==='/models/info'){
+    const id=incoming.searchParams.get('id')||'';
+    if(!id||id.length>400||/[\r\n]/.test(id)){reply(res,400,{error:'A valid model id is required.'},requestId);return true;}
+    const url=new URL(base.toString());url.pathname=base.pathname+suffix;url.searchParams.set('id',id);
+    const kind=incoming.searchParams.get('kind');if(kind)url.searchParams.set('kind',kind.slice(0,40));
+    await proxy(req,res,url,key,requestId);return true;
+   }
+   const kind=incoming.searchParams.get('kind')||'llm';
+   if(!MODEL_KINDS.has(kind)){reply(res,400,{error:'Unsupported 9Router model kind.'},requestId);return true;}
+   const segments=kind==='llm'?[]:[kind];
+   const url=new URL(base.toString());url.pathname=base.pathname+'/models'+(segments.length?'/'+segments[0]:'');
+   await proxy(req,res,url,key,requestId);return true;
+  }
+  if(req.method==='GET'&&pathname==='/api/9router/audio/voices'){
+   const incoming=new URL(req.url||'/', 'http://localhost');
+   const url=new URL(base.toString());url.pathname=base.pathname+'/audio/voices';
+   const provider=incoming.searchParams.get('provider'),language=incoming.searchParams.get('lang');
+   if(provider)url.searchParams.set('provider',provider.slice(0,80));
+   if(language)url.searchParams.set('lang',language.slice(0,20));
+   await proxy(req,res,url,key,requestId);return true;
+  }
+  if(req.method==='POST'&&POST_ENDPOINTS.has(pathname)){
+   if(pathname==='/api/9router/videos/generations'){
+    const requestBytes=await readRequestBody(req,MAX_BODY_BYTES);
+    let body:Json;
+    try{body=JSON.parse(requestBytes.toString('utf8')) as Json;}catch{reply(res,400,{error:'Video generation requires a JSON body.'},requestId);return true;}
+    if(!body||typeof body!=='object'||typeof body.model!=='string'||typeof body.prompt!=='string'){
+     reply(res,400,{error:'Provide a video model and prompt.'},requestId);return true;
+    }
+    const headers=new Headers({'Content-Type':'application/json','Accept':'application/json','Authorization':'Bearer '+key,'X-Request-Id':requestId});
+    const target=new URL(base.toString());target.pathname=base.pathname+'/videos/generations';
+    const response=await fetch(target.toString(),{method:'POST',headers,body:JSON.stringify(body),redirect:'error',signal:AbortSignal.timeout(180_000)});
+    const bytes=Buffer.from(await response.arrayBuffer());
+    if(bytes.length>2_000_000)throw new Error('9Router video job response exceeded the safety limit.');
+    if(!response.ok){reply(res,response.status>=400&&response.status<500?response.status:502,{error:'9Router video generation could not be started.'},requestId);return true;}
+    const data=JSON.parse(bytes.toString('utf8'));
+    const connectionId=response.headers.get('x-9router-connection-id');
+    if(connectionId)res.setHeader('X-9Router-Connection-Id',connectionId.slice(0,200));
+    res.writeHead(response.status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Request-Id':requestId});
+    res.end(JSON.stringify({...data,requestId}));return true;
+   }
+   const suffix=POST_ENDPOINTS.get(pathname)!;
+   const target=new URL(base.toString());target.pathname=base.pathname+suffix;
+   if(pathname==='/api/9router/images/generations'||pathname==='/api/9router/audio/speech'){
+    const incoming=new URL(req.url||'/', 'http://localhost');
+    if(incoming.searchParams.get('response_format')==='binary')target.searchParams.set('response_format','binary');
+    else if(incoming.searchParams.get('response_format')==='json')target.searchParams.set('response_format','json');
+   }
+   await proxy(req,res,target,key,requestId);return true;
+  }
+  const video=pathname.match(/^\/api\/9router\/videos\/([A-Za-z0-9_-]{1,180})$/);
+  if(req.method==='GET'&&video){
+   const incoming=new URL(req.url||'/', 'http://localhost');
+   const target=new URL(base.toString());target.pathname=base.pathname+'/videos/'+encodeURIComponent(video[1]);
+   const connection=incoming.searchParams.get('connectionId');
+   if(connection){reply(res,400,{error:'Video connection id must be supplied in X-9Router-Connection-Id header.'},requestId);return true;}
+   const connectionHeader=req.headers['x-9router-connection-id'];
+   const headers=new Headers({Authorization:'Bearer '+key,Accept:'application/json'});
+   if(typeof connectionHeader==='string'&&connectionHeader.length<=200)headers.set('x-connection-id',connectionHeader);
+   const response=await fetch(target.toString(),{headers,redirect:'error',signal:AbortSignal.timeout(45_000)});
+   const bytes=Buffer.from(await response.arrayBuffer());if(bytes.length>2_000_000)throw new Error('Video status response exceeded the safety limit.');
+   if(!response.ok){reply(res,response.status>=400&&response.status<500?response.status:502,{error:'9Router could not retrieve this video job.'},requestId);return true;}
+   res.writeHead(response.status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Request-Id':requestId});
+   res.end(JSON.stringify({...JSON.parse(bytes.toString('utf8')),requestId}));return true;
+  }
+  reply(res,405,{error:'Method or 9Router capability is not supported by this proxy route.'},requestId);return true;
+ }catch(error){
+  const message=error instanceof Error?error.message:'9Router request failed.';
+  const tooLarge=message.includes('too large');
+  reply(res,tooLarge?413:502,{available:false,error:message.slice(0,240)},requestId);return true;
+ }
+}
+type Json=Record<string,any>;
