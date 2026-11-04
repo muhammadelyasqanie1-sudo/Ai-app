@@ -45,6 +45,7 @@ const nineRouterAdapter = nineRouterBase
       baseUrl: nineRouterBase,
       apiKey: nineRouterKey,
       allowEmptyApiKey: true,
+      catalogOnlyHealthCheck: true,
     })
   : null;
 // Accept either a raw API key or the common "Bearer <key>" form pasted from API docs.
