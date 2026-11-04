@@ -151,6 +151,9 @@ export async function handleConnectionsApi(req: IncomingMessage,res: ServerRespo
       const body = await readJsonBody(req,12000);
       const slug = String(body.slug||'');
       const credentials = body.credentials;
+      const integrationConfig = body.config && typeof body.config === 'object' && !Array.isArray(body.config)
+        ? body.config as Record<string, unknown>
+        : null;
       if (!/^[a-z0-9-]{2,64}$/.test(slug)||!credentials||typeof credentials!=='object'||Array.isArray(credentials)) { sendAuthJson(res,400,{error:'Invalid integration credentials payload.'}); return true; }
       const integration = await pool.query('SELECT id FROM integrations WHERE slug=$1',[slug]);
       if (!integration.rows[0]) { sendAuthJson(res,404,{error:'Integration not found.'}); return true; }
@@ -161,11 +164,11 @@ export async function handleConnectionsApi(req: IncomingMessage,res: ServerRespo
         for(const [key,value] of entries) await client.query(`INSERT INTO integration_credentials(integration_id,credential_key,credential_value_encrypted)
           VALUES($1,$2,$3) ON CONFLICT(integration_id,credential_key) DO UPDATE SET credential_value_encrypted=EXCLUDED.credential_value_encrypted,updated_at=now()`,
           [integration.rows[0].id,key,encryptSecret(value)]);
-        if (body.config && typeof body.config==='object'&&!Array.isArray(body.config)) await client.query(`UPDATE integrations SET config_json=config_json||$2::jsonb,enabled=false,status=CASE WHEN status='active' THEN 'error' ELSE 'unconfigured' END,last_check_ok=NULL,last_error=NULL,updated_at=now() WHERE id=$1`,[integration.rows[0].id,JSON.stringify(body.config)]);
+        if (integrationConfig) await client.query(`UPDATE integrations SET config_json=config_json||$2::jsonb,enabled=false,status=CASE WHEN status='active' THEN 'error' ELSE 'unconfigured' END,last_check_ok=NULL,last_error=NULL,updated_at=now() WHERE id=$1`,[integration.rows[0].id,JSON.stringify(integrationConfig)]);
         else await client.query(`UPDATE integrations SET enabled=false,status=CASE WHEN status='active' THEN 'error' ELSE 'unconfigured' END,last_check_ok=NULL,last_error=NULL,updated_at=now() WHERE id=$1`,[integration.rows[0].id]);
-        if(slug==='ftp-sftp'&&body.config&&typeof body.config.host==='string'&&typeof body.config.username==='string') {
+        if(slug==='ftp-sftp'&&integrationConfig&&typeof integrationConfig.host==='string'&&typeof integrationConfig.username==='string') {
           await client.query(`INSERT INTO ftp_workspaces(user_id,integration_id,host,port,protocol,remote_path,local_path_alias)
-            VALUES($1,$2,$3,$4,$5,$6,$7)`,[admin.id,integration.rows[0].id,body.config.host,Number(body.config.port||22),body.config.protocol==='ftp'?'ftp':'sftp',String(body.config.remote_path||'/').slice(0,500),String(body.config.local_path_alias||'workspace').slice(0,100)]);
+            VALUES($1,$2,$3,$4,$5,$6,$7)`,[admin.id,integration.rows[0].id,integrationConfig.host,Number(integrationConfig.port||22),integrationConfig.protocol==='ftp'?'ftp':'sftp',String(integrationConfig.remote_path||'/').slice(0,500),String(integrationConfig.local_path_alias||'workspace').slice(0,100)]);
         }
         await client.query('COMMIT');
       } catch(error){await client.query('ROLLBACK');throw error;} finally{client.release();}
