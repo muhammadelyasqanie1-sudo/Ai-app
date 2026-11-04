@@ -67,7 +67,13 @@ function unwrapRows(payload: unknown): { rows: RawApi[]; hasMore: boolean | null
   if (Array.isArray(nested)) {
     return {
       rows: nested.filter((v): v is RawApi => Boolean(v) && typeof v === 'object' && !Array.isArray(v)),
-      hasMore: object.has_more === true || object.hasMore === true || object.next_page !== null && object.next_page !== undefined,
+      hasMore: typeof object.pages === 'number' && typeof object.page === 'number'
+        ? object.page < object.pages
+        : object.has_more === true || object.hasMore === true || object.next_page !== null && object.next_page !== undefined
+          ? true
+          : object.has_more === false || object.hasMore === false || object.next_page === null
+            ? false
+            : null,
     };
   }
   const data = object.data;
@@ -77,7 +83,13 @@ function unwrapRows(payload: unknown): { rows: RawApi[]; hasMore: boolean | null
     if (Array.isArray(rows)) {
       return {
         rows: rows.filter((v): v is RawApi => Boolean(v) && typeof v === 'object' && !Array.isArray(v)),
-        hasMore: child.has_more === true || child.hasMore === true || child.next_page !== null && child.next_page !== undefined,
+        hasMore: typeof child.pages === 'number' && typeof child.page === 'number'
+          ? child.page < child.pages
+          : child.has_more === true || child.hasMore === true || child.next_page !== null && child.next_page !== undefined
+            ? true
+            : child.has_more === false || child.hasMore === false || child.next_page === null
+              ? false
+              : null,
       };
     }
   }
@@ -88,9 +100,9 @@ function normalize(row: RawApi): PublicApiRecord | null {
   const name = text(field(row, 'API','name','apiName','title'), 160);
   if (!name) return null;
   const description = text(field(row, 'Description','description','summary'), 1200);
-  const category = text(field(row, 'Category','category','group'), 100, 'Uncategorized');
-  const homepageUrl = safeHttpUrl(field(row, 'Homepage','homepage','website','url'));
-  const docsUrl = safeHttpUrl(field(row, 'Link','link','docs','documentation','documentationUrl','callThisApi')) || homepageUrl;
+  const category = text(field(row, 'Category','category','categoryName','categorySlug','group'), 100, 'Uncategorized');
+  const homepageUrl = safeHttpUrl(field(row, 'Homepage','homepage','website','siteUrl','websiteUrl'));
+  const docsUrl = safeHttpUrl(field(row, 'Link','link','docs','documentation','documentationUrl','callThisApi','url')) || homepageUrl;
   const stable = [name.toLowerCase(), category.toLowerCase(), docsUrl || homepageUrl || ''].join('|');
   const sourceKey = createHash('sha256').update(stable).digest('hex');
   const healthValue = text(field(row, 'status','healthStatus','health'), 24).toLowerCase();
@@ -98,7 +110,7 @@ function normalize(row: RawApi): PublicApiRecord | null {
   const time = Number(field(row,'responseTimeMs','response_time_ms','latencyMs'));
   return {
     sourceKey, name, description,
-    auth: text(field(row,'Auth','auth','authentication'),40,'Unknown'),
+    auth: field(row,'Auth','auth','authentication') == null ? 'No' : text(field(row,'Auth','auth','authentication'),40,'Unknown'),
     https: triState(field(row,'HTTPS','https','supportsHttps')),
     cors: triState(field(row,'CORS','cors','supportsCors')),
     category, homepageUrl, docsUrl, healthStatus,
