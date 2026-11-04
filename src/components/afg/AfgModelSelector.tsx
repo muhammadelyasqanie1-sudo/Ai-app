@@ -11,17 +11,6 @@ type Props = {
   language: Language;
   loading?: boolean;
 };
-const brandFor = (provider: string, model: string) => {
-  const value = (provider + ' ' + model).toLowerCase();
-  if (/anthropic|claude|opus|sonnet|haiku/.test(value)) return { label: 'A', className: 'bg-[#d97757] text-white' };
-  if (/openai|gpt|o[134]/.test(value)) return { label: '◎', className: 'bg-[#10a37f] text-white' };
-  if (/google|gemini/.test(value)) return { label: '✦', className: 'bg-[#4285f4] text-white' };
-  if (/minimax/.test(value)) return { label: 'M', className: 'bg-[#5b63e6] text-white' };
-  if (/moonshot|kimi/.test(value)) return { label: 'K', className: 'bg-slate-800 text-white' };
-  if (/z-ai|glm/.test(value)) return { label: 'Z', className: 'bg-[#64748b] text-white' };
-  if (/qwen|alibaba/.test(value)) return { label: 'Q', className: 'bg-orange-500 text-white' };
-  return { label: provider.slice(0, 1).toUpperCase() || 'AI', className: 'bg-slate-700 text-white' };
-};
 const priceLabel = (model: AfgModelOption) => {
   const p = model.pricing;
   if (p?.inputPerMillion === 0 && p?.outputPerMillion === 0) return '🆓 Free';
@@ -75,7 +64,7 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
       </section>
     </div>}
     {showUpgrade&&<div className="afg-model-sheet-root" onMouseDown={e=>{if(e.target===e.currentTarget)setShowUpgrade(null);}}><section className="afg-model-paywall" role="dialog" aria-modal="true">
-      <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-amber-100 text-amber-700"><Lock/></div><h3 className="text-lg font-semibold">{dari?'این مدل در دسترس نیست':'Model access restricted'}</h3><p className="mt-2 text-sm opacity-70">{showUpgrade.disabledReason || (dari?'مدیر دسترسی این مدل را غیرفعال کرده است.':'This model is disabled by the administrator or your account has no access.')}</p><button className="afg-model-close mt-5 w-full" onClick={()=>setShowUpgrade(null)}>{dari?'متوجه شدم':'Got it'}</button>
+      <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-amber-100 text-amber-700"><Lock/></div><h3 className="text-lg font-semibold">{showUpgrade.requiresSubscription ? (dari?'اشتراک ویژه لازم است':'Premium subscription required') : (dari?'این مدل در دسترس نیست':'Model access restricted')}</h3><p className="mt-2 text-sm opacity-70">{showUpgrade.requiresSubscription ? (dari ? 'برای استفاده از این مدل، طرح '+String(showUpgrade.accessTier||'Pro').toUpperCase()+' را فعال کنید.' : 'Upgrade to the '+String(showUpgrade.accessTier||'Pro').toUpperCase()+' plan to use this model.') : (showUpgrade.disabledReason || (dari?'مدیر دسترسی این مدل را غیرفعال کرده است.':'This model is disabled by the administrator.'))}</p><button className="afg-model-close mt-5 w-full" onClick={()=>setShowUpgrade(null)}>{dari?'متوجه شدم':'Got it'}</button>
     </section></div>}
   </>;
 };
