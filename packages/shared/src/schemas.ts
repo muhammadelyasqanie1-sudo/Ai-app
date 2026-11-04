@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { isModelId } from './modelIds';
 
-export const LocaleSchema = z.enum(['dari','english']);
+export const LocaleSchema = z.enum(['dari','english','pashto','persian','arabic','urdu','turkish','russian','french','spanish','german','chinese','hindi','bengali','indonesian','portuguese','japanese','korean']);
 export const ChatMessageSchema = z.object({
   role: z.enum(['user','assistant']),
   content: z.string().max(50_000),
