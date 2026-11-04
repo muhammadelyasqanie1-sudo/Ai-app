@@ -156,7 +156,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
       try {
         // Some gateways charge for even a one-token generation. For those providers,
         // verify only authenticated catalog access and model visibility.
-        if (options?.catalogOnlyHealthCheck) {
+        if (options?.catalogOnlyHealthCheck || current.id === 'iteracompute') {
           const response = await fetch(current.catalogBaseUrl + '/models', {
             headers: { Authorization: 'Bearer ' + current.apiKey, Accept: 'application/json' },
             signal: AbortSignal.timeout(15_000), redirect: 'error',
