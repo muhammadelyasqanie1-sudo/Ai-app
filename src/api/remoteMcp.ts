@@ -192,9 +192,10 @@ export async function executeRemoteMcpTool(userId:string,toolName:string,args:un
  const payload=response.payload?.result;
  if(!payload)throw new Error('MCP tool returned no result.');
  const serialized=JSON.stringify(payload);
- if(serialized.length>16_000)return {truncated:true,responsePreview:serialized.slice(0,16_000),isError:Boolean(payload.isError)};
+ const safeSerialized=token?serialized.split(token).join('[redacted]'):serialized;
+ if(safeSerialized.length>16_000)return {truncated:true,responsePreview:safeSerialized.slice(0,16_000),isError:Boolean(payload.isError)};
  await recordAudit(userId,payload.isError?'mcp.tool.call_failed':'mcp.tool.call',String(row.id),{tool:original.name,source:'ai_chat'});
- return payload;
+ try{return JSON.parse(safeSerialized);}catch{return {content:safeSerialized};}
 }
 
 export async function handleRemoteMcpApi(req:IncomingMessage,res:ServerResponse,pathname:string):Promise<boolean>{
