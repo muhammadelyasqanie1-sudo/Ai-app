@@ -344,7 +344,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       await enforceModelSubscription(requestUserId, selectedProviderId, selectedModelId);
       if (activeModelId !== selectedKey) {
         activeModelId = selectedKey;
-        if (res.headersSent && !res.writableEnded) res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: selectedKey })}\\n\\n`);
+        if (res.headersSent && !res.writableEnded) res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: selectedKey })}\n\n`);
       }
       if (!rateLimitedModels.has(selectedKey)) {
         rateLimitedModels.add(selectedKey);
@@ -368,11 +368,11 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       'X-Request-Id': id,
       ...corsHeaders(req),
     });
-    res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: prepared.modelId })}\\n\\n`);
+    res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: prepared.modelId })}\n\n`);
 
     let emittedContent = false;
     heartbeat = setInterval(() => {
-      if (!res.writableEnded && !res.destroyed) res.write(': heartbeat\\n\\n');
+      if (!res.writableEnded && !res.destroyed) res.write(': heartbeat\n\n');
     }, 15_000);
     try {
       let toolRound = 0;
@@ -383,7 +383,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
           if (chunk.content) {
             emittedContent = true;
             streamedOutputCharacters += chunk.content.length;
-            res.write(`data: ${JSON.stringify({ type: 'content', text: chunk.content })}\\n\\n`);
+            res.write(`data: ${JSON.stringify({ type: 'content', text: chunk.content })}\n\n`);
           }
           for (const delta of chunk.toolCalls || []) {
             const current = toolCalls.get(delta.index) || {id:delta.id||randomUUID(),type:'function' as const,function:{name:'',arguments:''}};
@@ -413,11 +413,11 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
             const serialized=JSON.stringify(result);
             toolMessages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:serialized.slice(0,16_000)});
             estimatedInputTokens+=Math.ceil(serialized.length/4);
-            res.write(`data: ${JSON.stringify({type:'tool_status',name:call.function.name,status:'completed'})}\\n\\n`);
+            res.write(`data: ${JSON.stringify({type:'tool_status',name:call.function.name,status:'completed'})}\n\n`);
           } catch(error) {
             const message=error instanceof Error?error.message.slice(0,300):'API tool failed.';
             toolMessages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:JSON.stringify({error:message})});
-            res.write(`data: ${JSON.stringify({type:'tool_status',name:call.function.name,status:'failed'})}\\n\\n`);
+            res.write(`data: ${JSON.stringify({type:'tool_status',name:call.function.name,status:'failed'})}\n\n`);
           }
         }
         prepared=await prepareVerifiedChat({
@@ -433,7 +433,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
           requestId: id, selectedModel: activeModelId,
           userId: requestUserId, latencyMs: Date.now() - startedAt,
         }));
-        res.write(`data: ${JSON.stringify({ type: 'error', error: 'The AI provider returned an empty response. Please retry.', retryable: true, requestId: id })}\\n\\n`);
+        res.write(`data: ${JSON.stringify({ type: 'error', error: 'The AI provider returned an empty response. Please retry.', retryable: true, requestId: id })}\n\n`);
         res.end();
         return;
       }
