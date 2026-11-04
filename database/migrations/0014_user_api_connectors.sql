@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS user_api_connectors (
   description text NOT NULL DEFAULT '' CHECK(char_length(description)<=2000),
   endpoint_url text NOT NULL CHECK(endpoint_url ~ '^https://'),
   http_method text NOT NULL DEFAULT 'GET' CHECK(http_method IN ('GET','POST','PUT','PATCH','DELETE')),
-  auth_type text NOT NULL DEFAULT 'none' CHECK(auth_type IN ('none','bearer','header_key')),
+  auth_type text NOT NULL DEFAULT 'none' CHECK(auth_type IN ('none','bearer','header_key','query_key')),
   auth_header_name text NOT NULL DEFAULT 'X-API-Key',
   credential_encrypted text,
   input_schema_json jsonb NOT NULL DEFAULT '{"type":"object","properties":{},"additionalProperties":false}'::jsonb,
