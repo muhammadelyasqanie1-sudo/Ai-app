@@ -136,7 +136,7 @@ function parseRepositoryReadme(markdown: string): PublicApiRecord[] {
         const layer=cells[0].match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)/i);
         if(layer){
           const callLink=cells[2].match(/\]\((https?:\/\/[^)]+)\)/i);
-          const record=normalize({API:layer[1],Description:cells[1].replace(/<[^>]*>/g,'').trim(),Auth:'apiKey',HTTPS:'Yes',CORS:'Unknown',Category:'APILayer Suite',Homepage:layer[2],Link:callLink?.[1]||layer[2],siteName:'APILayer Unified Suite',siteDescription:'One APILayer account and API key for supported suite products.',source:REPOSITORY_SOURCE});
+          const record=normalize({API:layer[1],Description:cells[1].replace(/<[^>]*>/g,'').trim(),Auth:'apiKey',HTTPS:'Unknown',CORS:'Unknown',Category:'APILayer Suite',Homepage:layer[2],Link:callLink?.[1]||layer[2],siteName:'APILayer Unified Suite',siteDescription:'One APILayer account and API key for supported suite products.',source:REPOSITORY_SOURCE});
           if(record)rows.push(record);
         }
         continue;
