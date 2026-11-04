@@ -43,6 +43,9 @@ const beatApiAdapter = beatApiKey
       id: 'beatapi',
       displayName: 'BeatAPI',
       baseUrl: beatApiBaseUrl,
+      // BeatAPI serves inference on direct.beatapi.io; keep model catalogue requests
+      // on its standard API host.
+      catalogBaseUrl: 'https://api.beatapi.io/v1',
       apiKey: beatApiKey,
       catalogOnlyHealthCheck: true,
     })
