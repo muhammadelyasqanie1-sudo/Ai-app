@@ -249,7 +249,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       }
       const before=await pool.query('SELECT slug,display_name,base_url,config_json FROM providers WHERE slug=$1 LIMIT 1',[providerSlug]);
       if(!before.rows[0]){sendAuthJson(res,404,{error:'Provider not found.'});return true;}
-      if(['cloudflare','ollama'].includes(String(before.rows[0].slug))){
+      if(String(before.rows[0].slug)==='ollama'){
         sendAuthJson(res,409,{error:'This provider endpoint is managed by the host environment.'});return true;
       }
       const configJson={...(before.rows[0].config_json||{}),protocol:providerConfigInput.data.protocol||
