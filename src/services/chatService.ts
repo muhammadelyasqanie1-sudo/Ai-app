@@ -1,4 +1,4 @@
-import { getProviderAdapter, getVerifiedModelDescriptors, selectCheapestModel } from './providerGateway.ts';
+import { getConfiguredFallbackModelIds, getProviderAdapter, getVerifiedModelDescriptors, selectCheapestModel } from './providerGateway.ts';
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
 import type { ChatInput, ModelDescriptor } from '../providers/providerTypes.ts';
 
@@ -120,18 +120,27 @@ export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerI
   const separator = input.model.indexOf('::');
   const requestedProviderId = separator >= 0 ? input.model.slice(0, separator) : '';
   const requestedModelId = separator >= 0 ? input.model.slice(separator + 2) : input.model;
-  let selected = input.model === 'auto' ? undefined : descriptors.find((model) =>
-    model.id === requestedModelId && (!requestedProviderId || model.providerId === requestedProviderId) && verified(model),
-  );
-
-  // If the manually selected model is unavailable, use the administrator's healthy fallback order.
-  if (!selected && !input.noFallback) {
-    const fallbackId = await selectCheapestModel('text', input.model !== 'auto');
-    if (fallbackId) {
-      const split = fallbackId.indexOf('::');
-      const fallbackProvider = split >= 0 ? fallbackId.slice(0, split) : '';
-      const fallbackModel = split >= 0 ? fallbackId.slice(split + 2) : fallbackId;
-      selected = descriptors.find((model) => model.id === fallbackModel && (!fallbackProvider || model.providerId === fallbackProvider) && verified(model));
+  let selected: ModelDescriptor | undefined;
+  if (input.model === 'auto') {
+    const automaticId = await selectCheapestModel('text', false);
+    if (automaticId) {
+      const split = automaticId.indexOf('::');
+      const automaticProvider = split >= 0 ? automaticId.slice(0, split) : '';
+      const automaticModel = split >= 0 ? automaticId.slice(split + 2) : automaticId;
+      selected = descriptors.find((model) =>
+        model.id === automaticModel && (!automaticProvider || model.providerId === automaticProvider) && verified(model),
+      );
+    }
+  } else {
+    selected = descriptors.find((model) =>
+      model.id === requestedModelId && (!requestedProviderId || model.providerId === requestedProviderId) && verified(model),
+    );
+    if (!selected) {
+      throw new ProviderAdapterError(
+        'The selected model is unavailable or not currently verified. Choose another model or select Auto; AFG AI will not silently replace a manually selected model.',
+        503,
+        'selected_model_unavailable',
+      );
     }
   }
 
@@ -142,9 +151,29 @@ export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerI
   const provider = getProviderAdapter(selected.providerId);
   if (!provider) throw new ProviderAdapterError('The selected provider is not registered.', 503, 'provider_not_registered');
 
-  const candidates = [selected, ...descriptors.filter((model) =>
-    model.providerId !== selected!.providerId || model.id !== selected!.id,
-  ).filter((model) => verified(model) && model.capabilities.text && model.capabilities.streaming)];
+  // Manual model selection is pinned: neither a different model nor another provider may
+  // be substituted. Auto mode may use only the administrator-configured fallback chain.
+  const fallbackIds = input.model === 'auto' && !input.noFallback
+    ? await getConfiguredFallbackModelIds('text')
+    : [];
+  const configuredFallbacks = fallbackIds
+    .map((fallbackId) => {
+      const split = fallbackId.indexOf('::');
+      if (split < 1) return undefined;
+      const providerId = fallbackId.slice(0, split);
+      const modelId = fallbackId.slice(split + 2);
+      return descriptors.find((model) =>
+        model.providerId === providerId && model.id === modelId && verified(model) &&
+        model.capabilities.text && model.capabilities.streaming,
+      );
+    })
+    .filter((model): model is ModelDescriptor => Boolean(model));
+  const candidates = [
+    selected,
+    ...configuredFallbacks.filter((model) =>
+      model.providerId !== selected!.providerId || model.id !== selected!.id,
+    ),
+  ];
   const messages = compactOlderContext(input.messages, selected.contextWindow);
   const stream = reliableStream(candidates, { ...input, messages });
   return { providerId: provider.id, modelId: selected.id, stream };
