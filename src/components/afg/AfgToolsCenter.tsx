@@ -312,7 +312,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
 
       {activeSubTab === 'productivity' && <AfgProductivityCenter language={language} onRunTool={onRunTool} />}
       {activeSubTab === 'api-hub' && <AfgApiHubPanel language={language}/>}
-      {activeSubTab === 'mcp' && <AfgMcpPanel language={language}/>
+      {activeSubTab === 'mcp' && <AfgMcpPanel language={language}/>}
 
       {/* Tool 1: Interactive Translator (Text & Voice) */}
       {activeSubTab === 'translate' && (
