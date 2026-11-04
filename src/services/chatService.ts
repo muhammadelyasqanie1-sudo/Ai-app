@@ -22,7 +22,7 @@ function compactOlderContext(messages: ChatInput['messages'], contextWindow: num
   const recent: typeof conversation = [];
   let used = estimateTokens(system);
   const latestMessage = conversation[conversation.length - 1];
-  if (latestMessage?.role === 'user') {
+  if (latestMessage && (latestMessage.role === 'user' || latestMessage.role === 'tool')) {
     const latestCost = estimateTokens([latestMessage]);
     if (used + latestCost > budget) {
       throw new ProviderAdapterError(
