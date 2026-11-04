@@ -1,0 +1,53 @@
+name: Bug report
+description: Report a reproducible AFG AI defect.
+title: "fix: "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What failed?
+      description: Describe the observed failure in one or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and error details
+      description: Include a request ID, timestamp/time zone, status code, or redacted log excerpt when available. Never paste API keys, passwords, cookies, database URLs, or personal data.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: Web / Android / Railway / browser and version
+  - type: textarea
+    id: scope
+    attributes:
+      label: Suspected area / affected paths
+      description: Optional. Do not guess when unknown; identify any known related PR or recent commit.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Data safety
+      options:
+        - label: I removed secrets and personal data from logs and screenshots.
+          required: true

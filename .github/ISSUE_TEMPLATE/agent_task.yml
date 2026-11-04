@@ -1,0 +1,64 @@
+name: Agent / parallel engineering task
+description: Reserve a bounded implementation task for one engineer or coding agent.
+title: "task: "
+labels:
+  - engineering-task
+body:
+  - type: input
+    id: owner
+    attributes:
+      label: Task owner
+      description: One human or agent responsible for this branch and handoff.
+    validations:
+      required: true
+  - type: input
+    id: branch
+    attributes:
+      label: Dedicated branch
+      placeholder: feat/short-task-name
+    validations:
+      required: true
+  - type: textarea
+    id: objective
+    attributes:
+      label: Single task outcome
+      description: One independently reviewable result. Split unrelated outcomes into separate issues.
+    validations:
+      required: true
+  - type: textarea
+    id: paths
+    attributes:
+      label: Owned paths / files
+      description: Exact directories or files this task may modify. Shared contract files require explicit coordination.
+      placeholder: |
+        - src/api/example.ts
+        - docs/example.md
+    validations:
+      required: true
+  - type: textarea
+    id: excluded
+    attributes:
+      label: Excluded paths and non-goals
+      description: Files another task owns, or behavior that must not change.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and interface agreements
+      description: Related issues/PRs, API/schema contracts, provider configuration, and decisions required before coding.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable conditions for handoff.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: handoff
+    attributes:
+      label: Handoff record
+      description: Fill before closing. Include commit SHA, changed files, checks actually run/not run, configuration needs, risks, and next dependency.

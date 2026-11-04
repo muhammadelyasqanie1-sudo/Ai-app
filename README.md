@@ -14,6 +14,8 @@ AFG AI is an Android-friendly and web-based AI assistant. The current repository
 - `database/migrations/` — ordered PostgreSQL migrations (the clean-install source of truth).
 - `database/schema.sql` — legacy bootstrap/reference schema; new installations should use migrations.
 - `docs/` — architecture, security, reliability, acceptance criteria and delivery/reporting rules.
+- [GitHub collaboration guide](docs/engineering/GITHUB_COLLABORATION.md) — branch isolation, parallel-agent scope ownership, PR review, and current Actions behavior.
+- [Coding-agent instructions](AGENTS.md) — repository-wide safety, implementation, and handoff rules.
 - [Terminal status and command reference](docs/TERMINAL.md) — Phase 1 read-only Terminal API.
 - [AFG CLI guide](apps/cli/README.md) — supported Node.js CLI commands and secure token setup.
 - [Offline Learning status](docs/OFFLINE.md) — current disabled state and implementation prerequisites.
