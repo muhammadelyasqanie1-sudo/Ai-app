@@ -16,6 +16,13 @@ See BACKUP-RESTORE.md for the documented backup and recovery procedure. Never co
 
 Locale persistence is introduced by `0003_user_locale_settings.sql`. It creates `user_settings.locale` and backfills it from existing account preferences. Apply it with the normal migration runner before deploying the updated account API.
 
+
+## Custom provider credentials
+
+Custom provider credentials are encrypted with AES-256-GCM before storage in the canonical `providers.config_encrypted` column. Configure `AFG_PROVIDER_SECRET_ENCRYPTION_KEY` on the backend only as a base64-encoded 32-byte key (generate with `openssl rand -base64 32`). Keep the key stable and backed up securely: changing or losing it makes existing encrypted provider configurations unreadable. Do not put it in a `VITE_*` variable or source control.
+
+The initial custom-provider adapter supports OpenAI-compatible `/models` and `/chat/completions` endpoints only. Other provider formats need dedicated adapters and are rejected rather than being treated as compatible. Credentials and custom headers are never returned by the provider administration API. The additive registry metadata is in `0009_custom_provider_registry.sql`; it is not applied automatically.
+
 ## Private file library
 
 Migration `0010_private_file_quarantine.sql` adds owner-scoped metadata for private uploads. Apply it with the normal migration runner before using `/api/files`.
