@@ -10,6 +10,10 @@ CREATE TABLE IF NOT EXISTS public_api_catalog (
   category text NOT NULL DEFAULT 'Uncategorized',
   homepage_url text,
   docs_url text,
+  icon_url text,
+  image_url text,
+  site_name text,
+  site_description text,
   health_status text NOT NULL DEFAULT 'unknown'
     CHECK (health_status IN ('unknown','online','slow','offline','error')),
   response_time_ms integer CHECK (response_time_ms IS NULL OR response_time_ms BETWEEN 0 AND 600000),
