@@ -1,6 +1,6 @@
 import { getConfiguredFallbackModelIds, getProviderAdapter, getVerifiedModelDescriptors, selectCheapestModel } from './providerGateway.ts';
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
-import type { ChatInput, ModelDescriptor } from '../providers/providerTypes.ts';
+import type { ChatInput, ChatChunk, ModelDescriptor } from '../providers/providerTypes.ts';
 import { matchComboModels, resolveRoutingCombo } from './routingCombos.ts';
 
 const HEALTH_MAX_AGE_MS = 5 * 60 * 1000;
@@ -78,7 +78,7 @@ function waitWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-async function* reliableStream(candidates: ModelDescriptor[], input: ChatInput): AsyncIterable<{ content: string }> {
+async function* reliableStream(candidates: ModelDescriptor[], input: ChatInput): AsyncIterable<ChatChunk> {
   let lastError: unknown;
   for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex++) {
     const candidate = candidates[candidateIndex];
@@ -116,7 +116,7 @@ async function* reliableStream(candidates: ModelDescriptor[], input: ChatInput):
   throw new ProviderAdapterError('No healthy model could complete the request.', 503, 'model_unavailable');
 }
 
-export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerId: string; modelId: string; stream: AsyncIterable<{ content: string }> }> {
+export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerId: string; modelId: string; stream: AsyncIterable<ChatChunk> }> {
   const descriptors = await getVerifiedModelDescriptors();
   const comboPrefix = 'combo::';
   const comboSlug = input.model.startsWith(comboPrefix) ? input.model.slice(comboPrefix.length) : '';
