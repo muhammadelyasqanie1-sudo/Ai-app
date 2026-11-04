@@ -52,7 +52,7 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
  const [sttModel,setSttModel]=useState('');
  const [sttFile,setSttFile]=useState<File|null>(null);
  const [sttText,setSttText]=useState('');
- const [videoModel,setVideoModel]=useState('');
+ const [videoModel,setVideoModel]=useState('xai/grok-imagine-video');
  const [videoPrompt,setVideoPrompt]=useState('');
  const [videoMode,setVideoMode]=useState<'generate'|'edit'|'extend'>('generate');
  const [videoDuration,setVideoDuration]=useState('8');
