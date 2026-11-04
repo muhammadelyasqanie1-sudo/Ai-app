@@ -905,3 +905,14 @@ html.neon {
   --accent-blue: #818cf8;
   --accent-glow: rgba(34,211,238,.5);
 }
+
+/* Keep chat content legible in both global themes, including legacy utility classes. */
+.afg-chat-view .text-white { color: var(--text-primary) !important; }
+.afg-chat-view .text-slate-300,
+.afg-chat-view .text-slate-400 { color: var(--text-secondary) !important; }
+.afg-chat-view .text-slate-500,
+.afg-chat-view .text-slate-600 { color: var(--text-muted) !important; }
+.afg-chat-view [class*="bg-slate-950"],
+.afg-chat-view [class*="bg-slate-900"] { background-color: var(--bg-surface) !important; }
+.afg-chat-view [class*="border-slate-800"],
+.afg-chat-view [class*="border-slate-700"] { border-color: var(--border-color) !important; }
