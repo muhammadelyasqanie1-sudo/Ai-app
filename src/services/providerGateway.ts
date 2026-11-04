@@ -212,7 +212,12 @@ async function syncDiscoveredModels(provider: ChatProviderAdapter, models: Model
          updated_at = now()`,
       [provider.id, model.id, model.displayName,
         Object.entries(model.capabilities).filter(([, enabled]) => enabled).map(([key]) => key),
-        provider.id === 'beatapi' && model.id === beatApiDefaultModelId,
+        // Clean APIs' Free plan grants access to all 33 chat models within its monthly token allowance.
+        // For other gateways, automatically enable only models explicitly identified as free.
+        provider.id === 'cleanapis' ||
+          model.id.toLowerCase().endsWith('-free') ||
+          (model.pricing?.inputPerMillion === 0 && model.pricing?.outputPerMillion === 0) ||
+          (provider.id === 'beatapi' && model.id === beatApiDefaultModelId),
         model.contextWindow],
     );
   }
