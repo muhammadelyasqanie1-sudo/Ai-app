@@ -29,6 +29,9 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean}>=({l
  const [data,setData]=useState<CatalogResponse|null>(null);
  const [sync,setSync]=useState<SyncState|null>(null);
  const [gateway,setGateway]=useState<Provider|null>(null);
+ const [favoriteKeys,setFavoriteKeys]=useState<string[]>([]);
+ const [selectedDetails,setSelectedDetails]=useState<any>(null);
+ const [randomItem,setRandomItem]=useState<CatalogItem|null>(null);
  const [loading,setLoading]=useState(false);
  const [refreshing,setRefreshing]=useState(false);
  const [error,setError]=useState('');
@@ -42,11 +45,13 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean}>=({l
        request('/api/api-hub/catalog?'+params.toString()),
        adminMode?request('/api/admin/api-hub/status').catch(()=>null):Promise.resolve(null),
        request('/api/admin/providers').catch(()=>null),
+       request('/api/api-hub/favorites').catch(()=>({items:[]})),
      ]);
      setData(results[0] as CatalogResponse);
      setSync(results[1] as SyncState|null);
      const provider=(results[2]?.providers||[]).find((item:Provider)=>item.id==='9router');
      setGateway(provider||null);
+     setFavoriteKeys((results[3]?.items||[]).map((item:CatalogItem)=>item.source_key));
    }catch(e){setError(e instanceof Error?e.message:'Could not load API catalog.');}
    finally{setLoading(false);}
  },[query,category,auth,https,cors,page,adminMode]);
@@ -61,6 +66,31 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean}>=({l
      if(result.status==='partial')setNotice(dari?'همگام‌سازی ناقص بود؛ وضعیت را بررسی کنید.':'Catalog sync was partial; review the sync status.');
    }catch(e){setError(e instanceof Error?e.message:'Catalog sync failed.');}
    finally{setRefreshing(false);}
+ };
+
+ const toggleFavorite=async(item:CatalogItem)=>{
+   setError('');
+   try{
+     if(favoriteKeys.includes(item.source_key)){
+       await request('/api/api-hub/favorites/'+item.source_key,{method:'DELETE'});
+       setFavoriteKeys(keys=>keys.filter(key=>key!==item.source_key));
+       setNotice(label('Removed from favorites.','از علاقه‌مندی‌ها حذف شد.'));
+     }else{
+       await request('/api/api-hub/favorites',{method:'POST',body:JSON.stringify({sourceKey:item.source_key})});
+       setFavoriteKeys(keys=>[...keys,item.source_key]);
+       setNotice(label('Saved to favorites.','به علاقه‌مندی‌ها افزوده شد.'));
+     }
+   }catch(e){setError(e instanceof Error?e.message:'Could not update favorites.');}
+ };
+ const showDetails=async(item:CatalogItem)=>{
+   setError('');setSelectedDetails(null);
+   try{setSelectedDetails(await request('/api/api-hub/catalog/'+item.source_key));}
+   catch(e){setError(e instanceof Error?e.message:'Could not load API details.');}
+ };
+ const surprise=async()=>{
+   setError('');
+   try{const result=await request('/api/api-hub/random?category='+encodeURIComponent(category));setRandomItem(result.item||null);}
+   catch(e){setError(e instanceof Error?e.message:'Random discovery failed.');}
  };
  const update=(setter:(value:string)=>void)=>(value:string)=>{setter(value);setPage(1);};
  const label=(en:string,fa:string)=>dari?fa:en;
@@ -97,7 +127,7 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean}>=({l
     <div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-wider text-cyan-300">{item.category}</p><h3 className="mt-1 truncate font-bold text-white">{item.name}</h3></div><span className={pill+' border-slate-700 bg-slate-950 text-slate-300'}>{item.health_status||'unknown'}</span></div>
     <p className="mt-2 line-clamp-3 text-xs leading-5 text-slate-400">{item.description||label('No description supplied.','توضیحی ثبت نشده است.')}</p>
     <div className="mt-3 flex flex-wrap gap-1.5"><span className={pill+' border-slate-700 text-slate-300'}>Auth: {item.auth}</span><span className={pill+' border-slate-700 text-slate-300'}>HTTPS: {item.https}</span><span className={pill+' border-slate-700 text-slate-300'}>CORS: {item.cors}</span></div>
-    <div className="mt-4 flex flex-wrap gap-3 text-xs">{item.docs_url&&<a className="inline-flex items-center gap-1 text-cyan-300 hover:underline" href={item.docs_url} target="_blank" rel="noreferrer noopener">{label('API Docs','مستندات API')}<ArrowUpRight className="h-3 w-3"/></a>}{item.homepage_url&&item.homepage_url!==item.docs_url&&<a className="inline-flex items-center gap-1 text-slate-300 hover:underline" href={item.homepage_url} target="_blank" rel="noreferrer noopener">{label('Website','وب‌سایت')}<Globe className="h-3 w-3"/></a>}</div>
+    <div className="mt-4 flex flex-wrap gap-3 text-xs">{item.docs_url&&<a className="inline-flex items-center gap-1 text-cyan-300 hover:underline" href={item.docs_url} target="_blank" rel="noreferrer noopener">{label('API Docs','مستندات API')}<ArrowUpRight className="h-3 w-3"/></a>}{item.homepage_url&&item.homepage_url!==item.docs_url&&<a className="inline-flex items-center gap-1 text-slate-300 hover:underline" href={item.homepage_url} target="_blank" rel="noreferrer noopener">{label('Website','وب‌سایت')}<Globe className="h-3 w-3"/></a>}<button onClick={()=>void showDetails(item)} className="text-violet-300">{label('Details / alternatives','جزئیات / جایگزین‌ها')}</button><button onClick={()=>void toggleFavorite(item)} className="text-amber-300">{favoriteKeys.includes(item.source_key)?'★ '+label('Saved','ذخیره‌شده'):'☆ '+label('Save','ذخیره')}</button></div>
     <p className="mt-3 text-[10px] text-amber-300">{label('Catalog listing only · connect and verify before execution','فقط ورودی کاتالوگ · پیش از اجرا باید اتصال و مستندات تأیید شوند')}</p>
    </article>)}
   </div>
