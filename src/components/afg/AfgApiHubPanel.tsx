@@ -18,7 +18,7 @@ async function request(path:string,init:RequestInit={}){
  return data;
 }
 const pill='inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-semibold';
-export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean}>=({language,adminMode=false})=>{
+export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean;canSync?:boolean}>=({language,adminMode=false,canSync=false})=>{
  const dari=language==='dari'||language==='persian';
  const [query,setQuery]=useState('');
  const [category,setCategory]=useState('all');
@@ -99,7 +99,7 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean}>=({l
   <section className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 sm:p-5">
    <div className="flex flex-wrap items-start justify-between gap-3">
     <div className="flex items-start gap-3"><div className="rounded-xl border border-cyan-400/30 bg-slate-950 p-2"><Database className="h-5 w-5 text-cyan-300"/></div><div><h2 className="text-lg font-black text-white">{label('Universal API Hub','مرکز یکپارچه API')}</h2><p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">{label('Discover and filter the complete Public APIs directory. Entries are metadata until their official API contract and credentials are configured.','تمام فهرست Public APIs را جستجو و دسته‌بندی کنید. هر ورودی تا زمان تأیید مستندات و تنظیم اتصال، فقط اطلاعات کاتالوگ است.')}</p></div></div>
-    {adminMode&&<button disabled={refreshing} onClick={()=>void syncNow()} className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-50"><RefreshCw className={'h-4 w-4 '+(refreshing?'animate-spin':'')}/>{label('Sync catalog','همگام‌سازی فهرست')}</button>}
+    {canSync&&<button disabled={refreshing} onClick={()=>void syncNow()} className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-50"><RefreshCw className={'h-4 w-4 '+(refreshing?'animate-spin':'')}/>{label('Sync catalog','همگام‌سازی فهرست')}</button>}
    </div>
    <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
     <a href="https://github.com/public-apis/public-apis" target="_blank" rel="noreferrer noopener" className="rounded-lg border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-slate-300">GitHub source ↗</a>
