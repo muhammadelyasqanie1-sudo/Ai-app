@@ -23,7 +23,7 @@ export function useAlwaysLiveConnection() {
         const data = await response.json();
         if (!stopped) {
           window.dispatchEvent(new CustomEvent('afg-model-catalog', { detail: data }));
-          publish('live');
+          publish(data.verified === true ? 'live' : 'degraded');
         }
       } catch {
         if (!stopped) publish(navigator.onLine ? 'degraded' : 'offline');
