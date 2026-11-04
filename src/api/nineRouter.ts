@@ -143,6 +143,7 @@ export async function handleNineRouterApi(req:IncomingMessage,res:ServerResponse
  const requestId=randomUUID();
  const user=await authenticateRequest(req).catch(()=>null);
  if(!user){reply(res,401,{available:false,error:'Sign in is required.'},requestId);return true;}
+ if(user.role!=='admin'&&user.role!=='superadmin'){reply(res,403,{available:false,error:'The shared 9Router gateway is currently restricted to administrators until provider accounts are isolated per user.'},requestId);return true;}
  if(req.method!=='GET'&&!verifyCsrf(req)){reply(res,403,{error:'CSRF validation failed.'},requestId);return true;}
  if(!rateLimit(user.id)){reply(res,429,{error:'9Router proxy limit is 20 requests per minute per user.'},requestId);return true;}
  const key=(process.env.NINEROUTER_API_KEY||'').trim().replace(/^Bearer\s+/i,'').trim();
