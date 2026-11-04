@@ -29,6 +29,7 @@ import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf, verifyUser
 import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors, refreshDatabaseProviderAdapters, recordModelHealthResult, invalidateProviderHealth } from '../services/providerGateway.ts';
 import { encryptProviderSecret, providerKeyHint } from '../security/providerVault.ts';
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
+import { canAccessAdminRoute, canManageUser } from '../security/adminPermissions.ts';
 
 const ALLOWED_FALLBACK_CAPABILITIES = new Set(['text', 'vision', 'imageGen', 'tts', 'stt']);
 const customProviderInput = z.object({
@@ -99,8 +100,20 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     sendAuthJson(res, 401, { error: 'Sign in is required.' });
     return true;
   }
-  if (!['admin','superadmin'].includes(user.role)) {
-    sendAuthJson(res, 403, { error: 'Administrator access is required.' });
+  const rootRole = ['admin','superadmin'].includes(user.role);
+  let permissions: Record<string, boolean> = {};
+  if (!rootRole) {
+    try {
+      const roleResult = await pool.query('SELECT permissions_json FROM roles WHERE name=$1 LIMIT 1', [user.role]);
+      const value = roleResult.rows[0]?.permissions_json;
+      permissions = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, boolean> : {};
+    } catch {
+      sendAuthJson(res, 503, { error: 'Could not load staff permissions. Apply the staff RBAC migration first.' });
+      return true;
+    }
+  }
+  if (!canAccessAdminRoute(user.role, permissions, req.method || 'GET', pathname)) {
+    sendAuthJson(res, 403, { error: 'Your staff role does not have permission for this action.' });
     return true;
   }
   if (req.method !== 'GET' && !verifyCsrf(req)) {
@@ -120,6 +133,53 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     if (Number(counter.rows[0]?.request_count || 0) > adminLimit) {
       res.setHeader('Retry-After',String(adminWindow));
       sendAuthJson(res,429,{error:'Admin API rate limit exceeded.'}); return true;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/admin/staff/roles') {
+      const result = await pool.query('SELECT name,permissions_json,created_at FROM roles ORDER BY name');
+      sendAuthJson(res,200,{roles:result.rows});return true;
+    }
+
+    if (req.method === 'PATCH' && pathname === '/api/admin/staff/roles') {
+      if (!rootRole) { sendAuthJson(res,403,{error:'Only a root administrator can edit staff roles.'});return true; }
+      const body = await readJsonBody(req,12000);
+      const role = typeof body.role === 'string' ? body.role : '';
+      const value = body.permissions;
+      const allowed = new Set([
+        'providers:read','providers:manage','models:read','models:manage','routing:read','routing:manage',
+        'users:read','users:manage','users:suspend','audit:read','security:read','security:manage',
+        'dashboard:read','usage:read','system:read','settings:read','settings:manage',
+        'subscriptions:read','subscriptions:manage','notifications:broadcast',
+      ]);
+      if (!/^[a-z][a-z0-9_]{1,47}$/.test(role) || ['user','admin','superadmin'].includes(role) ||
+          !value || typeof value !== 'object' || Array.isArray(value) ||
+          Object.entries(value).length > allowed.size ||
+          Object.entries(value).some(([key,permission]) => !allowed.has(key) || typeof permission !== 'boolean')) {
+        sendAuthJson(res,400,{error:'Invalid staff role or permission map.'});return true;
+      }
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const updated = await client.query(
+          'UPDATE roles SET permissions_json=$2::jsonb WHERE name=$1 RETURNING name,permissions_json',
+          [role,JSON.stringify(value)],
+        );
+        if (!updated.rows[0]) {
+          await client.query('ROLLBACK');
+          sendAuthJson(res,404,{error:'Staff role not found.'});return true;
+        }
+        await client.query(
+          'INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb)',
+          [user.id,user.role,'staff.role.permissions.update','role',role,JSON.stringify({permissions:value}),JSON.stringify({permissions:value})],
+        );
+        await client.query('COMMIT');
+        sendAuthJson(res,200,{role:updated.rows[0]});return true;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/providers') {
@@ -345,7 +405,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           sendAuthJson(res,403,{error:'Administrator re-authentication failed. Enter your current account password.'});return true;
         }
       }
-      if (!targetId || (role !== undefined && !['user','admin','superadmin'].includes(role)) ||
+      if (!targetId || (role !== undefined && !/^[a-z][a-z0-9_]{1,47}$/.test(role)) ||
           (role === 'superadmin' && user.role !== 'superadmin') ||
           (status !== undefined && !['active','suspended','deleted'].includes(status)) ||
           (role === undefined && status === undefined)) {
@@ -353,6 +413,18 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       }
       if (targetId === user.id && (role === 'user' || status === 'suspended' || status === 'deleted')) {
         sendAuthJson(res,400,{error:'You cannot remove or suspend your own administrator account.'});return true;
+      }
+      if (role !== undefined && !rootRole) {
+        sendAuthJson(res,403,{error:'Only a root administrator can assign or revoke staff roles.'});return true;
+      }
+      if (status !== undefined && !canManageUser(user.role, permissions, status === 'suspended' ? 'suspend' : 'reactivate')) {
+        sendAuthJson(res,403,{error:'Your staff role cannot change this account status.'});return true;
+      }
+      if (role !== undefined) {
+        const registeredRole = await pool.query('SELECT name FROM roles WHERE name=$1 LIMIT 1',[role]);
+        if (!registeredRole.rows[0]) {
+          sendAuthJson(res,400,{error:'The requested role is not registered.'});return true;
+        }
       }
       if(status==='deleted'&&user.role!=='superadmin'){
         sendAuthJson(res,403,{error:'Only a superadmin can soft-delete accounts.'});return true;
@@ -373,6 +445,10 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         }
         const nextRole = role ?? target.rows[0].role;
         const nextStatus = status ?? target.rows[0].status;
+        if (target.rows[0].role === 'superadmin' && !rootRole) {
+          await client.query('ROLLBACK');
+          sendAuthJson(res,403,{error:'Only a root administrator may modify another superadmin.'});return true;
+        }
         if(target.rows[0].role==='superadmin' && user.role!=='superadmin'){
           await client.query('ROLLBACK');sendAuthJson(res,403,{error:'Only a superadmin may modify another superadmin.'});return true;
         }
