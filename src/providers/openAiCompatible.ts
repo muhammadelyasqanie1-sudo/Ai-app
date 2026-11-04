@@ -40,6 +40,7 @@ export interface OpenAICompatibleAdapterOptions {
   /** Separate model-list endpoint for gateways that serve catalog and inference on different hosts. */
   catalogBaseUrl?: string;
   catalogOnlyHealthCheck?: boolean;
+  allowEmptyApiKey?: boolean;
 }
 
 export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterOptions): ChatProviderAdapter {
@@ -48,7 +49,8 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
     baseUrl: options.baseUrl.replace(/\/+$/, ''),
     catalogBaseUrl: (options.catalogBaseUrl || options.baseUrl).replace(/\/+$/, ''),
     apiKey: options.apiKey,
-  } : config();
+    allowEmptyApiKey: options.allowEmptyApiKey === true,
+  } : { ...config(), allowEmptyApiKey: false };
   const initial = currentConfig();
   return {
     id: initial.id,
@@ -57,7 +59,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
 
     async validateConfig(): Promise<ConfigStatus> {
       const current = currentConfig();
-      if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl) ||
+      if (!current.baseUrl || (!current.apiKey && !current.allowEmptyApiKey) || !validBaseUrl(current.baseUrl) ||
           !current.catalogBaseUrl || !validBaseUrl(current.catalogBaseUrl)) {
         return { valid: false, message: 'Set a valid HTTPS OPENAI_COMPAT_BASE_URL and server-side OPENAI_COMPAT_API_KEY.' };
       }
@@ -68,7 +70,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
 
     async listModels(): Promise<ModelDescriptor[]> {
       const current = currentConfig();
-      if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
+      if (!current.baseUrl || (!current.apiKey && !current.allowEmptyApiKey) || !validBaseUrl(current.baseUrl)) {
         throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
       }
       try {
@@ -80,7 +82,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
           url.searchParams.set('limit', '100');
           if (after) url.searchParams.set('after', after);
           const response = await fetch(url, {
-            headers: { Authorization: 'Bearer ' + current.apiKey, Accept: 'application/json' },
+            headers: { ...(current.apiKey ? { Authorization: 'Bearer ' + current.apiKey } : {}), Accept: 'application/json' },
             signal: AbortSignal.timeout(15_000), redirect: 'error',
           });
           if (!response.ok) {
@@ -184,7 +186,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
           : { model: modelId, messages: [{ role: 'user', content: 'Reply with OK.' }], max_tokens: 1, stream: false };
         const response = await fetch(current.baseUrl + '/chat/completions', {
           method: 'POST',
-          headers: { Authorization: 'Bearer ' + current.apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
+          headers: { ...(current.apiKey ? { Authorization: 'Bearer ' + current.apiKey } : {}), 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify(probePayload),
           // IteraCompute's free inference tier can have a long cold-start queue.
           // Allow extra time for its verification probe so a slow first token does
@@ -214,7 +216,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
       try {
         response = await fetch(current.baseUrl + '/chat/completions', {
           method: 'POST',
-          headers: { Authorization: 'Bearer ' + current.apiKey, 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+          headers: { ...(current.apiKey ? { Authorization: 'Bearer ' + current.apiKey } : {}), 'Content-Type': 'application/json', Accept: 'text/event-stream' },
           body: JSON.stringify({ model: input.model, messages: input.messages, stream: true }),
           signal: input.signal ? AbortSignal.any([AbortSignal.timeout(90_000), input.signal]) : AbortSignal.timeout(90_000), redirect: 'error',
         });
