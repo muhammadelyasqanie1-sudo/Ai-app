@@ -111,7 +111,7 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean}>=({l
     <a href="https://publicapis.lol/llms.txt" target="_blank" rel="noreferrer noopener" className="rounded-lg border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-slate-300">llms.txt ↗</a>
     <a href="https://publicapis.lol/rss.xml" target="_blank" rel="noreferrer noopener" className="rounded-lg border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-slate-300">RSS ↗</a>
    </div>
-   <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+   <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
     <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('Catalog entries','تعداد APIها')}</p><b className="text-xl text-white">{(data?.total||0).toLocaleString()}</b></div>
     <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('Categories','دسته‌ها')}</p><b className="text-xl text-white">{(data?.categories?.length||0).toLocaleString()}</b></div>
     <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('MCP servers','سرورهای MCP')}</p><b className="text-xl text-white">{(sync?.mcpDirectory?.total||0).toLocaleString()}</b></div>
