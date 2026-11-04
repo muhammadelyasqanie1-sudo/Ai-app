@@ -178,6 +178,13 @@ async function getStoredModels(providerId: string, forceDisabled = false): Promi
 async function syncDiscoveredModels(provider: ChatProviderAdapter, models: ModelDescriptor[]): Promise<Map<string, boolean>> {
   if (!pool) return new Map(models.map((model) => [model.id, model.enabled]));
   try {
+  // Prefer the paid GLM 5.3 Flash model when this key can access it; otherwise
+  // bootstrap the free GLM 5.3 Flash model for keys restricted to free credit.
+  const beatApiDefaultModelId = provider.id === 'beatapi'
+    ? (models.some((model) => model.id === 'glm-5.3-flash')
+        ? 'glm-5.3-flash'
+        : (models.some((model) => model.id === 'glm-5.3-flash-free') ? 'glm-5.3-flash-free' : null))
+    : null;
   for (const model of models) {
     await pool.query(
       `INSERT INTO model_catalog
@@ -187,7 +194,7 @@ async function syncDiscoveredModels(provider: ChatProviderAdapter, models: Model
          display_name = EXCLUDED.display_name,
          capabilities = COALESCE(model_catalog.capabilities_override, EXCLUDED.capabilities),
          context_window = EXCLUDED.context_window,
-         -- Only bootstrap the selected BeatAPI model before an admin health-check decision exists.
+         -- Bootstrap only the chosen BeatAPI default before an admin health-check decision exists.
          enabled = CASE
            WHEN EXCLUDED.enabled AND model_catalog.health_checked_at IS NULL THEN true
            ELSE model_catalog.enabled
@@ -195,7 +202,7 @@ async function syncDiscoveredModels(provider: ChatProviderAdapter, models: Model
          updated_at = now()`,
       [provider.id, model.id, model.displayName,
         Object.entries(model.capabilities).filter(([, enabled]) => enabled).map(([key]) => key),
-        provider.id === 'beatapi' && model.id === 'glm-5.3-flash',
+        provider.id === 'beatapi' && model.id === beatApiDefaultModelId,
         model.contextWindow],
     );
   }
