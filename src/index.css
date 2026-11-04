@@ -887,3 +887,21 @@ html:not(.dark):not(.neon) .afg-chat-view .afg-assistant-bubble {
 .afg-connection-indicator.is-live .afg-connection-dot { background:#16a34a; box-shadow:0 0 0 3px rgba(22,163,74,.12); }
 .afg-connection-indicator.is-offline .afg-connection-dot { background:#dc2626; }
 .afg-connection-indicator.is-degraded .afg-connection-dot { background:#d97706; }
+
+.afg-drawer-panel .bg-gradient-to-r {
+  background: var(--accent-cyan) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+html.neon {
+  --bg-main: #030712;
+  --bg-surface: #070f25;
+  --bg-surface-subtle: #0b1b38;
+  --bg-surface-hover: #102a50;
+  --border-color: #164e63;
+  --text-primary: #ecfeff;
+  --text-secondary: #a5f3fc;
+  --accent-cyan: #22d3ee;
+  --accent-blue: #818cf8;
+  --accent-glow: rgba(34,211,238,.5);
+}
