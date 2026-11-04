@@ -89,7 +89,7 @@ async function* reliableStream(candidates: ModelDescriptor[], input: ChatInput):
       if (input.signal?.aborted) throw new ProviderAdapterError('The request was cancelled.', 499, 'request_aborted');
       let emitted = false;
       try {
-        const stream = provider.streamChat({ ...input, model: candidate.id, messages: compactOlderContext(input.messages, candidate.contextWindow) });
+        const stream = provider.streamChat({ ...input, ...(candidate.capabilities.tools?{}:{tools:undefined}), model: candidate.id, messages: compactOlderContext(input.messages, candidate.contextWindow) });
         for await (const chunk of stream) {
           if (chunk.content || (chunk.toolCalls && chunk.toolCalls.length)) emitted = true;
           yield chunk;
