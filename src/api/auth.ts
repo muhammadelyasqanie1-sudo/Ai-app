@@ -13,7 +13,7 @@ export interface AuthenticatedUser {
   id: string;
   email: string;
   displayName: string;
-  role: 'user' | 'admin' | 'superadmin';
+  role: string;
   status: 'active' | 'suspended' | 'deleted';
   defaultModel: string | null;
 }
