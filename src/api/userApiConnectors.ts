@@ -151,8 +151,9 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  const raw=await response.text();
  const durationMs=Date.now()-started;
  if(raw.length>1_000_000)throw new Error('API response exceeded the 1 MB safety limit.');
- let data:unknown=raw;
- if(raw){try{data=JSON.parse(raw);}catch{}}
+ const safeRaw=secrets.reduce((value,secret)=>value.split(secret).join('[redacted]'),raw);
+ let data:unknown=safeRaw;
+ if(safeRaw){try{data=JSON.parse(safeRaw);}catch{}}
  if(!response.ok)throw Object.assign(new Error('The external API returned HTTP '+response.status+'.'),{httpStatus:response.status,durationMs});
  await pool!.query(`INSERT INTO user_api_connector_runs(connector_id,user_id,request_id,http_method,http_status,duration_ms,outcome)
   VALUES($1,$2,$3,$4,$5,$6,'success')`,[row.id,userId,requestId,row.http_method,response.status,durationMs]);
