@@ -28,14 +28,14 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
     if (req.method === 'GET' && pathname === '/api/api-hub/random') {
       const url = new URL(req.url || '/', 'http://localhost');
       const category = url.searchParams.get('category');
-      const result = await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,health_status,response_time_ms
+      const result = await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,icon_url,image_url,site_name,site_description,health_status,response_time_ms
         FROM public_api_catalog WHERE is_active=true AND ($1::text IS NULL OR category=$1) ORDER BY random() LIMIT 1`,
         [category && category !== 'all' ? category.slice(0,100) : null]);
       sendAuthJson(res,200,{item:result.rows[0]||null}); return true;
     }
     if (req.method === 'GET' && pathname === '/api/api-hub/favorites') {
       const result = await pool.query(`SELECT c.source_key,c.name,c.description,c.auth,c.https,c.cors,c.category,
-        c.homepage_url,c.docs_url,c.health_status,f.note,f.created_at
+        c.homepage_url,c.docs_url,c.icon_url,c.image_url,c.site_name,c.site_description,c.health_status,f.note,f.created_at
         FROM user_public_api_favorites f JOIN public_api_catalog c ON c.source_key=f.source_key
         WHERE f.user_id=$1 ORDER BY f.created_at DESC`,[user.id]);
       sendAuthJson(res,200,{items:result.rows}); return true;
@@ -60,12 +60,12 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
     }
     const detailMatch = pathname.match(/^\\/api\\/api-hub\\/catalog\\/([a-f0-9]{64})$/i);
     if (req.method === 'GET' && detailMatch) {
-      const result = await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,
+      const result = await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,icon_url,image_url,site_name,site_description,
         health_status,response_time_ms,last_health_check,source_payload
         FROM public_api_catalog WHERE source_key=$1 AND is_active=true LIMIT 1`,[detailMatch[1]]);
       if (!result.rows[0]) { sendAuthJson(res,404,{error:'API catalog entry was not found.'}); return true; }
       const item=result.rows[0];
-      const alternatives=await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url
+      const alternatives=await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,icon_url,image_url,site_name,site_description
         FROM public_api_catalog WHERE category=$1 AND source_key<>$2 AND is_active=true
         ORDER BY CASE WHEN lower(auth)=lower($3) THEN 0 ELSE 1 END,
           CASE WHEN https='Yes' THEN 0 ELSE 1 END,name LIMIT 6`,[item.category,item.source_key,item.auth]);
