@@ -26,3 +26,6 @@ Uploads are signature-checked and stored under generated filenames, then marked 
 
 
 Migration `0009_staff_rbac_foundation.sql` adds backend-enforced staff roles and their initial permission maps. Apply it with `npm run db:migrate` only after reviewing the backup and deployment plan.
+
+
+Migration `0011_remove_cloudflare_workers_ai.sql` removes Cloudflare Workers AI from the provider registry and clears its model/fallback selections. Cloudflare R2/KV storage configuration is independent and is not removed by this migration.
