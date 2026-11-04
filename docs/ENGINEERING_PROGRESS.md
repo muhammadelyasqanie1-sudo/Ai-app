@@ -373,3 +373,10 @@ PR #7 remains open and unmerged. No deployment or production database operation 
 - Per-account file quota checks and inserts are serialized with a PostgreSQL advisory lock to prevent concurrent uploads from exceeding the 100-file / 100 MB limits.
 - Deletion revalidates the canonical quarantine directory before unlinking a stored path.
 - These source changes have not been built, tested, migrated, or deployed.
+
+## Milestone 12 — Supabase PostgreSQL TLS defaults
+
+- Added hostname-based TLS defaults for Supabase PostgreSQL direct and pooler endpoints when DATABASE_SSL is unset.
+- Explicit DATABASE_SSL=require continues to enable TLS for other PostgreSQL hosts; certificate verification remains enabled by default.
+- Added regression coverage for Supabase hosts, local PostgreSQL, explicit SSL modes and malformed URLs; wired the test into CI.
+- No production migration or live database connection was executed. Verify the deployment connection string and TLS negotiation before applying migrations.
