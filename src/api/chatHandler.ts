@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { prepareVerifiedChat } from '../services/chatService.ts';
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
 import { getEnabledUserApiToolDefinitions, executeUserApiTool } from './userApiConnectors.ts';
+import { getEnabledRemoteMcpToolDefinitions, executeRemoteMcpTool } from './remoteMcp.ts';
 import { buildToolModePrompt } from '../services/toolModes.ts';
 import { getProductivityPrompt } from './productivity.ts';
 import { authenticateRequest } from './auth.ts';
@@ -338,7 +339,10 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
 
     // User-owned Public API connectors become model-callable tools only after
     // their owner has verified and enabled them. Credentials remain server-side.
-    const toolDefinitions = requestUserId ? await getEnabledUserApiToolDefinitions(requestUserId) : [];
+    const toolDefinitions = requestUserId ? [
+      ...await getEnabledUserApiToolDefinitions(requestUserId),
+      ...await getEnabledRemoteMcpToolDefinitions(requestUserId),
+    ].slice(0,24) : [];
     const onModelSelected = async (selectedProviderId:string, selectedModelId:string) => {
       const selectedKey = selectedProviderId + '::' + selectedModelId;
       await enforceModelSubscription(requestUserId, selectedProviderId, selectedModelId);
@@ -413,7 +417,9 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
           try { args=JSON.parse(call.function.arguments||'{}'); }
           catch { toolMessages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:JSON.stringify({error:'The model supplied invalid JSON arguments.'})});continue; }
           try {
-            const result=await executeUserApiTool(requestUserId,call.function.name,args);
+            const result=call.function.name.startsWith('mcp_')
+              ? await executeRemoteMcpTool(requestUserId,call.function.name,args)
+              : await executeUserApiTool(requestUserId,call.function.name,args);
             const serialized=JSON.stringify(result);
             toolMessages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:serialized.slice(0,16_000)});
             estimatedInputTokens+=Math.ceil(serialized.length/4);
