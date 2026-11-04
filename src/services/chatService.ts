@@ -184,7 +184,7 @@ export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerI
     })
     .filter((model): model is ModelDescriptor => Boolean(model));
   const additionalCandidates = comboSlug
-    ? comboCandidates.slice(1)
+    ? (input.noFallback ? [] : comboCandidates.slice(1))
     : configuredFallbacks;
   const candidates = [
     selected,
