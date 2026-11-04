@@ -91,7 +91,7 @@ async function* reliableStream(candidates: ModelDescriptor[], input: ChatInput):
       try {
         const stream = provider.streamChat({ ...input, model: candidate.id, messages: compactOlderContext(input.messages, candidate.contextWindow) });
         for await (const chunk of stream) {
-          if (chunk.content) emitted = true;
+          if (chunk.content || (chunk.toolCalls && chunk.toolCalls.length)) emitted = true;
           yield chunk;
         }
         if (!emitted) throw new ProviderAdapterError('The provider returned an empty response.', 502, 'empty_response');
