@@ -127,6 +127,59 @@ function normalize(row: RawApi): PublicApiRecord | null {
   };
 }
 
+const REPOSITORY_README = 'https://raw.githubusercontent.com/public-apis/public-apis/master/README.md';
+const REPOSITORY_SOURCE = 'public-apis/public-apis';
+
+function parseRepositoryReadme(markdown: string): PublicApiRecord[] {
+  const rows: PublicApiRecord[] = [];
+  let category = 'Uncategorized';
+  let inApiTable = false;
+  for (const line of markdown.split(/\r?\n/)) {
+    const heading = line.match(/^###\s+(.+?)\s*$/);
+    if (heading) { category = heading[1].replace(/\s+/g,' ').trim().slice(0,100); inApiTable = false; continue; }
+    if (line.trim().startsWith('|') || /^API\s*\|/i.test(line.trim())) {
+      const cells = line.trim().replace(/^\|/,'').replace(/\|$/,'').split('|').map(value=>value.trim());
+      const normalized = cells.map(value=>value.replace(/\*\*/g,'').replace(/[*_]/g,'').toLowerCase());
+      if (normalized.length >= 5 && normalized[0] === 'api' && normalized[1] === 'description' &&
+          normalized[2] === 'auth' && normalized[3] === 'https' && normalized[4] === 'cors') {
+        inApiTable = true; continue;
+      }
+      if (/^:?-{3,}:?$/.test(cells[0]||'')) continue;
+      if (!inApiTable || cells.length < 5) continue;
+      const match = cells[0].match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)/i);
+      if (!match) continue;
+      const name = match[1].replace(/&amp;/g,'&').trim();
+      const url = match[2].trim();
+      const description = cells[1].replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim();
+      const strip = (value:string) => value.replace(/[*_]/g,'').replaceAll(String.fromCharCode(96),'').trim();
+      const auth = strip(cells[2]) || 'No';
+      const https = strip(cells[3]);
+      const cors = strip(cells[4]);
+      const record = normalize({API:name,Description:description,Auth:auth,HTTPS:https,CORS:cors,Category:category,Homepage:url,Link:url,source:REPOSITORY_SOURCE});
+      if (record) rows.push(record);
+    } else if (line.trim() && !line.trim().startsWith('<') && !line.trim().startsWith('*') && !line.trim().startsWith('[')) {
+      if (!line.startsWith(' ')) inApiTable = false;
+    }
+  }
+  const unique = new Map<string,PublicApiRecord>();
+  for (const row of rows) unique.set(row.sourceKey,row);
+  return [...unique.values()];
+}
+
+async function fetchRepositoryReadme(): Promise<{rows:PublicApiRecord[];hasMore:false}> {
+  const response = await fetch(REPOSITORY_README,{
+    headers:{Accept:'text/plain','User-Agent':'AFG-AI-API-Hub/1.0'},
+    signal:AbortSignal.timeout(30_000),
+    redirect:'error',
+  });
+  if(!response.ok)throw new Error('Public APIs GitHub README returned HTTP '+response.status+'.');
+  const markdown=await response.text();
+  if(markdown.length>5_000_000)throw new Error('Public APIs GitHub README exceeded the 5 MB safety limit.');
+  const rows=parseRepositoryReadme(markdown);
+  if(rows.length<100)throw new Error('Public APIs GitHub README parser found fewer than 100 API entries; refusing an incomplete catalog import.');
+  return {rows,hasMore:false};
+}
+
 async function fetchPage(page: number): Promise<{ rows: PublicApiRecord[]; hasMore: boolean | null }> {
   const url = new URL(SOURCE);
   url.searchParams.set('page', String(page));
