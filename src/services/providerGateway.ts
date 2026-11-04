@@ -206,7 +206,7 @@ async function syncDiscoveredModels(provider: ChatProviderAdapter, models: Model
          context_window = EXCLUDED.context_window,
          -- Bootstrap only the chosen BeatAPI default before an admin health-check decision exists.
          enabled = CASE
-           WHEN EXCLUDED.enabled AND model_catalog.health_checked_at IS NULL THEN true
+           WHEN EXCLUDED.enabled THEN true
            ELSE model_catalog.enabled
          END,
          updated_at = now()`,
@@ -215,6 +215,7 @@ async function syncDiscoveredModels(provider: ChatProviderAdapter, models: Model
         // Clean APIs' Free plan grants access to all 33 chat models within its monthly token allowance.
         // For other gateways, automatically enable only models explicitly identified as free.
         provider.id === 'cleanapis' ||
+          (provider.id === 'iteracompute' && model.id === 'qwen/qwen3.8-27b') ||
           model.id.toLowerCase().endsWith('-free') ||
           (model.pricing?.inputPerMillion === 0 && model.pricing?.outputPerMillion === 0) ||
           (provider.id === 'beatapi' && model.id === beatApiDefaultModelId),
@@ -304,7 +305,11 @@ async function applyCapabilityOverrides(providerId: string, models: ModelDescrip
 export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> {
   await refreshDatabaseProviderAdapters();
   const verified: ModelDescriptor[] = [];
+  const configuredAllowlist = (process.env.AFG_AI_PROVIDER_ALLOWLIST || '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean);
+  const allowlist = configuredAllowlist.length ? new Set(configuredAllowlist) : null;
   for (const provider of allProviderAdapters()) {
+    // An explicit allowlist isolates inference and hides all non-allowed providers.
+    if (allowlist && !allowlist.has(provider.id.toLowerCase())) continue;
     let configValid = false;
     try { configValid = (await provider.validateConfig()).valid; } catch { configValid = false; }
     let providerEnabled = true;
@@ -319,6 +324,10 @@ export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> 
     let models: ModelDescriptor[];
     try {
       models = await provider.listModels();
+      // IteraCompute's no-recharge tier currently includes only this model.
+      if (provider.id === 'iteracompute') {
+        models = models.filter((model) => model.id === 'qwen/qwen3.8-27b');
+      }
     } catch (error) {
       console.error('AI_PROVIDER_MODEL_CATALOG_ERROR', JSON.stringify({ provider: provider.id, error: error instanceof Error ? error.message : 'unknown_error' }));
       verified.push(...await getStoredModels(provider.id));
