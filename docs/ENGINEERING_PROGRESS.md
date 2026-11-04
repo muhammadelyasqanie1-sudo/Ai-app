@@ -258,6 +258,52 @@ Build output note: the production bundle reports a 6,116.37 kB JavaScript librar
 - Continue reducing initial client bundle weight and review cross-platform runtime capability gating. Keep all deployment and production-data changes untouched.
 
 
+## Milestone 10 — Lazy-load the Offline AI Hub
+
+**Status:** IMPLEMENTED BUT NOT VERIFIED
+
+### Problem found
+
+- CI production build output reported a shared JavaScript library chunk of 6,116.37 kB (2,189.96 kB gzip), which increases the amount of code users may need to download before using the app.
+- The Offline AI Hub was statically imported by the root App component, so its module graph was part of the initial application graph even when users stayed in chat.
+
+### Change
+
+- Converted the Offline AI Hub to a React lazy-loaded module.
+- The module now loads only when the user opens Offline AI Hub, Offline Chat, or Offline Models.
+- Added an accessible localized loading state while the feature chunk loads.
+- The same component state/props and feature routing are preserved.
+
+### Files changed
+
+- `src/App.tsx`
+
+### Verification
+
+- Source-level review confirms the static import was removed and the component is imported through `React.lazy`.
+- A production build is pending in PR CI; bundle-size improvement is not yet confirmed.
+
+### Next action
+
+- Run the production build in CI, compare emitted chunk sizes, and address any integration regressions.
+
+
+### Follow-up to Milestone 10 — Lazy-load secondary workspace modules
+
+**Status:** IMPLEMENTED BUT NOT VERIFIED
+
+The initial PR #8 bundle output showed that the Offline Hub component itself split into a 72.11 kB chunk, but the shared `lib` chunk remained 6,116.37 kB. The optimization was therefore extended rather than reported as a complete initial-payload reduction.
+
+- Image generation, video generation, tools, history, settings, admin, terminal, and offline learning are now also loaded through `React.lazy` only when their workspace tab is selected.
+- A shared accessible loading state covers the lazy workspace modules.
+- Chat and Home remain eagerly available as core entry experiences.
+- The Offline Hub remains lazy-loaded.
+
+**Files changed:** `src/App.tsx`
+
+**Verification:** Source reviewed; the updated production build is pending CI. No size reduction is claimed until the next build output confirms it.
+
+
 ## Live CI result — Terminal token audit PR #7
 
 - `validate-locales`: passed.
