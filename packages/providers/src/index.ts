@@ -1,4 +1,3 @@
 /** Public provider package boundary; implementations stay server-side in src/providers during migration. */
 export * from '../../../src/providers/providerTypes';
-export { cloudflareWorkersAi } from '../../../src/providers/cloudflareWorkersAi';
 export { createOpenAICompatibleAdapter } from '../../../src/providers/openAiCompatible';

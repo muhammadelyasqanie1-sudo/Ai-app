@@ -1,4 +1,3 @@
-import { cloudflareWorkersAi } from '../providers/cloudflareWorkersAi.ts';
 import { createAnthropicAdapter } from '../providers/anthropic.ts';
 import { createOllamaAdapter } from '../providers/ollama.ts';
 import { createOpenAICompatibleAdapter } from '../providers/openAiCompatible.ts';
@@ -32,9 +31,6 @@ import { decryptProviderSecret } from '../security/providerVault.ts';
 import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescriptor, CapabilityFlags } from '../providers/providerTypes.ts';
 
 const openAICompatible = createOpenAICompatibleAdapter();
-const cloudflareCatalogAdapter = { ...cloudflareWorkersAi, id: 'cloudflare', key: 'cloudflare' } as ChatProviderAdapter;
-// The database seed uses the canonical `cloudflare` slug. Keep one registry entry so
-// discovery and the user model picker do not duplicate every Workers AI model.
 const beatApiAdapter = process.env.BEATAPI_API_KEY?.trim()
   ? createOpenAICompatibleAdapter({
       id: 'beatapi',
@@ -44,7 +40,7 @@ const beatApiAdapter = process.env.BEATAPI_API_KEY?.trim()
       catalogOnlyHealthCheck: true,
     })
   : null;
-const staticProviderRegistry: ChatProviderAdapter[] = [cloudflareCatalogAdapter, openAICompatible, gptOssProxy, ...(beatApiAdapter ? [beatApiAdapter] : [])];
+const staticProviderRegistry: ChatProviderAdapter[] = [openAICompatible, gptOssProxy, ...(beatApiAdapter ? [beatApiAdapter] : [])];
 let databaseProviderRegistry: ChatProviderAdapter[] = [];
 let databaseProviderRefreshAt = 0;
 const DATABASE_PROVIDER_REFRESH_MS = 15_000;
@@ -111,19 +107,15 @@ export function getProviderRegistry(): Array<Pick<ChatProviderAdapter, 'id' | 'k
 }
 
 export function getProviderAdapter(providerId: string): ChatProviderAdapter | undefined {
-  // Backward compatibility for model references persisted before the provider slug
-  // was normalized to `cloudflare`.
-  if (providerId === 'cloudflare-workers-ai') return cloudflareCatalogAdapter;
   return allProviderAdapters().find((provider) => provider.id === providerId);
 }
 
 async function isProviderEnabled(providerId: string): Promise<boolean> {
   if (!pool) return true;
-  const canonicalProviderId = providerId === 'cloudflare-workers-ai' ? 'cloudflare' : providerId;
   try {
-    const catalog = await pool.query('SELECT enabled FROM providers WHERE slug = $1 LIMIT 1', [canonicalProviderId]);
+    const catalog = await pool.query('SELECT enabled FROM providers WHERE slug = $1 LIMIT 1', [providerId]);
     if (catalog.rows.length) return Boolean(catalog.rows[0].enabled);
-    const result = await pool.query('SELECT enabled FROM provider_configs WHERE provider_key = $1 LIMIT 1', [canonicalProviderId]);
+    const result = await pool.query('SELECT enabled FROM provider_configs WHERE provider_key = $1 LIMIT 1', [providerId]);
     return result.rows.length ? Boolean(result.rows[0].enabled) : true;
   } catch (error) {
     // An uninitialized optional catalog must not disable a configured AI provider.
