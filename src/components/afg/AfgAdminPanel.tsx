@@ -538,7 +538,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const secondary='rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-cyan-500/60 disabled:opacity-40';
   const stat=(label:string,value:any,detail:string,Icon:any)=><div className={panel}><div className="flex items-center justify-between"><span className="text-xs text-slate-400">{label}</span><Icon className="h-4 w-4 text-cyan-300"/></div><div className="mt-3 text-2xl font-black text-white">{fmt(value)}</div><p className="mt-1 text-[11px] text-slate-500">{detail}</p></div>;
 
-  if(!authenticated)return <section className="mx-auto w-full max-w-xl px-4 py-10">
+  if(!authenticated)return <section className="afg-admin-panel mx-auto w-full max-w-xl px-4 py-10">
     <div className="rounded-3xl border border-cyan-800/50 bg-slate-950 p-6 shadow-2xl sm:p-8">
       <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-400/30 bg-cyan-400/10"><LockKeyhole className="h-7 w-7 text-cyan-300"/></div>
       <h1 className="text-center text-2xl font-black text-white">{dari?'ورود مدیر AFG AI':'AFG AI Admin Console'}</h1>
@@ -558,7 +558,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     </div>
   </section>;
 
-  return <section className="mx-auto w-full max-w-[1600px] px-3 py-5 sm:px-5 lg:px-7">
+  return <section className="afg-admin-panel mx-auto w-full max-w-[1600px] px-3 py-5 sm:px-5 lg:px-7">
     <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/10 ring-1 ring-cyan-400/30"><ShieldCheck className="h-6 w-6 text-cyan-300"/></div><div><h1 className="text-xl font-black tracking-tight text-white sm:text-2xl">AFG AI <span className="text-cyan-300">Admin</span></h1><p className="text-xs text-slate-500">Control plane · Operations · Security · Transparency</p></div></div>
       <div className="flex items-center gap-2"><span className="hidden rounded-lg border border-slate-800 px-3 py-2 text-xs text-slate-400 sm:inline">{adminRole||'Administrator'}</span><button className={secondary+' flex items-center gap-2'} onClick={()=>void loadAdminData()}><RefreshCw className="h-4 w-4"/>Refresh</button><button className={secondary+' flex items-center gap-2'} onClick={()=>void signOut()}><LogOut className="h-4 w-4"/>Sign out</button></div>
