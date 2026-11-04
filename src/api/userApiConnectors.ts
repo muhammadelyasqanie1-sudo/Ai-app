@@ -72,6 +72,20 @@ function validateSchema(schema:unknown):Json{
  }
  return {type:'object',properties:value.properties,required,additionalProperties:false};
 }
+function modelToolSchema(input:unknown):Json{
+ const schema=validateSchema(input);
+ const properties:Json={};
+ for(const [name,value] of Object.entries(schema.properties as Json)){
+  const source=value as Json;
+  const property:Json={type:source.type};
+  if(typeof source.description==='string')property.description=source.description.slice(0,500);
+  if(Array.isArray(source.enum))property.enum=source.enum.slice(0,100);
+  if(Number.isInteger(source.maxLength))property.maxLength=source.maxLength;
+  properties[name]=property;
+ }
+ return {type:'object',properties,required:schema.required,additionalProperties:false};
+}
+
 function validateArgs(schema:Json,args:unknown):Json{
  if(!args||typeof args!=='object'||Array.isArray(args))throw new Error('Tool arguments must be a JSON object.');
  const object=args as Json;
@@ -162,7 +176,7 @@ export async function getEnabledUserApiToolDefinitions(userId:string){
    function:{
     name:String(row.tool_name),
     description:String(row.description||'Call the configured API connector '+row.tool_name).slice(0,1000),
-    parameters:validateSchema(row.input_schema_json),
+    parameters:modelToolSchema(row.input_schema_json),
    },
   }));
  }catch(error){
