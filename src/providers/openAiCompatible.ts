@@ -179,10 +179,13 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
             : { healthy: false, checkedAt, message: 'Model is not present in the provider catalog.' };
         }
         // Prove actual inference access with a one-token probe for ordinary providers.
+        const probePayload = current.id === 'iteracompute'
+          ? { model: modelId, messages: [{ role: 'user', content: 'Reply with exactly: OK' }], max_tokens: 512, reasoning: false, stream: false }
+          : { model: modelId, messages: [{ role: 'user', content: 'Reply with OK.' }], max_tokens: 1, stream: false };
         const response = await fetch(current.baseUrl + '/chat/completions', {
           method: 'POST',
           headers: { Authorization: 'Bearer ' + current.apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({ model: modelId, messages: [{ role: 'user', content: 'Reply with OK.' }], max_tokens: 1, stream: false }),
+          body: JSON.stringify(probePayload),
           signal: AbortSignal.timeout(15_000), redirect: 'error',
         });
         if (!response.ok) {
