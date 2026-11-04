@@ -121,12 +121,18 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
  });
  const search=()=>run('search',async()=>{
   if(!searchModel||!searchQuery.trim())throw new Error('Choose a search model and enter a query.');
-  const searchBody:any={model:searchModel,query:searchQuery,max_results:8,search_type:searchType};\n  if(searchCountry.trim())searchBody.country=searchCountry.trim();\n  if(searchLanguage.trim())searchBody.language=searchLanguage.trim();\n  if(searchTimeRange)searchBody.time_range=searchTimeRange;\n  if(searchDomainFilter.trim())searchBody.domain_filter=searchDomainFilter.split(',').map(v=>v.trim()).filter(Boolean);\n  const {data}=await call('/api/9router/search',{method:'POST',body:JSON.stringify(searchBody)});
+  const searchBody:any={model:searchModel,query:searchQuery,max_results:8,search_type:searchType};
+  if(searchCountry.trim())searchBody.country=searchCountry.trim();
+  if(searchLanguage.trim())searchBody.language=searchLanguage.trim();
+  if(searchTimeRange)searchBody.time_range=searchTimeRange;
+  if(searchDomainFilter.trim())searchBody.domain_filter=searchDomainFilter.split(',').map(v=>v.trim()).filter(Boolean);
+  const {data}=await call('/api/9router/search',{method:'POST',body:JSON.stringify(searchBody)});
   setSearchResult(data);
  });
  const fetchPage=()=>run('fetch',async()=>{
   if(!fetchModel||!/^https:\/\//i.test(fetchUrl))throw new Error('Choose a fetch model and enter an HTTPS URL.');
-  const maxCharacters=Number(fetchMaxCharacters);if(!Number.isInteger(maxCharacters)||maxCharacters<0||maxCharacters>100000)throw new Error('Maximum characters must be between 0 and 100000.');\n  const {data}=await call('/api/9router/web/fetch',{method:'POST',body:JSON.stringify({model:fetchModel,url:fetchUrl,format:fetchFormat,max_characters:maxCharacters})});
+  const maxCharacters=Number(fetchMaxCharacters);if(!Number.isInteger(maxCharacters)||maxCharacters<0||maxCharacters>100000)throw new Error('Maximum characters must be between 0 and 100000.');
+  const {data}=await call('/api/9router/web/fetch',{method:'POST',body:JSON.stringify({model:fetchModel,url:fetchUrl,format:fetchFormat,max_characters:maxCharacters})});
   setFetchResult(data);
  });
  const embed=()=>run('embedding',async()=>{
@@ -170,8 +176,10 @@ export const AfgNineRouterPanel:React.FC<{language:Language}>=({language})=>{
    if(videoPrompt.trim())body.prompt=videoPrompt.trim();
    if(videoImageFile){if(videoImageFile.size>8*1024*1024)throw new Error('Video reference image must be 8 MB or smaller.');body.image={url:await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(new Error('Could not read reference image.'));reader.readAsDataURL(videoImageFile);})};}
   }else{
-   if(!/^https:\/\//i.test(videoSourceUrl.trim()))throw new Error('Provide a public HTTPS source video URL.');
-   body.video={url:videoSourceUrl.trim()};if(videoPrompt.trim())body.prompt=videoPrompt.trim();
+   if(!videoSourceUrl.trim())throw new Error('Provide a source video URL or file ID.');
+   if(videoSourceType==='url'&&!/^https:\/\//i.test(videoSourceUrl.trim()))throw new Error('Provide a public HTTPS source video URL.');
+   body.video=videoSourceType==='url'?{url:videoSourceUrl.trim()}:{file_id:videoSourceUrl.trim()};
+   if(videoPrompt.trim())body.prompt=videoPrompt.trim();
   }
   body.duration=Number(videoDuration);body.aspect_ratio=videoAspect;body.resolution=videoResolution;
   const endpoint=videoMode==='generate'?'generations':videoMode==='edit'?'edits':'extensions';
