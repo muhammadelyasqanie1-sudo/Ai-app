@@ -319,6 +319,27 @@ function isRecentAndHealthy(model: ModelDescriptor): boolean {
     Date.now() - Date.parse(model.verifiedAt) <= HEALTH_TTL_MS;
 }
 
+export async function getConfiguredFallbackModelIds(capability: keyof CapabilityFlags = 'text'): Promise<string[]> {
+  if (!pool) return [];
+  try {
+    const result = await pool.query(
+      'SELECT ordered_models FROM provider_fallback_chains WHERE capability = $1 LIMIT 1',
+      [capability],
+    );
+    const ordered = result.rows[0]?.ordered_models;
+    if (!Array.isArray(ordered)) return [];
+    return ordered.filter((modelId): modelId is string =>
+      typeof modelId === 'string' && /^[a-zA-Z0-9._-]{1,100}::[a-zA-Z0-9@][a-zA-Z0-9._:/-]{0,299}$/.test(modelId),
+    );
+  } catch (error) {
+    console.warn('AI_MODEL_FALLBACK_POLICY_UNAVAILABLE', JSON.stringify({
+      capability,
+      error: error instanceof Error ? error.message : 'unknown_error',
+    }));
+    return [];
+  }
+}
+
 export async function selectCheapestModel(capability: keyof CapabilityFlags = 'text', preferFallback = false): Promise<string | null> {
   const descriptors = await getVerifiedModelDescriptors();
   const capable = descriptors.filter((model) =>
