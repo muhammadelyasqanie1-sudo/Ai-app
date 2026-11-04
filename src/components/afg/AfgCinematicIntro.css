@@ -148,3 +148,29 @@
 @media(max-width:390px){.afg-boot-scene{grid-template-columns:minmax(0,1fr) 76px minmax(0,1fr);gap:5px}.afg-boot-panel{padding:8px 6px}.afg-boot-panel strong{font-size:.56rem}.afg-boot-panel-caption{font-size:.43rem}.afg-boot-central{width:76px}}
 @media(max-height:720px) and (min-width:761px){.afg-boot-screen{padding-block:9px max(10px,env(safe-area-inset-bottom))}.afg-boot-header{min-height:46px;padding-bottom:8px}.afg-boot-stage{grid-template-rows:minmax(185px,1fr) auto}.afg-boot-copy h1{font-size:clamp(2.2rem,5vw,4rem)}.afg-boot-central{width:clamp(130px,17vw,210px)}.afg-boot-panel{min-height:90px;padding:10px 12px}.afg-boot-enter{min-height:44px;margin-top:10px}}
 @media(prefers-reduced-motion:reduce){.afg-boot-central,.afg-boot-central-core,.afg-boot-central-halo,.afg-boot-central-ring,.afg-boot-panel,.afg-boot-circuit .circuit-line{animation:none!important}.afg-boot-panel{opacity:1;filter:none;translate:none}}
+
+
+/* Golden neural-network welcome scene */
+.afg-boot-header-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.afg-boot-sound{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:34px;padding:7px 11px;border:1px solid rgba(255,184,107,.32);border-radius:999px;background:rgba(20,17,18,.56);color:#f4d6a5;font:600 .55rem 'Space Grotesk','Noto Sans Arabic',sans-serif;letter-spacing:.06em;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);transition:background .2s,border-color .2s,transform .2s}
+.afg-boot-sound span:first-child{font-size:.95rem;line-height:1;color:#ffcf8d}
+.afg-boot-sound:hover{transform:translateY(-1px);border-color:#ffb86b88;background:rgba(255,184,107,.1)}
+.afg-boot-sound:focus-visible,.afg-boot-enter:focus-visible{outline:2px solid #ffcf8d;outline-offset:4px}
+.afg-boot-central-halo{background:radial-gradient(circle,rgba(255,184,107,.27),rgba(13,242,255,.12) 38%,rgba(124,77,255,.08) 56%,transparent 72%)}
+.afg-boot-central-core{background:radial-gradient(circle at 35% 28%,#fff8df 0%,#ffdc91 9%,#c58b3c 29%,#24203b 66%,#05060a 100%);border-color:#ffe8b0;box-shadow:0 0 22px #ffb86b,0 0 58px #ffb86b88,0 0 105px #7c4dff55,inset -12px -18px 28px #020817}
+.afg-boot-central-core span,.afg-boot-central-core b{text-shadow:0 0 15px #ffb86b}
+.afg-boot-central-core b{color:#ffe1a5}
+.afg-boot-copy h1 em{background:linear-gradient(100deg,#fff4dc 0%,#ffcf83 35%,#fff0c8 58%,#b59aff 84%,#fff4dc 100%);background-size:220% auto;color:transparent;background-clip:text;-webkit-background-clip:text}
+.afg-boot-screen[dir=rtl] .afg-boot-copy{text-align:right}
+.afg-boot-screen[dir=rtl] .afg-boot-eyebrow{justify-content:flex-start}
+.afg-boot-screen[dir=rtl] .afg-boot-copy h1{letter-spacing:0;line-height:1.25}
+.afg-boot-screen[dir=rtl] .afg-boot-tagline{letter-spacing:0;line-height:1.8}
+@media(max-width:760px){
+ .afg-boot-header-actions{gap:6px}
+ .afg-boot-sound{min-height:29px;padding:5px 8px;font-size:.43rem;gap:5px}
+ .afg-boot-screen[dir=rtl] .afg-boot-copy{text-align:center}
+ .afg-boot-screen[dir=rtl] .afg-boot-eyebrow{justify-content:center}
+}
+@media(prefers-reduced-motion:reduce){
+ .afg-boot-sound{transition:none}
+}
