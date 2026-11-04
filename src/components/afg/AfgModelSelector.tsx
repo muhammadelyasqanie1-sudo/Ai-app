@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Check, ChevronDown, Lock, Search, X, Zap } from 'lucide-react';
 import type { AfgModelOption, Language } from '../../types/afg';
+import './AfgModelSelector.css';
 
 type Props = {
   models: AfgModelOption[];
