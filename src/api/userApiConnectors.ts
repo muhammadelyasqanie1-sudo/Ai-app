@@ -99,7 +99,7 @@ async function ownerConnector(userId:string,id:string){
  const result=await pool!.query('SELECT * FROM user_api_connectors WHERE id=$1 AND user_id=$2 LIMIT 1',[id,userId]);
  return result.rows[0]||null;
 }
-async function execute(row:any,args:unknown,userId:string,requestId:string){
+async function execute(row:any,args:unknown,userId:string,requestId:string,timeoutMs=15_000){
  const schema=validateSchema(row.input_schema_json),values=validateArgs(schema,args);
  const base=await safeEndpoint(row.endpoint_url);
  let pathname=base.pathname;
@@ -126,7 +126,7 @@ async function execute(row:any,args:unknown,userId:string,requestId:string){
   const key=row.auth_type==='bearer'?'Authorization':String(row.auth_header_name||'X-API-Key');
   headers.set(key,row.auth_type==='bearer'?'Bearer '+secret:secret);
  }
- const init:RequestInit={method:row.http_method,headers,redirect:'error',signal:AbortSignal.timeout(15_000)};
+ const init:RequestInit={method:row.http_method,headers,redirect:'error',signal:AbortSignal.timeout(timeoutMs)};
  if(['POST','PUT','PATCH'].includes(row.http_method)){headers.set('Content-Type','application/json');init.body=JSON.stringify(body);}
  const started=Date.now();
  let response:Response;
@@ -144,6 +144,54 @@ async function execute(row:any,args:unknown,userId:string,requestId:string){
   VALUES($1,$2,$3,$4,$5,$6,'success')`,[row.id,userId,requestId,row.http_method,response.status,durationMs]);
  return {data,status:response.status,durationMs};
 }
+async function reserveConnectorCall(userId:string,connectorId:string):Promise<boolean>{
+ const counter=await pool!.query(`INSERT INTO rate_limit_counters(scope_type,scope_key,window_start,request_count)
+  VALUES('user',$1,to_timestamp((floor(extract(epoch FROM now())/60)*60)::double precision),1)
+  ON CONFLICT(scope_type,scope_key,window_start) DO UPDATE SET request_count=rate_limit_counters.request_count+1 RETURNING request_count`,
+  ['api-connector:'+userId+':'+connectorId]);
+ return Number(counter.rows[0]?.request_count||0)<=30;
+}
+
+export async function getEnabledUserApiToolDefinitions(userId:string){
+ if(!pool||!userId)return [];
+ try{
+  const result=await pool.query(`SELECT tool_name,description,input_schema_json FROM user_api_connectors
+   WHERE user_id=$1 AND enabled=true AND status='verified' ORDER BY created_at DESC LIMIT 12`,[userId]);
+  return result.rows.map(row=>({
+   type:'function' as const,
+   function:{
+    name:String(row.tool_name),
+    description:String(row.description||'Call the configured API connector '+row.tool_name).slice(0,1000),
+    parameters:validateSchema(row.input_schema_json),
+   },
+  }));
+ }catch(error){
+  console.warn('AFG_API_CONNECTOR_TOOL_DISCOVERY_UNAVAILABLE',JSON.stringify({error:error instanceof Error?error.message:'unknown'}));
+  return [];
+ }
+}
+
+export async function executeUserApiTool(userId:string,toolName:string,args:unknown){
+ if(!pool||!userId)throw new Error('Sign in to use personal API connectors.');
+ const found=await pool.query(`SELECT * FROM user_api_connectors WHERE user_id=$1 AND tool_name=$2
+  AND enabled=true AND status='verified' LIMIT 1`,[userId,toolName]);
+ const row=found.rows[0];
+ if(!row)throw new Error('This API connector is no longer enabled for your account.');
+ if(!await reserveConnectorCall(userId,row.id))throw new Error('This API connector has reached its limit of 30 calls per minute.');
+ const requestId=randomUUID();
+ try{
+  const result=await execute(row,args,userId,requestId,10_000);
+  const serialized=JSON.stringify(result.data);
+  if(serialized.length>16_000)return {status:result.status,durationMs:result.durationMs,truncated:true,responsePreview:serialized.slice(0,16_000)};
+  return result;
+ }catch(error){
+  const message=error instanceof Error?error.message.slice(0,250):'API connector call failed.';
+  await pool.query(`INSERT INTO user_api_connector_runs(connector_id,user_id,request_id,http_method,duration_ms,outcome,error_code)
+   VALUES($1,$2,$3,$4,0,'error',$5)`,[row.id,userId,requestId,row.http_method,message]).catch(()=>{});
+  throw error;
+ }
+}
+
 async function audit(userId:string,action:string,id:string,metadata:Json={}){
  await pool!.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
   [userId,action,'api_connector',id,JSON.stringify(metadata)]).catch(()=>{});
@@ -223,11 +271,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
   if(req.method==='POST'&&callMatch){
    const row=await ownerConnector(user.id,callMatch[1]);
    if(!row||!row.enabled||row.status!=='verified'){sendAuthJson(res,409,{error:'API connector is not verified and enabled.'});return true;}
-   const counter=await pool.query(`INSERT INTO rate_limit_counters(scope_type,scope_key,window_start,request_count)
-    VALUES('user',$1,to_timestamp((floor(extract(epoch FROM now())/60)*60)::double precision),1)
-    ON CONFLICT(scope_type,scope_key,window_start) DO UPDATE SET request_count=rate_limit_counters.request_count+1 RETURNING request_count`,
-    ['api-connector:'+user.id+':'+row.id]);
-   if(Number(counter.rows[0]?.request_count||0)>30){sendAuthJson(res,429,{error:'API connector limit is 30 calls per minute.'});return true;}
+   if(!await reserveConnectorCall(user.id,row.id)){sendAuthJson(res,429,{error:'API connector limit is 30 calls per minute.'});return true;}
    const requestId=randomUUID(),body=await readJsonBody(req,60_000);
    try{
     const result=await execute(row,body.arguments||{},user.id,requestId);
