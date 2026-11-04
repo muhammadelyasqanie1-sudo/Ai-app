@@ -21,7 +21,7 @@ function config() {
   const apiKey = process.env.OPENAI_COMPAT_API_KEY?.trim() || '';
   const id = process.env.OPENAI_COMPAT_PROVIDER_ID?.trim() || 'openai-compatible';
   const displayName = process.env.OPENAI_COMPAT_DISPLAY_NAME?.trim() || 'OpenAI-compatible provider';
-  return { baseUrl, apiKey, id, displayName };
+  return { baseUrl, catalogBaseUrl: baseUrl, apiKey, id, displayName };
 }
 
 function validBaseUrl(value: string): boolean {
@@ -37,13 +37,17 @@ export interface OpenAICompatibleAdapterOptions {
   displayName: string;
   baseUrl: string;
   apiKey: string;
+  /** Separate model-list endpoint for gateways that serve catalog and inference on different hosts. */
+  catalogBaseUrl?: string;
   catalogOnlyHealthCheck?: boolean;
 }
 
 export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterOptions): ChatProviderAdapter {
   const currentConfig = () => options ? {
     id: options.id, displayName: options.displayName,
-    baseUrl: options.baseUrl.replace(/\/+$/, ''), apiKey: options.apiKey,
+    baseUrl: options.baseUrl.replace(/\/+$/, ''),
+    catalogBaseUrl: (options.catalogBaseUrl || options.baseUrl).replace(/\/+$/, ''),
+    apiKey: options.apiKey,
   } : config();
   const initial = currentConfig();
   return {
@@ -53,7 +57,8 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
 
     async validateConfig(): Promise<ConfigStatus> {
       const current = currentConfig();
-      if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl)) {
+      if (!current.baseUrl || !current.apiKey || !validBaseUrl(current.baseUrl) ||
+          !current.catalogBaseUrl || !validBaseUrl(current.catalogBaseUrl)) {
         return { valid: false, message: 'Set a valid HTTPS OPENAI_COMPAT_BASE_URL and server-side OPENAI_COMPAT_API_KEY.' };
       }
       return { valid: true };
@@ -71,7 +76,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
         let after: string | undefined;
         let pages = 0;
         while (pages++ < 50) {
-          const url = new URL(current.baseUrl + '/models');
+          const url = new URL(current.catalogBaseUrl + '/models');
           url.searchParams.set('limit', '100');
           if (after) url.searchParams.set('after', after);
           const response = await fetch(url, {
@@ -79,7 +84,13 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
             signal: AbortSignal.timeout(15_000), redirect: 'error',
           });
           if (!response.ok) {
-            console.error('AI_PROVIDER_MODEL_DISCOVERY_FAILED', JSON.stringify({ provider: current.id, status: response.status }));
+            const errorCode = await response.clone().json().then((body: any) => {
+              const value = body?.error?.code ?? body?.code ?? body?.error?.type;
+              return typeof value === 'string' && /^[a-zA-Z0-9_.-]{1,80}$/.test(value) ? value : undefined;
+            }).catch(() => undefined);
+            console.error('AI_PROVIDER_MODEL_DISCOVERY_FAILED', JSON.stringify({
+              provider: current.id, status: response.status, ...(errorCode ? { errorCode } : {}),
+            }));
             throw new ProviderAdapterError('Provider model discovery failed.', response.status >= 400 && response.status < 500 ? response.status : 502, 'model_catalog_failed');
           }
           const payload = await response.json() as OpenAIModelsPage;
@@ -146,11 +157,21 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
         // Some gateways charge for even a one-token generation. For those providers,
         // verify only authenticated catalog access and model visibility.
         if (options?.catalogOnlyHealthCheck) {
-          const response = await fetch(current.baseUrl + '/models', {
+          const response = await fetch(current.catalogBaseUrl + '/models', {
             headers: { Authorization: 'Bearer ' + current.apiKey, Accept: 'application/json' },
             signal: AbortSignal.timeout(15_000), redirect: 'error',
           });
-          if (!response.ok) return { healthy: false, checkedAt, message: 'Provider catalog check failed.' };
+          if (!response.ok) {
+            const errorCode = await response.clone().json().then((body: any) => {
+              const value = body?.error?.code ?? body?.code ?? body?.error?.type;
+              return typeof value === 'string' && /^[a-zA-Z0-9_.-]{1,80}$/.test(value) ? value : undefined;
+            }).catch(() => undefined);
+            console.warn('AI_PROVIDER_HEALTH_CHECK_FAILED', JSON.stringify({
+              provider: current.id, model: modelId, status: response.status,
+              ...(errorCode ? { errorCode } : {}),
+            }));
+            return { healthy: false, checkedAt, message: 'Provider catalog check failed.' };
+          }
           const payload = await response.json() as OpenAIModelsPage;
           const rows = Array.isArray(payload.data) ? payload.data : (payload.data && Array.isArray(payload.data.data) ? payload.data.data : []);
           return rows.some((model) => model.id === modelId)
