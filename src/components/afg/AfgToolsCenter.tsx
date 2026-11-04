@@ -16,11 +16,15 @@ import {
   Upload,
   Download,
   Play,
-  RotateCcw
+  RotateCcw,
+  Network,
+  PlugZap
 } from 'lucide-react';
 import type { Language, ToolSubTab } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
 import { AfgProductivityCenter } from './AfgProductivityCenter';
+import { AfgApiHubPanel } from './AfgApiHubPanel';
+import { AfgMcpPanel } from './AfgMcpPanel';
 
 interface AfgToolsCenterProps {
   language: Language;
@@ -233,6 +237,8 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   };
 
   const toolCards = [
+    { id: 'api-hub' as ToolSubTab, title: language === 'dari' ? 'مرکز جامع API' : 'Universal API Hub', desc: language === 'dari' ? 'کاتالوگ Public APIs، اتصال سرویس‌ها و ساخت ابزار هوشمند' : 'Discover Public APIs, connect services and create AI tools', ready: true, icon: Network, color: 'text-cyan-300', bg: 'bg-cyan-500/10', border: 'border-cyan-400/40' },
+    { id: 'mcp' as ToolSubTab, title: language === 'dari' ? 'ابزارها و سرورهای MCP' : 'MCP Servers & Tools', desc: language === 'dari' ? 'اتصال امن ابزارهای استاندارد هوش مصنوعی' : 'Connect secure, standardized AI tools', ready: true, icon: PlugZap, color: 'text-violet-300', bg: 'bg-violet-500/10', border: 'border-violet-400/40' },
     { id: 'productivity' as ToolSubTab, title: language === 'dari' ? 'مرکز بهره‌وری' : 'Productivity Center', desc: language === 'dari' ? 'یادداشت، وظایف، آموزش، جلسه و برنامه‌ریزی' : 'Notes, tasks, study, meetings and planning', ready: Boolean(capabilities.chat), icon: Sparkles, color: 'text-cyan-300', bg: 'bg-cyan-500/10', border: 'border-cyan-400/40' },
     { id: 'translate' as ToolSubTab, title: t.toolTranslate, desc: language === 'dari' ? 'ترجمه با مدل چت تأییدشده' : 'Uses the verified chat model', ready: Boolean(capabilities.chat), icon: Languages, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/30' },
     { id: 'code-help' as ToolSubTab, title: t.toolCodeHelp, desc: language === 'dari' ? 'تولید، توضیح، اشکال‌زدایی و بهینه‌سازی کد' : 'Generate, explain, debug and optimize code', ready: Boolean(capabilities.chat), icon: Code2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
@@ -305,6 +311,8 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
       )}
 
       {activeSubTab === 'productivity' && <AfgProductivityCenter language={language} onRunTool={onRunTool} />}
+      {activeSubTab === 'api-hub' && <AfgApiHubPanel language={language}/>}
+      {activeSubTab === 'mcp' && <AfgMcpPanel language={language}/>
 
       {/* Tool 1: Interactive Translator (Text & Voice) */}
       {activeSubTab === 'translate' && (
