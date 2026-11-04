@@ -30,7 +30,8 @@ export type ToolSubTab =
   | 'summarizer'
   | 'productivity'
   | 'api-hub'
-  | 'mcp';
+  | 'mcp'
+  | '9router';
 
 export interface UserProfile {
   name: string;
