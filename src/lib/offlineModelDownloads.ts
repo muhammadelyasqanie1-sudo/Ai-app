@@ -22,6 +22,8 @@ export type OfflineDownloadProgress = {
   downloadedBytes: number;
   totalBytes: number | null;
   percent: number | null;
+  speedBytesPerSecond?: number | null;
+  etaSeconds?: number | null;
   status: OfflineDownloadState['status'];
 };
 
@@ -55,13 +57,28 @@ async function downloadGGUFAndroid(options: Parameters<typeof downloadGGUF>[0]):
   }
   const abort = () => { void AFGOfflineModels.cancelDownload({ downloadId }); };
   options.signal?.addEventListener('abort', abort, { once: true });
+  let lastBytes: number | null = null;
+  let lastSampleAt = Date.now();
+  if (options.signal?.aborted) abort();
   try {
     while (true) {
       if (options.signal?.aborted) throw new Error('Android model download was cancelled.');
       const native = await AFGOfflineModels.getDownloadStatus({ downloadId });
       const state = mapNativeDownload(native);
       const totalBytes = state.expectedBytes;
-      options.onProgress?.({ downloadedBytes: state.downloadedBytes, totalBytes, percent: totalBytes ? Math.min(100, Math.floor(state.downloadedBytes / totalBytes * 100)) : null, status: state.status });
+      const now = Date.now();
+      const elapsedSeconds = Math.max(0.001, (now - lastSampleAt) / 1000);
+      const speedBytesPerSecond = lastBytes === null ? 0 : Math.max(0, (state.downloadedBytes - lastBytes) / elapsedSeconds);
+      options.onProgress?.({
+        downloadedBytes: state.downloadedBytes,
+        totalBytes,
+        percent: totalBytes ? Math.min(100, Math.floor(state.downloadedBytes / totalBytes * 100)) : null,
+        speedBytesPerSecond,
+        etaSeconds: totalBytes && speedBytesPerSecond > 0 ? Math.max(0, (totalBytes - state.downloadedBytes) / speedBytesPerSecond) : null,
+        status: state.status,
+      });
+      lastBytes = state.downloadedBytes;
+      lastSampleAt = now;
       if (state.status === 'installed') return state;
       if (state.status === 'error') throw new Error(state.error || 'Android model download failed.');
       await new Promise(resolve => window.setTimeout(resolve, 1200));
@@ -205,14 +222,19 @@ export async function downloadGGUF(options: {
   const { repoId, fileName } = options;
   const revision = options.revision || 'main';
   const id = repoId + '/' + fileName;
-  if (isAndroidNative()) return downloadGGUFAndroid(options);
-  if (!/^[^/]+\/[^/]+$/.test(repoId) || !fileName.toLowerCase().endsWith('.gguf') || fileName.split('/').some(part => !part || part === '.' || part === '..')) throw new Error('Invalid GGUF model selection.');
   if (activeTasks.has(id)) throw new Error('This model is already downloading.');
+  if (isAndroidNative()) {
+    activeTasks.set(id, { controller: new AbortController(), paused: false });
+    try { return await downloadGGUFAndroid(options); }
+    finally { activeTasks.delete(id); }
+  }
+  if (!/^[^/]+\/[^/]+$/.test(repoId) || !fileName.toLowerCase().endsWith('.gguf') || fileName.split('/').some(part => !part || part === '.' || part === '..')) throw new Error('Invalid GGUF model selection.');
   const controller = new AbortController();
   const task: DownloadTask = { controller, paused: false };
   activeTasks.set(id, task);
   const relayAbort = () => controller.abort(options.signal?.reason);
   options.signal?.addEventListener('abort', relayAbort, { once: true });
+  if (options.signal?.aborted) relayAbort();
   const partial = partName(id);
   const target = finalName(id, fileName);
   const expectedBytes = options.expectedBytes && options.expectedBytes > 0 ? options.expectedBytes : null;
@@ -239,9 +261,15 @@ export async function downloadGGUF(options: {
     }
     if (!response.ok || !response.body) throw new Error('Model download failed (' + response.status + ').');
     const range = response.headers.get('content-range');
-    if (offset && range && !range.startsWith('bytes ' + offset + '-')) throw new Error('Server returned an unexpected byte range.');
-    const totalFromRange = range ? Number(range.split('/')[1]) : null;
-    const totalBytes = Number.isFinite(totalFromRange) && totalFromRange! > 0 ? totalFromRange : expectedBytes;
+    const rangeMatch = range?.match(/^bytes (\d+)-\d+\/(\d+|\*)$/);
+    if (offset && (!rangeMatch || Number(rangeMatch[1]) !== offset)) {
+      throw new Error('The model host returned an invalid byte range; the partial download was preserved for retry.');
+    }
+    const totalFromRange = rangeMatch && rangeMatch[2] !== '*' ? Number(rangeMatch[2]) : null;
+    const contentLength = Number(response.headers.get('content-length'));
+    const totalBytes = Number.isFinite(totalFromRange) && totalFromRange! > 0
+      ? totalFromRange
+      : (expectedBytes || (Number.isFinite(contentLength) && contentLength > 0 ? offset + contentLength : null));
     const handle = await dir.getFileHandle(partial, { create: true });
     const reader = response.body.getReader();
     let downloadedBytes = offset;
@@ -255,9 +283,24 @@ export async function downloadGGUF(options: {
     const writable = await handle.createWritable({ keepExistingData: true });
     activeWritable = writable;
     await writable.seek(offset);
-    const emit = (status: OfflineDownloadState['status']) => options.onProgress?.({
-      downloadedBytes, totalBytes, percent: totalBytes ? Math.min(100, Math.floor(downloadedBytes / totalBytes * 100)) : null, status,
-    });
+    let lastProgressBytes = offset;
+    let lastProgressAt = Date.now();
+    let smoothedSpeed = 0;
+    const emit = (status: OfflineDownloadState['status']) => {
+      const now = Date.now();
+      const elapsedSeconds = Math.max(0.001, (now - lastProgressAt) / 1000);
+      const instantSpeed = Math.max(0, (downloadedBytes - lastProgressBytes) / elapsedSeconds);
+      smoothedSpeed = smoothedSpeed ? smoothedSpeed * 0.7 + instantSpeed * 0.3 : instantSpeed;
+      options.onProgress?.({
+        downloadedBytes, totalBytes,
+        percent: totalBytes ? Math.min(100, Math.floor(downloadedBytes / totalBytes * 100)) : null,
+        speedBytesPerSecond: smoothedSpeed,
+        etaSeconds: totalBytes && smoothedSpeed > 0 ? Math.max(0, (totalBytes - downloadedBytes) / smoothedSpeed) : null,
+        status,
+      });
+      lastProgressBytes = downloadedBytes;
+      lastProgressAt = now;
+    };
     emit('downloading');
     while (true) {
       const item = await reader.read();
