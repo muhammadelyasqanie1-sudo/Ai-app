@@ -231,7 +231,7 @@ export async function queryPublicApiCatalog(filters: {
   const clause = where.join(' AND ');
   const count = await pool.query(`SELECT count(*)::int AS total FROM public_api_catalog WHERE ${clause}`, values);
   const rows = await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,
-      health_status,response_time_ms,last_health_check,imported_at
+      icon_url,image_url,site_name,site_description,health_status,response_time_ms,last_health_check,imported_at
     FROM public_api_catalog WHERE ${clause} ORDER BY category,name LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`, values);
   return { items: rows.rows, page, pageSize, total: Number(count.rows[0]?.total || 0), categories: await listPublicApiCategories() };
 }
