@@ -217,7 +217,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
         response = await fetch(current.baseUrl + '/chat/completions', {
           method: 'POST',
           headers: { ...(current.apiKey ? { Authorization: 'Bearer ' + current.apiKey } : {}), 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-          body: JSON.stringify({ model: input.model, messages: input.messages, stream: true }),
+          body: JSON.stringify({ model: input.model, messages: input.messages, stream: true, ...(input.tools?.length ? { tools: input.tools, tool_choice: 'auto' } : {}) }),
           signal: input.signal ? AbortSignal.any([AbortSignal.timeout(90_000), input.signal]) : AbortSignal.timeout(90_000), redirect: 'error',
         });
       } catch (error) {
@@ -261,8 +261,19 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
             let event: any;
             try { event = JSON.parse(data); } catch { continue; }
             if (event.error) throw new ProviderAdapterError('The provider interrupted the response.', 502, 'provider_stream_error');
-            const content = event.choices?.[0]?.delta?.content;
-            if (typeof content === 'string' && content) yield { content };
+            const delta=event.choices?.[0]?.delta;
+            const content=delta?.content;
+            const toolCalls=Array.isArray(delta?.tool_calls)?delta.tool_calls.map((call:any)=>({
+              index:Number.isInteger(call.index)?call.index:0,
+              ...(typeof call.id==='string'?{id:call.id}:{}),
+              ...(call.type==='function'?{type:'function' as const}:{}),
+              ...(call.function&&typeof call.function==='object'?{function:{
+                ...(typeof call.function.name==='string'?{name:call.function.name}:{}),
+                ...(typeof call.function.arguments==='string'?{arguments:call.function.arguments}:{}),
+              }}:{}),
+            })):[];
+            if(typeof content==='string'&&content)yield {content};
+            if(toolCalls.length)yield {content:'',toolCalls};
           }
         }
         buffer += decoder.decode();
@@ -273,8 +284,19 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
             let event: any;
             try { event = JSON.parse(data); } catch { event = null; }
             if (event?.error) throw new ProviderAdapterError('The provider interrupted the response.', 502, 'provider_stream_error');
-            const content = event?.choices?.[0]?.delta?.content;
-            if (typeof content === 'string' && content) yield { content };
+            const delta=event?.choices?.[0]?.delta;
+            const content=delta?.content;
+            const toolCalls=Array.isArray(delta?.tool_calls)?delta.tool_calls.map((call:any)=>({
+              index:Number.isInteger(call.index)?call.index:0,
+              ...(typeof call.id==='string'?{id:call.id}:{}),
+              ...(call.type==='function'?{type:'function' as const}:{}),
+              ...(call.function&&typeof call.function==='object'?{function:{
+                ...(typeof call.function.name==='string'?{name:call.function.name}:{}),
+                ...(typeof call.function.arguments==='string'?{arguments:call.function.arguments}:{}),
+              }}:{}),
+            })):[];
+            if(typeof content==='string'&&content)yield {content};
+            if(toolCalls.length)yield {content:'',toolCalls};
           }
         }
       } catch (error) {
