@@ -39,7 +39,7 @@ const beatApiAdapter = process.env.BEATAPI_API_KEY?.trim()
   ? createOpenAICompatibleAdapter({
       id: 'beatapi',
       displayName: 'BeatAPI',
-      baseUrl: (process.env.BEATAPI_BASE_URL?.trim() || 'https://api.beatapi.io/v1').replace(/\/+$/, '');
+      baseUrl: (process.env.BEATAPI_BASE_URL?.trim() || 'https://api.beatapi.io/v1').replace(/\/+$/, ''),
       apiKey: process.env.BEATAPI_API_KEY.trim(),
       catalogOnlyHealthCheck: true,
     })
