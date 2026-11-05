@@ -67,3 +67,7 @@ Migration `0031_api_connector_quota_recovery_claims.sql` adds a short-lived clai
 ## Scheduled API connector health monitoring
 
 Migration `0032_api_connector_health_monitor.sql` adds opt-in monitoring fields and a due-check index. Monitoring can be enabled only for verified, enabled GET connectors; non-idempotent methods are excluded. The scheduler endpoint `POST /api/internal/connector-monitor/run` is protected by the high-entropy `AFG_CONNECTOR_MONITOR_SECRET` bearer secret and checks at most five due connectors per run. Configure a hosting cron/scheduler to call it every 15 minutes. The connector-specific interval is 60–10,080 minutes, defaulting to 360. The migration is additive and must be applied with the normal migration runner after reviewing the backup/recovery plan.
+
+## API key lifecycle and usage dashboard
+
+Migration `0033_api_key_lifecycle_usage_ledger.sql` adds persistent lifecycle state and renewal metadata to API keys. Waiting and expired keys are retained and protected from deletion; renewal dates are only stored when explicitly supplied. The API usage endpoint reads actual `user_api_connector_runs` records for 30-day request, success, failure and latency summaries. Costs are not fabricated. Apply migration 0033 with `npm run db:migrate` after reviewing the backup and recovery plan.
