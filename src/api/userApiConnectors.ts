@@ -1,5 +1,5 @@
 import type {IncomingMessage,ServerResponse} from 'http';
-import {createCipheriv,createDecipheriv,randomBytes,randomUUID} from 'node:crypto';
+import {createCipheriv,createDecipheriv,createHash,randomBytes,randomUUID} from 'node:crypto';
 import {lookup} from 'node:dns/promises';
 import {BlockList,isIP} from 'node:net';
 import {pool} from './database.ts';
@@ -41,6 +41,44 @@ function decrypt(value:string):string{
  const decipher=createDecipheriv('aes-256-gcm',encryptionKey(),Buffer.from(iv,'base64'));
  decipher.setAuthTag(Buffer.from(tag,'base64'));
  return Buffer.concat([decipher.update(Buffer.from(data,'base64')),decipher.final()]).toString('utf8');
+}
+
+function oauthPublicBase():URL{
+ const configured=(process.env.AFG_PUBLIC_URL||process.env.APP_URL||'').trim();
+ if(!configured)throw new Error('Set AFG_PUBLIC_URL to the public HTTPS AFG AI origin before using OAuth.');
+ const base=new URL(configured);
+ if(base.protocol!=='https:'||base.username||base.password||base.search||base.hash)throw new Error('AFG_PUBLIC_URL must be a clean public HTTPS URL.');
+ return base;
+}
+function normalizeOAuthConfig(input:unknown):Json{
+ if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('OAuth configuration is required.');
+ const value=input as Json,clientId=String(value.clientId||'').trim(),clientSecret=String(value.clientSecret||'').trim();
+ const authorizationUrl=String(value.authorizationUrl||'').trim(),tokenUrl=String(value.tokenUrl||'').trim();
+ const scopes=Array.isArray(value.scopes)?value.scopes.map((x:any)=>String(x).trim()).filter(Boolean).slice(0,40):String(value.scopes||'').split(/[ ,]+/).filter(Boolean).slice(0,40);
+ if(!clientId||clientId.length>500||!clientSecret||clientSecret.length>4000)throw new Error('OAuth client ID and client secret are required.');
+ for(const raw of [authorizationUrl,tokenUrl]){const u=new URL(raw);if(u.protocol!=='https:'||u.username||u.password||u.hash)throw new Error('OAuth endpoints must use HTTPS without embedded credentials or fragments.');}
+ return {clientId,clientSecret,authorizationUrl,tokenUrl,scopes};
+}
+async function getOAuthAccessToken(row:any,userId:string,secrets:string[]):Promise<string>{
+ const client=await pool!.connect();
+ try{
+  await client.query('BEGIN');
+  const locked=await client.query('SELECT credential_encrypted,oauth_config_encrypted FROM user_api_connectors WHERE id=$1 AND user_id=$2 FOR UPDATE',[row.id,userId]);
+  const stored=locked.rows[0];if(!stored?.credential_encrypted||!stored.oauth_config_encrypted)throw new Error('OAuth is not connected. Authorize this connector first.');
+  const config=JSON.parse(decrypt(stored.oauth_config_encrypted)) as Json;
+  const tokens=JSON.parse(decrypt(stored.credential_encrypted)) as Json;
+  const access=String(tokens.access_token||''),expires=Number(tokens.expires_at||0);
+  if(access&&(!expires||expires>Date.now()+60_000)){secrets.push(access,String(config.clientSecret||''));await client.query('COMMIT');return access;}
+  const refresh=String(tokens.refresh_token||'');if(!refresh)throw new Error('OAuth token expired and no refresh token was issued. Re-authorize this connector.');
+  await safeEndpoint(String(config.tokenUrl||''));
+  const body=new URLSearchParams({grant_type:'refresh_token',refresh_token:refresh,client_id:String(config.clientId),client_secret:String(config.clientSecret)});
+  const response=await fetch(String(config.tokenUrl),{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body,redirect:'error',signal:AbortSignal.timeout(15000)});
+  const raw=await readTextLimited(response,1_000_000);let next:Json;try{next=JSON.parse(raw);}catch{throw new Error('OAuth refresh returned an invalid response.');}
+  if(!response.ok||typeof next.access_token!=='string'||!next.access_token)throw new Error('OAuth refresh failed with HTTP '+response.status+'.');
+  const merged={...tokens,...next,refresh_token:typeof next.refresh_token==='string'?next.refresh_token:refresh,expires_at:next.expires_in?Date.now()+Number(next.expires_in)*1000:tokens.expires_at};
+  await client.query('UPDATE user_api_connectors SET credential_encrypted=$3,updated_at=now() WHERE id=$1 AND user_id=$2',[row.id,userId,encrypt(JSON.stringify(merged))]);
+  secrets.push(String(merged.access_token),refresh,String(config.clientSecret||''));await client.query('COMMIT');return String(merged.access_token);
+ }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}finally{client.release();}
 }
 async function readTextLimited(response:Response,maxBytes:number):Promise<string>{
  const declared=Number(response.headers.get('content-length')||0);
@@ -284,7 +322,7 @@ function classifyApiCapability(row:any):string{
 }
 function publicRow(row:any){
  return {id:row.id,catalogSourceKey:row.catalog_source_key,name:row.name,toolName:row.tool_name,description:row.description,
-  capability:classifyApiCapability(row),endpointUrl:row.endpoint_url,httpMethod:row.http_method,authType:row.auth_type,authHeaderName:row.auth_header_name,
+  capability:classifyApiCapability(row),endpointUrl:row.endpoint_url,httpMethod:row.http_method,authType:row.auth_type,authHeaderName:row.auth_header_name,oauthConfigured:Boolean(row.oauth_config_encrypted),
   hasCredential:Boolean(row.credential_encrypted),inputSchema:row.input_schema_json,sampleArguments:row.sample_arguments_json,
   fallbackGroup:row.fallback_group||'',fallbackPriority:Number(row.fallback_priority||100),queueState:row.queue_state||'ready',nextAvailableAt:row.next_available_at||null,
   rateLimitEvidence:row.rate_limit_evidence||null,lastQuotaStatus:row.last_quota_status||null,lastQuotaObservedAt:row.last_quota_observed_at||null,lastQuotaResetAt:row.last_quota_reset_at||null,
@@ -324,7 +362,9 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  const headers=new Headers({Accept:'application/json, application/octet-stream, image/*, audio/*, video/*, */*;q=0.8'});
  for(const [key,value] of Object.entries(parameterHeaders))headers.set(key,value);
  const secrets:string[]=[];
- if(row.auth_type==='bearer'||row.auth_type==='basic'||row.auth_type==='header_key'||row.auth_type==='query_key'){
+ if(row.auth_type==='oauth2'){
+  const token=await getOAuthAccessToken(row,userId,secrets);headers.set('Authorization','Bearer '+token);
+ }else if(row.auth_type==='bearer'||row.auth_type==='basic'||row.auth_type==='header_key'||row.auth_type==='query_key'){
   if(!row.credential_encrypted)throw new Error('API connector credential is missing.');
   const secret=decrypt(row.credential_encrypted);secrets.push(secret);
   if(row.auth_type==='query_key')query.set(String(row.auth_header_name||'api_key'),secret);
