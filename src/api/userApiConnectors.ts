@@ -94,7 +94,7 @@ async function getOAuthAccessToken(row:any,userId:string,secrets:string[]):Promi
   const response=await requestOAuthToken(config,body,15000);
   const raw=await readTextLimited(response,1_000_000);let next:Json;try{next=JSON.parse(raw);}catch{throw new Error('OAuth refresh returned an invalid response.');}
   if(!response.ok||typeof next.access_token!=='string'||!next.access_token)throw new Error('OAuth refresh failed with HTTP '+response.status+'.');
-  const merged={...tokens,...next,refresh_token:typeof next.refresh_token==='string'?next.refresh_token:refresh,expires_at:next.expires_in?Date.now()+Number(next.expires_in)*1000:null};
+  const merged:Json={...tokens,...next,refresh_token:typeof next.refresh_token==='string'?next.refresh_token:refresh,expires_at:next.expires_in?Date.now()+Number(next.expires_in)*1000:null};
   await client.query('UPDATE user_api_connectors SET credential_encrypted=$3,updated_at=now() WHERE id=$1 AND user_id=$2',[row.id,userId,encrypt(JSON.stringify(merged))]);
   secrets.push(String(merged.access_token),refresh,String(config.clientSecret||''));await client.query('COMMIT');return String(merged.access_token);
  }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}finally{client.release();}
