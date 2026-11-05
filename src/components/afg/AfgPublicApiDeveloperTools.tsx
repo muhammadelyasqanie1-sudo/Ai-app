@@ -183,7 +183,7 @@ export const AfgPublicApiDeveloperTools:React.FC<{language:Language}>=({language
     const binary=atob(pem),derBuffer=new ArrayBuffer(binary.length),derView=new Uint8Array(derBuffer);for(let i=0;i<binary.length;i++)derView[i]=binary.charCodeAt(i);const der=derBuffer;
     if(algorithm.startsWith('RS')||algorithm.startsWith('PS')){
      const name=algorithm.startsWith('PS')?'RSA-PSS':'RSASSA-PKCS1-v1_5';
-     key=await crypto.subtle.importKey('spki',der,{name,publicExponent:new Uint8Array([1,0,1]),hash:hashName},false,['verify']);
+     key=await crypto.subtle.importKey('spki',der,{name,hash:hashName},false,['verify']);
      verifyAlgorithm=algorithm.startsWith('PS')?{name:'RSA-PSS',saltLength:Number(hashName.slice(5))/8}:{name:'RSASSA-PKCS1-v1_5'};
     }else if(algorithm.startsWith('ES')){
      const namedCurve=algorithm==='ES256'?'P-256':algorithm==='ES384'?'P-384':algorithm==='ES512'?'P-521':'';
