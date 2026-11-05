@@ -57,7 +57,26 @@ function normalizeOAuthConfig(input:unknown):Json{
  const scopes=Array.isArray(value.scopes)?value.scopes.map((x:any)=>String(x).trim()).filter(Boolean).slice(0,40):String(value.scopes||'').split(/[ ,]+/).filter(Boolean).slice(0,40);
  if(!clientId||clientId.length>500||clientSecret.length>4000)throw new Error('A valid OAuth client ID is required; the client secret is optional for public PKCE clients.');
  for(const raw of [authorizationUrl,tokenUrl]){const u=new URL(raw);if(u.protocol!=='https:'||u.username||u.password||u.hash)throw new Error('OAuth endpoints must use HTTPS without embedded credentials or fragments.');}
- return {clientId,clientSecret,authorizationUrl,tokenUrl,scopes};
+ const tokenEndpointAuthMethod=String(value.tokenEndpointAuthMethod||(clientSecret?'client_secret_post':'none'));
+ if(!['client_secret_basic','client_secret_post','none'].includes(tokenEndpointAuthMethod))throw new Error('Unsupported OAuth token endpoint authentication method.');
+ if(tokenEndpointAuthMethod!=='none'&&!clientSecret)throw new Error('This OAuth token endpoint authentication method requires a client secret.');
+ return {clientId,clientSecret,authorizationUrl,tokenUrl,scopes,tokenEndpointAuthMethod};
+}
+async function requestOAuthToken(config:Json,form:URLSearchParams,timeoutMs:number):Promise<Response>{
+ const method=String(config.tokenEndpointAuthMethod||'client_secret_post');
+ const headers=new Headers({'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'});
+ form.set('client_id',String(config.clientId));
+ if(method==='client_secret_basic'){
+  const encoded=(value:string)=>new URLSearchParams([['v',value]]).toString().slice(2);
+  const credentials=encoded(String(config.clientId))+':'+encoded(String(config.clientSecret||''));
+  headers.set('Authorization','Basic '+Buffer.from(credentials,'utf8').toString('base64'));
+  form.delete('client_id');form.delete('client_secret');
+ }else if(method==='client_secret_post'){
+  if(config.clientSecret)form.set('client_secret',String(config.clientSecret));
+ }else{
+  form.delete('client_secret');
+ }
+ return fetch(String(config.tokenUrl),{method:'POST',headers,body:form,redirect:'error',signal:AbortSignal.timeout(timeoutMs)});
 }
 async function getOAuthAccessToken(row:any,userId:string,secrets:string[]):Promise<string>{
  const client=await pool!.connect();
@@ -71,8 +90,8 @@ async function getOAuthAccessToken(row:any,userId:string,secrets:string[]):Promi
   if(access&&(!expires||expires>Date.now()+60_000)){secrets.push(access,String(config.clientSecret||''));await client.query('COMMIT');return access;}
   const refresh=String(tokens.refresh_token||'');if(!refresh)throw new Error('OAuth token expired and no refresh token was issued. Re-authorize this connector.');
   await safeEndpoint(String(config.tokenUrl||''));
-  const body=new URLSearchParams({grant_type:'refresh_token',refresh_token:refresh,client_id:String(config.clientId)});if(config.clientSecret)body.set('client_secret',String(config.clientSecret));
-  const response=await fetch(String(config.tokenUrl),{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body,redirect:'error',signal:AbortSignal.timeout(15000)});
+  const body=new URLSearchParams({grant_type:'refresh_token',refresh_token:refresh});
+  const response=await requestOAuthToken(config,body,15000);
   const raw=await readTextLimited(response,1_000_000);let next:Json;try{next=JSON.parse(raw);}catch{throw new Error('OAuth refresh returned an invalid response.');}
   if(!response.ok||typeof next.access_token!=='string'||!next.access_token)throw new Error('OAuth refresh failed with HTTP '+response.status+'.');
   const merged={...tokens,...next,refresh_token:typeof next.refresh_token==='string'?next.refresh_token:refresh,expires_at:next.expires_in?Date.now()+Number(next.expires_in)*1000:null};
@@ -628,8 +647,8 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    const config=JSON.parse(decrypt(connector.oauth_config_encrypted)) as Json;
    const redirectUri=new URL('/api/api-hub/oauth/callback',oauthPublicBase()).toString();await safeEndpoint(String(config.tokenUrl||''));
    const verifier=decrypt(pending.code_verifier_encrypted);
-   const form=new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:redirectUri,client_id:String(config.clientId),code_verifier:verifier});if(config.clientSecret)form.set('client_secret',String(config.clientSecret));
-   const response=await fetch(String(config.tokenUrl),{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body:form,redirect:'error',signal:AbortSignal.timeout(20000)});
+   const form=new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:redirectUri,code_verifier:verifier});
+   const response=await requestOAuthToken(config,form,20000);
    const raw=await readTextLimited(response,1000000);let tokens:Json;try{tokens=JSON.parse(raw);}catch{throw new Error('OAuth token endpoint returned an invalid response.');}
    if(!response.ok||typeof tokens.access_token!=='string'||!tokens.access_token)throw new Error('OAuth authorization exchange failed with HTTP '+response.status+'.');
    tokens.expires_at=tokens.expires_in?Date.now()+Number(tokens.expires_in)*1000:null;
@@ -650,7 +669,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
   if(req.method==='GET'&&pathname==='/api/api-hub/connectors/queue'){
    await refreshDueQueueEntries(user.id);
    const result=await pool.query("SELECT id,name,status,enabled,queue_state,next_available_at,fallback_group,fallback_priority,last_quota_status,last_quota_reset_at,last_http_status,updated_at FROM user_api_connectors WHERE user_id=$1 ORDER BY CASE WHEN queue_state='ready' THEN 0 ELSE 1 END,CASE WHEN queue_state='waiting' THEN next_available_at END ASC NULLS LAST,fallback_priority ASC,updated_at ASC",[user.id]);
-   const rows=result.rows,summary={total:rows.length,ready:rows.filter((x:any)=>x.queue_state==='ready'&&x.status==='verified').length,enabled:rows.filter((x:any)=>x.enabled&&x.status==='verified'&&x.queue_state==='ready').length,waiting:rows.filter((x:any)=>x.queue_state==='waiting').length,resetKnown:rows.filter((x:any)=>x.queue_state==='waiting'&&x.next_available_at).length,needsOwnerReview:rows.filter((x:any)=>x.queue_state==='waiting'&&!x.next_available_at).length};
+   const rows=result.rows,summary={total:rows.length,ready:rows.filter((x:any)=>x.queue_state==='ready'&&x.status==='verified').length,enabled:rows.filter((x:any)=>x.enabled&&x.status==='verified'&&x.queue_state==='ready').length,waiting:rows.filter((x:any)=>x.queue_state==='waiting').length,resetKnown:rows.filter((x:any)=>x.queue_state==='waiting'&&x.next_available_at).length,needsOwnerReview:rows.filter((x:any)=>x.queue_state==='waiting'&&!x.next_available_at).length,dueRecovery:rows.filter((x:any)=>[402,429].includes(Number(x.last_quota_status))&&x.last_quota_reset_at&&new Date(x.last_quota_reset_at).getTime()<=Date.now()).length};
    sendAuthJson(res,200,{summary,queue:rows.map((x:any)=>({id:x.id,name:x.name,status:x.status,enabled:x.enabled,queueState:x.queue_state,nextAvailableAt:x.next_available_at,fallbackGroup:x.fallback_group||'',priority:Number(x.fallback_priority||100),lastQuotaStatus:x.last_quota_status,lastQuotaResetAt:x.last_quota_reset_at,lastHttpStatus:x.last_http_status,updatedAt:x.updated_at}))});return true;
   }
   const priorityMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/priority$/i);
@@ -792,6 +811,38 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    await audit(user.id,'api.connector.credential_rotated',row.id,{authType:row.auth_type,requiresVerification:true});
    sendAuthJson(res,200,{updated:true,verified:false,enabled:false,requiresVerification:true});return true;
   }
+  if(req.method==='POST'&&pathname==='/api/api-hub/connectors/recover-due'){
+   await refreshDueQueueEntries(user.id);
+   const client=await pool.connect();let claimed:any[]=[];
+   try{
+    await client.query('BEGIN');
+    const result=await client.query("WITH due AS (SELECT id FROM user_api_connectors WHERE user_id=$1 AND queue_state='ready' AND last_quota_status IN (402,429) AND last_quota_reset_at IS NOT NULL AND last_quota_reset_at<=now() AND (quota_recovery_claimed_at IS NULL OR quota_recovery_claimed_at<now()-interval '2 minutes') ORDER BY last_quota_reset_at ASC,fallback_priority ASC FOR UPDATE SKIP LOCKED LIMIT 5) UPDATE user_api_connectors c SET quota_recovery_claimed_at=now(),updated_at=now() FROM due WHERE c.id=due.id AND c.user_id=$1 RETURNING c.*",[user.id]);
+    claimed=result.rows;await client.query('COMMIT');
+   }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+   const outcomes:any[]=[];
+   for(const row of claimed){
+    const requestId=randomUUID();
+    try{
+     const result=await execute(row,row.sample_arguments_json,user.id,requestId,15_000);
+     await pool.query("UPDATE user_api_connectors SET status='verified',queue_state='ready',next_available_at=NULL,enabled=false,quota_recovery_claimed_at=NULL,last_quota_status=NULL,last_quota_observed_at=NULL,last_quota_reset_at=NULL,last_tested_at=now(),last_http_status=$3,last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2",[row.id,user.id,result.status]);
+     await audit(user.id,'api.connector.quota_recovered',row.id,{httpStatus:result.status,durationMs:result.durationMs,resetEvidenceAt:row.last_quota_reset_at,trigger:'owner_batch'});
+     outcomes.push({id:row.id,name:row.name,recovered:true,verified:true,enabled:false,httpStatus:result.status});
+    }catch(error){
+     const status=Number((error as any)?.httpStatus)||null;
+     const message=error instanceof Error?error.message.slice(0,250):'API connector recovery failed.';
+     if(status===402||status===429){
+      const retryAt=(error as any)?.retryAt,next=retryAt?new Date(retryAt):null;
+      const evidence=(error as any)?.rateLimitEvidence||{source:'upstream_response',observedAt:new Date().toISOString(),httpStatus:status,headers:{}};
+      await pool.query("UPDATE user_api_connectors SET enabled=false,status='error',queue_state='waiting',next_available_at=$3,quota_recovery_claimed_at=NULL,rate_limit_evidence=$4::jsonb,last_quota_status=$5,last_quota_observed_at=now(),last_quota_reset_at=$3,last_tested_at=now(),last_http_status=$5,last_error=$6,updated_at=now() WHERE id=$1 AND user_id=$2",[row.id,user.id,next,JSON.stringify(evidence),status,message]);
+     }else{
+      await pool.query("UPDATE user_api_connectors SET enabled=false,status='error',quota_recovery_claimed_at=NULL,last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1 AND user_id=$2",[row.id,user.id,status,message]);
+     }
+     await audit(user.id,'api.connector.quota_recovery_failed',row.id,{status,error:message,trigger:'owner_batch'});
+     outcomes.push({id:row.id,name:row.name,recovered:false,httpStatus:status,waitingForQuota:status===402||status===429,error:message});
+    }
+   }
+   sendAuthJson(res,200,{checked:outcomes.length,recovered:outcomes.filter(x=>x.recovered).length,failed:outcomes.filter(x=>!x.recovered).length,limit:5,results:outcomes});return true;
+  }
   const recoverMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/recover$/i);
   if(req.method==='POST'&&recoverMatch){
    const row=await ownerConnector(user.id,recoverMatch[1]);
@@ -803,10 +854,12 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    if(resetAt>Date.now()){
     sendAuthJson(res,409,{recovered:false,error:'The upstream-reported quota reset time has not arrived yet.',nextAvailableAt:row.last_quota_reset_at});return true;
    }
+   const claim=await pool.query("UPDATE user_api_connectors SET quota_recovery_claimed_at=now() WHERE id=$1 AND user_id=$2 AND (quota_recovery_claimed_at IS NULL OR quota_recovery_claimed_at<now()-interval '2 minutes') RETURNING id",[row.id,user.id]);
+   if(!claim.rows[0]){sendAuthJson(res,409,{recovered:false,error:'A quota recovery check is already running for this connector.'});return true;}
    const requestId=randomUUID();
    try{
     const result=await execute(row,row.sample_arguments_json,user.id,requestId,15_000);
-    await pool.query(`UPDATE user_api_connectors SET status='verified',queue_state='ready',next_available_at=NULL,enabled=false,last_tested_at=now(),last_http_status=$3,last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,user.id,result.status]);
+    await pool.query(`UPDATE user_api_connectors SET status='verified',queue_state='ready',next_available_at=NULL,enabled=false,quota_recovery_claimed_at=NULL,last_quota_status=NULL,last_quota_observed_at=NULL,last_quota_reset_at=NULL,last_tested_at=now(),last_http_status=$3,last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,user.id,result.status]);
     await audit(user.id,'api.connector.quota_recovered',row.id,{httpStatus:result.status,durationMs:result.durationMs,resetEvidenceAt:row.last_quota_reset_at});
     sendAuthJson(res,200,{recovered:true,verified:true,enabled:false,queueState:'ready',httpStatus:result.status,durationMs:result.durationMs});return true;
    }catch(error){
@@ -816,9 +869,9 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
      const retryAt=(error as any)?.retryAt;
      const next=retryAt?new Date(retryAt):null;
      const evidence=(error as any)?.rateLimitEvidence||{source:'upstream_response',observedAt:new Date().toISOString(),httpStatus:status,headers:{}};
-     await pool.query(`UPDATE user_api_connectors SET enabled=false,status='error',queue_state='waiting',next_available_at=$3,rate_limit_evidence=$4::jsonb,last_quota_status=$5,last_quota_observed_at=now(),last_quota_reset_at=$3,last_tested_at=now(),last_http_status=$5,last_error=$6,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,user.id,next,JSON.stringify(evidence),status,message]);
+     await pool.query(`UPDATE user_api_connectors SET enabled=false,status='error',queue_state='waiting',next_available_at=$3,quota_recovery_claimed_at=NULL,rate_limit_evidence=$4::jsonb,last_quota_status=$5,last_quota_observed_at=now(),last_quota_reset_at=$3,last_tested_at=now(),last_http_status=$5,last_error=$6,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,user.id,next,JSON.stringify(evidence),status,message]);
     }else{
-     await pool.query(`UPDATE user_api_connectors SET last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,user.id,status,message]);
+     await pool.query(`UPDATE user_api_connectors SET quota_recovery_claimed_at=NULL,last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,user.id,status,message]);
     }
     await audit(user.id,'api.connector.quota_recovery_failed',row.id,{status,error:message});
     sendAuthJson(res,502,{recovered:false,error:message,httpStatus:status,waitingForQuota:status===402||status===429});return true;
