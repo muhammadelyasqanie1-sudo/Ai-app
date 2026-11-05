@@ -545,7 +545,8 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    const multipart=String(req.headers['content-type']||'').toLowerCase().startsWith('multipart/form-data');
    const payload=multipart?await readMultipartRequest(req):{arguments:await readJsonBody(req,60_000),files:{}};
    try{
-    const result=await executeConnectorWithFallback(row,payload.arguments.arguments||payload.arguments,user.id,requestId,payload.files);
+    const callArguments=multipart?payload.arguments:(payload.arguments.arguments||payload.arguments);
+    const result=await executeConnectorWithFallback(row,callArguments,user.id,requestId,payload.files);
     sendAuthJson(res,200,{requestId,result});return true;
    }catch(error){
     const message=error instanceof Error?error.message.slice(0,250):'API connector call failed.';
