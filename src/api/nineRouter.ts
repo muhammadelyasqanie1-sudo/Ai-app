@@ -126,7 +126,7 @@ async function proxy(req:IncomingMessage,res:ServerResponse,target:URL,key:strin
  const abortClient=()=>controller.abort(new Error('Client disconnected.'));
  req.once('aborted',abortClient);
  res.once('close',()=>{if(!res.writableEnded)controller.abort(new Error('Client disconnected.'));});
- let response:Response;
+ let response!:Response;
  try{
   const maxAttempts=method==='GET'?3:1;
   for(let attempt=1;attempt<=maxAttempts;attempt++){
@@ -186,6 +186,7 @@ export async function handleNineRouterApi(req:IncomingMessage,res:ServerResponse
  if(!user){reply(res,401,{available:false,error:'Sign in is required.'},requestId);return true;}
  if(user.role!=='admin'&&user.role!=='superadmin'){reply(res,403,{available:false,error:'The shared 9Router gateway is currently restricted to administrators until provider accounts are isolated per user.'},requestId);return true;}
  if(req.method!=='GET'&&!verifyCsrf(req)){reply(res,403,{error:'CSRF validation failed.'},requestId);return true;}
+ if(pool){const setting=await pool.query("SELECT value_json FROM system_config WHERE key='ninerouter_gateway_enabled' LIMIT 1").catch(()=>({rows:[]}));if(setting.rows[0]?.value_json===false){reply(res,503,{available:false,error:'9Router gateway is paused by the administrator.'},requestId);return true;}}
  if(!rateLimit(user.id)){reply(res,429,{error:'9Router proxy limit is 20 requests per minute per user.'},requestId);return true;}
  const key=(process.env.NINEROUTER_API_KEY||'').trim().replace(/^Bearer\s+/i,'').trim();
  if(!process.env.NINEROUTER_BASE_URL?.trim()){
