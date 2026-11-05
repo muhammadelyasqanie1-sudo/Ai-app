@@ -680,6 +680,9 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    await pool.query(`UPDATE user_api_connectors SET credential_encrypted=$3,enabled=false,status='error',
     queue_state='ready',next_available_at=NULL,last_error='Credential updated; verify the connector before enabling it.',updated_at=now()
     WHERE id=$1 AND user_id=$2`,[row.id,user.id,encrypted]);
+   const activeKey=await pool.query('UPDATE user_api_connector_keys SET credential_encrypted=$3,updated_at=now() WHERE connector_id=$1 AND user_id=$2 AND is_active=true',[row.id,user.id,encrypted]);
+   if(!activeKey.rowCount)await pool.query(`INSERT INTO user_api_connector_keys(connector_id,user_id,label,credential_encrypted,is_active)
+    VALUES($1,$2,'Primary key',$3,true) ON CONFLICT(connector_id,label) DO UPDATE SET credential_encrypted=EXCLUDED.credential_encrypted,is_active=true,updated_at=now()`,[row.id,user.id,encrypted]);
    await audit(user.id,'api.connector.credential_rotated',row.id,{authType:row.auth_type,requiresVerification:true});
    sendAuthJson(res,200,{updated:true,verified:false,enabled:false,requiresVerification:true});return true;
   }
