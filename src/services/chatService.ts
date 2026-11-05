@@ -12,7 +12,8 @@ function estimateTokens(messages: ChatInput['messages']): number {
 function isProtectedContext(message: ChatInput['messages'][number]): boolean {
   const text = message.content;
   return Boolean(
-    message.role === 'tool' ||\n    message.tool_calls?.length ||
+    message.role === 'tool' ||
+    message.tool_calls?.length ||
     /\x60\x60\x60/.test(text) ||
     /\x60[^\x60\n]+\x60/.test(text) ||
     /https?:\/\/|(?:^|\s)\/[^\s]+|\b[A-Z0-9_]{3,}=[^\s]+/.test(text) ||
