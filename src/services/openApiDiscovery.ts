@@ -186,10 +186,17 @@ function governanceEvidence(document:Json,operations:any[]){
  };
  scanObject(document,'openapi');
  const responseHeaders:any[]=[];
+ const declaredParameters:any[]=[];
  for(const [path,pathItem] of Object.entries(document.paths||{})){
   if(!pathItem||typeof pathItem!=='object')continue;
   for(const method of ['get','post','put','patch','delete']){
    const op=(pathItem as any)[method];if(!op||typeof op!=='object')continue;
+   for(const parameter of [...((pathItem as any).parameters||[]),...(op.parameters||[])]){
+    if(String(parameter?.in||'')==='header'&&/^(retry-after|ratelimit-|x-ratelimit-)/i.test(String(parameter?.name||''))){
+     rateHeaders.add(String(parameter.name).toLowerCase());
+     declaredParameters.push({method:method.toUpperCase(),path,name:String(parameter.name),description:boundedText(parameter.description)});
+    }
+   }
    for(const [status,response] of Object.entries(op.responses||{})){
     const headers=(response as any)?.headers||{};
     for(const [headerName,header] of Object.entries(headers)){
@@ -202,6 +209,7 @@ function governanceEvidence(document:Json,operations:any[]){
   }
  }
  for(const item of responseHeaders)rateEvidence.push({kind:'response_header',...item});
+ for(const item of declaredParameters)rateEvidence.push({kind:'declared_parameter_header',...item});
  const descriptions:string[]=[];
  const collectText=(value:any,path:string,depth=0)=>{
   if(depth>5||!value||typeof value!=='object')return;
