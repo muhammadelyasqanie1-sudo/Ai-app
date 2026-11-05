@@ -502,11 +502,16 @@ async function executeConnectorWithFallback(row:any,args:unknown,userId:string,r
  }
 }
 
+function modelApiToolName(connectorId:string,toolName:string):string{
+ const id=connectorId.replace(/-/g,'').toLowerCase();
+ const suffix=toolName.toLowerCase().replace(/[^a-z0-9_]/g,'_').replace(/^[^a-z]+/,'tool').slice(0,26);
+ return 'api_'+id+'_'+(suffix||'tool');
+}
 export async function getEnabledUserApiToolDefinitions(userId:string){
  if(!pool||!userId)return [];
  try{
   await refreshDueQueueEntries(userId);
-  const result=await pool.query(`SELECT tool_name,description,input_schema_json,fallback_group FROM user_api_connectors
+  const result=await pool.query(`SELECT id,name,tool_name,description,http_method,input_schema_json,fallback_group FROM user_api_connectors
    WHERE user_id=$1 AND enabled=true AND status='verified' AND queue_state='ready' ORDER BY fallback_priority ASC,created_at DESC LIMIT 32`,[userId]);
   const available=result.rows.filter(row=>{
    const schema=validateSchema(row.input_schema_json);
@@ -515,8 +520,8 @@ export async function getEnabledUserApiToolDefinitions(userId:string){
   return available.map(row=>({
    type:'function' as const,
    function:{
-    name:String(row.tool_name),
-    description:(String(row.description||'Call the configured API connector '+row.tool_name)+(row.fallback_group?' Compatible fallback group: '+row.fallback_group+'. The executor automatically tries verified alternatives in this group on retryable upstream failures.':'' )).slice(0,1000),
+    name:modelApiToolName(String(row.id),String(row.tool_name)),
+    description:('API service: '+String(row.name||row.tool_name)+'. Method: '+String(row.http_method||'GET')+'. '+String(row.description||'Verified owner-configured API connector.')+(row.fallback_group?' Compatible fallback group: '+row.fallback_group+'. Verified alternatives in this group may be attempted only on retryable upstream failures.':'' )).slice(0,1000),
     parameters:modelToolSchema(row.input_schema_json),
    },
   }));
@@ -528,9 +533,11 @@ export async function getEnabledUserApiToolDefinitions(userId:string){
 
 export async function executeUserApiTool(userId:string,toolName:string,args:unknown){
  if(!pool||!userId)throw new Error('Sign in to use personal API connectors.');
+ const match=toolName.match(/^api_([a-f0-9]{32})_[a-z0-9_]{1,26}$/);
+ if(!match)throw new Error('Invalid API connector tool name.');
  await refreshDueQueueEntries(userId);
- const found=await pool.query(`SELECT * FROM user_api_connectors WHERE user_id=$1 AND tool_name=$2
-  AND enabled=true AND status='verified' AND queue_state='ready' LIMIT 1`,[userId,toolName]);
+ const found=await pool.query(`SELECT * FROM user_api_connectors WHERE user_id=$1 AND replace(id::text,'-','')=$2
+  AND enabled=true AND status='verified' AND queue_state='ready' LIMIT 1`,[userId,match[1]]);
  const row=found.rows[0];
  if(!row)throw new Error('This API connector is no longer enabled for your account.');
  if(!await reserveConnectorCall(userId,row.id))throw new Error('This API connector has reached its limit of 30 calls per minute.');
