@@ -110,6 +110,10 @@ async function proxy(req:IncomingMessage,res:ServerResponse,target:URL,key:strin
  headers.set('Accept',typeof req.headers.accept==='string'?req.headers.accept:'application/json');
  if(key)headers.set('Authorization','Bearer '+key);
  headers.set('X-Request-Id',requestId);
+ const tokenSaverOverride=req.headers['x-9router-token-saver'];
+ if(typeof tokenSaverOverride==='string'&&/^(on|off)$/i.test(tokenSaverOverride)){
+  headers.set('X-9Router-Token-Saver',tokenSaverOverride.toLowerCase());
+ }
  const method=(req.method||'GET').toUpperCase();
  let body:Buffer|undefined;
  if(method==='POST'){
