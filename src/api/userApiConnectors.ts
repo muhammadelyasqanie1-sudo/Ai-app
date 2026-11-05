@@ -335,7 +335,9 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  const retryAt=parseUpstreamResetAt(response);
  const announcedType=(response.headers.get('content-type')||'application/octet-stream').split(';')[0].trim().toLowerCase();
  const contentType=/^[a-z0-9][a-z0-9!#const contentType=(response.headers.get('content-type')||'application/octet-stream').split(';')[0].trim().toLowerCase();^_.+-]{0,80}\/[a-z0-9][a-z0-9!#const contentType=(response.headers.get('content-type')||'application/octet-stream').split(';')[0].trim().toLowerCase();^_.+-]{0,80}$/.test(announcedType)?announcedType:'application/octet-stream';
- const isTextual=contentType==='application/json'||contentType.endsWith('+json')||contentType.startsWith('text/')||contentType==='application/xml'||contentType.endsWith('+xml');
+ const contentDisposition=response.headers.get('content-disposition')||'';
+ const downloadable=/(?:^|;)\s*attachment\b/i.test(contentDisposition)||contentType==='image/svg+xml';
+ const isTextual=!downloadable&&(contentType==='application/json'||contentType.endsWith('+json')||contentType.startsWith('text/')||contentType==='application/xml'||contentType.endsWith('+xml'));
  let data:unknown;
  if(isTextual){
   const raw=await readTextLimited(response,1_000_000);
