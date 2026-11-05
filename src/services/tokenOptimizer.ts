@@ -8,7 +8,7 @@
 export type OptimizableMessage = { role: string; content: string; [key: string]: unknown };
 
 function compactOutsideCode(text: string): string {
-  const parts = text.split(/(```[\s\S]*?```)/g);
+  const parts = text.split(/(```[\s\S]*?(?:```|$))/g);
   return parts.map((part, index) => {
     if (index % 2 === 1) return part;
     return part
