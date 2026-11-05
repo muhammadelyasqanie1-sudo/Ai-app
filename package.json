@@ -45,6 +45,7 @@
     "bcryptjs": "^3.0.2",
     "argon2": "^0.44.0",
     "zod": "^4.1.12",
+    "yaml": "^2.8.1",
     "@afg-ai/capacitor-device-info": "file:plugins/capacitor-device-info",
     "@afg-ai/capacitor-offline-models": "file:plugins/capacitor-offline-models"
   },
