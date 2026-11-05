@@ -6,7 +6,7 @@ import { discoverOpenApiOperations, discoverOfficialDocumentation } from '../ser
 
 export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
   if (!pathname.startsWith('/api/api-hub') && !pathname.startsWith('/api/admin/api-hub')) return false;
-  if (!pool) { sendAuthJson(res,503,{error:'The API Hub requires DATABASE_URL and migrations 0012–0015 plus 0024–0025.'}); return true; }
+  if (!pool) { sendAuthJson(res,503,{error:'The API Hub requires DATABASE_URL and migrations 0012–0015 plus 0024–0026.'}); return true; }
   const user = await authenticateRequest(req).catch(() => null);
   if (!user) { sendAuthJson(res,401,{error:'Sign in is required.'}); return true; }
   const admin = ['admin','superadmin'].includes(user.role);
