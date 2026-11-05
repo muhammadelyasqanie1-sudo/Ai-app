@@ -75,12 +75,12 @@ async function readBytesLimited(response:Response,maxBytes:number):Promise<Buffe
  return Buffer.concat(chunks,total);
 }
 function safeDownloadName(value:string|null,contentType:string):string{
- const raw=(value||'').match(/filename\\*?=(?:UTF-8''|")?([^";]+)/i)?.[1]||'';
+ const raw=(value||'').match(/filename\*?=(?:UTF-8''|")?([^";]+)/i)?.[1]||'';
  let name=raw;
  try{name=decodeURIComponent(name);}catch{}
- name=name.replace(/[\\/]/g,'_').replace(/[\\u0000-\\u001f\\u007f]/g,'').replace(/[<>:"|?*]/g,'_').trim().slice(0,160);
+ name=name.replace(/[\\/]/g,'_').replace(/[\u0000-\u001f\u007f]/g,'').replace(/[<>:"|?*]/g,'_').trim().slice(0,160);
  if(!name||name==='.'||name==='..')name='api-response';
- if(!/\\.[a-z0-9]{1,8}$/i.test(name)){
+ if(!/\.[a-z0-9]{1,8}$/i.test(name)){
   const ext:Record<string,string>={'image/png':'png','image/jpeg':'jpg','image/gif':'gif','image/webp':'webp','application/pdf':'pdf','audio/mpeg':'mp3','audio/wav':'wav','audio/ogg':'ogg','video/mp4':'mp4','application/zip':'zip'};
   name+='.'+(ext[contentType]||'bin');
  }
