@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ShieldCheck, LockKeyhole, RefreshCw, LogOut, LayoutDashboard, Users, Network, TerminalSquare,
   Cpu, Activity, Gauge, HardDrive, Flag, ClipboardList, ShieldAlert, CheckCircle2,
@@ -69,7 +69,12 @@ async function adminApi(path:string, options:RequestInit = {}):Promise<any> {
   if (method !== 'GET' && method !== 'HEAD') headers.set('X-CSRF-Token',csrfCookie());
   const response = await fetch(API + path,{...options,headers,credentials:'include',cache:'no-store'});
   const body = await response.json().catch(()=>({}));
-  if (!response.ok) throw new Error(body.error || ('HTTP ' + response.status));
+  if (!response.ok) {
+    const failure = new Error(body.error || ('HTTP ' + response.status)) as Error & {status?:number; retryAfter?:string};
+    failure.status = response.status;
+    failure.retryAfter = response.headers.get('Retry-After') || undefined;
+    throw failure;
+  }
   return body;
 }
 
@@ -126,6 +131,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [modelStatusFilter,setModelStatusFilter] = useState('all');
   const [modelPage,setModelPage] = useState(0);
   const [selectedModelKeys,setSelectedModelKeys] = useState<Set<string>>(new Set());
+  const [bulkAction,setBulkAction] = useState<'enable'|'disable'|null>(null);
 
   const [search,setSearch] = useState('');
   const [userRoleFilter,setUserRoleFilter] = useState('all');
@@ -162,8 +168,11 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState('');
   const [notice,setNotice] = useState('');
+  const adminLoadInFlight = useRef(false);
 
   const loadAdminData = useCallback(async():Promise<boolean>=>{
+    if(adminLoadInFlight.current)return false;
+    adminLoadInFlight.current=true;
     setLoading(true);
     setError('');
     try{
@@ -173,7 +182,12 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
         '/api/admin/rate-limits','/api/admin/feature-flags','/api/admin/usage','/api/admin/errors',
         '/api/admin/sessions','/api/admin/config','/api/admin/announcements',
       ];
-      const values=await Promise.all(paths.map(path=>adminApi(path)));
+      const values:any[]=[];
+      // The production Postgres pool is intentionally small; avoid flooding it with 15 concurrent admin reads.
+      for(let index=0;index<paths.length;index+=3){
+        const batch=await Promise.all(paths.slice(index,index+3).map(path=>adminApi(path)));
+        values.push(...batch);
+      }
       setProviders(values[0].providers||[]);
       setModels(values[1].models||[]);
       setFallbacks(values[2].fallbacks||[]);
@@ -195,10 +209,15 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       setAuthenticated(true);
       return true;
     }catch(err){
-      setAuthenticated(false);
+      const status = (err as Error & {status?:number})?.status;
+      // A rate limit, transient database error, or failed dashboard query must not sign the administrator out.
+      if(status === 401){
+        setAuthenticated(false);
+        setAdminRole(null);
+      }
       setError(err instanceof Error?err.message:'Could not load administrator data.');
       return false;
-    }finally{setLoading(false);}
+    }finally{adminLoadInFlight.current=false;setLoading(false);}
   },[]);
 
   const loadHealth = useCallback(async()=>{
@@ -210,6 +229,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     adminApi('/api/auth/me').then((data)=>{
       if(data.authenticated && ['admin','superadmin'].includes(data.user?.role)){
         setAdminRole(data.user.role);
+        setAuthenticated(true);
         void loadAdminData();
       }
     }).catch(()=>{});
@@ -229,7 +249,12 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       )});
       setBootstrapToken('');
       const session=await adminApi('/api/auth/me');
-      if(session.user?.role==='admin'||session.user?.role==='superadmin')setAdminRole(session.user.role);
+      if(session.user?.role==='admin'||session.user?.role==='superadmin'){
+        setAdminRole(session.user.role);
+        setAuthenticated(true);
+      }else{
+        throw new Error('The account is not an administrator.');
+      }
       if(await loadAdminData())setNotice('Administrator session established.');
     }catch(err){setError(err instanceof Error?err.message:'Administrator authentication failed.');}
     finally{setLoading(false);}
@@ -374,15 +399,32 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     setSelectedModelKeys(new Set(filteredModels.map(modelKey)));
   };
   const bulkSetModels=async(enabled:boolean)=>{
+    if(bulkAction)return;
     const chosen=models.filter(model=>selectedModelKeys.has(modelKey(model)));
     if(!chosen.length){setError('Select at least one model first.');return;}
+    setError('');
+    setNotice((enabled?'Enabling ':'Disabling ')+chosen.length+' selected models…');
+    setBulkAction(enabled?'enable':'disable');
     try{
       const result=await adminApi('/api/admin/models/bulk',{method:'POST',body:JSON.stringify({
         enabled,models:chosen.map(model=>({providerId:model.providerId,modelId:model.id}))
       })});
       setSelectedModelKeys(new Set());
-      await reloadNotice((enabled?'Enabled ':'Disabled ')+String(result.changed||0)+' selected models.');
-    }catch(err){setError(err instanceof Error?err.message:'Bulk model update failed.');}
+      const refreshed=await loadAdminData();
+      if(refreshed){
+        const summary=(enabled?'Enabled ':'Disabled ')+String(result.changed||0)+' models; '+
+          String(result.unchanged||0)+' already had that state; '+String(result.missing||0)+' were not found.';
+        setNotice(summary);
+      }else{
+        setNotice('The bulk update completed, but the model list could not refresh. Use Refresh to confirm the latest state.');
+      }
+    }catch(err){
+      const status=(err as Error & {status?:number})?.status;
+      const retry=(err as Error & {retryAfter?:string})?.retryAfter;
+      setError((err instanceof Error?err.message:'Bulk model update failed.')+
+        (status===429?' Please wait '+(retry||'a short time')+' and retry.':''));
+      setNotice('');
+    }finally{setBulkAction(null);}
   };
 
   const testModel=async(model:ModelRow)=>{
@@ -579,10 +621,10 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
         {showBootstrap&&<>
           <input className={field} value={displayName} onChange={e=>setDisplayName(e.target.value)} placeholder="Administrator name"/>
           <input className={field} value={bootstrapToken} onChange={e=>setBootstrapToken(e.target.value)} type="password" placeholder="One-time bootstrap token"/>
-          <p className="text-xs text-amber-300">Requires AFG_ADMIN_BOOTSTRAP_TOKEN on the server. The first administrator becomes superadmin.</p>
+          <p className="text-xs text-amber-300">Requires AFG_ADMIN_BOOTSTRAP_TOKEN on the server. Creates the first superadmin, or recovers an existing administrator when you enter that administrator’s exact email address.</p>
         </>}
-        <button className={primary+' w-full'} disabled={loading||!email||!password||(showBootstrap&&!bootstrapToken)} onClick={()=>void signIn(showBootstrap)}>{loading?'…':showBootstrap?'Create first superadmin':'Sign in securely'}</button>
-        <button className="w-full py-2 text-xs text-cyan-300 underline" onClick={()=>setShowBootstrap(value=>!value)}>{showBootstrap?'Back to sign in':'Set up first administrator'}</button>
+        <button className={primary+' w-full'} disabled={loading||!email||!password||(showBootstrap&&!bootstrapToken)} onClick={()=>void signIn(showBootstrap)}>{loading?'…':showBootstrap?'Set up / recover administrator':'Sign in securely'}</button>
+        <button className="w-full py-2 text-xs text-cyan-300 underline" onClick={()=>setShowBootstrap(value=>!value)}>{showBootstrap?'Back to sign in':'Set up / recover administrator'}</button>
       </div>
       {error&&<p role="alert" className="mt-4 rounded-xl bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
     </div>
@@ -591,7 +633,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   return <section className="afg-admin-panel mx-auto w-full max-w-[1600px] px-3 py-5 sm:px-5 lg:px-7">
     <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/10 ring-1 ring-cyan-400/30"><ShieldCheck className="h-6 w-6 text-cyan-300"/></div><div><h1 className="text-xl font-black tracking-tight text-white sm:text-2xl">AFG AI <span className="text-cyan-300">Admin</span></h1><p className="text-xs text-slate-500">Control plane · Operations · Security · Transparency</p></div></div>
-      <div className="flex items-center gap-2"><span className="hidden rounded-lg border border-slate-800 px-3 py-2 text-xs text-slate-400 sm:inline">{adminRole||'Administrator'}</span><button className={secondary+' flex items-center gap-2'} onClick={()=>void loadAdminData()}><RefreshCw className="h-4 w-4"/>Refresh</button><button className={secondary+' flex items-center gap-2'} onClick={()=>void signOut()}><LogOut className="h-4 w-4"/>Sign out</button></div>
+      <div className="flex items-center gap-2"><span className="hidden rounded-lg border border-slate-800 px-3 py-2 text-xs text-slate-400 sm:inline">{adminRole||'Administrator'}</span><button className={secondary+' flex items-center gap-2'} disabled={loading} onClick={()=>void loadAdminData()}><RefreshCw className="h-4 w-4"/>Refresh</button><button className={secondary+' flex items-center gap-2'} onClick={()=>void signOut()}><LogOut className="h-4 w-4"/>Sign out</button></div>
     </header>
     {error&&<div role="alert" className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>}
     {notice&&<div role="status" className="mb-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-300">{notice}</div>}
@@ -703,9 +745,9 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
             <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
               <button className={secondary} onClick={selectFilteredModels}>Select all filtered ({fmt(filteredModels.length)})</button>
               <span className="text-xs text-slate-400">{selectedModelKeys.size} selected</span>
-              <button className={primary} disabled={!selectedModelKeys.size} onClick={()=>void bulkSetModels(true)}>Enable selected</button>
-              <button className={secondary} disabled={!selectedModelKeys.size} onClick={()=>void bulkSetModels(false)}>Disable selected</button>
-              <button className={secondary} disabled={!selectedModelKeys.size} onClick={()=>setSelectedModelKeys(new Set())}>Clear selection</button>
+              <button className={primary} disabled={!selectedModelKeys.size||bulkAction!==null} onClick={()=>void bulkSetModels(true)}>{bulkAction==='enable'?'Enabling…':'Enable selected'}</button>
+              <button className={secondary} disabled={!selectedModelKeys.size||bulkAction!==null} onClick={()=>void bulkSetModels(false)}>{bulkAction==='disable'?'Disabling…':'Disable selected'}</button>
+              <button className={secondary} disabled={!selectedModelKeys.size||bulkAction!==null} onClick={()=>setSelectedModelKeys(new Set())}>Clear selection</button>
             </div>
             <div className="mb-3 grid gap-2 sm:grid-cols-3"><input className={field} value={modelSearch} onChange={e=>{setModelSearch(e.target.value);setModelPage(0);}} placeholder="Search provider or model ID"/><select className={field} value={modelProviderFilter} onChange={e=>{setModelProviderFilter(e.target.value);setModelPage(0);}}><option value="all">All providers</option>{providers.map(p=><option key={p.id} value={p.id}>{p.displayName}</option>)}</select><select className={field} value={modelStatusFilter} onChange={e=>{setModelStatusFilter(e.target.value);setModelPage(0);}}><option value="all">All model states</option><option value="verified">Verified</option><option value="unverified">Unverified</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select></div>
             <div className="space-y-3">{pageModels.map(model=><div key={model.providerId+':'+model.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">

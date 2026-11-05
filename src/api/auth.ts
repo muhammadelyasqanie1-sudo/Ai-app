@@ -502,19 +502,16 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
   if (pathname === '/api/auth/bootstrap-admin' && req.method === 'POST') {
     try {
       const configuredToken = process.env.AFG_ADMIN_BOOTSTRAP_TOKEN || '';
-      const rawBody = await readJsonBody(req);
-      const parsed = parseAuthInput(AUTH_INPUT.bootstrap, rawBody);
+      const parsed = parseAuthInput(AUTH_INPUT.bootstrap, await readJsonBody(req));
       if (!parsed) { sendAuthJson(res, 400, { error: 'Provide a valid bootstrap token, email and password of at least 12 characters.' }); return true; }
-      const body = parsed;
-      const suppliedToken = body.bootstrapToken;
-      if (configuredToken.length < 32 || suppliedToken.length !== configuredToken.length ||
-          !timingSafeEqual(Buffer.from(suppliedToken), Buffer.from(configuredToken))) {
+      const { bootstrapToken, password } = parsed;
+      if (configuredToken.length < 32 || bootstrapToken.length !== configuredToken.length ||
+          !timingSafeEqual(Buffer.from(bootstrapToken), Buffer.from(configuredToken))) {
         sendAuthJson(res, 403, { error: 'Admin bootstrap is not authorized or is not configured.' });
         return true;
       }
-      const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-      const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 100) : 'AFG AI Administrator';
-      const password = typeof body.password === 'string' ? body.password : '';
+      const email = parsed.email.trim().toLowerCase();
+      const displayName = (parsed.displayName || 'AFG AI Administrator').trim().slice(0,100);
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 12 || password.length > 256) {
         sendAuthJson(res, 400, { error: 'Use a valid email and a password of at least 12 characters.' });
         return true;
@@ -522,37 +519,50 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       const passwordHash = await hashPassword(password);
       const client = await pool.connect();
       let adminUserId = '';
+      let recovered = false;
       try {
         await client.query('BEGIN');
-        // Serialize first-admin creation so concurrent requests cannot create multiple administrators.
         await client.query("SELECT pg_advisory_xact_lock(hashtext('afg-ai:admin-bootstrap'))");
-        const existingAdmins = await client.query("SELECT 1 FROM users WHERE role IN ('admin','superadmin') AND status = 'active' LIMIT 1");
-        if (existingAdmins.rows.length) {
-          await client.query('ROLLBACK');
-          sendAuthJson(res, 409, { error: 'An active administrator already exists. Bootstrap is permanently closed.' });
-          return true;
-        }
-        const existingUser = await client.query(
-          'SELECT id,status FROM users WHERE lower(email)=lower($1) LIMIT 1 FOR UPDATE',
-          [email],
+        const existingAdmins = await client.query(
+          "SELECT id,email,role FROM users WHERE role IN ('admin','superadmin') AND status='active' ORDER BY created_at ASC",
         );
-        if (existingUser.rows[0] && existingUser.rows[0].status !== 'active') {
+        const matchingAdmin = existingAdmins.rows.find((row: any) => String(row.email || '').toLowerCase() === email);
+        if (existingAdmins.rows.length && !matchingAdmin) {
           await client.query('ROLLBACK');
-          sendAuthJson(res, 409, { error: 'The selected account is not active. Use a different email or restore the account through an authorized process.' });
+          sendAuthJson(res, 409, { error: 'An active administrator already exists. To recover access, use the exact email address of that administrator.' });
           return true;
         }
-        if (existingUser.rows[0]) {
-          const promoted = await client.query(
-            "UPDATE users SET display_name=$2,password_hash=$3,role='superadmin',email_verified=true,updated_at=now() WHERE id=$1 RETURNING id",
-            [existingUser.rows[0].id,displayName,passwordHash],
+        if (matchingAdmin) {
+          const updated = await client.query(
+            "UPDATE users SET display_name=$2,password_hash=$3,email_verified=true,updated_at=now() WHERE id=$1 RETURNING id",
+            [matchingAdmin.id,displayName,passwordHash],
           );
-          adminUserId = promoted.rows[0].id;
+          adminUserId = updated.rows[0].id;
+          await client.query('UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL',[adminUserId]);
+          recovered = true;
         } else {
-          const created = await client.query(
-            "INSERT INTO users (email,display_name,password_hash,role,email_verified) VALUES ($1,$2,$3,'superadmin',true) RETURNING id",
-            [email,displayName,passwordHash],
+          const existingUser = await client.query(
+            'SELECT id,status FROM users WHERE lower(email)=lower($1) LIMIT 1 FOR UPDATE',
+            [email],
           );
-          adminUserId = created.rows[0].id;
+          if (existingUser.rows[0] && existingUser.rows[0].status !== 'active') {
+            await client.query('ROLLBACK');
+            sendAuthJson(res, 409, { error: 'The selected account is not active. Restore it through an authorized account recovery process.' });
+            return true;
+          }
+          if (existingUser.rows[0]) {
+            const promoted = await client.query(
+              "UPDATE users SET display_name=$2,password_hash=$3,role='superadmin',email_verified=true,updated_at=now() WHERE id=$1 RETURNING id",
+              [existingUser.rows[0].id,displayName,passwordHash],
+            );
+            adminUserId = promoted.rows[0].id;
+          } else {
+            const created = await client.query(
+              "INSERT INTO users (email,display_name,password_hash,role,email_verified) VALUES ($1,$2,$3,'superadmin',true) RETURNING id",
+              [email,displayName,passwordHash],
+            );
+            adminUserId = created.rows[0].id;
+          }
         }
         await client.query('COMMIT');
       } catch (error) {
@@ -562,10 +572,10 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         client.release();
       }
       await createSession(adminUserId, res);
-      await recordAuthSecurityEvent(req,adminUserId,'auth.admin_bootstrap','warning');
-      sendAuthJson(res, 201, { authenticated: true, bootstrapped: true });
+      await recordAuthSecurityEvent(req,adminUserId,recovered?'auth.admin_recovery':'auth.admin_bootstrap','warning');
+      sendAuthJson(res, recovered ? 200 : 201, { authenticated: true, bootstrapped: !recovered, recovered });
     } catch {
-      sendAuthJson(res, 400, { error: 'Could not complete administrator bootstrap.' });
+      sendAuthJson(res, 400, { error: 'Could not complete administrator bootstrap or recovery.' });
     }
     return true;
   }
