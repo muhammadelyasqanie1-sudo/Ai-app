@@ -100,7 +100,7 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean;canSy
    try{const result=await request('/api/api-hub/random?category='+encodeURIComponent(category));setRandomItem(result.item||null);}
    catch(e){setError(e instanceof Error?e.message:'Random discovery failed.');}
  };
- const discoverOpenApi=async()=>{setDiscovering(true);setError('');setNotice('');setOpenApiResult(null);setOpenApiSelection(null);try{const result=await request('/api/api-hub/openapi/discover',{method:'POST',body:JSON.stringify({specUrl:openApiUrl.trim()})});setOpenApiResult(result);setNotice(label('OpenAPI operations discovered. Select an operation to configure it.','عملیات OpenAPI پیدا شد؛ یک عملیات را برای تنظیم انتخاب کنید.'));}catch(e){setError(e instanceof Error?e.message:'OpenAPI discovery failed.');}finally{setDiscovering(false);}};
+ const discoverOpenApi=async()=>{setDiscovering(true);setError('');setNotice('');setOpenApiResult(null);setOpenApiSelection(null);setBulkSelected([]);try{const result=await request('/api/api-hub/openapi/discover',{method:'POST',body:JSON.stringify({specUrl:openApiUrl.trim()})});setOpenApiResult(result);setNotice(label('OpenAPI operations discovered. Select an operation to configure it.','عملیات OpenAPI پیدا شد؛ یک عملیات را برای تنظیم انتخاب کنید.'));}catch(e){setError(e instanceof Error?e.message:'OpenAPI discovery failed.');}finally{setDiscovering(false);}};
  const importSelectedSafe=async()=>{
   if(!openApiResult||!bulkSelected.length)return;
   setBulkImporting(true);setError('');let added=0,failed=0;
