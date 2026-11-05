@@ -609,10 +609,10 @@ export async function getCapabilitySnapshot() {
     models: selectable.filter((model) => model.capabilities.text && model.capabilities.streaming).map((model) => model.providerId + '::' + model.id),
     modelDescriptors: descriptors.map((model) => ({
       ...model,
-      selectable: isRecentAndHealthy(model) && model.capabilities.text && model.capabilities.streaming,
+      selectable: isRecentAndHealthy(model) && ((model.capabilities.text && model.capabilities.streaming) || model.capabilities.imageGen),
       disabledReason: !model.enabled ? 'Disabled by administrator.' :
         (!model.verifiedAt ? 'Provider not reachable.' :
-          (!model.capabilities.text || !model.capabilities.streaming ? 'This model does not support streaming chat.' : null)),
+          (!model.capabilities.imageGen && (!model.capabilities.text || !model.capabilities.streaming) ? 'This model does not support chat or image generation.' : null)),
     })),
     verified: capabilities.chat,
     checkedAt: new Date().toISOString(),
