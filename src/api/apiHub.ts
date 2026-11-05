@@ -13,7 +13,16 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
   if (pathname.startsWith('/api/admin/') && !admin) { sendAuthJson(res,403,{error:'Administrator access is required.'}); return true; }
   if (req.method !== 'GET' && !verifyCsrf(req)) { sendAuthJson(res,403,{error:'CSRF validation failed.'}); return true; }
   try {
-    if (req.method === 'POST' && pathname === '/api/api-hub/openapi/discover') {\n      const body = await readJsonBody(req,4000);\n      const specUrl = typeof body.specUrl === 'string' ? body.specUrl.trim() : '';\n      if (!specUrl || specUrl.length > 2048) { sendAuthJson(res,400,{error:'A valid OpenAPI JSON document URL is required.'}); return true; }\n      const result = await discoverOpenApiOperations(specUrl);\n      await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',\n        [user.id,'api_hub.openapi.discover','api_catalog',result.specUrl,JSON.stringify({operationCount:result.operationCount})]).catch(()=>{});\n      sendAuthJson(res,200,result); return true;\n    }\n    if (req.method === 'GET' && pathname === '/api/api-hub/catalog') {
+    if (req.method === 'POST' && pathname === '/api/api-hub/openapi/discover') {
+      const body = await readJsonBody(req,4000);
+      const specUrl = typeof body.specUrl === 'string' ? body.specUrl.trim() : '';
+      if (!specUrl || specUrl.length > 2048) { sendAuthJson(res,400,{error:'A valid OpenAPI JSON document URL is required.'}); return true; }
+      const result = await discoverOpenApiOperations(specUrl);
+      await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+        [user.id,'api_hub.openapi.discover','api_catalog',result.specUrl,JSON.stringify({operationCount:result.operationCount})]).catch(()=>{});
+      sendAuthJson(res,200,result); return true;
+    }
+    if (req.method === 'GET' && pathname === '/api/api-hub/catalog') {
       const url = new URL(req.url || '/', 'http://localhost');
       const result = await queryPublicApiCatalog({
         q: url.searchParams.get('q') || '',
