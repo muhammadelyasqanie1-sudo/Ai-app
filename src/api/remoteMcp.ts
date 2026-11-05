@@ -144,9 +144,12 @@ async function recordAudit(userId:string,action:string,id:string,metadata:Json={
   [userId,action,'mcp_server',id,JSON.stringify(metadata)]).catch(()=>{});
 }
 function modelToolName(serverId:string,toolName:string):string {
- const prefix='mcp_'+serverId.replace(/-/g,'').slice(0,8)+'_';
- const suffix=toolName.toLowerCase().replace(/[^a-z0-9_]/g,'_').replace(/^[^a-z]+/,'tool');
- return (prefix+suffix).slice(0,64);
+ const id=serverId.replace(/-/g,'').toLowerCase();
+ let hash=2166136261;
+ for(let i=0;i<toolName.length;i++){hash^=toolName.charCodeAt(i);hash=Math.imul(hash,16777619);}
+ const fingerprint=(hash>>>0).toString(16).padStart(8,'0');
+ const slug=toolName.toLowerCase().replace(/[^a-z0-9_]/g,'_').replace(/^[^a-z]+/,'tool').slice(0,17);
+ return 'mcp_'+id+'_'+(slug||'tool')+'_'+fingerprint;
 }
 export async function getEnabledRemoteMcpToolDefinitions(userId:string){
  if(!pool||!userId)return [];
@@ -174,12 +177,13 @@ export async function getEnabledRemoteMcpToolDefinitions(userId:string){
 }
 export async function executeRemoteMcpTool(userId:string,toolName:string,args:unknown){
  if(!pool||!userId)throw new Error('Sign in to use remote MCP tools.');
- if(!/^mcp_[a-f0-9]{8}_[a-z0-9_]{1,48}$/.test(toolName))throw new Error('Invalid MCP tool name.');
+ if(!/^mcp_[a-f0-9]{32}_[a-z0-9_]{1,17}_[a-f0-9]{8}$/.test(toolName))throw new Error('Invalid MCP tool name.');
  if(!args||typeof args!=='object'||Array.isArray(args)||JSON.stringify(args).length>48_000)throw new Error('Invalid MCP tool arguments.');
- const prefix=toolName.split('_').slice(1,2)[0];
+ const connectorId=toolName.match(/^mcp_([a-f0-9]{32})_/ )?.[1];
+ if(!connectorId)throw new Error('Invalid MCP tool name.');
  const result=await pool.query(`SELECT id,name,endpoint_url,auth_type,credential_encrypted,enabled,status,
   protocol_version,session_id_encrypted,tools_json FROM user_mcp_servers
-  WHERE user_id=$1 AND replace(id::text,'-','') LIKE $2 AND enabled=true AND status='verified'`,[userId,prefix+'%']);
+  WHERE user_id=$1 AND replace(id::text,'-','')=$2 AND enabled=true AND status='verified'`,[userId,connectorId]);
  const row=result.rows.find((candidate:any)=>(Array.isArray(candidate.tools_json)?candidate.tools_json:[]).some((tool:any)=>validTool(tool)&&modelToolName(String(candidate.id),tool.name)===toolName));
  if(!row)throw new Error('This MCP tool is no longer enabled for your account.');
  const original=(row.tools_json as Json[]).find((tool:any)=>validTool(tool)&&modelToolName(String(row.id),tool.name)===toolName);
