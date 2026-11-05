@@ -262,9 +262,29 @@ function validateArgs(schema:Json,args:unknown):Json{
  return args as Json;
 }
 
+function classifyApiCapability(row:any):string{
+ const schema=row.input_schema_json&&typeof row.input_schema_json==='object'?row.input_schema_json:{};
+ const haystack=[row.name,row.tool_name,row.description,row.endpoint_url,...Object.keys(schema.properties||{})].filter(Boolean).join(' ').toLowerCase();
+ const rules:Array<[string,RegExp]>=[
+  ['image',/\b(image|images|vision|picture|photo|ocr|visual)\b|\/(images|image|vision|ocr)(\/|\b)/],
+  ['video',/\b(video|videos|movie|clip|streaming video)\b|\/(videos|video)(\/|\b)/],
+  ['audio',/\b(audio|speech|tts|stt|transcri|transcription|voice|sound|music)\b|\/(audio|speech|voices|transcriptions)(\/|\b)/],
+  ['coding',/\b(code|coding|programming|compiler|repository|github|gitlab|terminal|sandbox|execution)\b/],
+  ['weather',/\b(weather|forecast|temperature|meteorolog|climate)\b/],
+  ['maps',/\b(map|maps|mapping|geocod|geolocation|directions|route|places|location)\b/],
+  ['finance',/\b(finance|financial|bank|payment|currency|exchange rate|stock|crypto|invoice|billing)\b/],
+  ['news',/\b(news|headline|article|journalism|rss)\b/],
+  ['food',/\b(food|recipe|restaurant|nutrition|meal|ingredient)\b/],
+  ['search',/\b(search|web search|browser|fetch|crawl|scrape|serp)\b/],
+  ['storage',/\b(storage|file|files|upload|download|bucket|object store|database|cloud storage)\b/],
+  ['ai_language',/\b(ai|llm|language model|chat|completion|embedding|generation|translate|translation|summari[sz])\b/],
+ ];
+ for(const [category,pattern] of rules)if(pattern.test(haystack))return category;
+ return 'general';
+}
 function publicRow(row:any){
  return {id:row.id,catalogSourceKey:row.catalog_source_key,name:row.name,toolName:row.tool_name,description:row.description,
-  endpointUrl:row.endpoint_url,httpMethod:row.http_method,authType:row.auth_type,authHeaderName:row.auth_header_name,
+  capability:classifyApiCapability(row),endpointUrl:row.endpoint_url,httpMethod:row.http_method,authType:row.auth_type,authHeaderName:row.auth_header_name,
   hasCredential:Boolean(row.credential_encrypted),inputSchema:row.input_schema_json,sampleArguments:row.sample_arguments_json,
   fallbackGroup:row.fallback_group||'',fallbackPriority:Number(row.fallback_priority||100),queueState:row.queue_state||'ready',nextAvailableAt:row.next_available_at||null,
   rateLimitEvidence:row.rate_limit_evidence||null,lastQuotaStatus:row.last_quota_status||null,lastQuotaObservedAt:row.last_quota_observed_at||null,lastQuotaResetAt:row.last_quota_reset_at||null,
@@ -511,7 +531,7 @@ export async function getEnabledUserApiToolDefinitions(userId:string){
  if(!pool||!userId)return [];
  try{
   await refreshDueQueueEntries(userId);
-  const result=await pool.query(`SELECT id,name,tool_name,description,http_method,input_schema_json,fallback_group FROM user_api_connectors
+  const result=await pool.query(`SELECT id,name,tool_name,description,endpoint_url,http_method,input_schema_json,fallback_group FROM user_api_connectors
    WHERE user_id=$1 AND enabled=true AND status='verified' AND queue_state='ready' ORDER BY fallback_priority ASC,created_at DESC LIMIT 32`,[userId]);
   const available=result.rows.filter(row=>{
    const schema=validateSchema(row.input_schema_json);
@@ -521,7 +541,7 @@ export async function getEnabledUserApiToolDefinitions(userId:string){
    type:'function' as const,
    function:{
     name:modelApiToolName(String(row.id),String(row.tool_name)),
-    description:('API service: '+String(row.name||row.tool_name)+'. Method: '+String(row.http_method||'GET')+'. '+String(row.description||'Verified owner-configured API connector.')+(row.fallback_group?' Compatible fallback group: '+row.fallback_group+'. Verified alternatives in this group may be attempted only on retryable upstream failures.':'' )).slice(0,1000),
+    description:('Capability category: '+classifyApiCapability(row)+'. API service: '+String(row.name||row.tool_name)+'. Method: '+String(row.http_method||'GET')+'. '+String(row.description||'Verified owner-configured API connector.')+(row.fallback_group?' Compatible fallback group: '+row.fallback_group+'. Verified alternatives in this group may be attempted only on retryable upstream failures.':'' )).slice(0,1000),
     parameters:modelToolSchema(row.input_schema_json),
    },
   }));
