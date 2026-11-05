@@ -79,6 +79,47 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
         [user.id,'api_hub.discovery.docs_scan','api_catalog',sourceKey,JSON.stringify({openApiCandidates:evidence.openApiCandidates.length,protocolTypes:evidence.protocolTypes,authTypes:evidence.authTypes})]).catch(()=>{});
       sendAuthJson(res,200,{item:saved.rows[0],evidence});return true;
     }
+    if (req.method === 'POST' && pathname === '/api/admin/api-hub/work-queue/discover-contract') {
+      if (!admin) { sendAuthJson(res,403,{error:'Administrator access is required.'}); return true; }
+      const body=await readJsonBody(req,2000);
+      const sourceKey=typeof body.sourceKey==='string'?body.sourceKey.trim():'';
+      if(!/^[a-f0-9]{64}$/i.test(sourceKey)){sendAuthJson(res,400,{error:'A valid source key is required.'});return true;}
+      const selected=await pool.query(`SELECT t.source_key,t.claimed_by,t.lease_until,t.official_docs_url,t.docs_evidence
+        FROM public_api_implementation_tracking t JOIN public_api_catalog c ON c.source_key=t.source_key
+        WHERE t.source_key=$1 AND t.work_state='claimed' AND t.claimed_by=$2 AND t.lease_until>now() AND c.is_active=true`,
+        [sourceKey,String(user.id)]);
+      const row=selected.rows[0];
+      if(!row){sendAuthJson(res,409,{error:'Claim this API first; the review lease may have expired.'});return true;}
+      const evidence=row.docs_evidence&&typeof row.docs_evidence==='object'?row.docs_evidence:{};
+      const candidates=Array.isArray(evidence.openApiCandidates)?evidence.openApiCandidates.slice(0,10):[];
+      if(!row.official_docs_url||!candidates.length){sendAuthJson(res,422,{error:'No official same-host OpenAPI/Swagger candidate was discovered. Scan the official docs or provide a reviewed specification URL.'});return true;}
+      const officialHost=new URL(row.official_docs_url).hostname.toLowerCase();
+      let contract:any=null;const failures:string[]=[];
+      for(const candidate of candidates){
+        try{
+          const candidateUrl=new URL(String(candidate));
+          if(candidateUrl.protocol!=='https:'||candidateUrl.hostname.toLowerCase()!==officialHost||candidateUrl.username||candidateUrl.password)
+            throw new Error('Candidate is not on the official documentation host.');
+          const discovered=await discoverOpenApiOperations(candidateUrl.toString());
+          if(!discovered.operationCount)throw new Error('The specification contains no supported operations.');
+          const tagGroups=[...new Set(discovered.operations.flatMap((operation:any)=>operation.tags||[]))].slice(0,100);
+          contract={...discovered,tagGroups,discoveredAt:new Date().toISOString(),source:'official_docs_link'};
+          break;
+        }catch(error){failures.push(error instanceof Error?error.message:'Unsupported specification');}
+      }
+      if(!contract){sendAuthJson(res,422,{error:'No supported OpenAPI JSON contract could be extracted from the official documentation links.',details:failures.slice(0,5)});return true;}
+      const saved=await pool.query(`UPDATE public_api_implementation_tracking
+        SET openapi_spec_url=$3,contract=$4::jsonb,discovery_status='contract_discovered',
+          work_state='done',claimed_by=NULL,claimed_at=NULL,lease_until=NULL,last_work_error=NULL,
+          last_discovered_at=now(),updated_at=now()
+        WHERE source_key=$1 AND work_state='claimed' AND claimed_by=$2 AND lease_until>now()
+        RETURNING source_key,discovery_status,work_state,openapi_spec_url`,
+        [sourceKey,String(user.id),contract.specUrl,JSON.stringify(contract)]);
+      if(!saved.rows[0]){sendAuthJson(res,409,{error:'The review lease expired while the contract was being extracted. Please claim it again.'});return true;}
+      await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+        [user.id,'api_hub.discovery.openapi_contract','api_catalog',sourceKey,JSON.stringify({specUrl:contract.specUrl,operationCount:contract.operationCount,tagGroups:contract.tagGroups})]).catch(()=>{});
+      sendAuthJson(res,200,{item:saved.rows[0],contract});return true;
+    }
     if (req.method === 'POST' && pathname === '/api/admin/api-hub/work-queue/complete') {
       if (!admin) { sendAuthJson(res,403,{error:'Administrator access is required.'}); return true; }
       const body=await readJsonBody(req,5000);
