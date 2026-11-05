@@ -331,7 +331,7 @@ async function audit(userId:string,action:string,id:string,metadata:Json={}){
 }
 export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerResponse,pathname:string):Promise<boolean>{
  if(!pathname.startsWith('/api/api-hub/connectors'))return false;
- if(!pool){sendAuthJson(res,503,{error:'API connectors require PostgreSQL and migration 0014.'});return true;}
+ if(!pool){sendAuthJson(res,503,{error:'API connectors require PostgreSQL and migrations 0014, 0023 and 0027.'});return true;}
  const user=await authenticateRequest(req).catch(()=>null);
  if(!user){sendAuthJson(res,401,{error:'Sign in is required.'});return true;}
  if(req.method!=='GET'&&!verifyCsrf(req)){sendAuthJson(res,403,{error:'CSRF validation failed.'});return true;}
