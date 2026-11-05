@@ -529,7 +529,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       }
       const email = parsed.email.trim().toLowerCase();
       const displayName = (parsed.displayName || 'AFG AI Administrator').trim().slice(0,100);
-      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || password.length < 12 || password.length > 256) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 12 || password.length > 256) {
         sendAuthJson(res, 400, { error: 'Use a valid email and a password of at least 12 characters.' });
         return true;
       }
