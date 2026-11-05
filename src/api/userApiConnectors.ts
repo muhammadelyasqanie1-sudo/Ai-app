@@ -211,13 +211,13 @@ async function executeConnectorWithFallback(row:any,args:unknown,userId:string,r
 export async function getEnabledUserApiToolDefinitions(userId:string){
  if(!pool||!userId)return [];
  try{
-  const result=await pool.query(`SELECT tool_name,description,input_schema_json FROM user_api_connectors
-   WHERE user_id=$1 AND enabled=true AND status='verified' ORDER BY created_at DESC LIMIT 12`,[userId]);
+  const result=await pool.query(`SELECT tool_name,description,input_schema_json,fallback_group FROM user_api_connectors
+   WHERE user_id=$1 AND enabled=true AND status='verified' ORDER BY created_at DESC LIMIT 32`,[userId]);
   return result.rows.map(row=>({
    type:'function' as const,
    function:{
     name:String(row.tool_name),
-    description:String(row.description||'Call the configured API connector '+row.tool_name).slice(0,1000),
+    description:(String(row.description||'Call the configured API connector '+row.tool_name)+(row.fallback_group?' Compatible fallback group: '+row.fallback_group+'. The executor automatically tries verified alternatives in this group on retryable upstream failures.':'' )).slice(0,1000),
     parameters:modelToolSchema(row.input_schema_json),
    },
   }));
