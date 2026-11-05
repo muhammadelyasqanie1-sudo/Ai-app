@@ -13,7 +13,7 @@ function isProtectedContext(message: ChatInput['messages'][number]): boolean {
   const text = message.content;
   return Boolean(
     message.tool_calls?.length ||
-    /\x60\x60\x60[\s\S]*?\x60\x60\x60/.test(text) ||
+    /\x60\x60\x60/.test(text) ||
     /\x60[^\x60\n]+\x60/.test(text) ||
     /https?:\/\/|(?:^|\s)\/[^\s]+|\b[A-Z0-9_]{3,}=[^\s]+/.test(text) ||
     /\{\s*["'][^"']+["']\s*:/.test(text) ||
@@ -76,7 +76,7 @@ function compactOlderContext(
 
   const retainedCount = recent.length;
   const older = conversation.slice(0, Math.max(0, conversation.length - retainedCount));
-  const summaryBudgetChars = Math.max(1024, Math.floor(budget * 0.18) * 4);
+  const summaryBudgetChars = Math.max(512, Math.floor(budget * 0.18) * 4 - 240);
   const protectedMessages = older.filter(isProtectedContext);
   const protectedChars = protectedMessages.reduce((sum, message) => sum + message.content.length, 0);
   if (protectedChars > summaryBudgetChars) {
