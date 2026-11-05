@@ -1091,29 +1091,60 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const body = await readJsonBody(req, 256_000);
       const enabled = body.enabled;
       const requested = body.models;
-      if (typeof enabled !== 'boolean' || !Array.isArray(requested) || requested.length < 1 || requested.length > 1000 ||
-          requested.some((item: any) => !item || typeof item.providerId !== 'string' || !/^[a-z0-9][a-z0-9-]{1,47}$/.test(item.providerId) ||
-            typeof item.modelId !== 'string' || !/^[a-zA-Z0-9@][a-zA-Z0-9._:/-]{0,299}$/.test(item.modelId))) {
-        sendAuthJson(res, 400, { error: 'Provide 1–1000 valid provider/model pairs and an enabled state.' });
+      if (typeof enabled !== 'boolean' || !Array.isArray(requested) || requested.length < 1 || requested.length > 1000) {
+        sendAuthJson(res, 400, { error: 'Provide 1–1,000 provider/model pairs and an enabled state.' });
         return true;
       }
-      const unique = [...new Map<string, {providerId:string;modelId:string}>(requested.map((item: any) => [item.providerId + '::' + item.modelId, {providerId:item.providerId,modelId:item.modelId}] as const)).values()];
+      const invalid = requested.filter((item: any) =>
+        !item || typeof item.providerId !== 'string' || !/^[a-z0-9][a-z0-9-]{1,47}$/.test(item.providerId.trim()) ||
+        typeof item.modelId !== 'string' || !item.modelId.trim() || item.modelId.trim().length > 300 ||
+        /[\\u0000-\\u001f\\u007f]/.test(item.modelId));
+      if (invalid.length) {
+        sendAuthJson(res, 400, { error: 'Some model identifiers are invalid.', invalid: invalid.length, requested: requested.length });
+        return true;
+      }
+      const unique = [...new Map<string, {providerId:string;modelId:string}>(requested.map((item: any) => {
+        const providerId = item.providerId.trim();
+        const modelId = item.modelId.trim();
+        return [providerId + '::' + modelId, {providerId,modelId}] as const;
+      })).values()];
+      const payload = JSON.stringify(unique.map(item => ({provider_id:item.providerId,model_id:item.modelId})));
       const client = await pool.connect();
       let changed = 0;
+      let matched = 0;
       try {
         await client.query('BEGIN');
-        for (const item of unique) {
-          const before = await client.query('SELECT enabled FROM model_catalog WHERE provider_key=$1 AND model_key=$2 FOR UPDATE', [item.providerId, item.modelId]);
-          if (!before.rows[0]) continue;
-          await client.query('UPDATE model_catalog SET enabled=$3,updated_at=now() WHERE provider_key=$1 AND model_key=$2', [item.providerId, item.modelId, enabled]);
+        const before = await client.query(
+          `SELECT m.provider_key,m.model_key,m.enabled
+             FROM model_catalog m
+             JOIN jsonb_to_recordset($1::jsonb) AS requested(provider_id text,model_id text)
+               ON requested.provider_id=m.provider_key AND requested.model_id=m.model_key
+            FOR UPDATE OF m`,
+          [payload],
+        );
+        matched = before.rows.length;
+        const toUpdate = before.rows
+          .filter((row: any) => Boolean(row.enabled) !== enabled)
+          .map((row: any) => ({provider_id:String(row.provider_key),model_id:String(row.model_key),was_enabled:Boolean(row.enabled)}));
+        if (toUpdate.length) {
+          const updatePayload = JSON.stringify(toUpdate.map(({provider_id,model_id}) => ({provider_id,model_id})));
           await client.query(
-            'INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
-            [user.id,user.role,'model.bulk_toggle','model',item.providerId+':'+item.modelId,
-              JSON.stringify({enabled:Boolean(before.rows[0].enabled)}),JSON.stringify({enabled}),
-              JSON.stringify({bulk:true})],
+            `UPDATE model_catalog m SET enabled=$2,updated_at=now()
+               FROM jsonb_to_recordset($1::jsonb) AS requested(provider_id text,model_id text)
+              WHERE m.provider_key=requested.provider_id AND m.model_key=requested.model_id`,
+            [updatePayload,enabled],
           );
-          changed++;
+          await client.query(
+            `INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata)
+             SELECT $1,$2,'model.bulk_toggle','model',item.provider_id||':'||item.model_id,
+                    jsonb_build_object('enabled',item.was_enabled),
+                    jsonb_build_object('enabled',$3),
+                    jsonb_build_object('bulk',true,'batch_size',$4)
+               FROM jsonb_to_recordset($5::jsonb) AS item(provider_id text,model_id text,was_enabled boolean)`,
+            [user.id,user.role,enabled,unique.length,JSON.stringify(toUpdate)],
+          );
         }
+        changed = toUpdate.length;
         await client.query('COMMIT');
       } catch (error) {
         await client.query('ROLLBACK');
@@ -1121,7 +1152,10 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       } finally {
         client.release();
       }
-      sendAuthJson(res, 200, { enabled, changed, requested: unique.length });
+      sendAuthJson(res, 200, {
+        enabled, changed, matched, requested: unique.length,
+        unchanged: matched - changed, missing: unique.length - matched,
+      });
       return true;
     }
 
