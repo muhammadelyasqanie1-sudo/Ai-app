@@ -734,6 +734,28 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    if(!updated.rows[0]){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
    await audit(user.id,'api.connector.queue_priority',priorityMatch[1],{priority});sendAuthJson(res,200,{priority:Number(updated.rows[0].fallback_priority)});return true;
   }
+  if(req.method==='GET'&&pathname==='/api/api-hub/usage'){
+   const summary=await pool.query(`SELECT count(*)::int AS total_requests,
+    count(*) FILTER(WHERE outcome='success')::int AS successful_requests,
+    count(*) FILTER(WHERE outcome<>'success')::int AS failed_requests,
+    round(avg(duration_ms))::int AS average_duration_ms,
+    count(*) FILTER(WHERE created_at>=now()-interval '24 hours')::int AS requests_24h,
+    count(*) FILTER(WHERE created_at>=now()-interval '30 days')::int AS requests_30d
+    FROM user_api_connector_runs WHERE user_id=$1 AND created_at>=now()-interval '30 days'`,[user.id]);
+   const byConnector=await pool.query(`SELECT c.id,c.name,count(r.id)::int AS requests,
+    count(r.id) FILTER(WHERE r.outcome='success')::int AS successful,
+    count(r.id) FILTER(WHERE r.outcome<>'success')::int AS failed,
+    round(avg(r.duration_ms))::int AS average_duration_ms,
+    max(r.created_at) AS last_used_at
+    FROM user_api_connectors c LEFT JOIN user_api_connector_runs r ON r.connector_id=c.id AND r.user_id=c.user_id AND r.created_at>=now()-interval '30 days'
+    WHERE c.user_id=$1 GROUP BY c.id,c.name ORDER BY requests DESC,c.name ASC`,[user.id]);
+   const waiting=await pool.query(`SELECT count(*)::int AS total,
+    count(*) FILTER(WHERE lifecycle_state='waiting')::int AS waiting,
+    count(*) FILTER(WHERE lifecycle_state='expired')::int AS expired,
+    count(*) FILTER(WHERE renewal_due_at IS NOT NULL AND renewal_due_at<=now() AND lifecycle_state IN ('waiting','expired'))::int AS renewal_due
+    FROM user_api_connector_keys WHERE user_id=$1`,[user.id]);
+   sendAuthJson(res,200,{periodDays:30,summary:summary.rows[0],connectors:byConnector.rows,keyLifecycle:waiting.rows[0],costTracking:'not_available_without_provider_reported_costs'});return true;
+  }
   if(req.method==='GET'&&pathname==='/api/api-hub/connectors'){
    await refreshDueQueueEntries(user.id);
    const result=await pool.query('SELECT * FROM user_api_connectors WHERE user_id=$1 ORDER BY CASE WHEN queue_state=\'ready\' THEN 0 ELSE 1 END,fallback_priority ASC,created_at DESC',[user.id]);
