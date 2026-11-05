@@ -248,8 +248,11 @@ function parseOpenFreeReadme(markdown: string): { records: LlmApiRecord[]; updat
     const cells = markdownCells(line);
     if (cells.length < 5 || /^provider$/i.test(cells[0])) continue;
     const providerCell = safeString(parseHtmlAnchor(cells[0]).text, 160);
-    if (providerCell && !/gemini|google\s+ai/i.test(providerCell)) currentProvider = ensureProvider(providerCell);
-    if (!currentProvider || /gemini|google\s+ai/i.test(currentProvider.providerName)) continue;
+    if (providerCell) {
+      if (/gemini|google\s+ai/i.test(providerCell)) { currentProvider = null; continue; }
+      currentProvider = ensureProvider(providerCell);
+    }
+    if (!currentProvider) continue;
     const modelCell = parseHtmlAnchor(cells[1]);
     const modelId = safeString(cells[2].replace(/^`|`$/g, ''), 300);
     if (!modelId || seenModels.has(currentProvider.providerSlug + '::' + modelId)) continue;
@@ -388,7 +391,11 @@ export async function queryLlmApiCatalog(filters: { q?:string; provider?:string;
   if(filters.provider?.trim())where.push('c.provider_slug='+add(filters.provider.trim().toLowerCase().slice(0,80)));
   if(filters.freeTier&&filters.freeTier!=='all')where.push('c.free_tier_type='+add(filters.freeTier));
   const clause=where.join(' AND ');
-  const count=await pool.query(`SELECT count(*)::int AS total FROM llm_api_catalog c WHERE ${clause}`,values);
+  const count=await pool.query(`SELECT count(*)::int AS total FROM (
+    SELECT c.provider_slug,COALESCE(c.model_id,'') AS model_key
+    FROM llm_api_catalog c WHERE ${clause}
+    GROUP BY c.provider_slug,COALESCE(c.model_id,'')
+  ) deduplicated`,values);
   const rows=await pool.query(`SELECT DISTINCT ON (c.provider_slug,COALESCE(c.model_id,'')) c.source,c.source_key,c.provider_slug,c.provider_name,c.provider_type,
     c.base_url,c.api_key_url,c.description,c.free_tier_type,c.payment_requirement,c.free_tier_details,
     c.model_id,c.model_name,c.model_page_url,c.context_window,c.max_output_tokens,c.modalities,c.rate_limit,
