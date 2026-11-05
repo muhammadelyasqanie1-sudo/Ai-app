@@ -13,6 +13,82 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
   if (pathname.startsWith('/api/admin/') && !admin) { sendAuthJson(res,403,{error:'Administrator access is required.'}); return true; }
   if (req.method !== 'GET' && !verifyCsrf(req)) { sendAuthJson(res,403,{error:'CSRF validation failed.'}); return true; }
   try {
+    if (req.method === 'POST' && pathname === '/api/admin/api-hub/work-queue/claim') {
+      if (!admin) { sendAuthJson(res,403,{error:'Administrator access is required.'}); return true; }
+      const body=await readJsonBody(req,2000);
+      const requested=Number(body.limit||10);
+      const limit=Number.isInteger(requested)?Math.max(1,Math.min(25,requested)):10;
+      const client=await pool.connect();
+      let claimed:any[]=[];
+      try{
+        await client.query('BEGIN');
+        const result=await client.query(`WITH candidates AS (
+            SELECT t.source_key FROM public_api_implementation_tracking t
+            JOIN public_api_catalog c ON c.source_key=t.source_key
+            WHERE c.is_active=true AND (
+              t.work_state='queued' OR (t.work_state='claimed' AND t.lease_until < now())
+            )
+            ORDER BY CASE t.discovery_status WHEN 'catalogued' THEN 0 WHEN 'docs_discovered' THEN 1 ELSE 2 END,
+              t.updated_at ASC
+            FOR UPDATE OF t SKIP LOCKED LIMIT $1
+          )
+          UPDATE public_api_implementation_tracking t
+          SET work_state='claimed',claimed_by=$2,claimed_at=now(),lease_until=now()+interval '20 minutes',
+              attempts=t.attempts+1,updated_at=now()
+          FROM candidates x WHERE t.source_key=x.source_key
+          RETURNING t.source_key,t.discovery_status,t.official_docs_url,t.openapi_spec_url,t.attempts,t.lease_until`,[limit,String(user.id)]);
+        claimed=result.rows;
+        await client.query('COMMIT');
+      }catch(error){await client.query('ROLLBACK');throw error;}
+      finally{client.release();}
+      if(claimed.length){
+        const keys=claimed.map(row=>row.source_key);
+        const details=await pool.query(`SELECT source_key,name,description,category,auth,homepage_url,docs_url
+          FROM public_api_catalog WHERE source_key=ANY($1::text[])`,[keys]);
+        const byKey=new Map(details.rows.map(row=>[row.source_key,row]));
+        claimed=claimed.map(row=>({...row,...(byKey.get(row.source_key)||{})}));
+      }
+      await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+        [user.id,'api_hub.discovery.queue.claim','api_catalog_batch',null,JSON.stringify({claimed:claimed.length,limit})]).catch(()=>{});
+      sendAuthJson(res,200,{claimed,limit,leaseMinutes:20});return true;
+    }
+    if (req.method === 'POST' && pathname === '/api/admin/api-hub/work-queue/complete') {
+      if (!admin) { sendAuthJson(res,403,{error:'Administrator access is required.'}); return true; }
+      const body=await readJsonBody(req,5000);
+      const sourceKey=typeof body.sourceKey==='string'?body.sourceKey.trim():'';
+      const outcome=typeof body.outcome==='string'?body.outcome:'';
+      const officialDocsUrl=typeof body.officialDocsUrl==='string'?body.officialDocsUrl.trim():'';
+      const specUrl=typeof body.specUrl==='string'?body.specUrl.trim():'';
+      const reason=typeof body.reason==='string'?body.reason.trim().slice(0,500):'';
+      if(!/^[a-f0-9]{64}$/i.test(sourceKey)){sendAuthJson(res,400,{error:'A valid source key is required.'});return true;}
+      if(!['docs_discovered','contract_discovered','unsupported','retry'].includes(outcome)){sendAuthJson(res,400,{error:'Unsupported queue outcome.'});return true;}
+      const validUrl=(value:string)=>{try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password&&value.length<=2048;}catch{return false;}};
+      if(outcome==='docs_discovered'&&!validUrl(officialDocsUrl)){sendAuthJson(res,400,{error:'A verified HTTPS official documentation URL is required.'});return true;}
+      if(outcome==='contract_discovered'&&!validUrl(specUrl)){sendAuthJson(res,400,{error:'A verified HTTPS OpenAPI JSON URL is required.'});return true;}
+      if(outcome==='unsupported'&&!reason){sendAuthJson(res,400,{error:'Explain why this protocol is unsupported.'});return true;}
+      const nextStatus=outcome==='retry'?null:outcome;
+      const result=await pool.query(`UPDATE public_api_implementation_tracking
+        SET discovery_status=COALESCE($3,discovery_status),
+          official_docs_url=CASE WHEN $4<>'' THEN $4 ELSE official_docs_url END,
+          openapi_spec_url=CASE WHEN $5<>'' THEN $5 ELSE openapi_spec_url END,
+          unsupported_reason=CASE WHEN $6<>'' THEN $6 ELSE unsupported_reason END,
+          work_state=CASE WHEN $7='retry' THEN 'queued' ELSE 'done' END,
+          claimed_by=NULL,claimed_at=NULL,lease_until=NULL,last_work_error=CASE WHEN $7='retry' THEN $6 ELSE NULL END,
+          updated_at=now()
+        WHERE source_key=$1 AND work_state='claimed' AND claimed_by=$2
+        RETURNING source_key,discovery_status,work_state`,
+        [sourceKey,String(user.id),nextStatus,officialDocsUrl,specUrl,reason,outcome]);
+      if(!result.rows[0]){sendAuthJson(res,409,{error:'This API is not currently claimed by your admin session, or its lease expired.'});return true;}
+      await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+        [user.id,'api_hub.discovery.queue.complete','api_catalog',sourceKey,JSON.stringify({outcome})]).catch(()=>{});
+      sendAuthJson(res,200,{item:result.rows[0]});return true;
+    }
+    if (req.method === 'GET' && pathname === '/api/admin/api-hub/work-queue') {
+      const result=await pool.query(`SELECT work_state,count(*)::int AS count FROM public_api_implementation_tracking GROUP BY work_state`);
+      const counts:Record<string,number>={queued:0,claimed:0,done:0,blocked:0};
+      for(const row of result.rows)counts[String(row.work_state)]=Number(row.count||0);
+      sendAuthJson(res,200,{counts,total:Object.values(counts).reduce((sum,n)=>sum+n,0)});return true;
+    }
     if (req.method === 'POST' && pathname === '/api/api-hub/openapi/discover') {
       const body = await readJsonBody(req,4000);
       const specUrl = typeof body.specUrl === 'string' ? body.specUrl.trim() : '';
