@@ -59,6 +59,33 @@ async function readTextLimited(response:Response,maxBytes:number):Promise<string
  for(const chunk of chunks){merged.set(chunk,offset);offset+=chunk.byteLength;}
  return new TextDecoder().decode(merged);
 }
+async function readBytesLimited(response:Response,maxBytes:number):Promise<Buffer>{
+ const declared=Number(response.headers.get('content-length')||0);
+ if(declared>maxBytes){await response.body?.cancel().catch(()=>{});throw new Error('Remote file exceeds the '+maxBytes+' byte safety limit.');}
+ if(!response.body)return Buffer.alloc(0);
+ const reader=response.body.getReader(),chunks:Buffer[]=[];let total=0;
+ try{
+  while(true){
+   const part=await reader.read();if(part.done)break;
+   total+=part.value.byteLength;
+   if(total>maxBytes){await reader.cancel().catch(()=>{});throw new Error('Remote file exceeds the '+maxBytes+' byte safety limit.');}
+   chunks.push(Buffer.from(part.value));
+  }
+ }finally{reader.releaseLock();}
+ return Buffer.concat(chunks,total);
+}
+function safeDownloadName(value:string|null,contentType:string):string{
+ const raw=(value||'').match(/filename\\*?=(?:UTF-8''|")?([^";]+)/i)?.[1]||'';
+ let name=raw;
+ try{name=decodeURIComponent(name);}catch{}
+ name=name.replace(/[\\/]/g,'_').replace(/[\\u0000-\\u001f\\u007f]/g,'').replace(/[<>:"|?*]/g,'_').trim().slice(0,160);
+ if(!name||name==='.'||name==='..')name='api-response';
+ if(!/\\.[a-z0-9]{1,8}$/i.test(name)){
+  const ext:Record<string,string>={'image/png':'png','image/jpeg':'jpg','image/gif':'gif','image/webp':'webp','application/pdf':'pdf','audio/mpeg':'mp3','audio/wav':'wav','audio/ogg':'ogg','video/mp4':'mp4','application/zip':'zip'};
+  name+='.'+(ext[contentType]||'bin');
+ }
+ return name;
+}
 type UploadedFile={filename:string;contentType:string;data:Buffer};
 async function readMultipartRequest(req:IncomingMessage,maxBytes=12*1024*1024):Promise<{arguments:Json;files:Record<string,UploadedFile>}>{
  const contentType=String(req.headers['content-type']||'');
@@ -117,7 +144,7 @@ function safeDownloadName(value:string|null,contentType:string):string{
  }
  return name;
 }
-async function safeEndpoint(value:string):Promise<URL>{^_.+-]{0,80}\/[a-z0-9][a-z0-9!#async function safeEndpoint(value:string):Promise<URL>{^_.+-]{0,80}$/.test(mime))throw new Error('Uploaded file content type is invalid.');^_.+-]{0,80}\/[a-z0-9][a-z0-9!#   if(!/^[a-z0-9][a-z0-9!#async function safeEndpoint(value:string):Promise<URL>{^_.+-]{0,80}\/[a-z0-9][a-z0-9!#async function safeEndpoint(value:string):Promise<URL>{^_.+-]{0,80}$/.test(mime))throw new Error('Uploaded file content type is invalid.');^_.+-]{0,80}$/.test(mime))throw new Error('Uploaded file content type is invalid.');
+   if(!/^[a-z0-9][a-z0-9!#$&^_.+-]{0,80}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,80}$/.test(mime))throw new Error('Uploaded file content type is invalid.');
    if(data.length>10*1024*1024)throw new Error('Each uploaded file is limited to 10 MB.');
    if(files[name])throw new Error('Duplicate uploaded file field: '+name+'.');
    files[name]={filename:safeFilename,contentType:mime,data};
