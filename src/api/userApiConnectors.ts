@@ -665,7 +665,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    }
    try{
     const result=await execute(row,row.sample_arguments_json,owner,requestId,12000);
-    await pool.query("UPDATE user_api_connectors SET health_monitor_claimed_at=NULL,last_health_check_at=now(),next_health_check_at=now()+(health_monitor_interval_minutes||360)*interval '1 minute',last_health_diagnosis='healthy',last_tested_at=now(),last_http_status=$2,last_error=NULL,updated_at=now() WHERE id=$1",[row.id,result.status]);
+    await pool.query("UPDATE user_api_connectors SET health_monitor_claimed_at=NULL,last_health_check_at=now(),next_health_check_at=now()+COALESCE(health_monitor_interval_minutes,360)*interval '1 minute',last_health_diagnosis='healthy',last_tested_at=now(),last_http_status=$2,last_error=NULL,updated_at=now() WHERE id=$1",[row.id,result.status]);
     await audit(owner,'api.connector.scheduled_health_check',String(row.id),{diagnosis:'healthy',httpStatus:result.status,durationMs:result.durationMs});
     results.push({id:row.id,checked:true,healthy:true,httpStatus:result.status});
    }catch(error){
@@ -677,9 +677,9 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
      const evidence=(error as any)?.rateLimitEvidence||{source:'upstream_response',observedAt:new Date().toISOString(),httpStatus:status,headers:{}};
      await pool.query("UPDATE user_api_connectors SET enabled=false,status='error',queue_state='waiting',next_available_at=$2,rate_limit_evidence=$3::jsonb,last_quota_status=$4,last_quota_observed_at=now(),last_quota_reset_at=$2,health_monitor_claimed_at=NULL,last_health_check_at=now(),last_health_diagnosis=$5,last_tested_at=now(),last_http_status=$4,last_error=$6,updated_at=now() WHERE id=$1",[row.id,next,JSON.stringify(evidence),status,diagnosis,message]);
     }else if(status===401||status===403||status===404){
-     await pool.query("UPDATE user_api_connectors SET enabled=false,status='error',health_monitor_claimed_at=NULL,last_health_check_at=now(),next_health_check_at=now()+(health_monitor_interval_minutes||360)*interval '1 minute',last_health_diagnosis=$2,last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1",[row.id,diagnosis,status,message]);
+     await pool.query("UPDATE user_api_connectors SET enabled=false,status='error',health_monitor_claimed_at=NULL,last_health_check_at=now(),next_health_check_at=now()+COALESCE(health_monitor_interval_minutes,360)*interval '1 minute',last_health_diagnosis=$2,last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1",[row.id,diagnosis,status,message]);
     }else{
-     await pool.query("UPDATE user_api_connectors SET health_monitor_claimed_at=NULL,last_health_check_at=now(),next_health_check_at=now()+(health_monitor_interval_minutes||360)*interval '1 minute',last_health_diagnosis=$2,last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1",[row.id,diagnosis,status,message]);
+     await pool.query("UPDATE user_api_connectors SET health_monitor_claimed_at=NULL,last_health_check_at=now(),next_health_check_at=now()+COALESCE(health_monitor_interval_minutes,360)*interval '1 minute',last_health_diagnosis=$2,last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1",[row.id,diagnosis,status,message]);
     }
     await audit(owner,'api.connector.scheduled_health_check_failed',String(row.id),{diagnosis,status,error:message});
     results.push({id:row.id,checked:true,healthy:false,diagnosis,httpStatus:status});
