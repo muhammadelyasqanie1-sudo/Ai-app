@@ -94,7 +94,7 @@ async function getOAuthAccessToken(row:any,userId:string,secrets:string[]):Promi
   const response=await requestOAuthToken(config,body,15000);
   const raw=await readTextLimited(response,1_000_000);let next:Json;try{next=JSON.parse(raw);}catch{throw new Error('OAuth refresh returned an invalid response.');}
   if(!response.ok||typeof next.access_token!=='string'||!next.access_token)throw new Error('OAuth refresh failed with HTTP '+response.status+'.');
-  const merged={...tokens,...next,refresh_token:typeof next.refresh_token==='string'?next.refresh_token:refresh,expires_at:next.expires_in?Date.now()+Number(next.expires_in)*1000:null};
+  const merged:Json={...tokens,...next,refresh_token:typeof next.refresh_token==='string'?next.refresh_token:refresh,expires_at:next.expires_in?Date.now()+Number(next.expires_in)*1000:null};
   await client.query('UPDATE user_api_connectors SET credential_encrypted=$3,updated_at=now() WHERE id=$1 AND user_id=$2',[row.id,userId,encrypt(JSON.stringify(merged))]);
   secrets.push(String(merged.access_token),refresh,String(config.clientSecret||''));await client.query('COMMIT');return String(merged.access_token);
  }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}finally{client.release();}
@@ -174,33 +174,6 @@ async function readMultipartRequest(req:IncomingMessage,maxBytes=12*1024*1024):P
    const safeFilename=filenameMatch[1].replace(/[\\/]/g,'_').replace(/[\u0000-\u001f\u007f]/g,'').slice(0,180);
    if(!safeFilename||safeFilename==='.'||safeFilename==='..')throw new Error('Uploaded filename is invalid.');
    const mime=headers.match(/\bcontent-type:\s*([^\r\n]+)/i)?.[1]?.trim().toLowerCase()||'application/octet-stream';
-   if(!/^[a-z0-9][a-z0-9!#   if(!/^[a-z0-9][a-z0-9!#async function readBytesLimited(response:Response,maxBytes:number):Promise<Buffer>{
- const declared=Number(response.headers.get('content-length')||0);
- if(declared>maxBytes){await response.body?.cancel().catch(()=>{});throw new Error('Remote file exceeds the '+maxBytes+' byte safety limit.');}
- if(!response.body)return Buffer.alloc(0);
- const reader=response.body.getReader(),chunks:Buffer[]=[];let total=0;
- try{
-  while(true){
-   const part=await reader.read();if(part.done)break;
-   total+=part.value.byteLength;
-   if(total>maxBytes){await reader.cancel().catch(()=>{});throw new Error('Remote file exceeds the '+maxBytes+' byte safety limit.');}
-   chunks.push(Buffer.from(part.value));
-  }
- }finally{reader.releaseLock();}
- return Buffer.concat(chunks,total);
-}
-function safeDownloadName(value:string|null,contentType:string):string{
- const raw=(value||'').replace(/^attachment;\\s*/i,'').match(/filename\\*?=(?:UTF-8''|")?([^";]+)/i)?.[1]||'';
- let name=raw;
- try{name=decodeURIComponent(name);}catch{}
- name=name.replace(/[\\\\/]/g,'_').replace(/[\\u0000-\\u001f\\u007f]/g,'').replace(/[<>:"|?*]/g,'_').trim().slice(0,160);
- if(!name||name==='.'||name==='..')name='api-response';
- if(!/\\.[a-z0-9]{1,8}$/i.test(name)){
-  const ext:Record<string,string>={'image/png':'png','image/jpeg':'jpg','image/gif':'gif','image/webp':'webp','application/pdf':'pdf','audio/mpeg':'mp3','audio/wav':'wav','audio/ogg':'ogg','video/mp4':'mp4','application/zip':'zip'};
-  name+='.'+(ext[contentType]||'bin');
- }
- return name;
-}
    if(!/^[a-z0-9][a-z0-9!#$&^_.+-]{0,80}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,80}$/.test(mime))throw new Error('Uploaded file content type is invalid.');
    if(data.length>10*1024*1024)throw new Error('Each uploaded file is limited to 10 MB.');
    if(files[name])throw new Error('Duplicate uploaded file field: '+name+'.');

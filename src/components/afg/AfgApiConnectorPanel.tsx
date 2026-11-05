@@ -106,7 +106,8 @@ export const AfgApiConnectorPanel:React.FC<{language:Language;catalogSelection?:
    output+=decoder.decode();setResults(prev=>({...prev,[row.id]:{kind:'stream',text:output,contentType}}));
   }else{
    const chunks:Uint8Array[]=[];while(true){const part=await reader.read();if(part.done)break;total+=part.value.byteLength;if(total>16*1024*1024){await reader.cancel();throw new Error('Stream exceeded 16 MB.');}chunks.push(part.value);}
-   const blob=new Blob(chunks,{type:contentType});const url=URL.createObjectURL(blob);
+   const blobParts=chunks.map(chunk=>Uint8Array.from(chunk).buffer);
+   const blob=new Blob(blobParts,{type:contentType});const url=URL.createObjectURL(blob);
    const disposition=response.headers.get('content-disposition')||'';const filename=disposition.match(/filename="?([^";]+)"?/i)?.[1]||'api-stream.bin';
    if(results[row.id]?.url)URL.revokeObjectURL(results[row.id].url);
    setResults(prev=>({...prev,[row.id]:{kind:'media',url,filename,contentType,sizeBytes:total}}));

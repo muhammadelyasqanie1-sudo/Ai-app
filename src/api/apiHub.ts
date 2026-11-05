@@ -3,6 +3,7 @@ import { pool } from './database.ts';
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './auth.ts';
 import { getPublicApiSyncStatus, queryPublicApiCatalog, syncPublicApiCatalog, syncPublicMcpCatalog } from '../services/publicApiCatalog.ts';
 import { discoverOpenApiOperations, discoverOfficialDocumentation } from '../services/openApiDiscovery.ts';
+import { getLlmApiSyncStatus, queryLlmApiCatalog, syncPublicLlmCatalog } from '../services/llmApiCatalog.ts';
 
 export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
   if (!pathname.startsWith('/api/api-hub') && !pathname.startsWith('/api/admin/api-hub')) return false;
@@ -196,6 +197,17 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
       });
       sendAuthJson(res,200,result); return true;
     }
+    if (req.method === 'GET' && pathname === '/api/api-hub/llm-catalog') {
+      const url = new URL(req.url || '/', 'http://localhost');
+      const result = await queryLlmApiCatalog({
+        q: url.searchParams.get('q') || '',
+        provider: url.searchParams.get('provider') || '',
+        freeTier: url.searchParams.get('freeTier') || 'all',
+        page: Number(url.searchParams.get('page') || 1),
+        pageSize: Number(url.searchParams.get('pageSize') || 30),
+      });
+      sendAuthJson(res,200,result); return true;
+    }
     if (req.method === 'GET' && pathname === '/api/api-hub/random') {
       const url = new URL(req.url || '/', 'http://localhost');
       const category = url.searchParams.get('category');
@@ -248,8 +260,10 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
     if (req.method === 'GET' && pathname === '/api/admin/api-hub/status') {
       const status=await getPublicApiSyncStatus();
       let mcpDirectory:{total:number;configured:boolean}={total:0,configured:false};
+      let llmCatalog:{configured:boolean;providers:number;models:number;candidateRecords?:number;sources?:any[];error?:string}={configured:false,providers:0,models:0};
       try{const mcp=await pool.query('SELECT count(*)::int AS total FROM mcp_directory_catalog WHERE is_active=true');mcpDirectory={total:Number(mcp.rows[0]?.total||0),configured:true};}catch{}
-      sendAuthJson(res,200,{...status,mcpDirectory}); return true;
+      try{llmCatalog=await getLlmApiSyncStatus();}catch(error){llmCatalog={configured:false,providers:0,models:0,error:error instanceof Error?error.message:'LLM catalogue migration is not applied.'};}
+      sendAuthJson(res,200,{...status,mcpDirectory,llmCatalog}); return true;
     }
     if (req.method === 'POST' && pathname === '/api/admin/api-hub/sync') {
       const body = await readJsonBody(req,1000);
@@ -258,9 +272,12 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
       const catalog=await syncPublicApiCatalog();
       let mcpDirectory:{imported:number;error?:string};
       try{mcpDirectory=await syncPublicMcpCatalog();}
-      catch{mcpDirectory={imported:0,error:'MCP directory sync requires migration 0013 and access to the upstream repository README.'};}
-      const complete=catalog.complete&&mcpDirectory.imported>0;
-      const result={catalog,mcpDirectory,complete};
+      catch(error){mcpDirectory={imported:0,error:error instanceof Error?error.message:'MCP directory sync failed.'};}
+      let llmCatalog:Awaited<ReturnType<typeof syncPublicLlmCatalog>>|{complete:false;imported:0;providers:0;sources:[];error:string};
+      try{llmCatalog=await syncPublicLlmCatalog();}
+      catch(error){llmCatalog={complete:false,imported:0,providers:0,sources:[],error:error instanceof Error?error.message:'LLM API catalogue sync failed.'};}
+      const complete=catalog.complete&&mcpDirectory.imported>0&&llmCatalog.complete;
+      const result={catalog,mcpDirectory,llmCatalog,complete};
       await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
         [user.id,user.role,'api_hub.catalog.sync','api_catalog','public-apis/public-apis',JSON.stringify(result)]);
       sendAuthJson(res,complete?200:206,{result,status:complete?'success':'partial'}); return true;
