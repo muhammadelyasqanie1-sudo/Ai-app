@@ -87,6 +87,7 @@ function authSummary(document:Json,operation:Json):string[]{
   for(const name of Object.keys(requirement)){
    const scheme=schemes[name];if(!scheme)continue;
    if(scheme.type==='http'&&String(scheme.scheme).toLowerCase()==='bearer')result.push('bearer');
+   else if(scheme.type==='http'&&String(scheme.scheme).toLowerCase()==='basic')result.push('basic');
    else if(scheme.type==='apiKey'&&scheme.in==='header')result.push('header_key:'+String(scheme.name||'X-API-Key'));
    else if(scheme.type==='apiKey'&&scheme.in==='query')result.push('query_key:'+String(scheme.name||'api_key'));
    else result.push('oauth_or_unsupported:'+String(scheme.type||'unknown'));
@@ -101,7 +102,8 @@ function operationSchema(document:Json,operation:Json,pathItem:Json):{schema:Jso
   if(!parameter||typeof parameter!=='object')continue;
   const name=String(parameter.name||'').trim(),location=String(parameter.in||'');
   if(!name||!['path','query','header','cookie'].includes(location))continue;
-  if(location==='header'||location==='cookie'){unsupported.push(location+':'+name);continue;}
+  if(location==='cookie'){unsupported.push(location+':'+name);continue;}
+  if(location==='header'&&(!/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}$/.test(name)||/^(authorization|proxy-authorization|host|cookie|content-length|content-type|connection|transfer-encoding)$/i.test(name)||name.toLowerCase().startsWith('proxy-'))){unsupported.push(location+':'+name);continue;}
   const schema=primitiveSchema(document,parameter.schema);
   if(!schema){unsupported.push(location+':'+name);continue;}
   schema['x-in']=location;properties[name]=schema;if(parameter.required===true)required.add(name);
@@ -259,7 +261,7 @@ export async function discoverOpenApiOperations(specUrl:string){
     deprecated:operation.deprecated===true,
     method:method.toUpperCase(),endpointUrl:endpoint,inputSchema:built.schema,
     authOptions:auth,securityRequirements:operation.security??document.security??[],unsupportedParameters:built.unsupported,
-    usable:built.unsupported.length===0&&auth.every(item=>['none','bearer'].includes(item)||item.startsWith('header_key:')||item.startsWith('query_key:')),
+    usable:built.unsupported.length===0&&auth.every(item=>['none','bearer','basic'].includes(item)||item.startsWith('header_key:')||item.startsWith('query_key:')),
    });
    if(operations.length>=100)break;
   }
