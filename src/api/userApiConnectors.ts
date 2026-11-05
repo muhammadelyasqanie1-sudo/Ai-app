@@ -811,6 +811,38 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    await audit(user.id,'api.connector.credential_rotated',row.id,{authType:row.auth_type,requiresVerification:true});
    sendAuthJson(res,200,{updated:true,verified:false,enabled:false,requiresVerification:true});return true;
   }
+  if(req.method==='POST'&&pathname==='/api/api-hub/connectors/recover-due'){
+   await refreshDueQueueEntries(user.id);
+   const client=await pool.connect();let claimed:any[]=[];
+   try{
+    await client.query('BEGIN');
+    const result=await client.query("WITH due AS (SELECT id FROM user_api_connectors WHERE user_id=$1 AND queue_state='ready' AND last_quota_status IN (402,429) AND last_quota_reset_at IS NOT NULL AND last_quota_reset_at<=now() AND (quota_recovery_claimed_at IS NULL OR quota_recovery_claimed_at<now()-interval '2 minutes') ORDER BY last_quota_reset_at ASC,fallback_priority ASC FOR UPDATE SKIP LOCKED LIMIT 5) UPDATE user_api_connectors c SET quota_recovery_claimed_at=now(),updated_at=now() FROM due WHERE c.id=due.id AND c.user_id=$1 RETURNING c.*",[user.id]);
+    claimed=result.rows;await client.query('COMMIT');
+   }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+   const outcomes:any[]=[];
+   for(const row of claimed){
+    const requestId=randomUUID();
+    try{
+     const result=await execute(row,row.sample_arguments_json,user.id,requestId,15_000);
+     await pool.query("UPDATE user_api_connectors SET status='verified',queue_state='ready',next_available_at=NULL,enabled=false,quota_recovery_claimed_at=NULL,last_quota_status=NULL,last_quota_observed_at=NULL,last_quota_reset_at=NULL,last_tested_at=now(),last_http_status=$3,last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2",[row.id,user.id,result.status]);
+     await audit(user.id,'api.connector.quota_recovered',row.id,{httpStatus:result.status,durationMs:result.durationMs,resetEvidenceAt:row.last_quota_reset_at,trigger:'owner_batch'});
+     outcomes.push({id:row.id,name:row.name,recovered:true,verified:true,enabled:false,httpStatus:result.status});
+    }catch(error){
+     const status=Number((error as any)?.httpStatus)||null;
+     const message=error instanceof Error?error.message.slice(0,250):'API connector recovery failed.';
+     if(status===402||status===429){
+      const retryAt=(error as any)?.retryAt,next=retryAt?new Date(retryAt):null;
+      const evidence=(error as any)?.rateLimitEvidence||{source:'upstream_response',observedAt:new Date().toISOString(),httpStatus:status,headers:{}};
+      await pool.query("UPDATE user_api_connectors SET enabled=false,status='error',queue_state='waiting',next_available_at=$3,quota_recovery_claimed_at=NULL,rate_limit_evidence=$4::jsonb,last_quota_status=$5,last_quota_observed_at=now(),last_quota_reset_at=$3,last_tested_at=now(),last_http_status=$5,last_error=$6,updated_at=now() WHERE id=$1 AND user_id=$2",[row.id,user.id,next,JSON.stringify(evidence),status,message]);
+     }else{
+      await pool.query("UPDATE user_api_connectors SET enabled=false,status='error',quota_recovery_claimed_at=NULL,last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1 AND user_id=$2",[row.id,user.id,status,message]);
+     }
+     await audit(user.id,'api.connector.quota_recovery_failed',row.id,{status,error:message,trigger:'owner_batch'});
+     outcomes.push({id:row.id,name:row.name,recovered:false,httpStatus:status,waitingForQuota:status===402||status===429,error:message});
+    }
+   }
+   sendAuthJson(res,200,{checked:outcomes.length,recovered:outcomes.filter(x=>x.recovered).length,failed:outcomes.filter(x=>!x.recovered).length,limit:5,results:outcomes});return true;
+  }
   const recoverMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/recover$/i);
   if(req.method==='POST'&&recoverMatch){
    const row=await ownerConnector(user.id,recoverMatch[1]);
