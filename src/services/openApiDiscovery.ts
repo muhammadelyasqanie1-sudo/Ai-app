@@ -1,3 +1,4 @@
+import {parse as parseYaml} from 'yaml';
 import {lookup} from 'node:dns/promises';
 import {BlockList,isIP} from 'node:net';
 
@@ -242,10 +243,10 @@ function governanceEvidence(document:Json,operations:any[]){
 
 export async function discoverOpenApiOperations(specUrl:string){
  const url=await safeSpecUrl(specUrl);
- const response=await fetch(url.toString(),{headers:{Accept:'application/vnd.oai.openapi+json, application/json'},redirect:'error',signal:AbortSignal.timeout(15_000)});
+ const response=await fetch(url.toString(),{headers:{Accept:'application/vnd.oai.openapi+json, application/json, application/yaml, text/yaml, application/x-yaml'},redirect:'error',signal:AbortSignal.timeout(15_000)});
  if(!response.ok)throw new Error('OpenAPI document returned HTTP '+response.status+'.');
  const raw=await readTextLimited(response,2_000_000);
- let document:Json;try{document=JSON.parse(raw);}catch{throw new Error('Only JSON-formatted OpenAPI documents are currently supported.');}
+ let document:Json;try{document=JSON.parse(raw);}catch{try{document=parseYaml(raw,{uniqueKeys:true,maxAliasCount:50}) as Json;}catch{throw new Error('The OpenAPI document is neither valid JSON nor supported YAML.');}}
  if(!document||typeof document!=='object'||!/^3\.(0|1)\./.test(String(document.openapi||''))||!document.paths||typeof document.paths!=='object')
   throw new Error('The document is not a supported OpenAPI 3.0 or 3.1 JSON specification.');
  const rootServer=Array.isArray(document.servers)?document.servers[0]?.url:null;
