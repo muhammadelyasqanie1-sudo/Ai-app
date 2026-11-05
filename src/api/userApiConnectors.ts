@@ -803,9 +803,9 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
      WHERE id=$1 AND user_id=$2 AND credential_encrypted IS NOT NULL
       AND NOT EXISTS(SELECT 1 FROM user_api_connector_keys WHERE connector_id=$1)
      ON CONFLICT(connector_id,label) DO NOTHING`,[connector.id,user.id]);
-    const result=await pool.query(`SELECT id,label,priority,is_active,created_at,updated_at
+    const result=await pool.query(`SELECT id,label,priority,is_active,lifecycle_state,expires_at,renewal_due_at,last_used_at,last_error,last_status_code,created_at,updated_at
      FROM user_api_connector_keys WHERE connector_id=$1 AND user_id=$2 ORDER BY priority ASC,created_at ASC`,[connector.id,user.id]);
-    sendAuthJson(res,200,{keys:result.rows.map((key:any)=>({id:key.id,label:key.label,priority:Number(key.priority),active:Boolean(key.is_active),createdAt:key.created_at,updatedAt:key.updated_at}))});return true;
+    sendAuthJson(res,200,{keys:result.rows.map((key:any)=>({id:key.id,label:key.label,priority:Number(key.priority),active:Boolean(key.is_active),lifecycleState:key.lifecycle_state||'active',expiresAt:key.expires_at||null,renewalDueAt:key.renewal_due_at||null,lastUsedAt:key.last_used_at||null,lastError:key.last_error||null,lastStatusCode:key.last_status_code||null,createdAt:key.created_at,updatedAt:key.updated_at}))});return true;
    }
    if(req.method==='POST'){
     const body=await readJsonBody(req,12_000);
@@ -821,6 +821,28 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
     sendAuthJson(res,201,{key:{id:inserted.rows[0].id,label:inserted.rows[0].label,priority:Number(inserted.rows[0].priority),active:false,createdAt:inserted.rows[0].created_at},requiresManualActivation:true});return true;
    }
    sendAuthJson(res,405,{error:'Method not allowed.'});return true;
+  }
+  const keyLifecycleMatch=pathname.match(/^\\/api\\/api-hub\\/connectors\\/([0-9a-f-]{36})\\/keys\\/([0-9a-f-]{36})\\/lifecycle$/i);
+  if(keyLifecycleMatch&&req.method==='POST'){
+   const connector=await ownerConnector(user.id,keyLifecycleMatch[1]);
+   if(!connector){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
+   const keyResult=await pool.query('SELECT * FROM user_api_connector_keys WHERE id=$1 AND connector_id=$2 AND user_id=$3 LIMIT 1',[keyLifecycleMatch[2],connector.id,user.id]);
+   const key=keyResult.rows[0];if(!key){sendAuthJson(res,404,{error:'API key not found.'});return true;}
+   const body=await readJsonBody(req,3000);
+   const state=String(body.state||'waiting');
+   const expiresAt=body.expiresAt?new Date(String(body.expiresAt)):null;
+   const renewalDueAt=body.renewalDueAt?new Date(String(body.renewalDueAt)):null;
+   if(!['active','waiting','expired','revoked'].includes(state)||(body.expiresAt&&(!expiresAt||!Number.isFinite(expiresAt.getTime())))||(body.renewalDueAt&&(!renewalDueAt||!Number.isFinite(renewalDueAt.getTime())))){
+    sendAuthJson(res,400,{error:'Invalid key lifecycle state or date.'});return true;
+   }
+   if(state==='revoked'&&key.is_active){sendAuthJson(res,409,{error:'Activate another key before revoking the active key.'});return true;}
+   await pool.query('UPDATE user_api_connector_keys SET lifecycle_state=$4,expires_at=$5,renewal_due_at=$6,updated_at=now() WHERE id=$1 AND connector_id=$2 AND user_id=$3',[key.id,connector.id,user.id,state,expiresAt,renewalDueAt]);
+   if(state==='waiting'||state==='expired'||state==='revoked'){
+    if(key.is_active)await pool.query('UPDATE user_api_connector_keys SET is_active=false WHERE id=$1',[key.id]);
+    await pool.query("UPDATE user_api_connectors SET enabled=false,status='error',last_error='Credential is waiting for renewal or replacement; key retained.',updated_at=now() WHERE id=$1 AND user_id=$2",[connector.id,user.id]);
+   }
+   await audit(user.id,'api.connector.key_lifecycle',connector.id,{keyId:key.id,state,expiresAt:expiresAt?.toISOString()||null,renewalDueAt:renewalDueAt?.toISOString()||null});
+   sendAuthJson(res,200,{updated:true,keyId:key.id,state,expiresAt:expiresAt?.toISOString()||null,renewalDueAt:renewalDueAt?.toISOString()||null,retained:true});return true;
   }
   const keyActionMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/keys\/([0-9a-f-]{36})\/(activate|delete)$/i);
   if(keyActionMatch&&(req.method==='POST'||req.method==='DELETE')){
