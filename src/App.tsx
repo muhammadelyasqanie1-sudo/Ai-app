@@ -300,6 +300,15 @@ export default function App() {
   };
 
   useEffect(() => {
+    const selectFromStudio = (event: Event) => {
+      const model = (event as CustomEvent<string>).detail;
+      if (typeof model === 'string' && model) handleSelectModel(model);
+    };
+    window.addEventListener('afg-select-model', selectFromStudio);
+    return () => window.removeEventListener('afg-select-model', selectFromStudio);
+  }, [modelOptions]);
+
+  useEffect(() => {
     const syncAccount = () => {
       fetch(API_BASE_URL + '/api/auth/me', { credentials: 'include' })
         .then((response) => response.ok ? response.json() : null)
