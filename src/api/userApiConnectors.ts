@@ -844,7 +844,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    }
    sendAuthJson(res,405,{error:'Method not allowed.'});return true;
   }
-  const keyLifecycleMatch=pathname.match(/^\\/api\\/api-hub\\/connectors\\/([0-9a-f-]{36})\\/keys\\/([0-9a-f-]{36})\\/lifecycle$/i);
+  const keyLifecycleMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/keys\/([0-9a-f-]{36})\/lifecycle$/i);
   if(keyLifecycleMatch&&req.method==='POST'){
    const connector=await ownerConnector(user.id,keyLifecycleMatch[1]);
    if(!connector){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
