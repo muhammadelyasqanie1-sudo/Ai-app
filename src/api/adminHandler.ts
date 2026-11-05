@@ -1099,7 +1099,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const invalid = requested.filter((item: any) =>
         !item || typeof item.providerId !== 'string' || !/^[a-z0-9][a-z0-9-]{1,47}$/.test(item.providerId.trim()) ||
         typeof item.modelId !== 'string' || !item.modelId.trim() || item.modelId.trim().length > 300 ||
-        /[\\u0000-\\u001f\\u007f]/.test(item.modelId));
+        /[\x00-\x1f\x7f]/.test(item.modelId));
       if (invalid.length) {
         sendAuthJson(res, 400, { error: 'Some model identifiers are invalid.', invalid: invalid.length, requested: requested.length });
         return true;
