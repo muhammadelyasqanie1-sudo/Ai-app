@@ -375,8 +375,8 @@ export async function queryPublicApiCatalog(filters:{
   if(filters.https&&filters.https!=='all')where.push('lower(c.https)=lower('+add(filters.https==='true'?'Yes':'No')+')');
   if(filters.cors&&filters.cors!=='all')where.push('lower(c.cors)=lower('+add(filters.cors==='true'?'Yes':'No')+')');
   const clause=where.join(' AND ');
-  const count=await pool.query('SELECT count(*)::int AS total FROM public_api_catalog WHERE '+clause,values);
-  const rows=await pool.query(`SELECT source_key,name,description,auth,https,cors,category,
+  const count=await pool.query('SELECT count(*)::int AS total FROM public_api_catalog c WHERE '+clause,values);
+  const rows=await pool.query(`SELECT c.source_key,c.name,c.description,c.auth,c.https,c.cors,c.category,
     CASE
       WHEN lower(category) ~ '(image|photo|avatar|art|drawing|design|visual)' OR lower(name||' '||description) ~ '(image generation|text.to.image|image editing|image synthesis)' THEN 'image'
       WHEN lower(category) ~ '(machine learning|artificial intelligence|text analysis|language|translation|sentiment)' OR lower(name||' '||description) ~ '(llm|chat completion|text generation|embedding|language model)' THEN 'ai'
