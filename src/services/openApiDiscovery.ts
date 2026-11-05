@@ -71,9 +71,11 @@ function primitiveSchema(document:Json,input:unknown,depth=0):Json|null{
  return output;
 }
 function makeToolName(value:string,path:string,method:string):string{
- const source=value||method+'_'+path.replace(/[{}]/g,'');
- const name=source.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60);
- return /^[a-z]/.test(name)?name:'api_'+name;
+ const base=(value||'api').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'')||'api';
+ const suffix=(method+'_'+path.replace(/[{}]/g,'')).toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(-24)||'operation';
+ const prefix=base.slice(0,Math.max(1,63-suffix.length-1));
+ const name=(prefix+'_'+suffix).slice(0,64);
+ return /^[a-z]/.test(name)?name:'api_'+name.slice(0,60);
 }
 function authSummary(document:Json,operation:Json):string[]{
  const requirements=operation.security??document.security??[];
