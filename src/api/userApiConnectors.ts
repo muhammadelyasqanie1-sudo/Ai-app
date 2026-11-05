@@ -274,7 +274,7 @@ async function ownerConnector(userId:string,id:string){
  const result=await pool!.query('SELECT * FROM user_api_connectors WHERE id=$1 AND user_id=$2 LIMIT 1',[id,userId]);
  return result.rows[0]||null;
 }
-async function execute(row:any,args:unknown,userId:string,requestId:string,timeoutMs=15_000,files:Record<string,UploadedFile>={}){
+async function execute(row:any,args:unknown,userId:string,requestId:string,timeoutMs=15_000,files:Record<string,UploadedFile>={},streamTo?:ServerResponse){
  const schema=validateSchema(row.input_schema_json),values=validateArgs(schema,args);
  const fileProperties=Object.entries(schema.properties as Json).filter(([,value])=>(value as Json).format==='binary').map(([key])=>key);
  for(const key of fileProperties){if((schema.required as string[]).includes(key)&&!files[key])throw new Error('Required upload field is missing: '+key+'.');}
@@ -333,6 +333,46 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  const durationMs=Date.now()-started;
  const rateLimitEvidence=readRateLimitEvidence(response);
  const retryAt=parseUpstreamResetAt(response);
+ if(streamTo&&!response.ok){
+  const raw=await readTextLimited(response,1_000_000);
+  const safeRaw=secrets.reduce((value,secret)=>value.split(secret).join('[redacted]'),raw);
+  throw Object.assign(new Error('The external API returned HTTP '+response.status+'. '+safeRaw.slice(0,500)),{
+   httpStatus:response.status,durationMs,retryAt:retryAt||undefined,rateLimitEvidence
+  });
+ }
+ if(streamTo){
+  const announced=(response.headers.get('content-type')||'application/octet-stream').split(';')[0].trim().toLowerCase();
+  const streamType=/^[a-z0-9][a-z0-9!# const retryAt=parseUpstreamResetAt(response);
+ const announcedType=^_.+-]{0,80}\/[a-z0-9][a-z0-9!# const retryAt=parseUpstreamResetAt(response);
+ const announcedType=^_.+-]{0,80}$/.test(announced)?announced:'application/octet-stream';
+  const disposition=response.headers.get('content-disposition')||'';
+  const streamHeaders:Record<string,string>={'Content-Type':streamType,'Cache-Control':'no-cache, no-transform','X-Content-Type-Options':'nosniff','X-Request-Id':requestId};
+  if(/(?:^|;)\s*attachment\b/i.test(disposition))streamHeaders['Content-Disposition']='attachment; filename="'+safeDownloadName(disposition,streamType).replace(/"/g,'')+'"';
+  streamTo.writeHead(response.status,streamHeaders);
+  const reader=response.body?.getReader();
+  let total=0;
+  try{
+   while(reader){
+    const part=await reader.read();if(part.done)break;
+    total+=part.value.byteLength;
+    if(total>16*1024*1024){await reader.cancel().catch(()=>{});throw new Error('Streaming API response exceeded the 16 MB safety limit.');}
+    if(streamTo.destroyed)throw new Error('Client disconnected during API streaming.');
+    if(!streamTo.write(Buffer.from(part.value))){
+     await new Promise<void>((resolve,reject)=>{
+      const cleanup=()=>{streamTo.removeListener('drain',onDrain);streamTo.removeListener('close',onClose);};
+      const onDrain=()=>{cleanup();resolve();};
+      const onClose=()=>{cleanup();reject(new Error('Client disconnected during API streaming.'));};
+      streamTo.once('drain',onDrain);streamTo.once('close',onClose);
+     });
+    }
+   }
+  }finally{reader?.releaseLock();}
+  if(!streamTo.destroyed)streamTo.end();
+  await persistRateLimitObservation(row,userId,rateLimitEvidence,null,null);
+  await pool!.query(\`INSERT INTO user_api_connector_runs(connector_id,user_id,request_id,http_method,http_status,duration_ms,outcome)
+   VALUES($1,$2,$3,$4,$5,$6,'success')\`,[row.id,userId,requestId,row.http_method,response.status,Date.now()-started]);
+  return {data:{kind:'stream',contentType:streamType,sizeBytes:total},status:response.status,durationMs:Date.now()-started};
+ }
  const announcedType=(response.headers.get('content-type')||'application/octet-stream').split(';')[0].trim().toLowerCase();
  const contentType=/^[a-z0-9][a-z0-9!#$&^_.+-]{0,80}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,80}$/.test(announcedType)?announcedType:'application/octet-stream';
  const contentDisposition=response.headers.get('content-disposition')||'';
@@ -434,12 +474,12 @@ async function recordConnectorFailure(row:any,userId:string,requestId:string,err
   VALUES($1,$2,$3,$4,$5,$6,'error',$7)`,
   [row.id,userId,requestId,row.http_method,Number(value?.httpStatus)||null,Math.max(0,Number(value?.durationMs)||0),message]).catch(()=>{});
 }
-async function executeConnectorWithFallback(row:any,args:unknown,userId:string,requestId:string,files:Record<string,UploadedFile>={}){
- try{return {...await execute(row,args,userId,requestId,10_000,files),connectorId:row.id,connectorName:row.name,fallbackUsed:false};}
+async function executeConnectorWithFallback(row:any,args:unknown,userId:string,requestId:string,files:Record<string,UploadedFile>={},streamTo?:ServerResponse){
+ try{return {...await execute(row,args,userId,requestId,streamTo?120_000:10_000,files,streamTo),connectorId:row.id,connectorName:row.name,fallbackUsed:false};}
  catch(primaryError){
   await recordConnectorFailure(row,userId,requestId,primaryError);
   await parkQuotaLimitedConnector(row,userId,primaryError);
-  if(!row.fallback_group||!isRetryableUpstreamFailure(primaryError))throw primaryError;
+  if(streamTo?.headersSent||!row.fallback_group||!isRetryableUpstreamFailure(primaryError))throw primaryError;
   const alternatives=await pool!.query(`SELECT * FROM user_api_connectors
    WHERE user_id=$1 AND fallback_group=$2 AND id<>$3 AND enabled=true AND status='verified'
     AND queue_state='ready' AND http_method=$4 AND input_schema_json=$5::jsonb AND endpoint_url<>$6
@@ -449,7 +489,7 @@ async function executeConnectorWithFallback(row:any,args:unknown,userId:string,r
   for(const candidate of alternatives.rows){
    if(!await reserveConnectorCall(userId,candidate.id))continue;
    try{
-    const result=await execute(candidate,args,userId,requestId,10_000,files);
+    const result=await execute(candidate,args,userId,requestId,streamTo?120_000:10_000,files,streamTo);
     console.info('AFG_API_CONNECTOR_FALLBACK',JSON.stringify({requestId,userId,group:row.fallback_group,from:row.id,to:candidate.id,outcome:'success'}));
     return {...result,connectorId:candidate.id,connectorName:candidate.name,fallbackUsed:true,fallbackFrom:row.name};
    }catch(error){
@@ -605,6 +645,26 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    if(!deleted.rows[0]){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
    await audit(user.id,'api.connector.delete',itemMatch[1]);
    sendAuthJson(res,200,{deleted:true});return true;
+  }
+  const streamMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/stream$/i);
+  if(req.method==='POST'&&streamMatch){
+   await refreshDueQueueEntries(user.id);
+   const row=await ownerConnector(user.id,streamMatch[1]);
+   if(!row||!row.enabled||row.status!=='verified'||row.queue_state!=='ready'){sendAuthJson(res,409,{error:row?.queue_state==='waiting'?'API connector is waiting for its upstream quota reset.':'API connector is not verified and enabled.'});return true;}
+   if(!await reserveConnectorCall(user.id,row.id)){sendAuthJson(res,429,{error:'API connector limit is 30 calls per minute.'});return true;}
+   const body=await readJsonBody(req,60_000),args=body.arguments||body;
+   const requestId=randomUUID();
+   try{
+    await executeConnectorWithFallback(row,args,user.id,requestId,{},res);
+    return true;
+   }catch(error){
+    const message=error instanceof Error?error.message.slice(0,300):'API connector streaming failed.';
+    if(res.headersSent){
+     if(String(res.getHeader('Content-Type')||'').startsWith('text/event-stream'))res.write('event: error\ndata: '+JSON.stringify({error:message,requestId})+'\n\n');
+     if(!res.writableEnded)res.end();
+    }else sendAuthJson(res,502,{requestId,error:message});
+    return true;
+   }
   }
   const callMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/call$/i);
   if(req.method==='POST'&&callMatch){
