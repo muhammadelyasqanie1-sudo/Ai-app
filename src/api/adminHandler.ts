@@ -209,13 +209,13 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       sendAuthJson(res,410,{error:'Custom AI providers are disabled. Only 9Router and Ollama are supported.'});return true;
     }
 
-    const providerConfigRoute=pathname.match(/^\\/api\\/admin\\/providers\\/([a-z0-9-]+)\\/config$/);
+    const providerConfigRoute=pathname.match(/^\/api\/admin\/providers\/([a-z0-9-]+)\/config$/);
     if(req.method==='PATCH'&&providerConfigRoute){
       sendAuthJson(res,409,{error:'Provider endpoints are managed by the 9Router integration or Ollama host configuration.'});return true;
     }
 
-    const keyRoute = pathname.match(/^\\/api\\/admin\\/providers\\/([a-z0-9-]+)\\/keys(?:\\/rotate)?$/);
-    if (keyRoute && ((req.method==='PUT' && !pathname.endsWith('/rotate')) || (req.method==='POST' && pathname.endsWith('/rotate'))) {
+    const keyRoute = pathname.match(/^\/api\/admin\/providers\/([a-z0-9-]+)\/keys(?:\/rotate)?$/);
+    if (keyRoute && (req.method==='PUT' || (req.method==='POST' && pathname.endsWith('/rotate')))) {
       sendAuthJson(res,409,{error:'Provider keys are managed by the 9Router integration. Other provider credentials are disabled.'});return true;
     }
 
