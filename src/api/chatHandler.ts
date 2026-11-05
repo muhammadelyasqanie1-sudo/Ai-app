@@ -313,12 +313,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
 
     const upstreamMessages: ChatMessage[] = [];
     estimatedInputTokens = Math.ceil(messages.reduce((total,message)=>total+message.content.length,0)/4);
-    if (systemMessages.join('
-
-').trim()) {
-      upstreamMessages.push({ role: 'system', content: systemMessages.join('
-
-') });
+    if (systemMessages.join('\n\n').trim()) {
+      upstreamMessages.push({ role: 'system', content: systemMessages.join('\n\n') });
     }
     upstreamMessages.push(...messages
       .filter((message) => message.role === 'user' || message.role === 'assistant')
@@ -352,13 +348,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       const lastUser = upstreamMessages[upstreamMessages.length - 1];
       if (lastUser.content.length > 6000) {
         const chunks = splitTranslationDocument(lastUser.content);
-        lastUser.content = 'Translate every numbered segment in order. Keep terminology consistent across all segments, preserve the original paragraph and markup structure, and do not omit or summarize any segment. Return the translated segments in the same order.
-
-' +
-          chunks.map((chunk, index) => `[Segment ${index + 1} of ${chunks.length}]
-${chunk}`).join('
-
-');
+        lastUser.content = 'Translate every numbered segment in order. Keep terminology consistent across all segments, preserve the original paragraph and markup structure, and do not omit or summarize any segment. Return the translated segments in the same order.\n\n' +
+          chunks.map((chunk, index) => `[Segment ${index + 1} of ${chunks.length}]\n${chunk}`).join('\n\n');
       }
     }
 
@@ -373,9 +364,7 @@ ${chunk}`).join('
       await enforceModelSubscription(requestUserId, selectedProviderId, selectedModelId);
       if (activeModelId !== selectedKey) {
         activeModelId = selectedKey;
-        if (res.headersSent && !res.writableEnded) res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: selectedKey })}
-
-`);
+        if (res.headersSent && !res.writableEnded) res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: selectedKey })}\n\n`);
       }
       if (!rateLimitedModels.has(selectedKey)) {
         rateLimitedModels.add(selectedKey);
@@ -401,15 +390,11 @@ ${chunk}`).join('
       'X-Request-Id': id,
       ...corsHeaders(req),
     });
-    res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: prepared.modelId })}
-
-`);
+    res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: prepared.modelId })}\n\n`);
 
     let emittedContent = false;
     heartbeat = setInterval(() => {
-      if (!res.writableEnded && !res.destroyed) res.write(': heartbeat
-
-');
+      if (!res.writableEnded && !res.destroyed) res.write(': heartbeat\n\n');
     }, 15_000);
     try {
       let toolRound = 0;
@@ -420,9 +405,7 @@ ${chunk}`).join('
           if (chunk.content) {
             emittedContent = true;
             streamedOutputCharacters += chunk.content.length;
-            res.write(`data: ${JSON.stringify({ type: 'content', text: chunk.content })}
-
-`);
+            res.write(`data: ${JSON.stringify({ type: 'content', text: chunk.content })}\n\n`);
           }
           for (const delta of chunk.toolCalls || []) {
             const current = toolCalls.get(delta.index) || {id:delta.id||randomUUID(),type:'function' as const,function:{name:'',arguments:''}};
@@ -458,15 +441,11 @@ ${chunk}`).join('
             const serialized=JSON.stringify(result);
             toolMessages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:serialized.slice(0,16_000)});
             estimatedInputTokens+=Math.ceil(serialized.length/4);
-            res.write(`data: ${JSON.stringify({type:'tool_status',name:call.function.name,status:'completed'})}
-
-`);
+            res.write(`data: ${JSON.stringify({type:'tool_status',name:call.function.name,status:'completed'})}\n\n`);
           } catch(error) {
             const message=error instanceof Error?error.message.slice(0,300):'API tool failed.';
             toolMessages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:JSON.stringify({error:message})});
-            res.write(`data: ${JSON.stringify({type:'tool_status',name:call.function.name,status:'failed'})}
-
-`);
+            res.write(`data: ${JSON.stringify({type:'tool_status',name:call.function.name,status:'failed'})}\n\n`);
           }
         }
         prepared=await prepareVerifiedChat({
@@ -482,9 +461,7 @@ ${chunk}`).join('
           requestId: id, selectedModel: activeModelId,
           userId: requestUserId, latencyMs: Date.now() - startedAt,
         }));
-        res.write(`data: ${JSON.stringify({ type: 'error', error: 'The AI provider returned an empty response. Please retry.', retryable: true, requestId: id })}
-
-`);
+        res.write(`data: ${JSON.stringify({ type: 'error', error: 'The AI provider returned an empty response. Please retry.', retryable: true, requestId: id })}\n\n`);
         res.end();
         return;
       }
@@ -493,12 +470,8 @@ ${chunk}`).join('
         requestId: id, selectedModel: activeModelId || (prepared.providerId + '::' + prepared.modelId),
         userId: requestUserId, outcome: 'success', latencyMs: Date.now() - startedAt,
       }));
-      res.write(`data: ${JSON.stringify({ type: 'done', requestId: id })}
-
-`);
-      res.write('data: [DONE]
-
-');
+      res.write(`data: ${JSON.stringify({ type: 'done', requestId: id })}\n\n`);
+      res.write('data: [DONE]\n\n');
       res.end();
     } catch (error) {
       await persistUsage(timedOut?'timeout':'error');
@@ -524,9 +497,7 @@ ${chunk}`).join('
           errorCode: streamErrorCode,
           retryable: streamRetryable,
           requestId: id,
-        })}
-
-`);
+        })}\n\n`);
         res.end();
       }
     }
