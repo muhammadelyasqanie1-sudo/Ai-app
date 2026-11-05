@@ -182,7 +182,12 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
         '/api/admin/rate-limits','/api/admin/feature-flags','/api/admin/usage','/api/admin/errors',
         '/api/admin/sessions','/api/admin/config','/api/admin/announcements',
       ];
-      const values=await Promise.all(paths.map(path=>adminApi(path)));
+      const values:any[]=[];
+      // The production Postgres pool is intentionally small; avoid flooding it with 15 concurrent admin reads.
+      for(let index=0;index<paths.length;index+=3){
+        const batch=await Promise.all(paths.slice(index,index+3).map(path=>adminApi(path)));
+        values.push(...batch);
+      }
       setProviders(values[0].providers||[]);
       setModels(values[1].models||[]);
       setFallbacks(values[2].fallbacks||[]);
