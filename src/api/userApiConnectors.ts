@@ -396,12 +396,23 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  if(query.size)url.search=query.toString();
  const init:RequestInit={method:row.http_method,headers,redirect:'error',signal:AbortSignal.timeout(timeoutMs)};
  if(['POST','PUT','PATCH'].includes(row.http_method)){
-  if(schema['x-content-type']==='multipart/form-data'){
+  const requestContentType=String(schema['x-content-type']||'application/json').toLowerCase();
+  if(requestContentType==='multipart/form-data'){
    const form=new FormData();
    for(const [key,value] of Object.entries(body))form.append(key,typeof value==='string'?value:JSON.stringify(value));
    for(const [key,file] of Object.entries(files))form.append(key,new Blob([Uint8Array.from(file.data)],{type:file.contentType}),file.filename);
    init.body=form;
-  }else{headers.set('Content-Type','application/json');init.body=JSON.stringify(body);}
+  }else if(requestContentType==='application/x-www-form-urlencoded'){
+   const form=new URLSearchParams();
+   for(const [key,value] of Object.entries(body))form.set(key,typeof value==='string'?value:JSON.stringify(value));
+   headers.set('Content-Type',requestContentType);init.body=form.toString();
+  }else if(['text/plain','application/xml','text/xml'].includes(requestContentType)){
+   if(typeof body.body!=='string')throw new Error('This content type requires a string body field.');
+   headers.set('Content-Type',requestContentType);init.body=body.body;
+  }else{
+   const contentType=requestContentType==='application/*+json'?'application/json':requestContentType;
+   headers.set('Content-Type',contentType);init.body=JSON.stringify(body);
+  }
  }
  const started=Date.now();
  let response:Response;
