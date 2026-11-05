@@ -289,6 +289,7 @@ export default function App() {
 
   const handleSelectModel = (model: string) => {
     setSelectedModel(model);
+    const selectedOption = modelOptions.find((item) => model === item.providerId + '::' + item.id);
     const csrf = document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '';
     fetch(API_BASE_URL + '/api/auth/preferences', {
       method: 'PATCH', credentials: 'include',
@@ -296,6 +297,15 @@ export default function App() {
       body: JSON.stringify({ defaultModel: model === 'auto' ? '' : model }),
     }).catch(() => {});
   };
+
+  useEffect(() => {
+    const selectFromStudio = (event: Event) => {
+      const model = (event as CustomEvent<string>).detail;
+      if (typeof model === 'string' && model) handleSelectModel(model);
+    };
+    window.addEventListener('afg-select-model', selectFromStudio);
+    return () => window.removeEventListener('afg-select-model', selectFromStudio);
+  }, [modelOptions]);
 
   useEffect(() => {
     const syncAccount = () => {
@@ -482,6 +492,39 @@ export default function App() {
   // Chat message sending & streaming logic
   const handleSendMessage = async (text: string, attachments: ChatAttachment[], baseMessages: AfgMessage[] = messages, toolOptions: Record<string, unknown> = {}) => {
     if (!text.trim() && attachments.length === 0) return;
+    const chosenModel = modelOptions.find((item) => selectedModel === item.providerId + '::' + item.id);
+    if (chosenModel?.capabilities?.imageGen) {
+      if (attachments.length) {
+        window.alert(language === 'dari' ? 'ویرایش تصویر با فایل پیوست هنوز فعال نیست؛ فعلاً توضیح متنی بفرستید.' : 'Image editing with attachments is not enabled yet. Send a text prompt instead.');
+        return;
+      }
+      const userMessage: AfgMessage = { id: crypto.randomUUID(), role: 'user', content: text, timestamp: Date.now() };
+      const assistantId = crypto.randomUUID();
+      setMessages([...baseMessages, userMessage, { id: assistantId, role: 'assistant', content: language === 'dari' ? 'در حال تولید تصویر…' : 'Generating image…', isStreaming: true, timestamp: Date.now() }]);
+      setIsLoading(true);
+      try {
+        if (chosenModel.providerId !== '9router') throw new Error(language === 'dari' ? 'مسیر تولید تصویر این ارائه‌دهنده هنوز وصل نشده است.' : 'Image generation for this provider is not integrated yet.');
+        const csrf = decodeURIComponent(document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '');
+        const response = await fetch(API_BASE_URL + '/api/9router/images/generations', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+          body: JSON.stringify({ model: chosenModel.id, prompt: text.trim(), n: 1, size: '1024x1024', quality: 'standard', response_format: 'url' }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || (language === 'dari' ? 'تولید تصویر ناموفق بود.' : 'Image generation failed.'));
+        const rows = Array.isArray(payload.data) ? payload.data : [];
+        const imageUrl = rows[0]?.url;
+        if (typeof imageUrl !== 'string' || !/^https:\/\//i.test(imageUrl)) throw new Error(language === 'dari' ? 'ارائه‌دهنده لینک معتبر تصویر برنگرداند.' : 'The provider did not return a valid image URL.');
+        const resultText = '![Generated image](' + imageUrl + ')';
+        setMessages(previous => previous.map(message => message.id === assistantId ? { ...message, content: resultText, isStreaming: false } : message));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Image generation failed.';
+        setMessages(previous => previous.map(item => item.id === assistantId ? { ...item, content: message, isStreaming: false, isError: true, retryable: true } : item));
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
     if (attachments.length > 0) {
       const hasImage = attachments.some((attachment) => /\\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(attachment.name));
       const selectedDescriptor = modelOptions.find((item) => selectedModel.endsWith(item.id));
@@ -799,6 +842,8 @@ export default function App() {
         {currentTab === 'image-gen' && (
           <LazyAfgImageGenView
             language={language}
+            selectedModel={selectedModel}
+            modelOptions={modelOptions}
           />
         )}
 
