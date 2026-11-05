@@ -75,7 +75,7 @@ async function getOAuthAccessToken(row:any,userId:string,secrets:string[]):Promi
   const response=await fetch(String(config.tokenUrl),{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body,redirect:'error',signal:AbortSignal.timeout(15000)});
   const raw=await readTextLimited(response,1_000_000);let next:Json;try{next=JSON.parse(raw);}catch{throw new Error('OAuth refresh returned an invalid response.');}
   if(!response.ok||typeof next.access_token!=='string'||!next.access_token)throw new Error('OAuth refresh failed with HTTP '+response.status+'.');
-  const merged={...tokens,...next,refresh_token:typeof next.refresh_token==='string'?next.refresh_token:refresh,expires_at:next.expires_in?Date.now()+Number(next.expires_in)*1000:tokens.expires_at};
+  const merged={...tokens,...next,refresh_token:typeof next.refresh_token==='string'?next.refresh_token:refresh,expires_at:next.expires_in?Date.now()+Number(next.expires_in)*1000:null};
   await client.query('UPDATE user_api_connectors SET credential_encrypted=$3,updated_at=now() WHERE id=$1 AND user_id=$2',[row.id,userId,encrypt(JSON.stringify(merged))]);
   secrets.push(String(merged.access_token),refresh,String(config.clientSecret||''));await client.query('COMMIT');return String(merged.access_token);
  }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}finally{client.release();}
@@ -650,7 +650,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
   if(req.method==='GET'&&pathname==='/api/api-hub/connectors/queue'){
    await refreshDueQueueEntries(user.id);
    const result=await pool.query("SELECT id,name,status,enabled,queue_state,next_available_at,fallback_group,fallback_priority,last_quota_status,last_quota_reset_at,last_http_status,updated_at FROM user_api_connectors WHERE user_id=$1 ORDER BY CASE WHEN queue_state='ready' THEN 0 ELSE 1 END,CASE WHEN queue_state='waiting' THEN next_available_at END ASC NULLS LAST,fallback_priority ASC,updated_at ASC",[user.id]);
-   const rows=result.rows,summary={total:rows.length,ready:rows.filter((x:any)=>x.queue_state==='ready').length,enabled:rows.filter((x:any)=>x.enabled&&x.status==='verified'&&x.queue_state==='ready').length,waiting:rows.filter((x:any)=>x.queue_state==='waiting').length,resetKnown:rows.filter((x:any)=>x.queue_state==='waiting'&&x.next_available_at).length,needsOwnerReview:rows.filter((x:any)=>x.queue_state==='waiting'&&!x.next_available_at).length};
+   const rows=result.rows,summary={total:rows.length,ready:rows.filter((x:any)=>x.queue_state==='ready'&&x.status==='verified').length,enabled:rows.filter((x:any)=>x.enabled&&x.status==='verified'&&x.queue_state==='ready').length,waiting:rows.filter((x:any)=>x.queue_state==='waiting').length,resetKnown:rows.filter((x:any)=>x.queue_state==='waiting'&&x.next_available_at).length,needsOwnerReview:rows.filter((x:any)=>x.queue_state==='waiting'&&!x.next_available_at).length};
    sendAuthJson(res,200,{summary,queue:rows.map((x:any)=>({id:x.id,name:x.name,status:x.status,enabled:x.enabled,queueState:x.queue_state,nextAvailableAt:x.next_available_at,fallbackGroup:x.fallback_group||'',priority:Number(x.fallback_priority||100),lastQuotaStatus:x.last_quota_status,lastQuotaResetAt:x.last_quota_reset_at,lastHttpStatus:x.last_http_status,updatedAt:x.updated_at}))});return true;
   }
   const priorityMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/priority$/i);
