@@ -39,3 +39,8 @@ Migration `0022_api_connector_fallback_groups.sql` adds optional per-user fallba
 ## Persistent API quota queue
 
 Migration `0023_api_connector_quota_queue.sql` adds a durable queue state to owner-scoped API connectors. HTTP 402/429 responses park the affected connector as `waiting` without deleting its endpoint, encrypted credential, priority, or configuration. If the upstream response supplies a valid `Retry-After` or rate-limit reset header, the connector becomes eligible again after that time when the user's API tools are next discovered or called. If the provider supplies no reset time, the connector remains waiting until its owner verifies it again or explicitly re-enables it; AFG AI does not guess monthly renewal dates. Other transient 5xx/network errors continue through the existing retryable fallback path and do not automatically mark the connector quota-exhausted.
+
+
+## Public API implementation coverage
+
+Migration `0024_public_api_implementation_tracking.sql` adds a durable per-catalog-entry implementation ledger and records whether both upstream catalogue sources were fully synchronized. New entries begin as `catalogued`; later verified documentation/OpenAPI discovery advances them without resetting progress on future catalogue syncs. Statuses distinguish catalogue-only entries, documentation discovery, contract discovery and unsupported protocols. Endpoint verification, credential configuration, successful probes, enabled state and quota waiting remain owner-scoped in the connector records and quota queue. This table contains public integration metadata only; user API credentials remain encrypted in owner-scoped connector records. Apply the migration before using the new tracking dashboard or running another catalog sync.

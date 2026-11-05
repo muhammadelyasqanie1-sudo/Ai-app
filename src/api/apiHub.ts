@@ -6,7 +6,7 @@ import { discoverOpenApiOperations } from '../services/openApiDiscovery.ts';
 
 export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
   if (!pathname.startsWith('/api/api-hub') && !pathname.startsWith('/api/admin/api-hub')) return false;
-  if (!pool) { sendAuthJson(res,503,{error:'The API Hub requires DATABASE_URL and migrations 0012–0015.'}); return true; }
+  if (!pool) { sendAuthJson(res,503,{error:'The API Hub requires DATABASE_URL and migrations 0012–0015 plus 0024.'}); return true; }
   const user = await authenticateRequest(req).catch(() => null);
   if (!user) { sendAuthJson(res,401,{error:'Sign in is required.'}); return true; }
   const admin = ['admin','superadmin'].includes(user.role);
@@ -16,10 +16,22 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
     if (req.method === 'POST' && pathname === '/api/api-hub/openapi/discover') {
       const body = await readJsonBody(req,4000);
       const specUrl = typeof body.specUrl === 'string' ? body.specUrl.trim() : '';
+      const sourceKey = typeof body.sourceKey === 'string' ? body.sourceKey.trim() : '';
       if (!specUrl || specUrl.length > 2048) { sendAuthJson(res,400,{error:'A valid OpenAPI JSON document URL is required.'}); return true; }
+      if (sourceKey && !/^[a-f0-9]{64}$/i.test(sourceKey)) { sendAuthJson(res,400,{error:'A valid catalog source key is required.'}); return true; }
       const result = await discoverOpenApiOperations(specUrl);
+      if (sourceKey) {
+        const tracked = await pool.query(`UPDATE public_api_implementation_tracking t
+          SET openapi_spec_url=$2,
+            discovery_status=CASE WHEN t.discovery_status IN ('catalogued','docs_discovered') THEN 'contract_discovered' ELSE t.discovery_status END,
+            last_discovered_at=now(),updated_at=now()
+          FROM public_api_catalog c
+          WHERE t.source_key=c.source_key AND t.source_key=$1 AND c.is_active=true
+          RETURNING t.source_key`,[sourceKey,result.specUrl]);
+        if (!tracked.rows[0]) { sendAuthJson(res,404,{error:'The selected API catalog entry was not found or has no tracking record.'}); return true; }
+      }
       await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
-        [user.id,'api_hub.openapi.discover','api_catalog',result.specUrl,JSON.stringify({operationCount:result.operationCount})]).catch(()=>{});
+        [user.id,'api_hub.openapi.discover','api_catalog',result.specUrl,JSON.stringify({operationCount:result.operationCount,sourceKey:sourceKey||null})]).catch(()=>{});
       sendAuthJson(res,200,result); return true;
     }
     if (req.method === 'GET' && pathname === '/api/api-hub/catalog') {
@@ -70,9 +82,12 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
     }
     const detailMatch = pathname.match(/^\/api\/api-hub\/catalog\/([a-f0-9]{64})$/i);
     if (req.method === 'GET' && detailMatch) {
-      const result = await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,icon_url,image_url,site_name,site_description,
-        health_status,response_time_ms,last_health_check,source_payload
-        FROM public_api_catalog WHERE source_key=$1 AND is_active=true LIMIT 1`,[detailMatch[1]]);
+      const result = await pool.query(`SELECT c.source_key,c.name,c.description,c.auth,c.https,c.cors,c.category,c.homepage_url,c.docs_url,c.icon_url,c.image_url,c.site_name,c.site_description,
+        c.health_status,c.response_time_ms,c.last_health_check,c.source_payload,
+        COALESCE(t.discovery_status,'catalogued') AS implementation_status,t.official_docs_url,t.openapi_spec_url,
+        t.endpoint_url,t.http_method,t.auth_type,t.endpoint_verified,t.auth_configured,t.last_probe_at,t.last_probe_status,t.unsupported_reason
+        FROM public_api_catalog c LEFT JOIN public_api_implementation_tracking t ON t.source_key=c.source_key
+        WHERE c.source_key=$1 AND c.is_active=true LIMIT 1`,[detailMatch[1]]);
       if (!result.rows[0]) { sendAuthJson(res,404,{error:'API catalog entry was not found.'}); return true; }
       const item=result.rows[0];
       const alternatives=await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,icon_url,image_url,site_name,site_description

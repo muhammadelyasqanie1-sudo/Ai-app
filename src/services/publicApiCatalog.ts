@@ -222,7 +222,8 @@ async function fetchDirectoryApiPage(page:number):Promise<{rows:PublicApiRecord[
   return {rows:extracted.rows.map(normalize).filter((row):row is PublicApiRecord=>row!==null),hasMore:extracted.hasMore};
 }
 
-let syncInFlight:Promise<{imported:number;pages:number;complete:boolean}>|null=null;
+type CatalogSyncResult={imported:number;pages:number;complete:boolean;sourceCoverage:{repositoryReadme:boolean;directoryApi:boolean}};
+let syncInFlight:Promise<CatalogSyncResult>|null=null;
 
 async function persistApiBatch(rows:PublicApiRecord[]):Promise<void> {
   if(!pool)throw new Error('The API catalog requires PostgreSQL.');
@@ -250,58 +251,79 @@ async function persistApiBatch(rows:PublicApiRecord[]):Promise<void> {
         'response_time_ms=CASE WHEN public_api_catalog.last_health_check IS NULL THEN EXCLUDED.response_time_ms ELSE public_api_catalog.response_time_ms END,'+
         'source_payload=EXCLUDED.source_payload,is_active=true,imported_at=now(),updated_at=now()';
       await client.query(sql,values);
+      // Create a durable work-tracking row for every newly catalogued API. Existing progress is never reset by a resync.
+      await client.query(`INSERT INTO public_api_implementation_tracking(source_key,discovery_status,official_docs_url,last_discovered_at,created_at,updated_at)
+        SELECT source_key,'catalogued',docs_url,now(),now(),now() FROM public_api_catalog WHERE source_key = ANY($1::text[])
+        ON CONFLICT(source_key) DO UPDATE SET
+          official_docs_url=COALESCE(EXCLUDED.official_docs_url,public_api_implementation_tracking.official_docs_url),
+          last_discovered_at=now(),updated_at=now()`,[batch.map(item=>item.sourceKey)]);
     }
     await client.query('COMMIT');
   }catch(error){await client.query('ROLLBACK');throw error;}
   finally{client.release();}
 }
 
-export async function syncPublicApiCatalog():Promise<{imported:number;pages:number;complete:boolean}> {
+export async function syncPublicApiCatalog():Promise<{imported:number;pages:number;complete:boolean;sourceCoverage:{repositoryReadme:boolean;directoryApi:boolean}}> {
   if(!pool)throw new Error('The API catalog requires PostgreSQL.');
   if(syncInFlight)return syncInFlight;
-  syncInFlight=(async()=>{
+  syncInFlight=(async():Promise<CatalogSyncResult>=>{
     await pool.query("INSERT INTO public_api_sync_state(source,status,last_started_at,last_error,updated_at) VALUES($1,'running',now(),NULL,now()) ON CONFLICT(source) DO UPDATE SET status='running',last_started_at=now(),last_error=NULL,updated_at=now()",[REPOSITORY_SOURCE]);
-    let imported=0;
-    let pages=0;
-    let complete=false;
+    let imported=0,pages=0;
+    let repositoryReadme=false,directoryApi=false;
+    const all=new Map<string,PublicApiRecord>();
+    const errors:string[]=[];
     try{
-      let sourcePages:Array<{rows:PublicApiRecord[];hasMore:boolean|null}>=[];
-      try{sourcePages=[await fetchRepositoryReadme()];}
-      catch(repositoryError){
-        console.warn('AFG_PUBLIC_API_REPOSITORY_README_UNAVAILABLE',JSON.stringify({error:repositoryError instanceof Error?repositoryError.message:'unknown'}));
+      // Import both official directory sources. A successful README fetch must not hide
+      // entries that exist only in the companion JSON directory (and vice versa).
+      try{
+        const result=await fetchRepositoryReadme();
+        for(const row of result.rows)all.set(row.sourceKey,{...row,raw:{...row.raw,catalogSource:'public-apis-readme'}});
+        repositoryReadme=true;pages++;
+      }catch(error){
+        errors.push('repository README: '+(error instanceof Error?error.message:'unknown error'));
+        console.warn('AFG_PUBLIC_API_REPOSITORY_README_UNAVAILABLE',JSON.stringify({error:error instanceof Error?error.message:'unknown'}));
+      }
+      try{
         for(let page=1;page<=MAX_PAGES;page++){
           const result=await fetchDirectoryApiPage(page);
-          sourcePages.push(result);
-          if(!result.rows.length){complete=true;break;}
-          if(result.hasMore===false){complete=true;break;}
+          pages++;
+          if(!result.rows.length){directoryApi=true;break;}
+          for(const row of result.rows){
+            const existing=all.get(row.sourceKey);
+            all.set(row.sourceKey,existing
+              ? {...existing,raw:{...existing.raw,alsoListedIn:'publicapis.lol',directoryPayload:row.raw}}
+              : {...row,raw:{...row.raw,catalogSource:'publicapis.lol'}});
+          }
+          if(result.hasMore===false){directoryApi=true;break;}
         }
+        if(!directoryApi)errors.push('companion directory: pagination did not reach a confirmed final page within '+MAX_PAGES+' pages');
+      }catch(error){
+        errors.push('companion directory: '+(error instanceof Error?error.message:'unknown error'));
+        console.warn('AFG_PUBLIC_API_DIRECTORY_UNAVAILABLE',JSON.stringify({error:error instanceof Error?error.message:'unknown'}));
       }
-      const allKeys=new Set<string>();
-      for(const result of sourcePages){
-        pages++;
-        if(!result.rows.length){complete=true;break;}
-        await persistApiBatch(result.rows);
-        for(const row of result.rows)allKeys.add(row.sourceKey);
-        imported+=result.rows.length;
-        if(result.hasMore===false)complete=true;
-      }
-      if(complete&&allKeys.size){
-        await pool.query('UPDATE public_api_catalog SET is_active=false,updated_at=now() WHERE NOT (source_key = ANY($1::text[]))',[Array.from(allKeys)]);
+      if(!all.size)throw new Error('No API records could be retrieved from either official directory source. '+errors.join('; '));
+      const records=[...all.values()];
+      await persistApiBatch(records);
+      imported=records.length;
+      const complete=repositoryReadme&&directoryApi;
+      // Never deactivate entries based on a partial snapshot from only one upstream source.
+      if(complete){
+        await pool.query('UPDATE public_api_catalog SET is_active=false,updated_at=now() WHERE NOT (source_key = ANY($1::text[]))',[records.map(row=>row.sourceKey)]);
       }
       const status=complete?'success':'partial';
-      await pool.query("UPDATE public_api_sync_state SET status=$2,items_imported=$3,pages_fetched=$4,last_completed_at=now(),last_error=NULL,updated_at=now() WHERE source=$1",
-        [REPOSITORY_SOURCE,status,imported,pages]);
-      return {imported,pages,complete};
+      const lastError=errors.length?errors.join(' | ').slice(0,500):null;
+      await pool.query("UPDATE public_api_sync_state SET status=$2,items_imported=$3,pages_fetched=$4,repository_readme_ok=$6,directory_api_ok=$7,last_completed_at=now(),last_error=$5,updated_at=now() WHERE source=$1",
+        [REPOSITORY_SOURCE,status,imported,pages,lastError,repositoryReadme,directoryApi]);
+      return {imported,pages,complete,sourceCoverage:{repositoryReadme,directoryApi}};
     }catch(error){
       const message=error instanceof Error?error.message.slice(0,500):'Catalog sync failed.';
-      await pool.query("UPDATE public_api_sync_state SET status='error',items_imported=$2,pages_fetched=$3,last_completed_at=now(),last_error=$4,updated_at=now() WHERE source=$1",
-        [REPOSITORY_SOURCE,imported,pages,message]).catch(()=>{});
+      await pool.query("UPDATE public_api_sync_state SET status='error',items_imported=$2,pages_fetched=$3,repository_readme_ok=$5,directory_api_ok=$6,last_completed_at=now(),last_error=$4,updated_at=now() WHERE source=$1",
+        [REPOSITORY_SOURCE,imported,pages,message,repositoryReadme,directoryApi]).catch(()=>{});
       throw error;
     }
   })();
-  try{return await syncInFlight;}finally{syncInFlight=null;}
+  try{return await syncInFlight}finally{syncInFlight=null;}
 }
-
 export async function syncPublicMcpCatalog():Promise<{imported:number}> {
   if(!pool)throw new Error('The MCP directory requires PostgreSQL.');
   const response=await fetch(REPOSITORY_README,{
@@ -366,8 +388,9 @@ export async function queryPublicApiCatalog(filters:{
       WHEN lower(category) ~ '(food|recipe|nutrition)' OR lower(name||' '||description) ~ '(recipe|nutrition data)' THEN 'food'
       ELSE 'general'
     END AS capability,
-    homepage_url,docs_url,icon_url,image_url,site_name,site_description,health_status,response_time_ms,last_health_check,imported_at
-    FROM public_api_catalog WHERE ${clause} ORDER BY category,name LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`,values);
+    homepage_url,docs_url,icon_url,image_url,site_name,site_description,health_status,response_time_ms,last_health_check,imported_at,
+    COALESCE(tracking.discovery_status,'catalogued') AS implementation_status
+    FROM public_api_catalog LEFT JOIN public_api_implementation_tracking tracking USING(source_key) WHERE ${clause} ORDER BY category,name LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`,values);
   return {items:rows.rows,page,pageSize,total:Number(count.rows[0]?.total||0),categories:await listPublicApiCategories()};
 }
 
@@ -379,6 +402,15 @@ export async function listPublicApiCategories(){
 
 export async function getPublicApiSyncStatus(){
   if(!pool)return {configured:false,status:'unavailable'};
-  const result=await pool.query('SELECT source,status,items_imported,pages_fetched,last_started_at,last_completed_at,last_error FROM public_api_sync_state WHERE source=$1 LIMIT 1',[REPOSITORY_SOURCE]);
-  return {configured:true,sync:result.rows[0]||null};
+  const result=await pool.query('SELECT source,status,items_imported,pages_fetched,repository_readme_ok,directory_api_ok,last_started_at,last_completed_at,last_error FROM public_api_sync_state WHERE source=$1 LIMIT 1',[REPOSITORY_SOURCE]);
+  let implementationTracking:{configured:boolean;total:number;byStatus:Record<string,number>}={configured:false,total:0,byStatus:{}};
+  try{
+    const tracking=await pool.query('SELECT discovery_status,count(*)::int AS count FROM public_api_implementation_tracking GROUP BY discovery_status');
+    const byStatus:Record<string,number>={};
+    for(const row of tracking.rows)byStatus[String(row.discovery_status)]=Number(row.count||0);
+    implementationTracking={configured:true,total:Object.values(byStatus).reduce((sum,value)=>sum+value,0),byStatus};
+  }catch(error){
+    console.warn('AFG_API_IMPLEMENTATION_TRACKING_UNAVAILABLE',JSON.stringify({error:error instanceof Error?error.message:'unknown'}));
+  }
+  return {configured:true,sync:result.rows[0]||null,implementationTracking};
 }
