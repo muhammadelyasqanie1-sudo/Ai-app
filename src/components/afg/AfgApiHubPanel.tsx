@@ -79,7 +79,9 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean;canSy
    try{
      const result=await request('/api/admin/api-hub/sync',{method:'POST',body:'{}'});
      const apiCount=Number(result.result?.catalog?.imported||0);const mcpCount=Number(result.result?.mcpDirectory?.imported||0);
-     setNotice(dari?('همگام‌سازی تکمیل شد: '+apiCount+' API و '+mcpCount+' سرور MCP.'):('Synced '+apiCount+' APIs and '+mcpCount+' MCP servers from GitHub.'));
+     const sourceCounts=result.result?.catalog?.sourceCounts||{};
+     const sourceSummary='README '+Number(sourceCounts.repositoryReadme||0)+' · publicapis.lol '+Number(sourceCounts.directoryApi||0)+' · unique '+Number(sourceCounts.unique||apiCount);
+     setNotice(dari?('همگام‌سازی: '+apiCount+' API یکتا و '+mcpCount+' سرور MCP. منابع: '+sourceSummary):('Synced '+apiCount+' unique APIs and '+mcpCount+' MCP servers. Source rows: '+sourceSummary+'.'));
      setPage(1);
      await load();
      if(result.status==='partial')setNotice(dari?'همگام‌سازی ناقص بود؛ وضعیت را بررسی کنید.':'Catalog sync was partial; review the sync status.');
