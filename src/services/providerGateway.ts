@@ -50,6 +50,7 @@ const nineRouterBaseAdapter = nineRouterBase
   : null;
 // 9Router exposes separate capability catalogues. Merge them into one server-side
 // catalogue while preserving upstream model IDs and assigning only endpoint-backed capabilities.
+const nineRouterModelKinds = new Map<string, string>();
 const nineRouterAdapter: ChatProviderAdapter | null = nineRouterBaseAdapter
   ? {
       ...nineRouterBaseAdapter,
@@ -73,7 +74,9 @@ const nineRouterAdapter: ChatProviderAdapter | null = nineRouterBaseAdapter
             const rows = Array.isArray(payload?.data) ? payload.data
               : Array.isArray(payload?.models) ? payload.models
               : Array.isArray(payload?.data?.data) ? payload.data.data : [];
-            return rows.filter((item: any) => item && typeof item.id === 'string').map((item: any): ModelDescriptor => ({
+            return rows.filter((item: any) => item && typeof item.id === 'string').map((item: any): ModelDescriptor => {
+              nineRouterModelKinds.set(item.id, kind);
+              return {
               id: item.id,
               providerId: '9router',
               displayName: typeof item.name === 'string' ? item.name : item.id,
@@ -82,13 +85,13 @@ const nineRouterAdapter: ChatProviderAdapter | null = nineRouterBaseAdapter
               pricing: undefined,
               capabilities: {
                 text: false, streaming: false, vision: capability === 'vision',
-                imageGen: capability === 'imageGen', imageEdit: capability === 'imageGen',
+                imageGen: capability === 'imageGen', imageEdit: false,
                 ocr: false, tts: capability === 'tts', stt: capability === 'stt',
                 tools: false, jsonMode: false,
               },
               enabled: true,
               verifiedAt: null,
-            }));
+            };});
           } catch {
             return [];
           }
@@ -96,6 +99,29 @@ const nineRouterAdapter: ChatProviderAdapter | null = nineRouterBaseAdapter
         const merged = [...chatModels, ...additional.flat()];
         return merged.filter((model, index) =>
           merged.findIndex((candidate) => candidate.id === model.id) === index);
+      },
+      async healthCheck(modelId: string): Promise<HealthStatus> {
+        const kind = nineRouterModelKinds.get(modelId);
+        if (!kind) return nineRouterBaseAdapter.healthCheck(modelId);
+        const path = kind === 'image' ? '/models/image'
+          : kind === 'image-to-text' ? '/models/image-to-text'
+          : kind === 'tts' ? '/models/tts' : '/models/stt';
+        const checkedAt = new Date().toISOString();
+        try {
+          const response = await fetch(nineRouterBase + path, {
+            headers: { ...(nineRouterKey ? { Authorization: 'Bearer ' + nineRouterKey } : {}), Accept: 'application/json' },
+            signal: AbortSignal.timeout(15_000), redirect: 'error',
+          });
+          if (!response.ok) return { healthy: false, checkedAt, message: '9Router capability catalogue check failed.' };
+          const payload = await response.json() as any;
+          const rows = Array.isArray(payload?.data) ? payload.data
+            : Array.isArray(payload?.models) ? payload.models
+            : Array.isArray(payload?.data?.data) ? payload.data.data : [];
+          return { healthy: rows.some((item: any) => item?.id === modelId), checkedAt,
+            ...(rows.some((item: any) => item?.id === modelId) ? {} : { message: 'Model is not present in its 9Router capability catalogue.' }) };
+        } catch {
+          return { healthy: false, checkedAt, message: '9Router capability catalogue is unreachable.' };
+        }
       },
     }
   : null;
