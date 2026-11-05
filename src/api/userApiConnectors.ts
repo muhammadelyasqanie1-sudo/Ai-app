@@ -1,5 +1,5 @@
 import type {IncomingMessage,ServerResponse} from 'http';
-import {createCipheriv,createDecipheriv,randomBytes,randomUUID} from 'node:crypto';
+import {createCipheriv,createDecipheriv,createHash,randomBytes,randomUUID} from 'node:crypto';
 import {lookup} from 'node:dns/promises';
 import {BlockList,isIP} from 'node:net';
 import {pool} from './database.ts';
@@ -41,6 +41,44 @@ function decrypt(value:string):string{
  const decipher=createDecipheriv('aes-256-gcm',encryptionKey(),Buffer.from(iv,'base64'));
  decipher.setAuthTag(Buffer.from(tag,'base64'));
  return Buffer.concat([decipher.update(Buffer.from(data,'base64')),decipher.final()]).toString('utf8');
+}
+
+function oauthPublicBase():URL{
+ const configured=(process.env.AFG_PUBLIC_URL||process.env.APP_URL||process.env.APP_ORIGIN||'').split(',')[0].trim();
+ if(!configured)throw new Error('Set AFG_PUBLIC_URL to the public HTTPS AFG AI origin before using OAuth.');
+ const base=new URL(configured);
+ if(base.protocol!=='https:'||base.username||base.password||base.search||base.hash)throw new Error('AFG_PUBLIC_URL must be a clean public HTTPS URL.');
+ return base;
+}
+function normalizeOAuthConfig(input:unknown):Json{
+ if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('OAuth configuration is required.');
+ const value=input as Json,clientId=String(value.clientId||'').trim(),clientSecret=String(value.clientSecret||'').trim();
+ const authorizationUrl=String(value.authorizationUrl||'').trim(),tokenUrl=String(value.tokenUrl||'').trim();
+ const scopes=Array.isArray(value.scopes)?value.scopes.map((x:any)=>String(x).trim()).filter(Boolean).slice(0,40):String(value.scopes||'').split(/[ ,]+/).filter(Boolean).slice(0,40);
+ if(!clientId||clientId.length>500||clientSecret.length>4000)throw new Error('A valid OAuth client ID is required; the client secret is optional for public PKCE clients.');
+ for(const raw of [authorizationUrl,tokenUrl]){const u=new URL(raw);if(u.protocol!=='https:'||u.username||u.password||u.hash)throw new Error('OAuth endpoints must use HTTPS without embedded credentials or fragments.');}
+ return {clientId,clientSecret,authorizationUrl,tokenUrl,scopes};
+}
+async function getOAuthAccessToken(row:any,userId:string,secrets:string[]):Promise<string>{
+ const client=await pool!.connect();
+ try{
+  await client.query('BEGIN');
+  const locked=await client.query('SELECT credential_encrypted,oauth_config_encrypted FROM user_api_connectors WHERE id=$1 AND user_id=$2 FOR UPDATE',[row.id,userId]);
+  const stored=locked.rows[0];if(!stored?.credential_encrypted||!stored.oauth_config_encrypted)throw new Error('OAuth is not connected. Authorize this connector first.');
+  const config=JSON.parse(decrypt(stored.oauth_config_encrypted)) as Json;
+  const tokens=JSON.parse(decrypt(stored.credential_encrypted)) as Json;
+  const access=String(tokens.access_token||''),expires=Number(tokens.expires_at||0);
+  if(access&&(!expires||expires>Date.now()+60_000)){secrets.push(access,String(config.clientSecret||''));await client.query('COMMIT');return access;}
+  const refresh=String(tokens.refresh_token||'');if(!refresh)throw new Error('OAuth token expired and no refresh token was issued. Re-authorize this connector.');
+  await safeEndpoint(String(config.tokenUrl||''));
+  const body=new URLSearchParams({grant_type:'refresh_token',refresh_token:refresh,client_id:String(config.clientId)});if(config.clientSecret)body.set('client_secret',String(config.clientSecret));
+  const response=await fetch(String(config.tokenUrl),{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body,redirect:'error',signal:AbortSignal.timeout(15000)});
+  const raw=await readTextLimited(response,1_000_000);let next:Json;try{next=JSON.parse(raw);}catch{throw new Error('OAuth refresh returned an invalid response.');}
+  if(!response.ok||typeof next.access_token!=='string'||!next.access_token)throw new Error('OAuth refresh failed with HTTP '+response.status+'.');
+  const merged={...tokens,...next,refresh_token:typeof next.refresh_token==='string'?next.refresh_token:refresh,expires_at:next.expires_in?Date.now()+Number(next.expires_in)*1000:null};
+  await client.query('UPDATE user_api_connectors SET credential_encrypted=$3,updated_at=now() WHERE id=$1 AND user_id=$2',[row.id,userId,encrypt(JSON.stringify(merged))]);
+  secrets.push(String(merged.access_token),refresh,String(config.clientSecret||''));await client.query('COMMIT');return String(merged.access_token);
+ }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}finally{client.release();}
 }
 async function readTextLimited(response:Response,maxBytes:number):Promise<string>{
  const declared=Number(response.headers.get('content-length')||0);
@@ -284,7 +322,7 @@ function classifyApiCapability(row:any):string{
 }
 function publicRow(row:any){
  return {id:row.id,catalogSourceKey:row.catalog_source_key,name:row.name,toolName:row.tool_name,description:row.description,
-  capability:classifyApiCapability(row),endpointUrl:row.endpoint_url,httpMethod:row.http_method,authType:row.auth_type,authHeaderName:row.auth_header_name,
+  capability:classifyApiCapability(row),endpointUrl:row.endpoint_url,httpMethod:row.http_method,authType:row.auth_type,authHeaderName:row.auth_header_name,oauthConfigured:Boolean(row.oauth_config_encrypted),
   hasCredential:Boolean(row.credential_encrypted),inputSchema:row.input_schema_json,sampleArguments:row.sample_arguments_json,
   fallbackGroup:row.fallback_group||'',fallbackPriority:Number(row.fallback_priority||100),queueState:row.queue_state||'ready',nextAvailableAt:row.next_available_at||null,
   rateLimitEvidence:row.rate_limit_evidence||null,lastQuotaStatus:row.last_quota_status||null,lastQuotaObservedAt:row.last_quota_observed_at||null,lastQuotaResetAt:row.last_quota_reset_at||null,
@@ -324,7 +362,9 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  const headers=new Headers({Accept:'application/json, application/octet-stream, image/*, audio/*, video/*, */*;q=0.8'});
  for(const [key,value] of Object.entries(parameterHeaders))headers.set(key,value);
  const secrets:string[]=[];
- if(row.auth_type==='bearer'||row.auth_type==='basic'||row.auth_type==='header_key'||row.auth_type==='query_key'){
+ if(row.auth_type==='oauth2'){
+  const token=await getOAuthAccessToken(row,userId,secrets);headers.set('Authorization','Bearer '+token);
+ }else if(row.auth_type==='bearer'||row.auth_type==='basic'||row.auth_type==='header_key'||row.auth_type==='query_key'){
   if(!row.credential_encrypted)throw new Error('API connector credential is missing.');
   const secret=decrypt(row.credential_encrypted);secrets.push(secret);
   if(row.auth_type==='query_key')query.set(String(row.auth_header_name||'api_key'),secret);
@@ -574,12 +614,53 @@ async function audit(userId:string,action:string,id:string,metadata:Json={}){
   [userId,action,'api_connector',id,JSON.stringify(metadata)]).catch(()=>{});
 }
 export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerResponse,pathname:string):Promise<boolean>{
+ if(pathname==='/api/api-hub/oauth/callback'&&req.method==='GET'){
+  try{
+   if(!pool)throw new Error('OAuth storage is unavailable.');
+   const incoming=new URL(req.url||'/', 'https://afg.invalid'),code=incoming.searchParams.get('code')||'',state=incoming.searchParams.get('state')||'',providerError=incoming.searchParams.get('error')||'';
+   if(providerError)throw new Error('OAuth provider denied authorization: '+providerError.slice(0,100));
+   if(!code||!state||state.length>300)throw new Error('OAuth callback is missing its code or state.');
+   const stateHash=createHash('sha256').update(state).digest('hex');
+   const claimed=await pool.query('DELETE FROM user_api_connector_oauth_states WHERE state_hash=$1 AND expires_at>now() RETURNING connector_id,user_id,code_verifier_encrypted',[stateHash]);
+   const pending=claimed.rows[0];if(!pending)throw new Error('OAuth state is invalid, expired, or already used. Start again.');
+   const connector=await ownerConnector(String(pending.user_id),String(pending.connector_id));
+   if(!connector||connector.auth_type!=='oauth2'||!connector.oauth_config_encrypted)throw new Error('OAuth connector configuration is unavailable.');
+   const config=JSON.parse(decrypt(connector.oauth_config_encrypted)) as Json;
+   const redirectUri=new URL('/api/api-hub/oauth/callback',oauthPublicBase()).toString();await safeEndpoint(String(config.tokenUrl||''));
+   const verifier=decrypt(pending.code_verifier_encrypted);
+   const form=new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:redirectUri,client_id:String(config.clientId),code_verifier:verifier});if(config.clientSecret)form.set('client_secret',String(config.clientSecret));
+   const response=await fetch(String(config.tokenUrl),{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body:form,redirect:'error',signal:AbortSignal.timeout(20000)});
+   const raw=await readTextLimited(response,1000000);let tokens:Json;try{tokens=JSON.parse(raw);}catch{throw new Error('OAuth token endpoint returned an invalid response.');}
+   if(!response.ok||typeof tokens.access_token!=='string'||!tokens.access_token)throw new Error('OAuth authorization exchange failed with HTTP '+response.status+'.');
+   tokens.expires_at=tokens.expires_in?Date.now()+Number(tokens.expires_in)*1000:null;
+   await pool.query("UPDATE user_api_connectors SET credential_encrypted=$3,enabled=false,status='unverified',queue_state='ready',next_available_at=NULL,last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2",[connector.id,pending.user_id,encrypt(JSON.stringify(tokens))]);
+   await audit(String(pending.user_id),'api.connector.oauth_connected',String(connector.id),{scopes:config.scopes||[],hasRefreshToken:Boolean(tokens.refresh_token)});
+   const destination=new URL('/',oauthPublicBase());destination.searchParams.set('api_oauth','connected');res.writeHead(302,{Location:destination.toString(),'Cache-Control':'no-store'});res.end();return true;
+  }catch(error){
+   let destination='';try{const url=new URL('/',oauthPublicBase());url.searchParams.set('api_oauth','error');url.searchParams.set('reason',(error instanceof Error?error.message:'OAuth failed').slice(0,180));destination=url.toString();}catch{}
+   if(destination){res.writeHead(302,{Location:destination,'Cache-Control':'no-store'});res.end();}else sendAuthJson(res,400,{error:error instanceof Error?error.message:'OAuth callback failed.'});return true;
+  }
+ }
  if(!pathname.startsWith('/api/api-hub/connectors'))return false;
- if(!pool){sendAuthJson(res,503,{error:'API connectors require PostgreSQL and migrations 0014, 0023 and 0027.'});return true;}
+ if(!pool){sendAuthJson(res,503,{error:'API connectors require PostgreSQL and migrations 0014, 0023 and 0027; key vault and OAuth features also require 0028 and 0029.'});return true;}
  const user=await authenticateRequest(req).catch(()=>null);
  if(!user){sendAuthJson(res,401,{error:'Sign in is required.'});return true;}
  if(req.method!=='GET'&&!verifyCsrf(req)){sendAuthJson(res,403,{error:'CSRF validation failed.'});return true;}
  try{
+  if(req.method==='GET'&&pathname==='/api/api-hub/connectors/queue'){
+   await refreshDueQueueEntries(user.id);
+   const result=await pool.query("SELECT id,name,status,enabled,queue_state,next_available_at,fallback_group,fallback_priority,last_quota_status,last_quota_reset_at,last_http_status,updated_at FROM user_api_connectors WHERE user_id=$1 ORDER BY CASE WHEN queue_state='ready' THEN 0 ELSE 1 END,CASE WHEN queue_state='waiting' THEN next_available_at END ASC NULLS LAST,fallback_priority ASC,updated_at ASC",[user.id]);
+   const rows=result.rows,summary={total:rows.length,ready:rows.filter((x:any)=>x.queue_state==='ready'&&x.status==='verified').length,enabled:rows.filter((x:any)=>x.enabled&&x.status==='verified'&&x.queue_state==='ready').length,waiting:rows.filter((x:any)=>x.queue_state==='waiting').length,resetKnown:rows.filter((x:any)=>x.queue_state==='waiting'&&x.next_available_at).length,needsOwnerReview:rows.filter((x:any)=>x.queue_state==='waiting'&&!x.next_available_at).length};
+   sendAuthJson(res,200,{summary,queue:rows.map((x:any)=>({id:x.id,name:x.name,status:x.status,enabled:x.enabled,queueState:x.queue_state,nextAvailableAt:x.next_available_at,fallbackGroup:x.fallback_group||'',priority:Number(x.fallback_priority||100),lastQuotaStatus:x.last_quota_status,lastQuotaResetAt:x.last_quota_reset_at,lastHttpStatus:x.last_http_status,updatedAt:x.updated_at}))});return true;
+  }
+  const priorityMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/priority$/i);
+  if(req.method==='POST'&&priorityMatch){
+   const body=await readJsonBody(req,2000),priority=Number(body.priority);
+   if(!Number.isInteger(priority)||priority<1||priority>1000){sendAuthJson(res,400,{error:'Priority must be an integer from 1 to 1000.'});return true;}
+   const updated=await pool.query('UPDATE user_api_connectors SET fallback_priority=$3,updated_at=now() WHERE id=$1 AND user_id=$2 RETURNING id,fallback_priority',[priorityMatch[1],user.id,priority]);
+   if(!updated.rows[0]){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
+   await audit(user.id,'api.connector.queue_priority',priorityMatch[1],{priority});sendAuthJson(res,200,{priority:Number(updated.rows[0].fallback_priority)});return true;
+  }
   if(req.method==='GET'&&pathname==='/api/api-hub/connectors'){
    await refreshDueQueueEntries(user.id);
    const result=await pool.query('SELECT * FROM user_api_connectors WHERE user_id=$1 ORDER BY CASE WHEN queue_state=\'ready\' THEN 0 ELSE 1 END,fallback_priority ASC,created_at DESC',[user.id]);
@@ -590,13 +671,14 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    const name=String(body.name||'').trim(),toolName=String(body.toolName||'').trim().toLowerCase();
    const description=String(body.description||'').trim(),endpoint=String(body.endpointUrl||'').trim();
    const method=String(body.method||'GET').toUpperCase(),authType=String(body.authType||'none');
+   const oauthConfig=authType==='oauth2'?normalizeOAuthConfig(body.oauthConfig):null;
    const authHeader=String(body.authHeaderName||'X-API-Key');
    const fallbackGroup=String(body.fallbackGroup||'').trim().toLowerCase();
    const fallbackPriority=Number(body.fallbackPriority??100);
    const secret=typeof body.credential==='string'?body.credential.trim():'';
    if(name.length<2||name.length>120||!/^[a-z][a-z0-9_]{1,63}$/.test(toolName)||description.length>2000||
-    !['GET','POST','PUT','PATCH','DELETE'].includes(method)||!['none','bearer','basic','header_key','query_key'].includes(authType)||
-    (authType==='none'&&secret)||(authType!=='none'&&!secret)||
+    !['GET','POST','PUT','PATCH','DELETE'].includes(method)||!['none','bearer','basic','header_key','query_key','oauth2'].includes(authType)||
+    (authType==='none'&&secret)||(authType!=='none'&&authType!=='oauth2'&&!secret)||(authType==='oauth2'&&secret)||
     ((authType==='header_key'||authType==='query_key')&&!/^[A-Za-z0-9_.-]{1,64}$/.test(authHeader))||
     (fallbackGroup&&!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(fallbackGroup))||!Number.isInteger(fallbackPriority)||fallbackPriority<1||fallbackPriority>1000){
     sendAuthJson(res,400,{error:'Invalid API connector settings.'});return true;
@@ -607,11 +689,34 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    const sourceKey=typeof body.catalogSourceKey==='string'?body.catalogSourceKey:null;
    if(sourceKey){const exists=await pool.query('SELECT 1 FROM public_api_catalog WHERE source_key=$1',[sourceKey]);if(!exists.rows[0]){sendAuthJson(res,404,{error:'Public API catalog entry was not found.'});return true;}}
    const encrypted=secret?encrypt(secret):null;
-   const created=await pool.query(`INSERT INTO user_api_connectors(user_id,catalog_source_key,name,tool_name,description,endpoint_url,http_method,auth_type,auth_header_name,credential_encrypted,input_schema_json,sample_arguments_json,fallback_group,fallback_priority)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14) RETURNING *`,
-    [user.id,sourceKey,name,toolName,description,endpoint,method,authType,authHeader,encrypted,JSON.stringify(schema),JSON.stringify(sample),fallbackGroup||null,fallbackPriority]);
+   const oauthEncrypted=oauthConfig?encrypt(JSON.stringify(oauthConfig)):null;
+   const created=await pool.query(`INSERT INTO user_api_connectors(user_id,catalog_source_key,name,tool_name,description,endpoint_url,http_method,auth_type,auth_header_name,credential_encrypted,oauth_config_encrypted,input_schema_json,sample_arguments_json,fallback_group,fallback_priority)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15) RETURNING *`,
+    [user.id,sourceKey,name,toolName,description,endpoint,method,authType,authHeader,encrypted,oauthEncrypted,JSON.stringify(schema),JSON.stringify(sample),fallbackGroup||null,fallbackPriority]);
    await audit(user.id,'api.connector.create',created.rows[0].id,{toolName,method,authType});
-   sendAuthJson(res,201,{connector:publicRow(created.rows[0])});return true;
+   sendAuthJson(res,201,{connector:publicRow(created.rows[0]),oauthRedirectUri:authType==='oauth2'?'/api/api-hub/oauth/callback':null});return true;
+  }
+  const oauthConfigMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/oauth\/config$/i);
+  if(req.method==='POST'&&oauthConfigMatch){
+   const row=await ownerConnector(user.id,oauthConfigMatch[1]);if(!row){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
+   if(row.auth_type!=='oauth2'){sendAuthJson(res,409,{error:'This connector is not configured for OAuth 2.0.'});return true;}
+   const config=normalizeOAuthConfig(await readJsonBody(req,12000)),encrypted=encrypt(JSON.stringify(config));
+   await pool.query("UPDATE user_api_connectors SET oauth_config_encrypted=$3,credential_encrypted=NULL,enabled=false,status='unverified',last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2",[row.id,user.id,encrypted]);
+   await audit(user.id,'api.connector.oauth_configured',row.id,{scopes:config.scopes});
+   sendAuthJson(res,200,{configured:true,redirectUri:new URL('/api/api-hub/oauth/callback',oauthPublicBase()).toString()});return true;
+  }
+  const oauthStartMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/oauth\/start$/i);
+  if(req.method==='POST'&&oauthStartMatch){
+   const row=await ownerConnector(user.id,oauthStartMatch[1]);if(!row){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
+   if(row.auth_type!=='oauth2'||!row.oauth_config_encrypted){sendAuthJson(res,409,{error:'Save OAuth client settings before starting authorization.'});return true;}
+   const config=JSON.parse(decrypt(row.oauth_config_encrypted)) as Json,authUrl=new URL(String(config.authorizationUrl||''));
+   await safeEndpoint(authUrl.origin+authUrl.pathname);const redirectUri=new URL('/api/api-hub/oauth/callback',oauthPublicBase()).toString();
+   const state=randomBytes(32).toString('base64url'),verifier=randomBytes(32).toString('base64url'),challenge=createHash('sha256').update(verifier).digest('base64url');
+   await pool.query('DELETE FROM user_api_connector_oauth_states WHERE expires_at<=now()');
+   await pool.query('INSERT INTO user_api_connector_oauth_states(connector_id,user_id,state_hash,code_verifier_encrypted,expires_at) VALUES($1,$2,$3,$4,now()+interval \'10 minutes\')',[row.id,user.id,createHash('sha256').update(state).digest('hex'),encrypt(verifier)]);
+   authUrl.searchParams.set('response_type','code');authUrl.searchParams.set('client_id',String(config.clientId));authUrl.searchParams.set('redirect_uri',redirectUri);authUrl.searchParams.set('state',state);
+   authUrl.searchParams.set('code_challenge',challenge);authUrl.searchParams.set('code_challenge_method','S256');if(Array.isArray(config.scopes)&&config.scopes.length)authUrl.searchParams.set('scope',config.scopes.join(' '));
+   await audit(user.id,'api.connector.oauth_started',row.id,{scopes:config.scopes||[]});sendAuthJson(res,200,{authorizationUrl:authUrl.toString(),expiresInSeconds:600});return true;
   }
   const keysMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/keys$/i);
   if(keysMatch){
