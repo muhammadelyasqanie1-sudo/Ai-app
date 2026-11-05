@@ -12,7 +12,8 @@ async function request(path:string,init:RequestInit={}){
 }
 export const AfgApiConnectorPanel:React.FC<{language:Language;catalogSelection?:{source_key:string;name:string;description:string;auth:string;docs_url:string|null;homepage_url:string|null}|null;openApiSelection?:OpenApiSelection|null}>=({language,catalogSelection=null,openApiSelection=null})=>{
  const dari=language==='dari'||language==='persian',t=(en:string,fa:string)=>dari?fa:en;
- const [rows,setRows]=useState<Connector[]>([]);\n const [capabilityFilter,setCapabilityFilter]=useState('all');
+ const [rows,setRows]=useState<Connector[]>([]);
+ const [capabilityFilter,setCapabilityFilter]=useState('all');
  const [encryption,setEncryption]=useState(false);
  const [name,setName]=useState('');const [toolName,setToolName]=useState('');
  const [description,setDescription]=useState('');const [endpoint,setEndpoint]=useState('');
