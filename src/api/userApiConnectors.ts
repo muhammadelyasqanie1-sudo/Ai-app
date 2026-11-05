@@ -223,6 +223,7 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  for(const key of fileProperties){if((schema.required as string[]).includes(key)&&!files[key])throw new Error('Required upload field is missing: '+key+'.');}
  for(const key of Object.keys(files))if(!fileProperties.includes(key))throw new Error('Undeclared upload field: '+key+'.');
  if(Object.keys(files).length&&!schema['x-content-type'])throw new Error('This API connector is not configured for multipart/form-data uploads.');
+ if(Object.keys(files).length&&!['POST','PUT','PATCH'].includes(row.http_method))throw new Error('Multipart file uploads require POST, PUT or PATCH.');
  const base=await safeEndpoint(row.endpoint_url);
  let pathname=base.pathname;
  const query=new URLSearchParams();
@@ -262,7 +263,7 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
   if(schema['x-content-type']==='multipart/form-data'){
    const form=new FormData();
    for(const [key,value] of Object.entries(body))form.append(key,typeof value==='string'?value:JSON.stringify(value));
-   for(const [key,file] of Object.entries(files))form.append(key,new Blob([file.data],{type:file.contentType}),file.filename);
+   for(const [key,file] of Object.entries(files))form.append(key,new Blob([Uint8Array.from(file.data)],{type:file.contentType}),file.filename);
    init.body=form;
   }else{headers.set('Content-Type','application/json');init.body=JSON.stringify(body);}
  }
@@ -401,7 +402,11 @@ export async function getEnabledUserApiToolDefinitions(userId:string){
   await refreshDueQueueEntries(userId);
   const result=await pool.query(`SELECT tool_name,description,input_schema_json,fallback_group FROM user_api_connectors
    WHERE user_id=$1 AND enabled=true AND status='verified' AND queue_state='ready' ORDER BY fallback_priority ASC,created_at DESC LIMIT 32`,[userId]);
-  return result.rows.map(row=>({
+  const available=result.rows.filter(row=>{
+   const schema=validateSchema(row.input_schema_json);
+   return !(schema.required as string[]).some(key=>(schema.properties as Json)[key]?.format==='binary');
+  });
+  return available.map(row=>({
    type:'function' as const,
    function:{
     name:String(row.tool_name),
