@@ -660,8 +660,8 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    }catch(error){
     const message=error instanceof Error?error.message.slice(0,300):'API connector streaming failed.';
     if(res.headersSent){
-     if(String(res.getHeader('Content-Type')||'').startsWith('text/event-stream'))res.write('event: error\ndata: '+JSON.stringify({error:message,requestId})+'\n\n');
-     if(!res.writableEnded)res.end();
+     if(String(res.getHeader('Content-Type')||'').startsWith('text/event-stream')){res.write('event: error\ndata: '+JSON.stringify({error:message,requestId})+'\n\n');if(!res.writableEnded)res.end();}
+     else if(!res.destroyed)res.destroy();
     }else sendAuthJson(res,502,{requestId,error:message});
     return true;
    }
