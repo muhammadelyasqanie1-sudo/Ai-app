@@ -1,6 +1,7 @@
 import React,{useCallback,useEffect,useState} from 'react';
 import {Activity,CheckCircle2,Code2,Power,RefreshCw,Trash2,Wrench} from 'lucide-react';
 import type {Language} from '../../types/afg';
+type OpenApiSelection={name:string;toolName:string;description:string;endpointUrl:string;method:string;inputSchema:any;authOptions:string[]};
 type Connector={id:string;catalogSourceKey:string|null;name:string;toolName:string;description:string;endpointUrl:string;httpMethod:string;authType:string;authHeaderName:string;hasCredential:boolean;inputSchema:any;sampleArguments:any;fallbackGroup:string;fallbackPriority:number;enabled:boolean;status:string;lastTestedAt:string|null;lastHttpStatus:number|null;lastError:string|null};
 const csrf=()=>decodeURIComponent(document.cookie.split('; ').find(x=>x.startsWith('afg_csrf='))?.slice(9)||'');
 async function request(path:string,init:RequestInit={}){
@@ -9,7 +10,7 @@ async function request(path:string,init:RequestInit={}){
  const response=await fetch(path,{...init,headers,credentials:'include',cache:'no-store'});
  const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||('HTTP '+response.status));return data;
 }
-export const AfgApiConnectorPanel:React.FC<{language:Language;catalogSelection?:{source_key:string;name:string;description:string;auth:string;docs_url:string|null;homepage_url:string|null}|null}>=({language,catalogSelection=null})=>{
+export const AfgApiConnectorPanel:React.FC<{language:Language;catalogSelection?:{source_key:string;name:string;description:string;auth:string;docs_url:string|null;homepage_url:string|null}|null;openApiSelection?:OpenApiSelection|null}>=({language,catalogSelection=null,openApiSelection=null})=>{
  const dari=language==='dari'||language==='persian',t=(en:string,fa:string)=>dari?fa:en;
  const [rows,setRows]=useState<Connector[]>([]);
  const [encryption,setEncryption]=useState(false);
@@ -23,6 +24,7 @@ export const AfgApiConnectorPanel:React.FC<{language:Language;catalogSelection?:
  const [busy,setBusy]=useState('');const [error,setError]=useState('');const [notice,setNotice]=useState('');
  const [argumentsJson,setArgumentsJson]=useState<Record<string,string>>({});
  useEffect(()=>{if(!catalogSelection)return;setName(catalogSelection.name.slice(0,120));setToolName(catalogSelection.name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,64)||'api_tool');setDescription(catalogSelection.description.slice(0,1000));setSourceKey(catalogSelection.source_key);setEndpoint('');setCredential('');setAuthType(/api.?key|key/i.test(catalogSelection.auth)?'header_key':/oauth|bearer/i.test(catalogSelection.auth)?'bearer':'none');setAuthHeader('X-API-Key');setFallbackGroup('');setFallbackPriority('100');},[catalogSelection]);
+ useEffect(()=>{if(!openApiSelection)return;setName(openApiSelection.name.slice(0,120));setToolName(openApiSelection.toolName);setDescription(openApiSelection.description.slice(0,1000));setEndpoint(openApiSelection.endpointUrl);setMethod(openApiSelection.method);setSchema(JSON.stringify(openApiSelection.inputSchema,null,2));setSample('{}');setSourceKey('');setCredential('');const auth=openApiSelection.authOptions[0]||'none';if(auth==='bearer'){setAuthType('bearer');setAuthHeader('Authorization');}else if(auth.startsWith('header_key:')){setAuthType('header_key');setAuthHeader(auth.slice(11)||'X-API-Key');}else if(auth.startsWith('query_key:')){setAuthType('query_key');setAuthHeader(auth.slice(10)||'api_key');}else{setAuthType('none');setAuthHeader('X-API-Key');}setFallbackGroup('');setFallbackPriority('100');},[openApiSelection]);
  const [results,setResults]=useState<Record<string,string>>({});
  const load=useCallback(async()=>{const data=await request('/api/api-hub/connectors');setRows(data.connectors||[]);setEncryption(Boolean(data.encryptionConfigured));},[]);
  useEffect(()=>{void load().catch(e=>setError(e instanceof Error?e.message:'Could not load connectors.'));},[load]);
