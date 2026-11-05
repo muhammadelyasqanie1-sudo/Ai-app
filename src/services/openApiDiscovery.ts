@@ -113,7 +113,7 @@ function operationSchema(document:Json,operation:Json,pathItem:Json):{schema:Jso
  if(body&&typeof body==='object'){
   const jsonMedia=body.content?.['application/json']||body.content?.['application/*+json'];
   const multipartMedia=body.content?.['multipart/form-data'];
-  const media=jsonMedia||multipartMedia;
+  const media=multipartMedia||jsonMedia;
   if(media?.schema){
    let schema:any=media.schema;
    if(typeof schema.$ref==='string')schema=resolveLocalRef(document,schema.$ref)||{};
