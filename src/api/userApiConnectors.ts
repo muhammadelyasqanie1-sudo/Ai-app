@@ -694,7 +694,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15) RETURNING *`,
     [user.id,sourceKey,name,toolName,description,endpoint,method,authType,authHeader,encrypted,oauthEncrypted,JSON.stringify(schema),JSON.stringify(sample),fallbackGroup||null,fallbackPriority]);
    await audit(user.id,'api.connector.create',created.rows[0].id,{toolName,method,authType});
-   sendAuthJson(res,201,{connector:publicRow(created.rows[0])});return true;
+   sendAuthJson(res,201,{connector:publicRow(created.rows[0]),oauthRedirectUri:authType==='oauth2'?new URL('/api/api-hub/oauth/callback',oauthPublicBase()).toString():null});return true;
   }
   const oauthConfigMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/oauth\/config$/i);
   if(req.method==='POST'&&oauthConfigMatch){
