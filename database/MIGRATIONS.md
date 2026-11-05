@@ -54,3 +54,8 @@ Migration `0025_public_api_discovery_work_queue.sql` adds a durable, bounded adm
 ## Public API official documentation evidence
 
 Migration `0026_public_api_docs_evidence.sql` stores bounded evidence extracted from the catalogue entry's official documentation page: same-host OpenAPI/Swagger link candidates, explicit protocol labels, and authentication terms found in the page text. The discovery endpoint only accepts an API already claimed by the current administrator, fetches the catalogue's HTTPS documentation/homepage URL with DNS/SSRF checks, refuses redirects and cross-host links, and caps the response size. These findings are discovery hints, not a verified API contract, endpoint probe, quota confirmation, credential, or permission to enable a connector. Apply migration 0026 after 0025 before using this feature.
+
+
+## Observed upstream API quota responses
+
+Migration `0027_api_connector_rate_limit_observations.sql` adds owner-scoped storage for rate-limit headers actually returned by an API connector. The executor records a bounded allowlist of upstream response headers (including Retry-After, RateLimit and X-RateLimit limit/remaining/reset fields), the observed HTTP status and timestamp, and a parsed reset instant only when the upstream supplied a valid future value. HTTP 402/429 responses keep the connector in the waiting queue; a known reset makes it eligible after that instant, while a missing reset remains a manual-review state. Connector listing exposes this evidence without exposing credentials. Successful and other non-quota responses may refresh the last observed header snapshot but do not clear a prior quota status. Apply migration 0027 after 0026 before using these fields. No monthly renewal date or remaining quota is inferred.
