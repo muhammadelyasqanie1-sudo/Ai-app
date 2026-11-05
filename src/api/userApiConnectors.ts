@@ -344,7 +344,7 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
   const announced=(response.headers.get('content-type')||'application/octet-stream').split(';')[0].trim().toLowerCase();
   const streamType=/^[a-z0-9][a-z0-9!_.+-]{0,80}\/[a-z0-9][a-z0-9!_.+-]{0,80}$/.test(announced)?announced:'application/octet-stream';
   const disposition=response.headers.get('content-disposition')||'';
-  const streamHeaders:Record<string,string>={'Content-Type':streamType,'Cache-Control':'no-cache, no-transform','X-Content-Type-Options':'nosniff','X-Request-Id':requestId};
+  const streamHeaders:Record<string,string>={'Content-Type':streamType,'Cache-Control':'no-cache, no-transform','X-Content-Type-Options':'nosniff','X-Accel-Buffering':'no','X-Request-Id':requestId};
   if(/(?:^|;)\s*attachment\b/i.test(disposition))streamHeaders['Content-Disposition']='attachment; filename="'+safeDownloadName(disposition,streamType).replace(/"/g,'')+'"';
   streamTo.writeHead(response.status,streamHeaders);
   const reader=response.body?.getReader();
@@ -649,6 +649,8 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    await refreshDueQueueEntries(user.id);
    const row=await ownerConnector(user.id,streamMatch[1]);
    if(!row||!row.enabled||row.status!=='verified'||row.queue_state!=='ready'){sendAuthJson(res,409,{error:row?.queue_state==='waiting'?'API connector is waiting for its upstream quota reset.':'API connector is not verified and enabled.'});return true;}
+   const streamSchema=validateSchema(row.input_schema_json);
+   if(Object.values(streamSchema.properties as Json).some((property:any)=>property?.format==='binary')){sendAuthJson(res,400,{error:'Streaming file uploads are not available yet. Use Run tool to upload files.'});return true;}
    if(!await reserveConnectorCall(user.id,row.id)){sendAuthJson(res,429,{error:'API connector limit is 30 calls per minute.'});return true;}
    const body=await readJsonBody(req,60_000),args=body.arguments||body;
    const requestId=randomUUID();
