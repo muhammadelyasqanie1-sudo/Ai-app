@@ -93,7 +93,7 @@ export const AfgApiConnectorPanel:React.FC<{language:Language;catalogSelection?:
   }
   return {streamed:true,contentType,sizeBytes:total};
  });
- const normalizedEndpoint=(value:string)=>{try{const url=new URL(value);return url.origin.toLowerCase()+url.pathname.replace(/\\/+$/,'').toLowerCase();}catch{return value.trim().toLowerCase().replace(/[?#].*$/,'').replace(/\\/+$/,'');}};
+ const normalizedEndpoint=(value:string)=>{try{const url=new URL(value);let path=url.pathname.toLowerCase();while(path.length>1&&path.endsWith('/'))path=path.slice(0,-1);return url.origin.toLowerCase()+path;}catch{let path=value.trim().toLowerCase().replace(/[?#].*$/,'');while(path.length>1&&path.endsWith('/'))path=path.slice(0,-1);return path;}};
  const duplicateGroups=rows.reduce<Record<string,Connector[]>>((groups,row)=>{const key=row.httpMethod.toUpperCase()+' '+normalizedEndpoint(row.endpointUrl);(groups[key]||(groups[key]=[])).push(row);return groups;},{});
  const duplicateIds=new Set(Object.values(duplicateGroups).filter(group=>group.length>1).flatMap(group=>group.map(row=>row.id)));
  const counts={total:rows.length,enabled:rows.filter(row=>row.enabled&&row.status==='verified'&&row.queueState!=='waiting').length,waiting:rows.filter(row=>row.queueState==='waiting').length,needsKey:rows.filter(row=>row.authType!=='none'&&!row.hasCredential).length,failed:rows.filter(row=>row.status==='error').length,unverified:rows.filter(row=>row.status!=='verified'&&row.status!=='error').length};
