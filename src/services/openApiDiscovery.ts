@@ -129,7 +129,7 @@ function operationSchema(document:Json,operation:Json,pathItem:Json):{schema:Jso
      property['x-in']='body';properties[name]=property;
     }
     if(Array.isArray(schema.required))for(const name of schema.required)if(typeof name==='string'&&properties[name])required.add(name);
-   }else if(['text/plain','application/xml','text/xml'].includes(requestContentType)&&schema.type==='string'){
+   }else if((requestContentType==='text/plain'||requestContentType==='application/xml'||requestContentType==='text/xml')&&schema.type==='string'){
     properties.body={type:'string',description:String(schema.description||'Raw request body').slice(0,500),'x-in':'body'};
     if(body.required===true)required.add('body');
    }else unsupported.push('requestBody:non_flat_or_unsupported_schema');
