@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ShieldCheck, LockKeyhole, RefreshCw, LogOut, LayoutDashboard, Users, Network, TerminalSquare,
   Cpu, Activity, Gauge, HardDrive, Flag, ClipboardList, ShieldAlert, CheckCircle2,
@@ -168,8 +168,11 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState('');
   const [notice,setNotice] = useState('');
+  const adminLoadInFlight = useRef(false);
 
   const loadAdminData = useCallback(async():Promise<boolean>=>{
+    if(adminLoadInFlight.current)return false;
+    adminLoadInFlight.current=true;
     setLoading(true);
     setError('');
     try{
@@ -209,7 +212,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       }
       setError(err instanceof Error?err.message:'Could not load administrator data.');
       return false;
-    }finally{setLoading(false);}
+    }finally{adminLoadInFlight.current=false;setLoading(false);}
   },[]);
 
   const loadHealth = useCallback(async()=>{
@@ -625,7 +628,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   return <section className="afg-admin-panel mx-auto w-full max-w-[1600px] px-3 py-5 sm:px-5 lg:px-7">
     <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/10 ring-1 ring-cyan-400/30"><ShieldCheck className="h-6 w-6 text-cyan-300"/></div><div><h1 className="text-xl font-black tracking-tight text-white sm:text-2xl">AFG AI <span className="text-cyan-300">Admin</span></h1><p className="text-xs text-slate-500">Control plane · Operations · Security · Transparency</p></div></div>
-      <div className="flex items-center gap-2"><span className="hidden rounded-lg border border-slate-800 px-3 py-2 text-xs text-slate-400 sm:inline">{adminRole||'Administrator'}</span><button className={secondary+' flex items-center gap-2'} onClick={()=>void loadAdminData()}><RefreshCw className="h-4 w-4"/>Refresh</button><button className={secondary+' flex items-center gap-2'} onClick={()=>void signOut()}><LogOut className="h-4 w-4"/>Sign out</button></div>
+      <div className="flex items-center gap-2"><span className="hidden rounded-lg border border-slate-800 px-3 py-2 text-xs text-slate-400 sm:inline">{adminRole||'Administrator'}</span><button className={secondary+' flex items-center gap-2'} disabled={loading} onClick={()=>void loadAdminData()}><RefreshCw className="h-4 w-4"/>Refresh</button><button className={secondary+' flex items-center gap-2'} onClick={()=>void signOut()}><LogOut className="h-4 w-4"/>Sign out</button></div>
     </header>
     {error&&<div role="alert" className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>}
     {notice&&<div role="status" className="mb-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-300">{notice}</div>}
