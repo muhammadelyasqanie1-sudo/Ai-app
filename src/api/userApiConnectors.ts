@@ -647,6 +647,20 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
  if(!user){sendAuthJson(res,401,{error:'Sign in is required.'});return true;}
  if(req.method!=='GET'&&!verifyCsrf(req)){sendAuthJson(res,403,{error:'CSRF validation failed.'});return true;}
  try{
+  if(req.method==='GET'&&pathname==='/api/api-hub/connectors/queue'){
+   await refreshDueQueueEntries(user.id);
+   const result=await pool.query("SELECT id,name,status,enabled,queue_state,next_available_at,fallback_group,fallback_priority,last_quota_status,last_quota_reset_at,last_http_status,updated_at FROM user_api_connectors WHERE user_id=$1 ORDER BY CASE WHEN queue_state='ready' THEN 0 ELSE 1 END,CASE WHEN queue_state='waiting' THEN next_available_at END ASC NULLS LAST,fallback_priority ASC,updated_at ASC",[user.id]);
+   const rows=result.rows,summary={total:rows.length,ready:rows.filter((x:any)=>x.queue_state==='ready').length,enabled:rows.filter((x:any)=>x.enabled&&x.status==='verified'&&x.queue_state==='ready').length,waiting:rows.filter((x:any)=>x.queue_state==='waiting').length,resetKnown:rows.filter((x:any)=>x.queue_state==='waiting'&&x.next_available_at).length,needsOwnerReview:rows.filter((x:any)=>x.queue_state==='waiting'&&!x.next_available_at).length};
+   sendAuthJson(res,200,{summary,queue:rows.map((x:any)=>({id:x.id,name:x.name,status:x.status,enabled:x.enabled,queueState:x.queue_state,nextAvailableAt:x.next_available_at,fallbackGroup:x.fallback_group||'',priority:Number(x.fallback_priority||100),lastQuotaStatus:x.last_quota_status,lastQuotaResetAt:x.last_quota_reset_at,lastHttpStatus:x.last_http_status,updatedAt:x.updated_at}))});return true;
+  }
+  const priorityMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/priority$/i);
+  if(req.method==='POST'&&priorityMatch){
+   const body=await readJsonBody(req,2000),priority=Number(body.priority);
+   if(!Number.isInteger(priority)||priority<1||priority>1000){sendAuthJson(res,400,{error:'Priority must be an integer from 1 to 1000.'});return true;}
+   const updated=await pool.query('UPDATE user_api_connectors SET fallback_priority=$3,updated_at=now() WHERE id=$1 AND user_id=$2 RETURNING id,fallback_priority',[priorityMatch[1],user.id,priority]);
+   if(!updated.rows[0]){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
+   await audit(user.id,'api.connector.queue_priority',priorityMatch[1],{priority});sendAuthJson(res,200,{priority:Number(updated.rows[0].fallback_priority)});return true;
+  }
   if(req.method==='GET'&&pathname==='/api/api-hub/connectors'){
    await refreshDueQueueEntries(user.id);
    const result=await pool.query('SELECT * FROM user_api_connectors WHERE user_id=$1 ORDER BY CASE WHEN queue_state=\'ready\' THEN 0 ELSE 1 END,fallback_priority ASC,created_at DESC',[user.id]);
