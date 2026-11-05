@@ -47,7 +47,8 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
     })).filter(group => group.items.length);
   }, [models, query, dari]);
   const choose = (model: AfgModelOption) => {
-    if (!model.selectable) {
+    const supportedInChat = Boolean(model.capabilities?.imageGen || (model.capabilities?.text && model.capabilities?.streaming));
+    if (!model.selectable || !supportedInChat) {
       setShowUpgrade(model);
       return;
     }
@@ -72,7 +73,7 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
           <button className={'afg-model-row '+(!selected?'is-selected':'')} onClick={()=>{onSelect('auto');setOpen(false);}}>
             <span className="afg-brand-mark bg-slate-800 text-white">✦</span><span className="min-w-0 flex-1"><strong>Auto</strong><small>{dari?'انتخاب خودکار مدل سالم':'Choose the healthiest eligible model'}</small></span><span className="text-xs opacity-60">AUTO</span>{!selected&&<Check size={18}/>}
           </button>
-          {groups.map(group=><div key={group.category}><div className="afg-model-group-title">{group.label}</div>{group.items.map(model=>{const active=selectedModel===model.providerId+'::'+model.id;const disabled=!model.selectable;return <button key={model.providerId+'::'+model.id} className={'afg-model-row '+(active?'is-selected ':'')+(disabled?'is-disabled':'')} onClick={()=>choose(model)} aria-disabled={disabled}>
+          {groups.map(group=><div key={group.category}><div className="afg-model-group-title">{group.label}</div>{group.items.map(model=>{const active=selectedModel===model.providerId+'::'+model.id;const supportedInChat=Boolean(model.capabilities?.imageGen||(model.capabilities?.text&&model.capabilities?.streaming));const disabled=!model.selectable||!supportedInChat;return <button key={model.providerId+'::'+model.id} className={'afg-model-row '+(active?'is-selected ':'')+(disabled?'is-disabled':'')} onClick={()=>choose(model)} aria-disabled={disabled}>
             <ProviderIcon provider={model.providerId} model={model.id} /><span className="min-w-0 flex-1 text-start"><strong>{model.displayName}</strong><small>{model.disabledReason || (model.contextWindow ? model.contextWindow.toLocaleString()+' context' : (dari?'مدل گفت‌وگو':'Chat model'))}</small></span>
             <span className="afg-model-cost">{model.requiresSubscription ? <span className="afg-premium-badge">Premium</span> : priceLabel(model)}</span>{disabled?<Lock size={16}/>:active?<Check size={18}/>:null}
           </button>;})}</div>)}
@@ -82,7 +83,7 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
       </section>
     </div>}
     {showUpgrade&&<div className="afg-model-sheet-root" onMouseDown={e=>{if(e.target===e.currentTarget)setShowUpgrade(null);}}><section className="afg-model-paywall" role="dialog" aria-modal="true">
-      <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-amber-100 text-amber-700"><Lock/></div><h3 className="text-lg font-semibold">{showUpgrade.requiresSubscription ? (dari?'اشتراک ویژه لازم است':'Premium subscription required') : (dari?'این مدل در دسترس نیست':'Model access restricted')}</h3><p className="mt-2 text-sm opacity-70">{showUpgrade.requiresSubscription ? (dari ? 'برای استفاده از این مدل، طرح '+String(showUpgrade.accessTier||'Pro').toUpperCase()+' را فعال کنید.' : 'Upgrade to the '+String(showUpgrade.accessTier||'Pro').toUpperCase()+' plan to use this model.') : (showUpgrade.disabledReason || (dari?'مدیر دسترسی این مدل را غیرفعال کرده است.':'This model is disabled by the administrator.'))}</p><button className="afg-model-close mt-5 w-full" onClick={()=>setShowUpgrade(null)}>{dari?'متوجه شدم':'Got it'}</button>
+      <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-amber-100 text-amber-700"><Lock/></div><h3 className="text-lg font-semibold">{showUpgrade.selectable && !showUpgrade.capabilities?.imageGen && !(showUpgrade.capabilities?.text && showUpgrade.capabilities?.streaming) ? (dari?'این مدل برای چت مستقیم نیست':'This is not a chat model') : showUpgrade.requiresSubscription ? (dari?'اشتراک ویژه لازم است':'Premium subscription required') : (dari?'این مدل در دسترس نیست':'Model access restricted')}</h3><p className="mt-2 text-sm opacity-70">{showUpgrade.selectable && !showUpgrade.capabilities?.imageGen && !(showUpgrade.capabilities?.text && showUpgrade.capabilities?.streaming) ? (dari?'این مدل در گروه قابلیت خودش نمایش داده می‌شود و از ورودی چت قابل اجرا نیست.':'This model appears in its capability group and cannot run as a chat completion.') : showUpgrade.requiresSubscription ? (dari ? 'برای استفاده از این مدل، طرح '+String(showUpgrade.accessTier||'Pro').toUpperCase()+' را فعال کنید.' : 'Upgrade to the '+String(showUpgrade.accessTier||'Pro').toUpperCase()+' plan to use this model.') : (showUpgrade.disabledReason || (dari?'مدیر دسترسی این مدل را غیرفعال کرده است.':'This model is disabled by the administrator.'))}</p><button className="afg-model-close mt-5 w-full" onClick={()=>setShowUpgrade(null)}>{dari?'متوجه شدم':'Got it'}</button>
     </section></div>}
   </>;
 };
