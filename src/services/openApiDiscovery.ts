@@ -19,6 +19,23 @@ function publicAddress(value:string):boolean{
  if(lower.startsWith('::ffff:')){const mapped=lower.slice(7);if(isIP(mapped)===4)return !blocked.check(mapped,'ipv4');}
  return !blocked.check(value,'ipv6');
 }
+async function readTextLimited(response:Response,maxBytes:number):Promise<string>{
+ const declared=Number(response.headers.get('content-length')||0);
+ if(declared>maxBytes){await response.body?.cancel().catch(()=>{});throw new Error('Remote response exceeds the '+maxBytes+' byte safety limit.');}
+ if(!response.body)return '';
+ const reader=response.body.getReader(),chunks:Uint8Array[]=[];let total=0;
+ try{
+  while(true){
+   const part=await reader.read();if(part.done)break;
+   total+=part.value.byteLength;
+   if(total>maxBytes){await reader.cancel().catch(()=>{});throw new Error('Remote response exceeds the '+maxBytes+' byte safety limit.');}
+   chunks.push(part.value);
+  }
+ }finally{reader.releaseLock();}
+ const merged=new Uint8Array(total);let offset=0;
+ for(const chunk of chunks){merged.set(chunk,offset);offset+=chunk.byteLength;}
+ return new TextDecoder().decode(merged);
+}
 async function safeSpecUrl(value:string):Promise<URL>{
  let url:URL;try{url=new URL(value);}catch{throw new Error('Enter a valid OpenAPI JSON document URL.');}
  if(url.protocol!=='https:'||url.username||url.password||url.hash||url.hostname==='localhost'||
@@ -109,7 +126,7 @@ export async function discoverOpenApiOperations(specUrl:string){
  const url=await safeSpecUrl(specUrl);
  const response=await fetch(url.toString(),{headers:{Accept:'application/vnd.oai.openapi+json, application/json'},redirect:'error',signal:AbortSignal.timeout(15_000)});
  if(!response.ok)throw new Error('OpenAPI document returned HTTP '+response.status+'.');
- const raw=await response.text();if(raw.length>2_000_000)throw new Error('OpenAPI document exceeds the 2 MB safety limit.');
+ const raw=await readTextLimited(response,2_000_000);
  let document:Json;try{document=JSON.parse(raw);}catch{throw new Error('Only JSON-formatted OpenAPI documents are currently supported.');}
  if(!document||typeof document!=='object'||!/^3\.(0|1)\./.test(String(document.openapi||''))||!document.paths||typeof document.paths!=='object')
   throw new Error('The document is not a supported OpenAPI 3.0 or 3.1 JSON specification.');
