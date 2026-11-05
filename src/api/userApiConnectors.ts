@@ -72,54 +72,91 @@ async function safeEndpoint(value:string):Promise<URL>{
  }
  return url;
 }
+function normalizeJsonProperty(input:unknown,depth=0):Json{
+ if(depth>5||!input||typeof input!=='object'||Array.isArray(input))throw new Error('JSON Schema property is invalid or too deeply nested.');
+ const source=input as Json;
+ if(!['string','number','integer','boolean','object','array'].includes(source.type))throw new Error('API connector parameters must use supported JSON types.');
+ const output:Json={type:source.type};
+ if(typeof source.description==='string')output.description=source.description.slice(0,500);
+ if(Array.isArray(source.enum)){
+  if(source.enum.length>100||source.enum.some((value:any)=>value!==null&&!['string','number','boolean'].includes(typeof value)))throw new Error('Parameter enum is invalid.');
+  output.enum=source.enum;
+ }
+ for(const key of ['maxLength','minLength','maxItems','minItems'] as const){
+  const value=source[key];if(value!==undefined){
+   const max=key.startsWith('max')?10000:10000;
+   if(!Number.isInteger(value)||Number(value)<0||Number(value)>max)throw new Error('Parameter '+key+' is invalid.');
+   output[key]=value;
+  }
+ }
+ for(const key of ['minimum','maximum'] as const){
+  const value=source[key];if(value!==undefined){if(typeof value!=='number'||!Number.isFinite(value))throw new Error('Parameter '+key+' is invalid.');output[key]=value;}
+ }
+ if(source.type==='object'){
+  if(!source.properties||typeof source.properties!=='object'||Array.isArray(source.properties))throw new Error('Nested object parameters require a properties map.');
+  const entries=Object.entries(source.properties as Json);if(entries.length>40)throw new Error('An object may define at most 40 properties.');
+  const properties:Json={};
+  for(const [key,value] of entries){
+   if(!/^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(key)||['__proto__','prototype','constructor'].includes(key))throw new Error('JSON Schema contains an invalid property name.');
+   properties[key]=normalizeJsonProperty(value,depth+1);
+  }
+  const required=Array.isArray(source.required)?source.required:[];
+  if(required.length>40||required.some((item:any)=>typeof item!=='string'||!Object.prototype.hasOwnProperty.call(properties,item)))throw new Error('Nested object required fields are invalid.');
+  output.properties=properties;output.required=required;output.additionalProperties=false;
+ }else if(source.type==='array'){
+  if(!source.items||typeof source.items!=='object'||Array.isArray(source.items))throw new Error('Array parameters require an items schema.');
+  output.items=normalizeJsonProperty(source.items,depth+1);
+ }
+ return output;
+}
 function validateSchema(schema:unknown):Json{
  if(!schema||typeof schema!=='object'||Array.isArray(schema))throw new Error('Input schema must be a JSON object.');
  const value=schema as Json;
  if(value.type!=='object'||!value.properties||typeof value.properties!=='object'||Array.isArray(value.properties))throw new Error('Input schema must use type object and a properties map.');
- if(Object.keys(value.properties).length>40)throw new Error('An API tool may define at most 40 input parameters.');
- const required=Array.isArray(value.required)?value.required:[];
- if(required.length>40||required.some((item:any)=>typeof item!=='string'||!Object.prototype.hasOwnProperty.call(value.properties,item)))throw new Error('Input schema required fields are invalid.');
- for(const [key,prop] of Object.entries(value.properties)){
-  if(!/^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(key)||['__proto__','prototype','constructor'].includes(key)||!prop||typeof prop!=='object'||Array.isArray(prop))throw new Error('Input schema contains an invalid property.');
-  const p=prop as Json;
-  if(!['string','number','integer','boolean'].includes(p.type))throw new Error('API connector parameters must be string, number, integer or boolean.');
-  if(p['x-in']!==undefined&&!['path','query','body'].includes(p['x-in']))throw new Error('Parameter x-in must be path, query or body.');
-  if(p.enum!==undefined&&(!Array.isArray(p.enum)||p.enum.length>100))throw new Error('Parameter enum is invalid.');
-  if(p.maxLength!==undefined&&(!Number.isInteger(p.maxLength)||p.maxLength<0||p.maxLength>10000))throw new Error('Parameter maxLength is invalid.');
- }
- return {type:'object',properties:value.properties,required,additionalProperties:false};
+ const normalized=normalizeJsonProperty(value);
+ if(Object.keys(normalized.properties as Json).length>40)throw new Error('An API tool may define at most 40 input parameters.');
+ return normalized;
 }
 function modelToolSchema(input:unknown):Json{
  const schema=validateSchema(input);
- const properties:Json={};
- for(const [name,value] of Object.entries(schema.properties as Json)){
-  const source=value as Json;
-  const property:Json={type:source.type};
-  if(typeof source.description==='string')property.description=source.description.slice(0,500);
-  if(Array.isArray(source.enum))property.enum=source.enum.slice(0,100);
-  if(Number.isInteger(source.maxLength))property.maxLength=source.maxLength;
-  properties[name]=property;
- }
- return {type:'object',properties,required:schema.required,additionalProperties:false};
+ return {...schema,additionalProperties:false};
 }
-
+function validateJsonValue(schema:Json,value:unknown,path:string,depth=0):void{
+ if(depth>6)throw new Error(path+' exceeds the maximum JSON nesting depth.');
+ if(schema.type==='string'){
+  if(typeof value!=='string')throw new Error(path+' must be a string.');
+  if(schema.maxLength!==undefined&&value.length>Number(schema.maxLength))throw new Error(path+' is too long.');
+  if(schema.minLength!==undefined&&value.length<Number(schema.minLength))throw new Error(path+' is too short.');
+ }else if(schema.type==='number'||schema.type==='integer'){
+  if(typeof value!=='number'||!Number.isFinite(value)||(schema.type==='integer'&&!Number.isSafeInteger(value)))throw new Error(path+' must be a valid '+schema.type+'.');
+  if(schema.minimum!==undefined&&value<Number(schema.minimum))throw new Error(path+' is below its minimum.');
+  if(schema.maximum!==undefined&&value>Number(schema.maximum))throw new Error(path+' exceeds its maximum.');
+ }else if(schema.type==='boolean'){
+  if(typeof value!=='boolean')throw new Error(path+' must be a boolean.');
+ }else if(schema.type==='object'){
+  if(!value||typeof value!=='object'||Array.isArray(value))throw new Error(path+' must be an object.');
+  const object=value as Json,properties=schema.properties as Json,required=schema.required as string[];
+  for(const key of required)if(!Object.prototype.hasOwnProperty.call(object,key))throw new Error(path+'.'+key+' is required.');
+  for(const [key,item] of Object.entries(object)){
+   const child=properties[key] as Json|undefined;
+   if(!child)throw new Error(path+' contains an unknown property: '+key+'.');
+   validateJsonValue(child,item,path+'.'+key,depth+1);
+  }
+ }else if(schema.type==='array'){
+  if(!Array.isArray(value))throw new Error(path+' must be an array.');
+  if(schema.maxItems!==undefined&&value.length>Number(schema.maxItems))throw new Error(path+' has too many items.');
+  if(schema.minItems!==undefined&&value.length<Number(schema.minItems))throw new Error(path+' has too few items.');
+  for(let i=0;i<value.length;i++)validateJsonValue(schema.items as Json,value[i],path+'['+i+']',depth+1);
+ }
+ if(Array.isArray(schema.enum)&&!schema.enum.some((allowed:any)=>JSON.stringify(allowed)===JSON.stringify(value)))throw new Error(path+' is not an allowed value.');
+}
 function validateArgs(schema:Json,args:unknown):Json{
  if(!args||typeof args!=='object'||Array.isArray(args))throw new Error('Tool arguments must be a JSON object.');
- const object=args as Json;
- if(JSON.stringify(object).length>48_000)throw new Error('Tool arguments exceed the 48 KB limit.');
- const props=schema.properties as Json,required=schema.required as string[];
- for(const key of required)if(!Object.prototype.hasOwnProperty.call(object,key))throw new Error('Missing required parameter: '+key);
- for(const [key,value] of Object.entries(object)){
-  const p=props[key] as Json|undefined;if(!p)throw new Error('Unknown parameter: '+key);
-  if(p.type==='string'&&typeof value!=='string')throw new Error('Parameter '+key+' must be a string.');
-  if(p.type==='number'&&(typeof value!=='number'||!Number.isFinite(value)))throw new Error('Parameter '+key+' must be a number.');
-  if(p.type==='integer'&&(!Number.isSafeInteger(value)))throw new Error('Parameter '+key+' must be an integer.');
-  if(p.type==='boolean'&&typeof value!=='boolean')throw new Error('Parameter '+key+' must be a boolean.');
-  if(p.maxLength!==undefined&&typeof value==='string'&&value.length>p.maxLength)throw new Error('Parameter '+key+' is too long.');
-  if(Array.isArray(p.enum)&&!p.enum.some((allowed:any)=>allowed===value))throw new Error('Parameter '+key+' is not an allowed value.');
- }
- return object;
+ if(JSON.stringify(args).length>48_000)throw new Error('Tool arguments exceed the 48 KB limit.');
+ validateJsonValue(schema,args,'arguments');
+ return args as Json;
 }
+
 function publicRow(row:any){
  return {id:row.id,catalogSourceKey:row.catalog_source_key,name:row.name,toolName:row.tool_name,description:row.description,
   endpointUrl:row.endpoint_url,httpMethod:row.http_method,authType:row.auth_type,authHeaderName:row.auth_header_name,
