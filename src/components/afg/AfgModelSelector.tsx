@@ -28,18 +28,21 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
     const filtered = models.filter(m => (m.displayName + ' ' + m.providerId + ' ' + m.id).toLowerCase().includes(query.toLowerCase()));
     const categoryOf = (model: AfgModelOption) => {
       const id = (model.id + ' ' + model.displayName).toLowerCase();
-      if (model.capabilities?.imageGen || model.capabilities?.imageEdit) return 'image';
-      if (/video|grok-imagine-video/.test(id)) return 'video';
+      const kind = String(model.catalogKind || '').toLowerCase();
+      if (kind === 'video' || /video|grok-imagine-video/.test(id)) return 'video';
+      if (kind === 'image' || model.capabilities?.imageGen || model.capabilities?.imageEdit) return 'image';
       if (/coder|coding|code-|codegen|deepseek-coder|qwen.*coder|starcoder|code llama/.test(id)) return 'coding';
       if (model.capabilities?.tts || model.capabilities?.stt) return 'audio';
-      if (model.capabilities?.vision || model.capabilities?.ocr) return 'vision';
+      if (model.capabilities?.vision || model.capabilities?.ocr || kind === 'image-to-text') return 'vision';
+      if (model.capabilities?.embedding || kind === 'embedding') return 'embedding';
+      if (model.capabilities?.webSearch || model.capabilities?.webFetch || kind === 'web' || kind === 'webSearch' || kind === 'webFetch') return 'web';
       if (model.capabilities?.text && model.capabilities?.streaming) return 'chat';
       return 'other';
     };
-    const order = ['chat','coding','image','video','audio','vision','other'];
+    const order = ['chat','coding','image','video','audio','vision','web','embedding','other'];
     const labels: Record<string,string> = dari
-      ? {chat:'مدل‌های چت',coding:'مدل‌های کدنویسی',image:'مدل‌های تصویر',video:'مدل‌های ویدیو',audio:'مدل‌های صوتی',vision:'درک تصویر',other:'سایر مدل‌ها'}
-      : {chat:'Chat models',coding:'Coding models',image:'Image models',video:'Video models',audio:'Audio models',vision:'Image understanding',other:'Other models'};
+      ? {chat:'مدل‌های چت',coding:'مدل‌های کدنویسی',image:'مدل‌های تصویر',video:'مدل‌های ویدیو',audio:'مدل‌های صوتی',vision:'درک تصویر',web:'مدل‌های وب',embedding:'مدل‌های برداری',other:'سایر مدل‌ها'}
+      : {chat:'Chat models',coding:'Coding models',image:'Image models',video:'Video models',audio:'Audio models',vision:'Image understanding',web:'Web models',embedding:'Embedding models',other:'Other models'};
     return order.map(category => ({
       category,
       label: labels[category],
