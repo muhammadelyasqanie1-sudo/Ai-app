@@ -72,7 +72,7 @@ async function readMultipartRequest(req:IncomingMessage,maxBytes=12*1024*1024):P
   chunks.push(chunk);
  }
  const raw=Buffer.concat(chunks),delimiter=Buffer.from('--'+boundary),separator=Buffer.from('\r\n\r\n');
- const files:Record<string,UploadedFile>={};let args:Json|null=null,offset=0,parts=0;
+ const files:Record<string,UploadedFile>=Object.create(null);let args:Json|null=null,offset=0,parts=0;
  while(true){
   const start=raw.indexOf(delimiter,offset);if(start<0)break;
   let cursor=start+delimiter.length;
@@ -87,12 +87,13 @@ async function readMultipartRequest(req:IncomingMessage,maxBytes=12*1024*1024):P
   const name=nameMatch[1];parts++;if(parts>50)throw new Error('Multipart request contains too many parts.');
   const filenameMatch=headers.match(/\bfilename="([^"]{0,255})"/i);
   if(filenameMatch){
-   if(!/^[a-zA-Z0-9._ -]{1,180}$/.test(filenameMatch[1])||filenameMatch[1]==='.'||filenameMatch[1]==='..')throw new Error('Uploaded filename contains unsupported characters.');
+   const safeFilename=filenameMatch[1].replace(/[\\/]/g,'_').replace(/[\\u0000-\\u001f\\u007f]/g,'').slice(0,180);
+   if(!safeFilename||safeFilename==='.'||safeFilename==='..')throw new Error('Uploaded filename is invalid.');
    const mime=headers.match(/\bcontent-type:\s*([^\r\n]+)/i)?.[1]?.trim().toLowerCase()||'application/octet-stream';
    if(!/^[a-z0-9][a-z0-9!#async function safeEndpoint(value:string):Promise<URL>{^_.+-]{0,80}\/[a-z0-9][a-z0-9!#async function safeEndpoint(value:string):Promise<URL>{^_.+-]{0,80}$/.test(mime))throw new Error('Uploaded file content type is invalid.');
    if(data.length>10*1024*1024)throw new Error('Each uploaded file is limited to 10 MB.');
    if(files[name])throw new Error('Duplicate uploaded file field: '+name+'.');
-   files[name]={filename:filenameMatch[1],contentType:mime,data};
+   files[name]={filename:safeFilename,contentType:mime,data};
   }else{
    if(name!=='arguments'||args)throw new Error('Only one arguments field and declared file fields are accepted.');
    try{args=JSON.parse(data.toString('utf8'));}catch{throw new Error('Multipart arguments must contain valid JSON.');}
@@ -121,7 +122,7 @@ function normalizeJsonProperty(input:unknown,depth=0):Json{
  if(!['string','number','integer','boolean','object','array'].includes(source.type))throw new Error('API connector parameters must use supported JSON types.');
  const output:Json={type:source.type};
  if(typeof source.description==='string')output.description=source.description.slice(0,500);
- if(source.format!==undefined){if(source.type!=='string'||source.format!=='binary')throw new Error('Only string/binary file properties are supported.');output.format='binary';}
+ if(source.format!==undefined){if(source.type!=='string'||source.format!=='binary'||depth!==1)throw new Error('Binary file properties are supported only at the connector input root.');output.format='binary';}
  if(source['x-in']!==undefined){if(!['path','query','body','header'].includes(source['x-in']))throw new Error('API parameter location is invalid.');output['x-in']=source['x-in'];}
  if(Array.isArray(source.enum)){
   if(source.enum.length>100||source.enum.some((value:any)=>value!==null&&!['string','number','boolean'].includes(typeof value)))throw new Error('Parameter enum is invalid.');
@@ -160,6 +161,8 @@ function validateSchema(schema:unknown):Json{
  if(value.type!=='object'||!value.properties||typeof value.properties!=='object'||Array.isArray(value.properties))throw new Error('Input schema must use type object and a properties map.');
  const normalized=normalizeJsonProperty(value);
  if(value['x-content-type']!==undefined){if(value['x-content-type']!=='multipart/form-data')throw new Error('Only multipart/form-data is supported for file uploads.');normalized['x-content-type']='multipart/form-data';}
+ const hasBinary=Object.values(normalized.properties as Json).some((property:any)=>property?.format==='binary');
+ if(hasBinary&&normalized['x-content-type']!=='multipart/form-data')throw new Error('Binary file fields require x-content-type multipart/form-data.');
  if(Object.keys(normalized.properties as Json).length>40)throw new Error('An API tool may define at most 40 input parameters.');
  return normalized;
 }
