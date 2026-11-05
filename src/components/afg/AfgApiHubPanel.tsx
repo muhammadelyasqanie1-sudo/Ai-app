@@ -33,6 +33,10 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean;canSy
  const [selectedDetails,setSelectedDetails]=useState<any>(null);
  const [randomItem,setRandomItem]=useState<CatalogItem|null>(null);
  const [connectorSelection,setConnectorSelection]=useState<CatalogItem|null>(null);
+ const [openApiUrl,setOpenApiUrl]=useState('');
+ const [openApiResult,setOpenApiResult]=useState<any>(null);
+ const [openApiSelection,setOpenApiSelection]=useState<any>(null);
+ const [discovering,setDiscovering]=useState(false);
  const [loading,setLoading]=useState(false);
  const [refreshing,setRefreshing]=useState(false);
  const [error,setError]=useState('');
@@ -94,6 +98,7 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean;canSy
    try{const result=await request('/api/api-hub/random?category='+encodeURIComponent(category));setRandomItem(result.item||null);}
    catch(e){setError(e instanceof Error?e.message:'Random discovery failed.');}
  };
+ const discoverOpenApi=async()=>{setDiscovering(true);setError('');setNotice('');setOpenApiResult(null);setOpenApiSelection(null);try{const result=await request('/api/api-hub/openapi/discover',{method:'POST',body:JSON.stringify({specUrl:openApiUrl.trim()})});setOpenApiResult(result);setNotice(label('OpenAPI operations discovered. Select an operation to configure it.','عملیات OpenAPI پیدا شد؛ یک عملیات را برای تنظیم انتخاب کنید.'));}catch(e){setError(e instanceof Error?e.message:'OpenAPI discovery failed.');}finally{setDiscovering(false);}};
  const update=(setter:(value:string)=>void)=>(value:string)=>{setter(value);setPage(1);};
  const label=(en:string,fa:string)=>dari?fa:en;
  return <div className="space-y-4">
@@ -124,6 +129,13 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean;canSy
   </section>
   {error&&<div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>}
   {notice&&<div role="status" className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-300">{notice}</div>}
+  <section className="rounded-2xl border border-violet-500/20 bg-violet-500/5 p-4">
+   <h3 className="font-bold text-white">{label('Import operations from OpenAPI','واردکردن عملیات از OpenAPI')}</h3>
+   <p className="mt-1 text-xs leading-5 text-slate-400">{label('Paste a public HTTPS URL to an OpenAPI 3.0/3.1 JSON document. This discovers operations only; it does not execute them or provide credentials.','نشانی HTTPS عمومی سند JSON استاندارد OpenAPI 3 را وارد کنید. این بخش فقط عملیات را شناسایی می‌کند و آن‌ها را اجرا یا کلید دسترسی ایجاد نمی‌کند.')}</p>
+   <div className="mt-3 flex flex-col gap-2 sm:flex-row"><input value={openApiUrl} onChange={e=>setOpenApiUrl(e.target.value)} placeholder="https://api.example.com/openapi.json" className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white"/><button disabled={discovering||!openApiUrl.trim()} onClick={()=>void discoverOpenApi()} className="rounded-xl bg-violet-400 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-40">{discovering?label('Discovering…','در حال شناسایی…'):label('Discover operations','شناسایی عملیات')}</button></div>
+   {openApiResult&&<div className="mt-3 space-y-2"><p className="text-xs text-violet-200">{openApiResult.specTitle} · {openApiResult.operationCount} {label('operations found','عملیات پیدا شد')}</p>{(openApiResult.operations||[]).map((operation:any,index:number)=><div key={operation.toolName+'_'+index} className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="text-xs font-semibold text-white">{operation.method} {operation.name}</p><p className="mt-1 break-all text-[10px] text-slate-500">{operation.endpointUrl}</p><p className="mt-1 text-[10px] text-slate-400">{label('Auth','احراز هویت')}: {(operation.authOptions||[]).join(', ')} · {operation.usable?label('Supported schema','ساختار پشتیبانی‌شده'):label('Review required','نیازمند بررسی')}</p></div><button disabled={!operation.usable} onClick={()=>{setOpenApiSelection(operation);setConnectorSelection(null);setNotice(label('Operation loaded into the connector form. Add credentials, then test it.','عملیات به فرم اتصال منتقل شد؛ کلید را وارد و سپس آزمایش کنید.'));}} className="shrink-0 rounded-lg border border-violet-400/30 px-3 py-2 text-[10px] text-violet-200 disabled:opacity-40">{label('Configure','تنظیم')}</button></div>)}</div>}
+   <p className="mt-2 text-[10px] text-slate-500">{label('JSON only in this milestone. YAML, OAuth authorization flows, remote schema references and complex nested request bodies are not imported.','در این مرحله فقط JSON پشتیبانی می‌شود؛ YAML، جریان OAuth، ارجاع‌های خارجی و بدنه‌های پیچیده وارد نمی‌شوند.')}</p>
+  </section>
   <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 sm:p-4">
    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
     <div className="relative sm:col-span-2 xl:col-span-1"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500"/><input value={query} onChange={e=>{setQuery(e.target.value);setPage(1);}} placeholder={label('Search APIs','جستجوی API')} className="w-full rounded-xl border border-slate-700 bg-slate-900 py-2 pl-9 pr-3 text-sm text-white"/></div>
@@ -154,6 +166,6 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean;canSy
   {data&&data.items.length===0&&!loading&&<div className="rounded-xl border border-slate-800 p-8 text-center text-sm text-slate-400">{label('No APIs match these filters.','هیچ API مطابق این فیلترها یافت نشد.')}</div>}
   <div className="flex items-center justify-center gap-3"><button disabled={page<=1||loading} onClick={()=>setPage(v=>Math.max(1,v-1))} className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 disabled:opacity-40"><ChevronLeft className="h-4 w-4"/>{label('Previous','قبلی')}</button><span className="text-xs text-slate-400">{page} / {pageCount}</span><button disabled={page>=pageCount||loading} onClick={()=>setPage(v=>Math.min(pageCount,v+1))} className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 disabled:opacity-40">{label('Next','بعدی')}<ChevronRight className="h-4 w-4"/></button></div>
   <p className="text-[10px] leading-5 text-slate-500">{label('Importing this directory does not grant credentials or permission to call every service. API contracts, authentication, rate limits and terms must be reviewed before a connector is enabled.','واردکردن این فهرست به معنی دسترسی به کلید یا مجوز اجرای سرویس‌ها نیست. قرارداد API، احراز هویت، سهمیه و شرایط استفاده باید پیش از فعال‌سازی اتصال بررسی شوند.')}</p>
-  <AfgApiConnectorPanel language={language} catalogSelection={connectorSelection}/>
+  <AfgApiConnectorPanel language={language} catalogSelection={connectorSelection} openApiSelection={openApiSelection}/>
  </div>;
 };
