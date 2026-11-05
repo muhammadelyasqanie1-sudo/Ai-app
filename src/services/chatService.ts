@@ -239,6 +239,31 @@ export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerI
     }
   }
 
+  if (input.tools?.length) {
+    const toolCapable = descriptors.filter((candidate) =>
+      verified(candidate) && candidate.capabilities.tools,
+    );
+    if (comboSlug) {
+      comboCandidates = comboCandidates.filter((candidate) => candidate.capabilities.tools);
+      if (!comboCandidates.length) {
+        throw new ProviderAdapterError('None of the verified models in this routing combo supports API tools. Choose a tool-capable model or update the combo.', 422, 'combo_tools_unsupported');
+      }
+      selected = comboCandidates[0];
+    } else if (input.model === 'auto') {
+      if (!selected?.capabilities.tools) {
+        const cost = (candidate: ModelDescriptor) =>
+          Number(candidate.pricing?.inputPerMillion ?? Number.POSITIVE_INFINITY) +
+          Number(candidate.pricing?.outputPerMillion ?? Number.POSITIVE_INFINITY);
+        selected = [...toolCapable].sort((a, b) => cost(a) - cost(b))[0];
+      }
+      if (!selected) {
+        throw new ProviderAdapterError('No recently verified model with API tool-calling support is available. Connect or enable a tool-capable model.', 503, 'no_tool_capable_model');
+      }
+    } else if (!selected?.capabilities.tools) {
+      throw new ProviderAdapterError('The selected model does not support API tool calling. Choose a model marked as supporting Tools, or select Auto.', 422, 'selected_model_tools_unsupported');
+    }
+  }
+
   if (!selected) {
     throw new ProviderAdapterError('Provider not reachable. No enabled, healthy text model is available.', 503, 'model_not_verified');
   }
@@ -259,7 +284,8 @@ export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerI
       const modelId = fallbackId.slice(split + 2);
       return descriptors.find((model) =>
         model.providerId === providerId && model.id === modelId && verified(model) &&
-        model.capabilities.text && model.capabilities.streaming,
+        model.capabilities.text && model.capabilities.streaming &&
+        (!input.tools?.length || model.capabilities.tools),
       );
     })
     .filter((model): model is ModelDescriptor => Boolean(model));
