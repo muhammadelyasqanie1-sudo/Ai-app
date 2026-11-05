@@ -15,7 +15,7 @@ async function call(path:string,options:RequestInit={}){
  }
  const response=await fetch(BASE+path,{...options,headers,credentials:'include',cache:'no-store'});
  const type=response.headers.get('content-type')||'';
- if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.error||('HTTP '+response.status));}
+ if(!response.ok){const body=await response.json().catch(()=>({}));const requestId=response.headers.get('x-request-id')||body.requestId||'';const retryAfter=response.headers.get('retry-after')||'';const retryHint=retryAfter?' · Retry-After '+retryAfter+'s':'';throw new Error((body.error||('HTTP '+response.status))+(requestId?' · Request '+requestId:'')+retryHint);}
  if(type.includes('json'))return {data:await response.json(),response};
  return {data:await response.arrayBuffer(),response};
 }
