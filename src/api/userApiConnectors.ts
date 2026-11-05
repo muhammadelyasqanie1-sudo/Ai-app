@@ -874,6 +874,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    const keyResult=await pool.query('SELECT * FROM user_api_connector_keys WHERE id=$1 AND connector_id=$2 AND user_id=$3 LIMIT 1',[keyId,connector.id,user.id]);
    const key=keyResult.rows[0];if(!key){sendAuthJson(res,404,{error:'API key not found.'});return true;}
    if(action==='activate'&&req.method==='POST'){
+    if(['waiting','expired','revoked'].includes(String(key.lifecycle_state||'active'))){sendAuthJson(res,409,{error:'This retained or expired key cannot be reactivated. Add the renewed provider key as a new entry, verify it, then activate it.'});return true;}
     if(connector.auth_type==='none'){sendAuthJson(res,409,{error:'This connector does not use API credentials.'});return true;}
     await pool.query(`UPDATE user_api_connectors SET credential_encrypted=$3,enabled=false,status='error',
      queue_state='ready',next_available_at=NULL,last_error='API key changed; verify the connector before enabling it.',updated_at=now()
