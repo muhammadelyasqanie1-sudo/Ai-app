@@ -252,9 +252,11 @@ async function persistApiBatch(rows:PublicApiRecord[]):Promise<void> {
         'source_payload=EXCLUDED.source_payload,is_active=true,imported_at=now(),updated_at=now()';
       await client.query(sql,values);
       // Create a durable work-tracking row for every newly catalogued API. Existing progress is never reset by a resync.
-      await client.query(`INSERT INTO public_api_implementation_tracking(source_key,discovery_status,created_at,updated_at)
-        SELECT source_key,'catalogued',now(),now() FROM public_api_catalog WHERE source_key = ANY($1::text[])
-        ON CONFLICT(source_key) DO NOTHING`,[batch.map(item=>item.sourceKey)]);
+      await client.query(`INSERT INTO public_api_implementation_tracking(source_key,discovery_status,official_docs_url,last_discovered_at,created_at,updated_at)
+        SELECT source_key,'catalogued',docs_url,now(),now(),now() FROM public_api_catalog WHERE source_key = ANY($1::text[])
+        ON CONFLICT(source_key) DO UPDATE SET
+          official_docs_url=COALESCE(EXCLUDED.official_docs_url,public_api_implementation_tracking.official_docs_url),
+          last_discovered_at=now(),updated_at=now()`,[batch.map(item=>item.sourceKey)]);
     }
     await client.query('COMMIT');
   }catch(error){await client.query('ROLLBACK');throw error;}
@@ -310,13 +312,13 @@ export async function syncPublicApiCatalog():Promise<{imported:number;pages:numb
       }
       const status=complete?'success':'partial';
       const lastError=errors.length?errors.join(' | ').slice(0,500):null;
-      await pool.query("UPDATE public_api_sync_state SET status=$2,items_imported=$3,pages_fetched=$4,last_completed_at=now(),last_error=$5,updated_at=now() WHERE source=$1",
-        [REPOSITORY_SOURCE,status,imported,pages,lastError]);
+      await pool.query("UPDATE public_api_sync_state SET status=$2,items_imported=$3,pages_fetched=$4,repository_readme_ok=$6,directory_api_ok=$7,last_completed_at=now(),last_error=$5,updated_at=now() WHERE source=$1",
+        [REPOSITORY_SOURCE,status,imported,pages,lastError,repositoryReadme,directoryApi]);
       return {imported,pages,complete,sourceCoverage:{repositoryReadme,directoryApi}};
     }catch(error){
       const message=error instanceof Error?error.message.slice(0,500):'Catalog sync failed.';
-      await pool.query("UPDATE public_api_sync_state SET status='error',items_imported=$2,pages_fetched=$3,last_completed_at=now(),last_error=$4,updated_at=now() WHERE source=$1",
-        [REPOSITORY_SOURCE,imported,pages,message]).catch(()=>{});
+      await pool.query("UPDATE public_api_sync_state SET status='error',items_imported=$2,pages_fetched=$3,repository_readme_ok=$5,directory_api_ok=$6,last_completed_at=now(),last_error=$4,updated_at=now() WHERE source=$1",
+        [REPOSITORY_SOURCE,imported,pages,message,repositoryReadme,directoryApi]).catch(()=>{});
       throw error;
     }
   })();
@@ -400,7 +402,7 @@ export async function listPublicApiCategories(){
 
 export async function getPublicApiSyncStatus(){
   if(!pool)return {configured:false,status:'unavailable'};
-  const result=await pool.query('SELECT source,status,items_imported,pages_fetched,last_started_at,last_completed_at,last_error FROM public_api_sync_state WHERE source=$1 LIMIT 1',[REPOSITORY_SOURCE]);
+  const result=await pool.query('SELECT source,status,items_imported,pages_fetched,repository_readme_ok,directory_api_ok,last_started_at,last_completed_at,last_error FROM public_api_sync_state WHERE source=$1 LIMIT 1',[REPOSITORY_SOURCE]);
   let implementationTracking:{configured:boolean;total:number;byStatus:Record<string,number>}={configured:false,total:0,byStatus:{}};
   try{
     const tracking=await pool.query('SELECT discovery_status,count(*)::int AS count FROM public_api_implementation_tracking GROUP BY discovery_status');
