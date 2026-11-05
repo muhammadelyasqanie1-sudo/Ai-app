@@ -44,7 +44,7 @@ function decrypt(value:string):string{
 }
 
 function oauthPublicBase():URL{
- const configured=(process.env.AFG_PUBLIC_URL||process.env.APP_URL||'').trim();
+ const configured=(process.env.AFG_PUBLIC_URL||process.env.APP_URL||process.env.APP_ORIGIN||'').split(',')[0].trim();
  if(!configured)throw new Error('Set AFG_PUBLIC_URL to the public HTTPS AFG AI origin before using OAuth.');
  const base=new URL(configured);
  if(base.protocol!=='https:'||base.username||base.password||base.search||base.hash)throw new Error('AFG_PUBLIC_URL must be a clean public HTTPS URL.');
