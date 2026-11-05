@@ -537,8 +537,26 @@ async function persistRateLimitObservation(row:any,userId:string,evidence:Json,q
 }
 function isQuotaFailure(error:unknown):boolean{return [402,429].includes(Number((error as {httpStatus?:number})?.httpStatus||0));}
 async function refreshDueQueueEntries(userId:string):Promise<void>{
- await pool!.query(`UPDATE user_api_connectors SET queue_state='ready',next_available_at=NULL,last_error=NULL,updated_at=now()
+ await pool!.query(`UPDATE user_api_connector_keys SET queue_state='ready',next_available_at=NULL,last_error=NULL,updated_at=now()
   WHERE user_id=$1 AND queue_state='waiting' AND next_available_at IS NOT NULL AND next_available_at<=now()`,[userId]);
+ await pool!.query(`WITH due AS (
+   SELECT DISTINCT ON (connector_id) connector_id,id,credential_encrypted
+   FROM user_api_connector_keys
+   WHERE user_id=$1 AND is_active=false AND queue_state='ready'
+   ORDER BY connector_id,priority ASC,created_at ASC
+  ), activated AS (
+   UPDATE user_api_connector_keys k SET is_active=true,last_used_at=now(),updated_at=now()
+   FROM due d JOIN user_api_connectors c ON c.id=d.connector_id
+   WHERE k.id=d.id AND c.user_id=$1 AND c.queue_state='waiting'
+    AND c.next_available_at IS NOT NULL AND c.next_available_at<=now()
+   RETURNING k.connector_id,k.credential_encrypted
+  )
+  UPDATE user_api_connectors c SET credential_encrypted=a.credential_encrypted,enabled=false,status='verified',
+   queue_state='ready',next_available_at=NULL,last_error='Quota reset observed; verify connector before re-enabling.',updated_at=now()
+  FROM activated a WHERE c.id=a.connector_id AND c.user_id=$1`,[userId]);
+ await pool!.query(`UPDATE user_api_connectors SET queue_state='ready',next_available_at=NULL,last_error=NULL,updated_at=now()
+  WHERE user_id=$1 AND queue_state='waiting' AND next_available_at IS NOT NULL AND next_available_at<=now()
+   AND NOT EXISTS(SELECT 1 FROM user_api_connector_keys k WHERE k.connector_id=user_api_connectors.id AND k.queue_state='waiting' AND k.next_available_at<=now())`,[userId]);
 }
 async function rotateQuotaLimitedConnectorKey(row:any,userId:string,error:unknown):Promise<boolean>{
  if(!isQuotaFailure(error)||row.auth_type==='none'||row.auth_type==='oauth2')return false;
