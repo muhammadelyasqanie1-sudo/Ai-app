@@ -1,5 +1,5 @@
 import type {IncomingMessage,ServerResponse} from 'http';
-import {createCipheriv,createDecipheriv,createHash,randomBytes,randomUUID} from 'node:crypto';
+import {createCipheriv,createDecipheriv,createHash,randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
 import {lookup} from 'node:dns/promises';
 import {BlockList,isIP} from 'node:net';
 import {pool} from './database.ts';
@@ -345,7 +345,7 @@ function publicRow(row:any){
   hasCredential:Boolean(row.credential_encrypted),inputSchema:row.input_schema_json,sampleArguments:row.sample_arguments_json,
   fallbackGroup:row.fallback_group||'',fallbackPriority:Number(row.fallback_priority||100),queueState:row.queue_state||'ready',nextAvailableAt:row.next_available_at||null,
   rateLimitEvidence:row.rate_limit_evidence||null,lastQuotaStatus:row.last_quota_status||null,lastQuotaObservedAt:row.last_quota_observed_at||null,lastQuotaResetAt:row.last_quota_reset_at||null,
-  enabled:row.enabled,status:row.status,lastTestedAt:row.last_tested_at,lastHttpStatus:row.last_http_status,lastError:row.last_error};
+  enabled:row.enabled,status:row.status,lastTestedAt:row.last_tested_at,lastHttpStatus:row.last_http_status,lastError:row.last_error,healthMonitorEnabled:row.health_monitor_enabled===true,healthMonitorIntervalMinutes:Number(row.health_monitor_interval_minutes||360),lastHealthCheckAt:row.last_health_check_at||null,lastHealthDiagnosis:row.last_health_diagnosis||null};
 }
 async function ownerConnector(userId:string,id:string){
  const result=await pool!.query('SELECT * FROM user_api_connectors WHERE id=$1 AND user_id=$2 LIMIT 1',[id,userId]);
@@ -633,6 +633,49 @@ async function audit(userId:string,action:string,id:string,metadata:Json={}){
   [userId,action,'api_connector',id,JSON.stringify(metadata)]).catch(()=>{});
 }
 export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerResponse,pathname:string):Promise<boolean>{
+ if(pathname==='/api/internal/connector-monitor/run'&&req.method==='POST'){
+  const configured=process.env.AFG_CONNECTOR_MONITOR_SECRET||'';
+  const supplied=(req.headers.authorization||'').replace(/^Bearer\\s+/i,'').trim();
+  const expected=Buffer.from(configured),actual=Buffer.from(supplied);
+  if(!configured||expected.length!==actual.length||!timingSafeEqual(expected,actual)){sendAuthJson(res,401,{error:'Connector monitor authentication failed.'});return true;}
+  if(!pool){sendAuthJson(res,503,{error:'Database is unavailable.'});return true;}
+  const client=await pool.connect();let claimed:any[]=[];
+  try{
+   await client.query('BEGIN');
+   const due=await client.query("WITH due AS (SELECT id FROM user_api_connectors WHERE health_monitor_enabled=true AND enabled=true AND status='verified' AND queue_state='ready' AND http_method='GET' AND (next_health_check_at IS NULL OR next_health_check_at<=now()) AND (health_monitor_claimed_at IS NULL OR health_monitor_claimed_at<now()-interval '10 minutes') ORDER BY next_health_check_at ASC NULLS FIRST,fallback_priority ASC FOR UPDATE SKIP LOCKED LIMIT 5) UPDATE user_api_connectors c SET health_monitor_claimed_at=now() FROM due WHERE c.id=due.id RETURNING c.*");
+   claimed=due.rows;await client.query('COMMIT');
+  }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+  const results:any[]=[];
+  for(const row of claimed){
+   const owner=String(row.user_id),requestId=randomUUID();
+   if(!await reserveConnectorCall(owner,String(row.id))){
+    await pool.query("UPDATE user_api_connectors SET health_monitor_claimed_at=NULL,next_health_check_at=now()+interval '15 minutes' WHERE id=$1",[row.id]);
+    results.push({id:row.id,checked:false,diagnosis:'local_rate_limited'});continue;
+   }
+   try{
+    const result=await execute(row,row.sample_arguments_json,owner,requestId,12000);
+    await pool.query("UPDATE user_api_connectors SET health_monitor_claimed_at=NULL,last_health_check_at=now(),next_health_check_at=now()+(health_monitor_interval_minutes||360)*interval '1 minute',last_health_diagnosis='healthy',last_tested_at=now(),last_http_status=$2,last_error=NULL,updated_at=now() WHERE id=$1",[row.id,result.status]);
+    await audit(owner,'api.connector.scheduled_health_check',String(row.id),{diagnosis:'healthy',httpStatus:result.status,durationMs:result.durationMs});
+    results.push({id:row.id,checked:true,healthy:true,httpStatus:result.status});
+   }catch(error){
+    const status=Number((error as any)?.httpStatus)||null;
+    const message=error instanceof Error?error.message.slice(0,250):'Scheduled health check failed.';
+    const diagnosis=status===401||status===403?'authentication_failed':status===404?'endpoint_not_found':status===402||status===429?'quota_limited':status&&status>=500?'upstream_server_error':'network_or_timeout';
+    if(status===402||status===429){
+     const retryAt=(error as any)?.retryAt,next=retryAt?new Date(retryAt):null;
+     const evidence=(error as any)?.rateLimitEvidence||{source:'upstream_response',observedAt:new Date().toISOString(),httpStatus:status,headers:{}};
+     await pool.query("UPDATE user_api_connectors SET enabled=false,status='error',queue_state='waiting',next_available_at=$2,rate_limit_evidence=$3::jsonb,last_quota_status=$4,last_quota_observed_at=now(),last_quota_reset_at=$2,health_monitor_claimed_at=NULL,last_health_check_at=now(),last_health_diagnosis=$5,last_tested_at=now(),last_http_status=$4,last_error=$6,updated_at=now() WHERE id=$1",[row.id,next,JSON.stringify(evidence),status,diagnosis,message]);
+    }else if(status===401||status===403||status===404){
+     await pool.query("UPDATE user_api_connectors SET enabled=false,status='error',health_monitor_claimed_at=NULL,last_health_check_at=now(),next_health_check_at=now()+(health_monitor_interval_minutes||360)*interval '1 minute',last_health_diagnosis=$2,last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1",[row.id,diagnosis,status,message]);
+    }else{
+     await pool.query("UPDATE user_api_connectors SET health_monitor_claimed_at=NULL,last_health_check_at=now(),next_health_check_at=now()+(health_monitor_interval_minutes||360)*interval '1 minute',last_health_diagnosis=$2,last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1",[row.id,diagnosis,status,message]);
+    }
+    await audit(owner,'api.connector.scheduled_health_check_failed',String(row.id),{diagnosis,status,error:message});
+    results.push({id:row.id,checked:true,healthy:false,diagnosis,httpStatus:status});
+   }
+  }
+  sendAuthJson(res,200,{checked:results.filter(x=>x.checked).length,skipped:results.filter(x=>!x.checked).length,limit:5,results});return true;
+ }
  if(pathname==='/api/api-hub/oauth/callback'&&req.method==='GET'){
   try{
    if(!pool)throw new Error('OAuth storage is unavailable.');
@@ -912,6 +955,17 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
     await audit(user.id,isHealthCheck?'api.connector.health_check_failed':'api.connector.verify_failed',row.id,{status,error:message,diagnosis});
     sendAuthJson(res,502,isHealthCheck?{healthy:false,diagnosis,httpStatus:status,error:message,waitingForQuota:status===402||status===429}:{verified:false,error:message});return true;
    }
+  }
+  const monitorMatch=pathname.match(/^\\/api\\/api-hub\\/connectors\\/([0-9a-f-]{36})\\/monitor$/i);
+  if(req.method==='POST'&&monitorMatch){
+   const body=await readJsonBody(req,2000),enabled=body.enabled===true,interval=Number(body.intervalMinutes??360);
+   if(typeof body.enabled!=='boolean'||!Number.isInteger(interval)||interval<60||interval>10080){sendAuthJson(res,400,{error:'Health monitoring requires a boolean enabled value and an interval from 60 to 10080 minutes.'});return true;}
+   const row=await ownerConnector(user.id,monitorMatch[1]);
+   if(!row){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
+   if(enabled&&(row.http_method!=='GET'||row.enabled!==true||row.status!=='verified'||row.queue_state!=='ready')){sendAuthJson(res,409,{error:'Scheduled health monitoring is available only for verified, enabled GET connectors to avoid repeating non-idempotent operations.'});return true;}
+   const updated=await pool.query("UPDATE user_api_connectors SET health_monitor_enabled=$3,health_monitor_interval_minutes=$4,next_health_check_at=CASE WHEN $3 THEN now() ELSE NULL END,health_monitor_claimed_at=NULL,updated_at=now() WHERE id=$1 AND user_id=$2 RETURNING health_monitor_enabled,health_monitor_interval_minutes,next_health_check_at",[row.id,user.id,enabled,interval]);
+   await audit(user.id,'api.connector.health_monitor_toggle',String(row.id),{enabled,intervalMinutes:interval});
+   sendAuthJson(res,200,{healthMonitorEnabled:updated.rows[0].health_monitor_enabled,intervalMinutes:updated.rows[0].health_monitor_interval_minutes,nextHealthCheckAt:updated.rows[0].next_health_check_at});return true;
   }
   const itemMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})$/i);
   if(itemMatch&&req.method==='PATCH'){
