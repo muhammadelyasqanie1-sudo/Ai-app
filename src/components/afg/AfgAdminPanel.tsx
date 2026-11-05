@@ -673,7 +673,8 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
           </div>
         </div>}
 
-        {tab==='providers'&&<div className="space-y-4">          <div className={panel}><div className="mb-4"><h2 className="text-lg font-bold text-white">Provider inventory</h2><p className="text-xs text-slate-500">Only 9Router Gateway and Ollama (Local) are supported AI providers.</p></div>
+        {tab==='providers'&&<div className="space-y-4">
+          <div className={panel}><div className="mb-4"><h2 className="text-lg font-bold text-white">Provider inventory</h2><p className="text-xs text-slate-500">Only 9Router Gateway and Ollama (Local) are supported AI providers.</p></div>
             <div className="grid gap-3 md:grid-cols-2">{providers.map(provider=><div key={provider.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
               <div className="flex items-start justify-between gap-3"><div><h3 className="font-bold text-white">{provider.displayName}</h3><p className="mt-1 text-xs text-slate-500">{provider.id} · {provider.kind||'provider'} · {provider.source||'system'}</p></div><span className={provider.last_health_ok===true?'text-emerald-300':provider.last_health_ok===false?'text-red-300':provider.configured?'text-cyan-300':'text-amber-300'}>{provider.last_health_ok===true?'Healthy':provider.last_health_ok===false?'Health error':provider.configured?'Configured':provider.has_key?'Key stored · adapter unavailable':'Missing credentials'}</span></div>
               <p className="mt-2 break-all text-[11px] text-slate-500">{provider.base_url||'Managed by Cloudflare environment'} · Last check {date(provider.last_health_at)} {provider.keyStatus?'· Key '+provider.keyStatus:''} {isSuperadmin&&provider.keyHint?'· hint …'+provider.keyHint:''}</p>
