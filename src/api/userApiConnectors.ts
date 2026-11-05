@@ -613,6 +613,61 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    await audit(user.id,'api.connector.create',created.rows[0].id,{toolName,method,authType});
    sendAuthJson(res,201,{connector:publicRow(created.rows[0])});return true;
   }
+  const keysMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/keys$/i);
+  if(keysMatch){
+   const connector=await ownerConnector(user.id,keysMatch[1]);
+   if(!connector){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
+   if(connector.auth_type==='none'){sendAuthJson(res,409,{error:'This connector does not use API credentials.'});return true;}
+   if(req.method==='GET'){
+    // Lazily preserve credentials created after migration 0028 as the initial key.
+    await pool.query(`INSERT INTO user_api_connector_keys(connector_id,user_id,label,credential_encrypted,is_active)
+     SELECT id,user_id,'Primary key',credential_encrypted,true FROM user_api_connectors
+     WHERE id=$1 AND user_id=$2 AND credential_encrypted IS NOT NULL
+      AND NOT EXISTS(SELECT 1 FROM user_api_connector_keys WHERE connector_id=$1)
+     ON CONFLICT(connector_id,label) DO NOTHING`,[connector.id,user.id]);
+    const result=await pool.query(`SELECT id,label,priority,is_active,created_at,updated_at
+     FROM user_api_connector_keys WHERE connector_id=$1 AND user_id=$2 ORDER BY priority ASC,created_at ASC`,[connector.id,user.id]);
+    sendAuthJson(res,200,{keys:result.rows.map((key:any)=>({id:key.id,label:key.label,priority:Number(key.priority),active:Boolean(key.is_active),createdAt:key.created_at,updatedAt:key.updated_at}))});return true;
+   }
+   if(req.method==='POST'){
+    const body=await readJsonBody(req,12_000);
+    const label=String(body.label||'').trim(),secret=typeof body.credential==='string'?body.credential.trim():'';
+    const priority=Number(body.priority??100);
+    if(!label||label.length>80||!secret||secret.length>8192||!Number.isInteger(priority)||priority<1||priority>1000){
+     sendAuthJson(res,400,{error:'Enter a key label, a credential up to 8192 characters, and a priority from 1 to 1000.'});return true;
+    }
+    const encrypted=encrypt(secret);
+    const inserted=await pool.query(`INSERT INTO user_api_connector_keys(connector_id,user_id,label,credential_encrypted,priority)
+     VALUES($1,$2,$3,$4,$5) RETURNING id,label,priority,is_active,created_at`,[connector.id,user.id,label,encrypted,priority]);
+    await audit(user.id,'api.connector.key_added',connector.id,{keyId:inserted.rows[0].id,label,priority});
+    sendAuthJson(res,201,{key:{id:inserted.rows[0].id,label:inserted.rows[0].label,priority:Number(inserted.rows[0].priority),active:false,createdAt:inserted.rows[0].created_at},requiresManualActivation:true});return true;
+   }
+   sendAuthJson(res,405,{error:'Method not allowed.'});return true;
+  }
+  const keyActionMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/keys\/([0-9a-f-]{36})\/(activate|delete)$/i);
+  if(keyActionMatch&&(req.method==='POST'||req.method==='DELETE')){
+   const connector=await ownerConnector(user.id,keyActionMatch[1]);
+   if(!connector){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
+   const keyId=keyActionMatch[2],action=keyActionMatch[3];
+   const keyResult=await pool.query('SELECT * FROM user_api_connector_keys WHERE id=$1 AND connector_id=$2 AND user_id=$3 LIMIT 1',[keyId,connector.id,user.id]);
+   const key=keyResult.rows[0];if(!key){sendAuthJson(res,404,{error:'API key not found.'});return true;}
+   if(action==='activate'&&req.method==='POST'){
+    if(connector.auth_type==='none'){sendAuthJson(res,409,{error:'This connector does not use API credentials.'});return true;}
+    await pool.query(`UPDATE user_api_connectors SET credential_encrypted=$3,enabled=false,status='error',
+     queue_state='ready',next_available_at=NULL,last_error='API key changed; verify the connector before enabling it.',updated_at=now()
+     WHERE id=$1 AND user_id=$2`,[connector.id,user.id,key.credential_encrypted]);
+    await pool.query('UPDATE user_api_connector_keys SET is_active=(id=$2),updated_at=now() WHERE connector_id=$1 AND user_id=$3',[connector.id,key.id,user.id]);
+    await audit(user.id,'api.connector.key_activated',connector.id,{keyId:key.id,label:key.label,requiresVerification:true});
+    sendAuthJson(res,200,{activated:true,verified:false,enabled:false,requiresVerification:true});return true;
+   }
+   if(action==='delete'&&(req.method==='DELETE'||req.method==='POST')){
+    if(key.is_active){sendAuthJson(res,409,{error:'Select another key before deleting the active key.'});return true;}
+    await pool.query('DELETE FROM user_api_connector_keys WHERE id=$1 AND connector_id=$2 AND user_id=$3',[key.id,connector.id,user.id]);
+    await audit(user.id,'api.connector.key_deleted',connector.id,{keyId:key.id,label:key.label});
+    sendAuthJson(res,200,{deleted:true});return true;
+   }
+   sendAuthJson(res,405,{error:'Method not allowed.'});return true;
+  }
   const credentialMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/credentials$/i);
   if(req.method==='POST'&&credentialMatch){
    const row=await ownerConnector(user.id,credentialMatch[1]);
