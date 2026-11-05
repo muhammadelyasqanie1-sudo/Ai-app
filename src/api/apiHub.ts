@@ -72,7 +72,7 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
           official_docs_url=CASE WHEN $4<>'' THEN $4 ELSE official_docs_url END,
           openapi_spec_url=CASE WHEN $5<>'' THEN $5 ELSE openapi_spec_url END,
           unsupported_reason=CASE WHEN $6<>'' THEN $6 ELSE unsupported_reason END,
-          work_state=CASE WHEN $7='retry' THEN 'queued' ELSE 'done' END,
+          work_state=CASE WHEN $7='retry' THEN 'queued' WHEN $7='unsupported' THEN 'blocked' ELSE 'done' END,
           claimed_by=NULL,claimed_at=NULL,lease_until=NULL,last_work_error=CASE WHEN $7='retry' THEN $6 ELSE NULL END,
           updated_at=now()
         WHERE source_key=$1 AND work_state='claimed' AND claimed_by=$2
@@ -100,7 +100,8 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
         const tracked = await pool.query(`UPDATE public_api_implementation_tracking t
           SET openapi_spec_url=$2,
             discovery_status=CASE WHEN t.discovery_status IN ('catalogued','docs_discovered') THEN 'contract_discovered' ELSE t.discovery_status END,
-            last_discovered_at=now(),updated_at=now()
+            work_state=CASE WHEN t.work_state='claimed' THEN 'done' ELSE t.work_state END,
+            claimed_by=NULL,claimed_at=NULL,lease_until=NULL,last_discovered_at=now(),updated_at=now()
           FROM public_api_catalog c
           WHERE t.source_key=c.source_key AND t.source_key=$1 AND c.is_active=true
           RETURNING t.source_key`,[sourceKey,result.specUrl]);
