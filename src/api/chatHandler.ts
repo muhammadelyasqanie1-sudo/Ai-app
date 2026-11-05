@@ -16,6 +16,26 @@ import { estimateTokenCount, optimizeChatMessages } from '../services/tokenOptim
 type ChatMessage = { role: 'user' | 'assistant' | 'system' | 'tool'; content: string; name?: string; tool_call_id?: string; tool_calls?: Array<{id:string;type:'function';function:{name:string;arguments:string}}> };
 const chatRequestSchema = ChatRequestSchema;
 
+function selectRelevantChatTools(definitions:any[],messages:ChatMessage[],limit=16):any[]{
+  if(definitions.length<=limit)return definitions;
+  const latestUser=[...messages].reverse().find(message=>message.role==='user')?.content||'';
+  const queryTokens=new Set(String(latestUser).toLocaleLowerCase().match(/[\p{L}\p{N}_-]{2,}/gu)||[]);
+  const ranked=definitions.map((definition,index)=>{
+    const fn=definition?.function||{};
+    const searchable=[fn.name,fn.description,...Object.keys(fn.parameters?.properties||{})].join(' ').toLocaleLowerCase();
+    const tokens=searchable.match(/[\p{L}\p{N}_-]{2,}/gu)||[];
+    let score=0;
+    for(const token of tokens)if(queryTokens.has(token))score+=token.length>=7?3:2;
+    for(const token of queryTokens)if(token.length>=5&&searchable.includes(token))score+=1;
+    return {definition,index,score};
+  });
+  ranked.sort((a,b)=>b.score-a.score||a.index-b.index);
+  const relevant=ranked.filter(item=>item.score>0);
+  // Keep a small general-purpose set when the user message has no lexical match.
+  const selected=(relevant.length?relevant:ranked).slice(0,limit);
+  return selected.sort((a,b)=>a.index-b.index).map(item=>item.definition);
+}
+
 // Per-process load shedding; identity-based/distributed rate limits require authenticated users.
 let activeChatRequests = 0;
 const MAX_CONCURRENT_CHAT_REQUESTS = 4;
@@ -355,10 +375,11 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
 
     // User-owned Public API connectors become model-callable tools only after
     // their owner has verified and enabled them. Credentials remain server-side.
-    const toolDefinitions = requestUserId ? [
+    const availableToolDefinitions = requestUserId ? [
       ...await getEnabledUserApiToolDefinitions(requestUserId),
       ...await getEnabledRemoteMcpToolDefinitions(requestUserId),
-    ].slice(0,24) : [];
+    ] : [];
+    const toolDefinitions = selectRelevantChatTools(availableToolDefinitions,upstreamMessages,16);
     const onModelSelected = async (selectedProviderId:string, selectedModelId:string) => {
       const selectedKey = selectedProviderId + '::' + selectedModelId;
       await enforceModelSubscription(requestUserId, selectedProviderId, selectedModelId);
