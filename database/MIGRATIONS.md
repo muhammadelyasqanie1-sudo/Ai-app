@@ -29,3 +29,13 @@ Migration `0009_staff_rbac_foundation.sql` adds backend-enforced staff roles and
 
 
 Migration `0011_remove_cloudflare_workers_ai.sql` removes Cloudflare Workers AI from the provider registry and clears its model/fallback selections. Cloudflare R2/KV storage configuration is independent and is not removed by this migration.
+
+
+## Public API connector fallback groups
+
+Migration `0022_api_connector_fallback_groups.sql` adds optional per-user fallback group and priority fields to API connectors. Connectors in the same group are eligible as sequential alternatives only when they are enabled, verified, owned by the same user, and have the same HTTP method and exact JSON input schema. Apply with `npm run db:migrate` after reviewing `BACKUP-RESTORE.md`. The migration has not been run against any hosted database as part of source changes.
+
+
+## Persistent API quota queue
+
+Migration `0023_api_connector_quota_queue.sql` adds a durable queue state to owner-scoped API connectors. HTTP 402/429 responses park the affected connector as `waiting` without deleting its endpoint, encrypted credential, priority, or configuration. If the upstream response supplies a valid `Retry-After` or rate-limit reset header, the connector becomes eligible again after that time when the user's API tools are next discovered or called. If the provider supplies no reset time, the connector remains waiting until its owner verifies it again or explicitly re-enables it; AFG AI does not guess monthly renewal dates. Other transient 5xx/network errors continue through the existing retryable fallback path and do not automatically mark the connector quota-exhausted.

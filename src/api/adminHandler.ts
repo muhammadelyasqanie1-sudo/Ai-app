@@ -207,103 +207,16 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
 
     if(req.method==='POST' && pathname==='/api/admin/providers/custom'){
       sendAuthJson(res,410,{error:'Custom AI providers are disabled. Only 9Router and Ollama are supported.'});return true;
-      if(user.role!=='superadmin'){sendAuthJson(res,403,{error:'Only a superadmin can register custom provider endpoints.'});return true;}
-      const body=await readJsonBody(req,8000);
-      const parsed=customProviderInput.safeParse(body);
-      if(!parsed.success||!safeCustomProviderUrl(parsed.data.baseUrl)){
-        sendAuthJson(res,400,{error:'Provide a valid slug, display name, and public HTTPS provider API base URL.'});return true;
-      }
-      const {slug,displayName,baseUrl}=parsed.data;
-      const protocol=parsed.data.protocol||'openai-compatible';
-      const client=await pool.connect();
-      try{
-        await client.query('BEGIN');
-        const created=await client.query(`INSERT INTO providers(kind,display_name,enabled,slug,base_url,config_json,source)
-          VALUES('custom',$1,false,$2,$3,$4::jsonb,'custom')
-          RETURNING id,slug,kind,display_name,base_url,enabled,config_json,source,created_at`,
-          [displayName,slug,baseUrl,JSON.stringify({protocol,requires_key:true,custom:true})]);
-        await client.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
-          [user.id,user.role,'provider.custom.create','provider',created.rows[0].id,null,JSON.stringify(created.rows[0]),JSON.stringify({slug,displayName,baseUrl,protocol})]);
-        await client.query('COMMIT');
-        sendAuthJson(res,201,{provider:created.rows[0]});return true;
-      }catch(error){
-        await client.query('ROLLBACK');
-        if((error as {code?:string})?.code==='23505'){sendAuthJson(res,409,{error:'A provider with this slug already exists.'});return true;}
-        throw error;
-      }finally{client.release();}
     }
-
-
 
     const providerConfigRoute=pathname.match(/^\/api\/admin\/providers\/([a-z0-9-]+)\/config$/);
     if(req.method==='PATCH'&&providerConfigRoute){
       sendAuthJson(res,409,{error:'Provider endpoints are managed by the 9Router integration or Ollama host configuration.'});return true;
-      if(user.role!=='superadmin'){sendAuthJson(res,403,{error:'Only a superadmin can change provider configuration.'});return true;}
-      const providerSlug=providerConfigRoute[1];
-      const body=await readJsonBody(req,8000);
-      const providerConfigInput=z.object({
-        baseUrl:z.string().trim().url().max(500),
-        displayName:z.string().trim().min(1).max(80).optional(),
-        protocol:z.enum(['openai-compatible','anthropic-messages']).optional(),
-      }).strict().safeParse(body);
-      if(!providerConfigInput.success||!(await safeCustomProviderUrl(providerConfigInput.data.baseUrl))){
-        sendAuthJson(res,400,{error:'Provide a public HTTPS provider URL and valid configuration.'});return true;
-      }
-      const before=await pool.query('SELECT slug,display_name,base_url,config_json FROM providers WHERE slug=$1 LIMIT 1',[providerSlug]);
-      if(!before.rows[0]){sendAuthJson(res,404,{error:'Provider not found.'});return true;}
-      if(String(before.rows[0].slug)==='ollama'){
-        sendAuthJson(res,409,{error:'This provider endpoint is managed by the host environment.'});return true;
-      }
-      const configJson={...(before.rows[0].config_json||{}),protocol:providerConfigInput.data.protocol||
-        (before.rows[0].config_json as any)?.protocol||'openai-compatible'};
-      const updated=await pool.query(`UPDATE providers SET base_url=$2,display_name=COALESCE($3,display_name),
-        config_json=$4::jsonb,last_health_at=NULL,last_health_ok=NULL,last_error_code=NULL,updated_at=now()
-        WHERE slug=$1 RETURNING slug,display_name,base_url,config_json`,
-        [providerSlug,providerConfigInput.data.baseUrl,providerConfigInput.data.displayName||null,JSON.stringify(configJson)]);
-      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
-        [user.id,user.role,'provider.config.update','provider',providerSlug,JSON.stringify(before.rows[0]),JSON.stringify(updated.rows[0]),JSON.stringify({protocol:configJson.protocol})]);
-      invalidateProviderHealth(providerSlug);
-      await refreshDatabaseProviderAdapters(true);
-      sendAuthJson(res,200,{provider:updated.rows[0]});return true;
     }
 
     const keyRoute = pathname.match(/^\/api\/admin\/providers\/([a-z0-9-]+)\/keys(?:\/rotate)?$/);
-    if (keyRoute && ((req.method==='PUT' && !pathname.endsWith('/rotate')) || (req.method==='POST' && pathname.endsWith('/rotate')))) {
+    if (keyRoute && (req.method==='PUT' || (req.method==='POST' && pathname.endsWith('/rotate')))) {
       sendAuthJson(res,409,{error:'Provider keys are managed by the 9Router integration. Other provider credentials are disabled.'});return true;
-      if (user.role !== 'superadmin') { sendAuthJson(res,403,{error:'Superadmin access is required to manage provider keys.'}); return true; }
-      const providerSlug=keyRoute[1];
-      const body=await readJsonBody(req,10000);
-      const parsedKey=providerKeyInput.safeParse(body);
-      if(!parsedKey.success){sendAuthJson(res,400,{error:'Provide a valid provider API key. Only the default key alias is currently supported.'});return true;}
-      const secret=parsedKey.data.apiKey;
-      const alias='default';
-      if(!(await verifyUserPassword(user.id,parsedKey.data.currentPassword))){
-        sendAuthJson(res,403,{error:'Administrator re-authentication failed. Enter your current account password.'});return true;
-      }
-      const provider=await pool.query('SELECT id,slug FROM providers WHERE slug=$1 LIMIT 1',[providerSlug]);
-      if(!provider.rows[0]){sendAuthJson(res,404,{error:'Provider not found.'});return true;}
-      let encrypted:string;
-      try{encrypted=encryptProviderSecret(secret);}catch{
-        sendAuthJson(res,503,{error:'Provider key vault is not configured. Set PROVIDER_KEYS_MASTER_KEY to a 32-byte base64 or 64-character hex key.'});return true;
-      }
-      const hint=providerKeyHint(secret);
-      const previousKey=await pool.query('SELECT key_hint,status,rotated_at FROM provider_keys WHERE provider_id=$1 AND alias=$2 LIMIT 1',[provider.rows[0].id,alias]);
-      const client=await pool.connect();
-      try{
-        await client.query('BEGIN');
-        await client.query(`INSERT INTO provider_keys(provider_id,alias,key_encrypted,key_hint,status,rotated_at)
-          VALUES($1,$2,$3,$4,'active',CASE WHEN $5 THEN now() ELSE NULL END)
-          ON CONFLICT(provider_id,alias) DO UPDATE SET key_encrypted=EXCLUDED.key_encrypted,key_hint=EXCLUDED.key_hint,status='active',rotated_at=now()`,
-          [provider.rows[0].id,alias,encrypted,hint,pathname.endsWith('/rotate')]);
-        await client.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
-          [user.id,user.role,pathname.endsWith('/rotate')?'provider.key.rotate':'provider.key.set','provider',providerSlug,
-            previousKey.rows[0]?JSON.stringify({keyHint:previousKey.rows[0].key_hint,status:previousKey.rows[0].status,rotatedAt:previousKey.rows[0].rotated_at}):null,
-            JSON.stringify({keyHint:hint,status:'active'}),JSON.stringify({alias})]);
-        await client.query('COMMIT');
-      }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
-      invalidateProviderHealth(providerSlug);
-      await refreshDatabaseProviderAdapters(true);
-      sendAuthJson(res,200,{providerId:providerSlug,alias,keyHint:hint,status:'active'});return true;
     }
 
     const discoverRoute=pathname.match(/^\/api\/admin\/providers\/([a-z0-9-]+)\/discover-models$/);

@@ -354,7 +354,20 @@ export async function queryPublicApiCatalog(filters:{
   if(filters.cors&&filters.cors!=='all')where.push('lower(cors)=lower('+add(filters.cors==='true'?'Yes':'No')+')');
   const clause=where.join(' AND ');
   const count=await pool.query('SELECT count(*)::int AS total FROM public_api_catalog WHERE '+clause,values);
-  const rows=await pool.query('SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,icon_url,image_url,site_name,site_description,health_status,response_time_ms,last_health_check,imported_at FROM public_api_catalog WHERE '+clause+' ORDER BY category,name LIMIT '+pageSize+' OFFSET '+((page-1)*pageSize),values);
+  const rows=await pool.query(`SELECT source_key,name,description,auth,https,cors,category,
+    CASE
+      WHEN lower(category) ~ '(image|photo|avatar|art|drawing|design|visual)' OR lower(name||' '||description) ~ '(image generation|text.to.image|image editing|image synthesis)' THEN 'image'
+      WHEN lower(category) ~ '(machine learning|artificial intelligence|text analysis|language|translation|sentiment)' OR lower(name||' '||description) ~ '(llm|chat completion|text generation|embedding|language model)' THEN 'ai'
+      WHEN lower(category) ~ '(weather|environment|climate)' OR lower(name||' '||description) ~ '(forecast|weather data|air quality)' THEN 'weather'
+      WHEN lower(category) ~ '(finance|currency|exchange|cryptocurrency|banking)' OR lower(name||' '||description) ~ '(exchange rate|currency conversion|stock market|crypto price)' THEN 'finance'
+      WHEN lower(category) ~ '(map|geocod|location|transport|navigation)' OR lower(name||' '||description) ~ '(geocoding|routing|directions|place search)' THEN 'maps'
+      WHEN lower(category) ~ '(developer|programming|development|code|testing)' OR lower(name||' '||description) ~ '(code repository|package registry|developer tools|source control)' THEN 'coding'
+      WHEN lower(category) ~ '(news|media|social)' OR lower(name||' '||description) ~ '(news feed|articles|social media)' THEN 'news'
+      WHEN lower(category) ~ '(food|recipe|nutrition)' OR lower(name||' '||description) ~ '(recipe|nutrition data)' THEN 'food'
+      ELSE 'general'
+    END AS capability,
+    homepage_url,docs_url,icon_url,image_url,site_name,site_description,health_status,response_time_ms,last_health_check,imported_at
+    FROM public_api_catalog WHERE ${clause} ORDER BY category,name LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`,values);
   return {items:rows.rows,page,pageSize,total:Number(count.rows[0]?.total||0),categories:await listPublicApiCategories()};
 }
 

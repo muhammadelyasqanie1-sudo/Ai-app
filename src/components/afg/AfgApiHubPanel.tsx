@@ -3,7 +3,7 @@ import { Activity, ArrowUpRight, ChevronLeft, ChevronRight, Database, Globe, Ref
 import type { Language } from '../../types/afg';
 import { AfgApiConnectorPanel } from './AfgApiConnectorPanel.tsx';
 
-type CatalogItem={source_key:string;name:string;description:string;auth:string;https:string;cors:string;category:string;homepage_url:string|null;docs_url:string|null;icon_url:string|null;image_url:string|null;site_name:string|null;site_description:string|null;health_status:string;response_time_ms:number|null;last_health_check:string|null};
+type CatalogItem={source_key:string;name:string;description:string;auth:string;https:string;cors:string;category:string;capability?:string;homepage_url:string|null;docs_url:string|null;icon_url:string|null;image_url:string|null;site_name:string|null;site_description:string|null;health_status:string;response_time_ms:number|null;last_health_check:string|null};
 type CatalogResponse={items:CatalogItem[];page:number;pageSize:number;total:number;categories:Array<{category:string;count:number}>};
 type SyncState={configured?:boolean;sync?:{status:string;items_imported:number;pages_fetched:number;last_started_at:string|null;last_completed_at:string|null;last_error:string|null}|null;mcpDirectory?:{total:number}};
 type Provider={id:string;displayName:string;configured:boolean;enabled:boolean};
@@ -18,6 +18,7 @@ async function request(path:string,init:RequestInit={}){
  return data;
 }
 const pill='inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-semibold';
+const capabilityLabel=(value?:string)=>({ai:'AI & language',image:'Image',coding:'Coding',weather:'Weather',finance:'Finance',maps:'Maps & location',news:'News & media',food:'Food & nutrition',general:'General'}[value||'general']||'General');
 export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean;canSync?:boolean}>=({language,adminMode=false,canSync=false})=>{
  const dari=language==='dari'||language==='persian';
  const [query,setQuery]=useState('');
@@ -33,6 +34,13 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean;canSy
  const [selectedDetails,setSelectedDetails]=useState<any>(null);
  const [randomItem,setRandomItem]=useState<CatalogItem|null>(null);
  const [connectorSelection,setConnectorSelection]=useState<CatalogItem|null>(null);
+ const [openApiUrl,setOpenApiUrl]=useState('');
+ const [openApiSourceKey,setOpenApiSourceKey]=useState<string|null>(null);
+ const [openApiResult,setOpenApiResult]=useState<any>(null);
+ const [openApiSelection,setOpenApiSelection]=useState<any>(null);
+ const [bulkImporting,setBulkImporting]=useState(false);
+ const [bulkSelected,setBulkSelected]=useState<string[]>([]);
+ const [discovering,setDiscovering]=useState(false);
  const [loading,setLoading]=useState(false);
  const [refreshing,setRefreshing]=useState(false);
  const [error,setError]=useState('');
@@ -94,6 +102,21 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean;canSy
    try{const result=await request('/api/api-hub/random?category='+encodeURIComponent(category));setRandomItem(result.item||null);}
    catch(e){setError(e instanceof Error?e.message:'Random discovery failed.');}
  };
+ const discoverOpenApi=async()=>{setDiscovering(true);setError('');setNotice('');setOpenApiResult(null);setOpenApiSelection(null);setBulkSelected([]);try{const result=await request('/api/api-hub/openapi/discover',{method:'POST',body:JSON.stringify({specUrl:openApiUrl.trim()})});setOpenApiResult(result);setNotice(label('OpenAPI operations discovered. Select an operation to configure it.','عملیات OpenAPI پیدا شد؛ یک عملیات را برای تنظیم انتخاب کنید.'));}catch(e){setError(e instanceof Error?e.message:'OpenAPI discovery failed.');}finally{setDiscovering(false);}};
+ const importSelectedSafe=async()=>{
+  if(!openApiResult||!bulkSelected.length)return;
+  setBulkImporting(true);setError('');let added=0,failed=0;
+  for(const key of bulkSelected){
+   const index=Number(key);const op=openApiResult.operations?.[index];if(!op)continue;
+   try{
+    const result=await request('/api/api-hub/connectors',{method:'POST',body:JSON.stringify({name:String(op.name||op.toolName).slice(0,120),toolName:op.toolName,description:op.description||'Imported from OpenAPI',endpointUrl:op.endpointUrl,method:'GET',authType:'none',authHeaderName:'X-API-Key',credential:'',inputSchema:op.inputSchema,sampleArguments:{},catalogSourceKey:openApiSourceKey,fallbackGroup:'',fallbackPriority:100})});
+    added++;
+    try{await request('/api/api-hub/connectors/'+result.connector.id+'/test',{method:'POST',body:'{}'});}catch{failed++;}
+   }catch{failed++;}
+  }
+  setBulkSelected([]);setBulkImporting(false);
+  setNotice(label('Imported '+added+' safe GET connectors; '+failed+' need review. They remain disabled until verified.',''+added+' اتصال GET وارد شد؛ '+failed+' مورد نیازمند بررسی است. تا تأیید غیرفعال می‌مانند.'));
+ };
  const update=(setter:(value:string)=>void)=>(value:string)=>{setter(value);setPage(1);};
  const label=(en:string,fa:string)=>dari?fa:en;
  return <div className="space-y-4">
@@ -124,6 +147,13 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean;canSy
   </section>
   {error&&<div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>}
   {notice&&<div role="status" className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-300">{notice}</div>}
+  <section className="rounded-2xl border border-violet-500/20 bg-violet-500/5 p-4">
+   <h3 className="font-bold text-white">{label('Import operations from OpenAPI','واردکردن عملیات از OpenAPI')}</h3>
+   <p className="mt-1 text-xs leading-5 text-slate-400">{label('Paste a public HTTPS URL to an OpenAPI 3.0/3.1 JSON document. This discovers operations only; it does not execute them or provide credentials.','نشانی HTTPS عمومی سند JSON استاندارد OpenAPI 3 را وارد کنید. این بخش فقط عملیات را شناسایی می‌کند و آن‌ها را اجرا یا کلید دسترسی ایجاد نمی‌کند.')}</p>
+   <div className="mt-3 flex flex-col gap-2 sm:flex-row"><input value={openApiUrl} onChange={e=>{setOpenApiUrl(e.target.value);setOpenApiSourceKey(null);}} placeholder="https://api.example.com/openapi.json" className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white"/><button disabled={discovering||!openApiUrl.trim()} onClick={()=>void discoverOpenApi()} className="rounded-xl bg-violet-400 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-40">{discovering?label('Discovering…','در حال شناسایی…'):label('Discover operations','شناسایی عملیات')}</button></div>
+   {openApiResult&&<div className="mt-3 space-y-2"><p className="text-xs text-violet-200">{openApiResult.specTitle} · {openApiResult.operationCount} {label('operations found','عملیات پیدا شد')}</p><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><span className="text-[10px] text-slate-400">{label('Bulk import: no-auth GET operations with no required parameters only.','واردسازی گروهی: فقط GET بدون کلید و بدون پارامتر اجباری.')}</span><button disabled={bulkImporting||!bulkSelected.length} onClick={()=>void importSelectedSafe()} className="rounded-lg bg-violet-400 px-3 py-2 text-[10px] font-bold text-slate-950 disabled:opacity-40">{bulkImporting?label('Importing…','در حال واردسازی…'):label('Import selected ('+bulkSelected.length+')','واردسازی انتخاب‌شده‌ها ('+bulkSelected.length+')')}</button></div>{(openApiResult.operations||[]).map((operation:any,index:number)=>{const safe=operation.usable&&operation.method==='GET'&&(operation.authOptions||[]).every((item:string)=>item==='none')&&!(operation.inputSchema?.required||[]).length;return <div key={operation.toolName+'_'+index} className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 items-start gap-2"><input type="checkbox" checked={bulkSelected.includes(String(index))} disabled={!safe||bulkImporting} onChange={event=>setBulkSelected(values=>event.target.checked?[...values,String(index)]:values.filter(value=>value!==String(index)))} className="mt-1 accent-violet-400"/><div className="min-w-0"><p className="text-xs font-semibold text-white">{operation.method} {operation.name}</p><p className="mt-1 break-all text-[10px] text-slate-500">{operation.endpointUrl}</p><p className="mt-1 text-[10px] text-slate-400">{label('Auth','احراز هویت')}: {(operation.authOptions||[]).join(', ')} · {safe?label('Safe for bulk import','مناسب واردسازی گروهی'):label('Manual setup required','نیازمند تنظیم دستی')}</p></div></div><button disabled={!operation.usable} onClick={()=>{setOpenApiSelection(operation);setConnectorSelection(null);setNotice(label('Operation loaded into connector setup.','عملیات به فرم تنظیم اتصال منتقل شد.'));}} className="shrink-0 rounded-lg border border-violet-400/30 px-3 py-2 text-[10px] text-violet-200 disabled:opacity-40">{label('Configure','تنظیم')}</button></div>})}</div>}
+   <p className="mt-2 text-[10px] text-slate-500">{label('JSON only in this milestone. YAML, OAuth authorization flows, remote schema references and complex nested request bodies are not imported.','در این مرحله فقط JSON پشتیبانی می‌شود؛ YAML، جریان OAuth، ارجاع‌های خارجی و بدنه‌های پیچیده وارد نمی‌شوند.')}</p>
+  </section>
   <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 sm:p-4">
    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
     <div className="relative sm:col-span-2 xl:col-span-1"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500"/><input value={query} onChange={e=>{setQuery(e.target.value);setPage(1);}} placeholder={label('Search APIs','جستجوی API')} className="w-full rounded-xl border border-slate-700 bg-slate-900 py-2 pl-9 pr-3 text-sm text-white"/></div>
@@ -144,16 +174,16 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean;canSy
   {loading&&!data&&<div className="rounded-xl border border-slate-800 p-8 text-center text-sm text-slate-400">{label('Loading catalog…','در حال بارگذاری فهرست…')}</div>}
   <div className="grid gap-3 md:grid-cols-2">
    {(data?.items||[]).map(item=><article key={item.source_key} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-    <div className="flex items-start justify-between gap-2"><div className="flex min-w-0 items-center gap-2">{item.icon_url&&<img src={item.icon_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-8 w-8 shrink-0 rounded-lg bg-slate-950 object-contain p-1"/>}<div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-wider text-cyan-300">{item.category}</p><h3 className="mt-1 truncate font-bold text-white">{item.name}</h3><p className="text-[10px] text-slate-500">{item.site_name||''}</p></div></div><span className={pill+' border-slate-700 bg-slate-950 text-slate-300'}>{item.health_status||'unknown'}</span></div>
+    <div className="flex items-start justify-between gap-2"><div className="flex min-w-0 items-center gap-2">{item.icon_url&&<img src={item.icon_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-8 w-8 shrink-0 rounded-lg bg-slate-950 object-contain p-1"/>}<div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-wider text-cyan-300">{item.category}</p><span className={pill+' mt-1 border-cyan-500/20 text-cyan-200'}>{capabilityLabel(item.capability)}</span><h3 className="mt-1 truncate font-bold text-white">{item.name}</h3><p className="text-[10px] text-slate-500">{item.site_name||''}</p></div></div><span className={pill+' border-slate-700 bg-slate-950 text-slate-300'}>{item.health_status||'unknown'}</span></div>
     <p className="mt-2 line-clamp-3 text-xs leading-5 text-slate-400">{item.description||label('No description supplied.','توضیحی ثبت نشده است.')}</p>
     <div className="mt-3 flex flex-wrap gap-1.5"><span className={pill+' border-slate-700 text-slate-300'}>Auth: {item.auth}</span><span className={pill+' border-slate-700 text-slate-300'}>HTTPS: {item.https}</span><span className={pill+' border-slate-700 text-slate-300'}>CORS: {item.cors}</span></div>
-    <div className="mt-4 flex flex-wrap gap-3 text-xs">{item.docs_url&&<a className="inline-flex items-center gap-1 text-cyan-300 hover:underline" href={item.docs_url} target="_blank" rel="noreferrer noopener">{label('API Docs','مستندات API')}<ArrowUpRight className="h-3 w-3"/></a>}{item.homepage_url&&item.homepage_url!==item.docs_url&&<a className="inline-flex items-center gap-1 text-slate-300 hover:underline" href={item.homepage_url} target="_blank" rel="noreferrer noopener">{label('Website','وب‌سایت')}<Globe className="h-3 w-3"/></a>}<button onClick={()=>void showDetails(item)} className="text-violet-300">{label('Details / alternatives','جزئیات / جایگزین‌ها')}</button><button onClick={()=>{setConnectorSelection(item);setNotice(label('API details copied into the connector form. Add the documented endpoint and your own key.','مشخصات API به فرم اتصال منتقل شد؛ endpoint مستند و کلید خود را وارد کنید.'));}} className="text-cyan-300">{label('Configure key','تنظیم کلید')}</button><button onClick={()=>void toggleFavorite(item)} className="text-amber-300">{favoriteKeys.includes(item.source_key)?'★ '+label('Saved','ذخیره‌شده'):'☆ '+label('Save','ذخیره')}</button></div>
+    <div className="mt-4 flex flex-wrap gap-3 text-xs">{item.docs_url&&<a className="inline-flex items-center gap-1 text-cyan-300 hover:underline" href={item.docs_url} target="_blank" rel="noreferrer noopener">{label('API Docs','مستندات API')}<ArrowUpRight className="h-3 w-3"/></a>}{item.docs_url&&<button onClick={()=>{setOpenApiUrl(item.docs_url||'');setOpenApiSourceKey(item.source_key);setOpenApiResult(null);setOpenApiSelection(null);setNotice(label('Documentation URL copied to OpenAPI discovery. It must point directly to an OpenAPI 3 JSON document.','نشانی مستندات به بخش شناسایی OpenAPI منتقل شد؛ باید مستقیماً به سند JSON نسخه ۳ اشاره کند.'));}} className="text-violet-300">{label('Try OpenAPI import','بررسی برای واردسازی OpenAPI')}</button>}{item.homepage_url&&item.homepage_url!==item.docs_url&&<a className="inline-flex items-center gap-1 text-slate-300 hover:underline" href={item.homepage_url} target="_blank" rel="noreferrer noopener">{label('Website','وب‌سایت')}<Globe className="h-3 w-3"/></a>}<button onClick={()=>void showDetails(item)} className="text-violet-300">{label('Details / alternatives','جزئیات / جایگزین‌ها')}</button><button onClick={()=>{setConnectorSelection(item);setNotice(label('API details copied into the connector form. Add the documented endpoint and your own key.','مشخصات API به فرم اتصال منتقل شد؛ endpoint مستند و کلید خود را وارد کنید.'));}} className="text-cyan-300">{label('Configure key','تنظیم کلید')}</button><button onClick={()=>void toggleFavorite(item)} className="text-amber-300">{favoriteKeys.includes(item.source_key)?'★ '+label('Saved','ذخیره‌شده'):'☆ '+label('Save','ذخیره')}</button></div>
     <p className="mt-3 text-[10px] text-amber-300">{label('Catalog listing only · connect and verify before execution','فقط ورودی کاتالوگ · پیش از اجرا باید اتصال و مستندات تأیید شوند')}</p>
    </article>)}
   </div>
   {data&&data.items.length===0&&!loading&&<div className="rounded-xl border border-slate-800 p-8 text-center text-sm text-slate-400">{label('No APIs match these filters.','هیچ API مطابق این فیلترها یافت نشد.')}</div>}
   <div className="flex items-center justify-center gap-3"><button disabled={page<=1||loading} onClick={()=>setPage(v=>Math.max(1,v-1))} className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 disabled:opacity-40"><ChevronLeft className="h-4 w-4"/>{label('Previous','قبلی')}</button><span className="text-xs text-slate-400">{page} / {pageCount}</span><button disabled={page>=pageCount||loading} onClick={()=>setPage(v=>Math.min(pageCount,v+1))} className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 disabled:opacity-40">{label('Next','بعدی')}<ChevronRight className="h-4 w-4"/></button></div>
   <p className="text-[10px] leading-5 text-slate-500">{label('Importing this directory does not grant credentials or permission to call every service. API contracts, authentication, rate limits and terms must be reviewed before a connector is enabled.','واردکردن این فهرست به معنی دسترسی به کلید یا مجوز اجرای سرویس‌ها نیست. قرارداد API، احراز هویت، سهمیه و شرایط استفاده باید پیش از فعال‌سازی اتصال بررسی شوند.')}</p>
-  <AfgApiConnectorPanel language={language} catalogSelection={connectorSelection}/>
+  <AfgApiConnectorPanel language={language} catalogSelection={connectorSelection} openApiSelection={openApiSelection}/>
  </div>;
 };

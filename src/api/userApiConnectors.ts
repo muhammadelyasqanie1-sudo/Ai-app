@@ -42,6 +42,23 @@ function decrypt(value:string):string{
  decipher.setAuthTag(Buffer.from(tag,'base64'));
  return Buffer.concat([decipher.update(Buffer.from(data,'base64')),decipher.final()]).toString('utf8');
 }
+async function readTextLimited(response:Response,maxBytes:number):Promise<string>{
+ const declared=Number(response.headers.get('content-length')||0);
+ if(declared>maxBytes){await response.body?.cancel().catch(()=>{});throw new Error('Remote response exceeds the '+maxBytes+' byte safety limit.');}
+ if(!response.body)return '';
+ const reader=response.body.getReader(),chunks:Uint8Array[]=[];let total=0;
+ try{
+  while(true){
+   const part=await reader.read();if(part.done)break;
+   total+=part.value.byteLength;
+   if(total>maxBytes){await reader.cancel().catch(()=>{});throw new Error('Remote response exceeds the '+maxBytes+' byte safety limit.');}
+   chunks.push(part.value);
+  }
+ }finally{reader.releaseLock();}
+ const merged=new Uint8Array(total);let offset=0;
+ for(const chunk of chunks){merged.set(chunk,offset);offset+=chunk.byteLength;}
+ return new TextDecoder().decode(merged);
+}
 async function safeEndpoint(value:string):Promise<URL>{
  let url:URL;try{url=new URL(value);}catch{throw new Error('Enter a valid API endpoint URL.');}
  if(url.protocol!=='https:'||url.username||url.password||url.hash||url.search||
@@ -107,6 +124,7 @@ function publicRow(row:any){
  return {id:row.id,catalogSourceKey:row.catalog_source_key,name:row.name,toolName:row.tool_name,description:row.description,
   endpointUrl:row.endpoint_url,httpMethod:row.http_method,authType:row.auth_type,authHeaderName:row.auth_header_name,
   hasCredential:Boolean(row.credential_encrypted),inputSchema:row.input_schema_json,sampleArguments:row.sample_arguments_json,
+  fallbackGroup:row.fallback_group||'',fallbackPriority:Number(row.fallback_priority||100),queueState:row.queue_state||'ready',nextAvailableAt:row.next_available_at||null,
   enabled:row.enabled,status:row.status,lastTestedAt:row.last_tested_at,lastHttpStatus:row.last_http_status,lastError:row.last_error};
 }
 async function ownerConnector(userId:string,id:string){
@@ -131,7 +149,6 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  }
  if(/\{[a-zA-Z][a-zA-Z0-9_]*\}/.test(pathname))throw new Error('The API endpoint contains an unresolved path parameter.');
  const url=new URL(base.toString());url.pathname=pathname;
- if(query.size)url.search=query.toString();
  const headers=new Headers({Accept:'application/json'});
  const secrets:string[]=[];
  if(row.auth_type==='bearer'||row.auth_type==='header_key'||row.auth_type==='query_key'){
@@ -140,21 +157,28 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
   if(row.auth_type==='query_key')query.set(String(row.auth_header_name||'api_key'),secret);
   else {const key=row.auth_type==='bearer'?'Authorization':String(row.auth_header_name||'X-API-Key');headers.set(key,row.auth_type==='bearer'?'Bearer '+secret:secret);}
  }
+ if(query.size)url.search=query.toString();
  const init:RequestInit={method:row.http_method,headers,redirect:'error',signal:AbortSignal.timeout(timeoutMs)};
  if(['POST','PUT','PATCH'].includes(row.http_method)){headers.set('Content-Type','application/json');init.body=JSON.stringify(body);}
  const started=Date.now();
  let response:Response;
  try{response=await fetch(url.toString(),init);}catch(error){
-  if(error instanceof Error&&error.name==='TimeoutError')throw new Error('The API endpoint timed out.');
-  throw new Error('The API endpoint could not be reached.');
+  if(error instanceof Error&&error.name==='TimeoutError')throw Object.assign(new Error('The API endpoint timed out.'),{retryable:true});
+  throw Object.assign(new Error('The API endpoint could not be reached.'),{retryable:true});
  }
- const raw=await response.text();
+ const raw=await readTextLimited(response,1_000_000);
  const durationMs=Date.now()-started;
- if(raw.length>1_000_000)throw new Error('API response exceeded the 1 MB safety limit.');
  const safeRaw=secrets.reduce((value,secret)=>value.split(secret).join('[redacted]'),raw);
  let data:unknown=safeRaw;
  if(safeRaw){try{data=JSON.parse(safeRaw);}catch{}}
- if(!response.ok)throw Object.assign(new Error('The external API returned HTTP '+response.status+'.'),{httpStatus:response.status,durationMs});
+ if(!response.ok){
+  const retryHeader=response.headers.get('retry-after');
+  const resetHeader=response.headers.get('x-ratelimit-reset')||response.headers.get('ratelimit-reset')||response.headers.get('x-rate-limit-reset');
+  let retryAt:number|undefined;
+  if(retryHeader){const seconds=Number(retryHeader);const parsed=Number.isFinite(seconds)&&seconds>0?Date.now()+seconds*1000:Date.parse(retryHeader);if(Number.isFinite(parsed)&&parsed>Date.now())retryAt=parsed;}
+  if(!retryAt&&resetHeader){const raw=Number(resetHeader);const parsed=Number.isFinite(raw)?(raw>10_000_000_000?raw:raw>1_000_000_000?raw*1000:Date.now()+raw*1000):Date.parse(resetHeader);if(Number.isFinite(parsed)&&parsed>Date.now())retryAt=parsed;}
+  throw Object.assign(new Error('The external API returned HTTP '+response.status+'.'),{httpStatus:response.status,durationMs,retryAt});
+ }
  await pool!.query(`INSERT INTO user_api_connector_runs(connector_id,user_id,request_id,http_method,http_status,duration_ms,outcome)
   VALUES($1,$2,$3,$4,$5,$6,'success')`,[row.id,userId,requestId,row.http_method,response.status,durationMs]);
  return {data,status:response.status,durationMs};
@@ -167,16 +191,70 @@ async function reserveConnectorCall(userId:string,connectorId:string):Promise<bo
  return Number(counter.rows[0]?.request_count||0)<=30;
 }
 
+function isQuotaFailure(error:unknown):boolean{return [402,429].includes(Number((error as {httpStatus?:number})?.httpStatus||0));}
+async function refreshDueQueueEntries(userId:string):Promise<void>{
+ await pool!.query(`UPDATE user_api_connectors SET queue_state='ready',next_available_at=NULL,last_error=NULL,updated_at=now()
+  WHERE user_id=$1 AND queue_state='waiting' AND next_available_at IS NOT NULL AND next_available_at<=now()`,[userId]);
+}
+async function parkQuotaLimitedConnector(row:any,userId:string,error:unknown):Promise<void>{
+ if(!isQuotaFailure(error))return;
+ const retryAt=Number((error as {retryAt?:number})?.retryAt||0);
+ const next=retryAt>Date.now()?new Date(retryAt):null;
+ await pool!.query(`UPDATE user_api_connectors SET queue_state='waiting',next_available_at=$3,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,userId,next]);
+}
+function isRetryableUpstreamFailure(error:unknown):boolean{
+ const value=error as {httpStatus?:number;retryable?:boolean};
+ if(value?.retryable===true)return true;
+ return [402,408,425,429,500,502,503,504].includes(Number(value?.httpStatus||0));
+}
+async function recordConnectorFailure(row:any,userId:string,requestId:string,error:unknown):Promise<void>{
+ const value=error as {httpStatus?:number;durationMs?:number};
+ const message=error instanceof Error?error.message.slice(0,250):'API connector call failed.';
+ await pool!.query(`INSERT INTO user_api_connector_runs(connector_id,user_id,request_id,http_method,http_status,duration_ms,outcome,error_code)
+  VALUES($1,$2,$3,$4,$5,$6,'error',$7)`,
+  [row.id,userId,requestId,row.http_method,Number(value?.httpStatus)||null,Math.max(0,Number(value?.durationMs)||0),message]).catch(()=>{});
+}
+async function executeConnectorWithFallback(row:any,args:unknown,userId:string,requestId:string){
+ try{return {...await execute(row,args,userId,requestId,10_000),connectorId:row.id,connectorName:row.name,fallbackUsed:false};}
+ catch(primaryError){
+  await recordConnectorFailure(row,userId,requestId,primaryError);
+  await parkQuotaLimitedConnector(row,userId,primaryError);
+  if(!row.fallback_group||!isRetryableUpstreamFailure(primaryError))throw primaryError;
+  const alternatives=await pool!.query(`SELECT * FROM user_api_connectors
+   WHERE user_id=$1 AND fallback_group=$2 AND id<>$3 AND enabled=true AND status='verified'
+    AND queue_state='ready' AND http_method=$4 AND input_schema_json=$5::jsonb AND endpoint_url<>$6
+   ORDER BY fallback_priority ASC,created_at ASC LIMIT 8`,
+   [userId,row.fallback_group,row.id,row.http_method,JSON.stringify(row.input_schema_json),row.endpoint_url]);
+  let lastError:unknown=primaryError;
+  for(const candidate of alternatives.rows){
+   if(!await reserveConnectorCall(userId,candidate.id))continue;
+   try{
+    const result=await execute(candidate,args,userId,requestId,10_000);
+    console.info('AFG_API_CONNECTOR_FALLBACK',JSON.stringify({requestId,userId,group:row.fallback_group,from:row.id,to:candidate.id,outcome:'success'}));
+    return {...result,connectorId:candidate.id,connectorName:candidate.name,fallbackUsed:true,fallbackFrom:row.name};
+   }catch(error){
+    lastError=error;
+    await recordConnectorFailure(candidate,userId,requestId,error);
+    await parkQuotaLimitedConnector(candidate,userId,error);
+    if(!isRetryableUpstreamFailure(error))break;
+   }
+  }
+  console.warn('AFG_API_CONNECTOR_FALLBACK_EXHAUSTED',JSON.stringify({requestId,userId,group:row.fallback_group,outcome:'failed'}));
+  throw lastError;
+ }
+}
+
 export async function getEnabledUserApiToolDefinitions(userId:string){
  if(!pool||!userId)return [];
  try{
-  const result=await pool.query(`SELECT tool_name,description,input_schema_json FROM user_api_connectors
-   WHERE user_id=$1 AND enabled=true AND status='verified' ORDER BY created_at DESC LIMIT 12`,[userId]);
+  await refreshDueQueueEntries(userId);
+  const result=await pool.query(`SELECT tool_name,description,input_schema_json,fallback_group FROM user_api_connectors
+   WHERE user_id=$1 AND enabled=true AND status='verified' AND queue_state='ready' ORDER BY fallback_priority ASC,created_at DESC LIMIT 32`,[userId]);
   return result.rows.map(row=>({
    type:'function' as const,
    function:{
     name:String(row.tool_name),
-    description:String(row.description||'Call the configured API connector '+row.tool_name).slice(0,1000),
+    description:(String(row.description||'Call the configured API connector '+row.tool_name)+(row.fallback_group?' Compatible fallback group: '+row.fallback_group+'. The executor automatically tries verified alternatives in this group on retryable upstream failures.':'' )).slice(0,1000),
     parameters:modelToolSchema(row.input_schema_json),
    },
   }));
@@ -188,23 +266,17 @@ export async function getEnabledUserApiToolDefinitions(userId:string){
 
 export async function executeUserApiTool(userId:string,toolName:string,args:unknown){
  if(!pool||!userId)throw new Error('Sign in to use personal API connectors.');
+ await refreshDueQueueEntries(userId);
  const found=await pool.query(`SELECT * FROM user_api_connectors WHERE user_id=$1 AND tool_name=$2
-  AND enabled=true AND status='verified' LIMIT 1`,[userId,toolName]);
+  AND enabled=true AND status='verified' AND queue_state='ready' LIMIT 1`,[userId,toolName]);
  const row=found.rows[0];
  if(!row)throw new Error('This API connector is no longer enabled for your account.');
  if(!await reserveConnectorCall(userId,row.id))throw new Error('This API connector has reached its limit of 30 calls per minute.');
  const requestId=randomUUID();
- try{
-  const result=await execute(row,args,userId,requestId,10_000);
-  const serialized=JSON.stringify(result.data);
-  if(serialized.length>16_000)return {status:result.status,durationMs:result.durationMs,truncated:true,responsePreview:serialized.slice(0,16_000)};
-  return result;
- }catch(error){
-  const message=error instanceof Error?error.message.slice(0,250):'API connector call failed.';
-  await pool.query(`INSERT INTO user_api_connector_runs(connector_id,user_id,request_id,http_method,duration_ms,outcome,error_code)
-   VALUES($1,$2,$3,$4,0,'error',$5)`,[row.id,userId,requestId,row.http_method,message]).catch(()=>{});
-  throw error;
- }
+ const result=await executeConnectorWithFallback(row,args,userId,requestId);
+ const serialized=JSON.stringify(result.data);
+ if(serialized.length>16_000)return {...result,truncated:true,responsePreview:serialized.slice(0,16_000)};
+ return result;
 }
 
 async function audit(userId:string,action:string,id:string,metadata:Json={}){
@@ -219,7 +291,8 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
  if(req.method!=='GET'&&!verifyCsrf(req)){sendAuthJson(res,403,{error:'CSRF validation failed.'});return true;}
  try{
   if(req.method==='GET'&&pathname==='/api/api-hub/connectors'){
-   const result=await pool.query('SELECT * FROM user_api_connectors WHERE user_id=$1 ORDER BY created_at DESC',[user.id]);
+   await refreshDueQueueEntries(user.id);
+   const result=await pool.query('SELECT * FROM user_api_connectors WHERE user_id=$1 ORDER BY CASE WHEN queue_state=\'ready\' THEN 0 ELSE 1 END,fallback_priority ASC,created_at DESC',[user.id]);
    sendAuthJson(res,200,{connectors:result.rows.map(publicRow),encryptionConfigured:Boolean(process.env.AFG_INTEGRATION_ENCRYPTION_KEY)});return true;
   }
   if(req.method==='POST'&&pathname==='/api/api-hub/connectors'){
@@ -228,11 +301,14 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    const description=String(body.description||'').trim(),endpoint=String(body.endpointUrl||'').trim();
    const method=String(body.method||'GET').toUpperCase(),authType=String(body.authType||'none');
    const authHeader=String(body.authHeaderName||'X-API-Key');
+   const fallbackGroup=String(body.fallbackGroup||'').trim().toLowerCase();
+   const fallbackPriority=Number(body.fallbackPriority??100);
    const secret=typeof body.credential==='string'?body.credential.trim():'';
    if(name.length<2||name.length>120||!/^[a-z][a-z0-9_]{1,63}$/.test(toolName)||description.length>2000||
     !['GET','POST','PUT','PATCH','DELETE'].includes(method)||!['none','bearer','header_key','query_key'].includes(authType)||
     (authType==='none'&&secret)||(authType!=='none'&&!secret)||
-    ((authType==='header_key'||authType==='query_key')&&!/^[A-Za-z0-9_.-]{1,64}$/.test(authHeader))){
+    ((authType==='header_key'||authType==='query_key')&&!/^[A-Za-z0-9_.-]{1,64}$/.test(authHeader))||
+    (fallbackGroup&&!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(fallbackGroup))||!Number.isInteger(fallbackPriority)||fallbackPriority<1||fallbackPriority>1000){
     sendAuthJson(res,400,{error:'Invalid API connector settings.'});return true;
    }
    await safeEndpoint(endpoint);
@@ -241,9 +317,9 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    const sourceKey=typeof body.catalogSourceKey==='string'?body.catalogSourceKey:null;
    if(sourceKey){const exists=await pool.query('SELECT 1 FROM public_api_catalog WHERE source_key=$1',[sourceKey]);if(!exists.rows[0]){sendAuthJson(res,404,{error:'Public API catalog entry was not found.'});return true;}}
    const encrypted=secret?encrypt(secret):null;
-   const created=await pool.query(`INSERT INTO user_api_connectors(user_id,catalog_source_key,name,tool_name,description,endpoint_url,http_method,auth_type,auth_header_name,credential_encrypted,input_schema_json,sample_arguments_json)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb) RETURNING *`,
-    [user.id,sourceKey,name,toolName,description,endpoint,method,authType,authHeader,encrypted,JSON.stringify(schema),JSON.stringify(sample)]);
+   const created=await pool.query(`INSERT INTO user_api_connectors(user_id,catalog_source_key,name,tool_name,description,endpoint_url,http_method,auth_type,auth_header_name,credential_encrypted,input_schema_json,sample_arguments_json,fallback_group,fallback_priority)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14) RETURNING *`,
+    [user.id,sourceKey,name,toolName,description,endpoint,method,authType,authHeader,encrypted,JSON.stringify(schema),JSON.stringify(sample),fallbackGroup||null,fallbackPriority]);
    await audit(user.id,'api.connector.create',created.rows[0].id,{toolName,method,authType});
    sendAuthJson(res,201,{connector:publicRow(created.rows[0])});return true;
   }
@@ -253,14 +329,14 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    const requestId=randomUUID();
    try{
     const result=await execute(row,row.sample_arguments_json,user.id,requestId);
-    await pool.query(`UPDATE user_api_connectors SET status='verified',enabled=false,last_tested_at=now(),last_http_status=$3,last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2`,
+    await pool.query(`UPDATE user_api_connectors SET status='verified',queue_state='ready',next_available_at=NULL,enabled=false,last_tested_at=now(),last_http_status=$3,last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2`,
      [row.id,user.id,result.status]);
     await audit(user.id,'api.connector.verify',row.id,{status:result.status,durationMs:result.durationMs});
     sendAuthJson(res,200,{verified:true,httpStatus:result.status,durationMs:result.durationMs});return true;
    }catch(error){
     const status=Number((error as any)?.httpStatus)||null;
     const message=error instanceof Error?error.message.slice(0,250):'API connector verification failed.';
-    await pool.query(`UPDATE user_api_connectors SET enabled=false,status='error',last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1 AND user_id=$2`,
+    await pool.query(`UPDATE user_api_connectors SET enabled=false,status='error',queue_state=CASE WHEN $3 IN (402,429) THEN 'waiting' ELSE queue_state END,next_available_at=NULL,last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1 AND user_id=$2`,
      [row.id,user.id,status,message]);
     await audit(user.id,'api.connector.verify_failed',row.id,{status,error:message});
     sendAuthJson(res,502,{verified:false,error:message});return true;
@@ -270,7 +346,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
   if(itemMatch&&req.method==='PATCH'){
    const body=await readJsonBody(req,2000);
    if(typeof body.enabled!=='boolean'){sendAuthJson(res,400,{error:'enabled must be boolean.'});return true;}
-   const updated=await pool.query(`UPDATE user_api_connectors SET enabled=$3,status=CASE WHEN $3 THEN 'verified' ELSE 'disabled' END,updated_at=now()
+   const updated=await pool.query(`UPDATE user_api_connectors SET enabled=$3,status=CASE WHEN $3 THEN 'verified' ELSE 'disabled' END,queue_state=CASE WHEN $3 THEN 'ready' ELSE queue_state END,next_available_at=CASE WHEN $3 THEN NULL ELSE next_available_at END,updated_at=now()
     WHERE id=$1 AND user_id=$2 AND ($3=false OR status='verified') RETURNING id,enabled,status`,[itemMatch[1],user.id,body.enabled]);
    if(!updated.rows[0]){sendAuthJson(res,409,{error:'Only a verified API connector can be enabled.'});return true;}
    await audit(user.id,'api.connector.toggle',itemMatch[1],{enabled:body.enabled});
@@ -284,17 +360,16 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
   }
   const callMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/call$/i);
   if(req.method==='POST'&&callMatch){
+   await refreshDueQueueEntries(user.id);
    const row=await ownerConnector(user.id,callMatch[1]);
-   if(!row||!row.enabled||row.status!=='verified'){sendAuthJson(res,409,{error:'API connector is not verified and enabled.'});return true;}
+   if(!row||!row.enabled||row.status!=='verified'||row.queue_state!=='ready'){sendAuthJson(res,409,{error:row?.queue_state==='waiting'?'API connector is waiting for its upstream quota reset.':'API connector is not verified and enabled.'});return true;}
    if(!await reserveConnectorCall(user.id,row.id)){sendAuthJson(res,429,{error:'API connector limit is 30 calls per minute.'});return true;}
    const requestId=randomUUID(),body=await readJsonBody(req,60_000);
    try{
-    const result=await execute(row,body.arguments||{},user.id,requestId);
+    const result=await executeConnectorWithFallback(row,body.arguments||{},user.id,requestId);
     sendAuthJson(res,200,{requestId,result});return true;
    }catch(error){
     const message=error instanceof Error?error.message.slice(0,250):'API connector call failed.';
-    await pool.query(`INSERT INTO user_api_connector_runs(connector_id,user_id,request_id,http_method,duration_ms,outcome,error_code)
-      VALUES($1,$2,$3,$4,0,'error',$5)`,[row.id,user.id,requestId,row.http_method,message]).catch(()=>{});
     sendAuthJson(res,502,{requestId,error:message});return true;
    }
   }
