@@ -125,6 +125,7 @@ function publicRow(row:any){
   endpointUrl:row.endpoint_url,httpMethod:row.http_method,authType:row.auth_type,authHeaderName:row.auth_header_name,
   hasCredential:Boolean(row.credential_encrypted),inputSchema:row.input_schema_json,sampleArguments:row.sample_arguments_json,
   fallbackGroup:row.fallback_group||'',fallbackPriority:Number(row.fallback_priority||100),queueState:row.queue_state||'ready',nextAvailableAt:row.next_available_at||null,
+  rateLimitEvidence:row.rate_limit_evidence||null,lastQuotaStatus:row.last_quota_status||null,lastQuotaObservedAt:row.last_quota_observed_at||null,lastQuotaResetAt:row.last_quota_reset_at||null,
   enabled:row.enabled,status:row.status,lastTestedAt:row.last_tested_at,lastHttpStatus:row.last_http_status,lastError:row.last_error};
 }
 async function ownerConnector(userId:string,id:string){
@@ -166,19 +167,19 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
   if(error instanceof Error&&error.name==='TimeoutError')throw Object.assign(new Error('The API endpoint timed out.'),{retryable:true});
   throw Object.assign(new Error('The API endpoint could not be reached.'),{retryable:true});
  }
- const raw=await readTextLimited(response,1_000_000);
  const durationMs=Date.now()-started;
+ const rateLimitEvidence=readRateLimitEvidence(response);
+ const retryAt=parseUpstreamResetAt(response);
+ const raw=await readTextLimited(response,1_000_000);
  const safeRaw=secrets.reduce((value,secret)=>value.split(secret).join('[redacted]'),raw);
  let data:unknown=safeRaw;
  if(safeRaw){try{data=JSON.parse(safeRaw);}catch{}}
  if(!response.ok){
-  const retryHeader=response.headers.get('retry-after');
-  const resetHeader=response.headers.get('x-ratelimit-reset')||response.headers.get('ratelimit-reset')||response.headers.get('x-rate-limit-reset');
-  let retryAt:number|undefined;
-  if(retryHeader){const seconds=Number(retryHeader);const parsed=Number.isFinite(seconds)&&seconds>0?Date.now()+seconds*1000:Date.parse(retryHeader);if(Number.isFinite(parsed)&&parsed>Date.now())retryAt=parsed;}
-  if(!retryAt&&resetHeader){const raw=Number(resetHeader);const parsed=Number.isFinite(raw)?(raw>10_000_000_000?raw:raw>1_000_000_000?raw*1000:Date.now()+raw*1000):Date.parse(resetHeader);if(Number.isFinite(parsed)&&parsed>Date.now())retryAt=parsed;}
-  throw Object.assign(new Error('The external API returned HTTP '+response.status+'.'),{httpStatus:response.status,durationMs,retryAt});
+  throw Object.assign(new Error('The external API returned HTTP '+response.status+'.'),{
+   httpStatus:response.status,durationMs,retryAt:retryAt||undefined,rateLimitEvidence
+  });
  }
+ await persistRateLimitObservation(row,userId,rateLimitEvidence,null,null);
  await pool!.query(`INSERT INTO user_api_connector_runs(connector_id,user_id,request_id,http_method,http_status,duration_ms,outcome)
   VALUES($1,$2,$3,$4,$5,$6,'success')`,[row.id,userId,requestId,row.http_method,response.status,durationMs]);
  return {data,status:response.status,durationMs};
@@ -191,6 +192,46 @@ async function reserveConnectorCall(userId:string,connectorId:string):Promise<bo
  return Number(counter.rows[0]?.request_count||0)<=30;
 }
 
+const RATE_LIMIT_HEADERS=[
+ 'retry-after','ratelimit-limit','ratelimit-remaining','ratelimit-reset','ratelimit-reset-after','ratelimit-policy',
+ 'x-ratelimit-limit','x-ratelimit-remaining','x-ratelimit-reset','x-ratelimit-reset-after',
+ 'x-rate-limit-limit','x-rate-limit-remaining','x-rate-limit-reset','x-rate-limit-reset-after'
+] as const;
+function readRateLimitEvidence(response:Response):Json{
+ const headers:Json={};
+ for(const name of RATE_LIMIT_HEADERS){
+  const value=response.headers.get(name);
+  if(value!==null)headers[name]=value.slice(0,256);
+ }
+ return {source:'upstream_response',observedAt:new Date().toISOString(),httpStatus:response.status,headers};
+}
+function parseUpstreamResetAt(response:Response,now=Date.now()):number|null{
+ const retry=response.headers.get('retry-after');
+ if(retry){
+  const seconds=Number(retry);
+  const parsed=Number.isFinite(seconds)&&seconds>0?now+seconds*1000:Date.parse(retry);
+  if(Number.isFinite(parsed)&&parsed>now&&parsed<=now+366*24*60*60*1000)return parsed;
+ }
+ for(const name of ['ratelimit-reset','x-ratelimit-reset','x-rate-limit-reset','ratelimit-reset-after','x-ratelimit-reset-after','x-rate-limit-reset-after']){
+  const value=response.headers.get(name);if(!value)continue;
+  const numeric=Number(value);
+  const parsed=Number.isFinite(numeric)
+   ?(name.endsWith('reset-after')?now+numeric*1000:numeric>10_000_000_000?numeric:numeric>1_000_000_000?numeric*1000:now+numeric*1000)
+   :Date.parse(value);
+  if(Number.isFinite(parsed)&&parsed>now&&parsed<=now+366*24*60*60*1000)return parsed;
+ }
+ return null;
+}
+async function persistRateLimitObservation(row:any,userId:string,evidence:Json,quotaStatus:number|null,resetAt:number|null):Promise<void>{
+ await pool!.query(`UPDATE user_api_connectors SET rate_limit_evidence=$3::jsonb,
+  last_quota_status=CASE WHEN $4::int IS NULL THEN last_quota_status ELSE $4::int END,
+  last_quota_observed_at=CASE WHEN $4::int IS NULL THEN last_quota_observed_at ELSE now() END,
+  last_quota_reset_at=CASE WHEN $4::int IS NULL THEN last_quota_reset_at ELSE $5::timestamptz END,
+  updated_at=now() WHERE id=$1 AND user_id=$2`,
+  [row.id,userId,JSON.stringify(evidence),quotaStatus,resetAt?new Date(resetAt):null]).catch(error=>{
+   console.warn('AFG_API_CONNECTOR_RATE_LIMIT_OBSERVATION_FAILED',JSON.stringify({connectorId:row.id,error:error instanceof Error?error.message:'unknown'}));
+  });
+}
 function isQuotaFailure(error:unknown):boolean{return [402,429].includes(Number((error as {httpStatus?:number})?.httpStatus||0));}
 async function refreshDueQueueEntries(userId:string):Promise<void>{
  await pool!.query(`UPDATE user_api_connectors SET queue_state='ready',next_available_at=NULL,last_error=NULL,updated_at=now()
@@ -198,9 +239,13 @@ async function refreshDueQueueEntries(userId:string):Promise<void>{
 }
 async function parkQuotaLimitedConnector(row:any,userId:string,error:unknown):Promise<void>{
  if(!isQuotaFailure(error))return;
- const retryAt=Number((error as {retryAt?:number})?.retryAt||0);
+ const value=error as {retryAt?:number;httpStatus?:number;rateLimitEvidence?:Json};
+ const retryAt=Number(value.retryAt||0);
  const next=retryAt>Date.now()?new Date(retryAt):null;
- await pool!.query(`UPDATE user_api_connectors SET queue_state='waiting',next_available_at=$3,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,userId,next]);
+ const evidence=value.rateLimitEvidence||{source:'upstream_response',observedAt:new Date().toISOString(),httpStatus:value.httpStatus||null,headers:{}};
+ await pool!.query(`UPDATE user_api_connectors SET queue_state='waiting',next_available_at=$3,
+  rate_limit_evidence=$4::jsonb,last_quota_status=$5,last_quota_observed_at=now(),last_quota_reset_at=$3,updated_at=now()
+  WHERE id=$1 AND user_id=$2`,[row.id,userId,next,JSON.stringify(evidence),Number(value.httpStatus)||null]);
 }
 function isRetryableUpstreamFailure(error:unknown):boolean{
  const value=error as {httpStatus?:number;retryable?:boolean};
@@ -336,8 +381,14 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    }catch(error){
     const status=Number((error as any)?.httpStatus)||null;
     const message=error instanceof Error?error.message.slice(0,250):'API connector verification failed.';
-    await pool.query(`UPDATE user_api_connectors SET enabled=false,status='error',queue_state=CASE WHEN $3 IN (402,429) THEN 'waiting' ELSE queue_state END,next_available_at=NULL,last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1 AND user_id=$2`,
-     [row.id,user.id,status,message]);
+    await pool.query(`UPDATE user_api_connectors SET enabled=false,status='error',queue_state=CASE WHEN $3 IN (402,429) THEN 'waiting' ELSE queue_state END,
+     next_available_at=CASE WHEN $3 IN (402,429) THEN $5 ELSE next_available_at END,
+     rate_limit_evidence=CASE WHEN $3 IN (402,429) THEN $6::jsonb ELSE rate_limit_evidence END,
+     last_quota_status=CASE WHEN $3 IN (402,429) THEN $3 ELSE last_quota_status END,
+     last_quota_observed_at=CASE WHEN $3 IN (402,429) THEN now() ELSE last_quota_observed_at END,
+     last_quota_reset_at=CASE WHEN $3 IN (402,429) THEN $5 ELSE last_quota_reset_at END,
+     last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1 AND user_id=$2`,
+     [row.id,user.id,status,message,(error as any)?.retryAt?new Date((error as any).retryAt):null,JSON.stringify((error as any)?.rateLimitEvidence||{source:'upstream_response',observedAt:new Date().toISOString(),httpStatus:status,headers:{}})]);
     await audit(user.id,'api.connector.verify_failed',row.id,{status,error:message});
     sendAuthJson(res,502,{verified:false,error:message});return true;
    }
