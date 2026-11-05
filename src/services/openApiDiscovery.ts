@@ -120,8 +120,8 @@ export async function discoverOpenApiOperations(specUrl:string){
   const pathItem=pathItemValue as Json;
   const server=Array.isArray(pathItem.servers)?pathItem.servers[0]?.url:rootServer;
   if(typeof server!=='string'||!server.startsWith('https://')||server.includes('{'))continue;
-  let base:URL;try{base=new URL(server);}catch{continue;}
-  if(base.protocol!=='https:'||base.username||base.password)continue;
+  let base:URL;try{base=await safeSpecUrl(server);}catch{continue;}
+  if(base.search||base.pathname.includes('..'))continue;
   for(const method of ['get','post','put','patch','delete']){
    const operation=pathItem[method];if(!operation||typeof operation!=='object')continue;
    const built=operationSchema(document,operation,pathItem);
