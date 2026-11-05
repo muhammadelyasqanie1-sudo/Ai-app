@@ -718,7 +718,8 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
     const message=error instanceof Error?error.message.slice(0,250):'Scheduled health check failed.';
     const diagnosis=status===401||status===403?'authentication_failed':status===404?'endpoint_not_found':status===402||status===429?'quota_limited':status&&status>=500?'upstream_server_error':'network_or_timeout';
     if(status===402||status===429){
-     await rotateQuotaLimitedConnectorKey(row,owner,error);
+     const rotated=await rotateQuotaLimitedConnectorKey(row,owner,error);
+     if(rotated){results.push({id:row.id,checked:true,healthy:false,diagnosis:'quota_limited_key_rotated',httpStatus:status});continue;}
      const retryAt=(error as any)?.retryAt,next=retryAt?new Date(retryAt):null;
      const evidence=(error as any)?.rateLimitEvidence||{source:'upstream_response',observedAt:new Date().toISOString(),httpStatus:status,headers:{}};
      await pool.query("UPDATE user_api_connectors SET enabled=false,status='error',queue_state='waiting',next_available_at=$2,rate_limit_evidence=$3::jsonb,last_quota_status=$4,last_quota_observed_at=now(),last_quota_reset_at=$2,health_monitor_claimed_at=NULL,last_health_check_at=now(),last_health_diagnosis=$5,last_tested_at=now(),last_http_status=$4,last_error=$6,updated_at=now() WHERE id=$1",[row.id,next,JSON.stringify(evidence),status,diagnosis,message]);
