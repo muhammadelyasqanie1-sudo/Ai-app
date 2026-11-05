@@ -653,7 +653,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
   const client=await pool.connect();let claimed:any[]=[];
   try{
    await client.query('BEGIN');
-   const due=await client.query("WITH due AS (SELECT id FROM user_api_connectors WHERE health_monitor_enabled=true AND enabled=true AND status='verified' AND queue_state='ready' AND http_method='GET' AND (next_health_check_at IS NULL OR next_health_check_at<=now()) AND (health_monitor_claimed_at IS NULL OR health_monitor_claimed_at<now()-interval '10 minutes') ORDER BY next_health_check_at ASC NULLS FIRST,fallback_priority ASC FOR UPDATE SKIP LOCKED LIMIT 5) UPDATE user_api_connectors c SET health_monitor_claimed_at=now() FROM due WHERE c.id=due.id RETURNING c.*");
+   const due=await client.query("WITH due AS (SELECT id FROM user_api_connectors WHERE health_monitor_enabled=true AND enabled=true AND status='verified' AND queue_state='ready' AND http_method='GET' AND (next_health_check_at IS NULL OR next_health_check_at<=now()) AND (health_monitor_claimed_at IS NULL OR health_monitor_claimed_at<now()-interval '10 minutes') ORDER BY next_health_check_at ASC NULLS FIRST,fallback_priority ASC LIMIT 5 FOR UPDATE SKIP LOCKED) UPDATE user_api_connectors c SET health_monitor_claimed_at=now() FROM due WHERE c.id=due.id RETURNING c.*");
    claimed=due.rows;await client.query('COMMIT');
   }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
   const results:any[]=[];
