@@ -91,6 +91,10 @@ Migration `0025_public_api_discovery_work_queue.sql` adds a persistent review qu
 The admin work queue can scan an already-claimed catalogue entry's official HTTPS docs/homepage. The bounded scanner refuses redirects, private/reserved DNS targets, cross-host documentation links, and oversized responses. It records only evidence explicitly present in the page: protocol/authentication terms and same-host OpenAPI/Swagger link candidates. A candidate spec is not automatically imported or trusted; it must be reviewed and parsed as an OpenAPI contract separately. These labels never mark an endpoint verified, establish quota/reset information, configure credentials, or enable a connector. Requires migration 0026.
 
 
+## HTTP Basic authentication for personal API tools
+
+The connector vault supports documented HTTP Basic authentication in addition to no-auth, bearer tokens, API-key headers and API-key query parameters. For Basic auth, the owner enters the provider-issued username and password as `username:password`; the server constructs the Authorization header for the upstream request. The combined credential is encrypted at rest, never returned to the browser, and is redacted from response previews. OpenAPI HTTP `basic` security schemes are recognized by the connector setup UI. Basic auth is not inferred from a generic OAuth label, and it does not replace OAuth authorization-code or token-refresh flows.
+
 ## Nested JSON request schemas for API tools
 
 Verified owner-configured API connectors accept bounded nested JSON objects and arrays in their tool input schemas, including nested required fields, scalar enums, string length limits, array item limits and numeric bounds. Validation rejects unknown object properties, unsupported schema types, excessive nesting and oversized arguments before any upstream request is sent. This expands support for real JSON APIs whose request bodies are not flat scalar maps; it does not automatically translate multipart, binary, YAML, remote-reference, OAuth or streaming contracts.
