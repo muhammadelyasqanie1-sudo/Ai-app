@@ -170,6 +170,7 @@ async function proxy(req:IncomingMessage,res:ServerResponse,target:URL,key:strin
  if(!response.ok){
   let code='upstream_rejected';
   if(type.includes('json')){try{const parsed=JSON.parse(bytes.toString('utf8'));const candidate=parsed?.error?.code||parsed?.error?.type;if(typeof candidate==='string'&&/^[a-z0-9_.-]{1,80}$/i.test(candidate))code=candidate;}catch{}}
+  const retryAfter=response.headers.get('retry-after');if(retryAfter&&retryAfter.length<=100&&!/[\\r\\n]/.test(retryAfter))res.setHeader('Retry-After',retryAfter);
   reply(res,response.status>=400&&response.status<500?response.status:502,{error:'9Router could not complete this request.',code},requestId);return;
  }
  const allowedHeaders=['content-type','content-disposition','cache-control','retry-after','x-9router-connection-id','x-request-id'];
