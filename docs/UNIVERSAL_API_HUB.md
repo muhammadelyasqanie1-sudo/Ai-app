@@ -89,3 +89,8 @@ Migration `0025_public_api_discovery_work_queue.sql` adds a persistent review qu
 ## Official documentation discovery
 
 The admin work queue can scan an already-claimed catalogue entry's official HTTPS docs/homepage. The bounded scanner refuses redirects, private/reserved DNS targets, cross-host documentation links, and oversized responses. It records only evidence explicitly present in the page: protocol/authentication terms and same-host OpenAPI/Swagger link candidates. A candidate spec is not automatically imported or trusted; it must be reviewed and parsed as an OpenAPI contract separately. These labels never mark an endpoint verified, establish quota/reset information, configure credentials, or enable a connector. Requires migration 0026.
+
+
+## OpenAPI contract extraction from discovered documentation
+
+After the official-docs scan, the same administrator claim remains active so the next step can inspect the discovered same-host OpenAPI/Swagger candidates. The contract extractor tries a bounded number of those candidates, accepts only HTTPS links on the official documentation host, and parses supported OpenAPI 3.0/3.1 JSON. It persists the normalized operation list, input schemas, auth requirements, tags, deprecation flags, and operation count in the existing tracking contract field. The queue item is completed only after a contract is successfully extracted or an administrator records another explicit outcome. No endpoint is called, no quota is inferred, and no connector is enabled by extraction. Existing contract metadata is not proof of endpoint health or credentials.
