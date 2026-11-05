@@ -291,7 +291,8 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
  if(req.method!=='GET'&&!verifyCsrf(req)){sendAuthJson(res,403,{error:'CSRF validation failed.'});return true;}
  try{
   if(req.method==='GET'&&pathname==='/api/api-hub/connectors'){
-   const result=await pool.query('SELECT * FROM user_api_connectors WHERE user_id=$1 ORDER BY created_at DESC',[user.id]);
+   await refreshDueQueueEntries(user.id);
+   const result=await pool.query('SELECT * FROM user_api_connectors WHERE user_id=$1 ORDER BY CASE WHEN queue_state=\'ready\' THEN 0 ELSE 1 END,fallback_priority ASC,created_at DESC',[user.id]);
    sendAuthJson(res,200,{connectors:result.rows.map(publicRow),encryptionConfigured:Boolean(process.env.AFG_INTEGRATION_ENCRYPTION_KEY)});return true;
   }
   if(req.method==='POST'&&pathname==='/api/api-hub/connectors'){
