@@ -1,5 +1,6 @@
 import type {IncomingMessage,ServerResponse} from 'http';
 import {randomUUID} from 'node:crypto';
+import {pool} from './database.ts';
 import {lookup} from 'node:dns/promises';
 import {BlockList,isIP} from 'node:net';
 import {authenticateRequest,sendAuthJson,verifyCsrf} from './auth.ts';
@@ -127,7 +128,17 @@ async function proxy(req:IncomingMessage,res:ServerResponse,target:URL,key:strin
  res.once('close',()=>{if(!res.writableEnded)controller.abort(new Error('Client disconnected.'));});
  let response:Response;
  try{
-  response=await fetch(target.toString(),{method,headers,body:body?new Blob([Uint8Array.from(body)]):undefined,redirect:'error',signal:controller.signal});
+  const maxAttempts=method==='GET'?3:1;
+  for(let attempt=1;attempt<=maxAttempts;attempt++){
+   response=await fetch(target.toString(),{method,headers,body:body?new Blob([Uint8Array.from(body)]):undefined,redirect:'error',signal:controller.signal});
+   const retryable=[408,425,429,500,502,503,504].includes(response.status);
+   if(!retryable||attempt===maxAttempts)break;
+   const retryAfter=response.headers.get('retry-after')||'';
+   await response.body?.cancel().catch(()=>{});
+   const seconds=Number(retryAfter);
+   const delay=Number.isFinite(seconds)&&seconds>=0?Math.min(5000,seconds*1000):Math.min(250*attempt,1000);
+   await new Promise(resolve=>setTimeout(resolve,delay));
+  }
  }finally{clearTimeout(timeout);}
  const type=cleanContentType(response.headers.get('content-type'));
  const length=response.headers.get('content-length');
@@ -170,6 +181,7 @@ async function proxy(req:IncomingMessage,res:ServerResponse,target:URL,key:strin
 export async function handleNineRouterApi(req:IncomingMessage,res:ServerResponse,pathname:string):Promise<boolean>{
  if(!pathname.startsWith('/api/9router/'))return false;
  const requestId=randomUUID();
+ const startedAt=Date.now();
  const user=await authenticateRequest(req).catch(()=>null);
  if(!user){reply(res,401,{available:false,error:'Sign in is required.'},requestId);return true;}
  if(user.role!=='admin'&&user.role!=='superadmin'){reply(res,403,{available:false,error:'The shared 9Router gateway is currently restricted to administrators until provider accounts are isolated per user.'},requestId);return true;}
@@ -208,6 +220,11 @@ export async function handleNineRouterApi(req:IncomingMessage,res:ServerResponse
    if(!MODEL_KINDS.has(kind)){reply(res,400,{error:'Unsupported 9Router model kind.'},requestId);return true;}
    const segments=kind==='llm'?[]:[kind];
    const url=new URL(base.toString());url.pathname=base.pathname+'/models'+(segments.length?'/'+segments[0]:'');
+   await proxy(req,res,url,key,requestId);return true;
+  }
+  const modelKindPath=pathname.match(/^\/api\/9router\/models\/(llm|image|tts|embedding|web|stt|image-to-text)$/);
+  if(req.method==='GET'&&modelKindPath){
+   const url=new URL(base.toString());url.pathname=base.pathname+'/models/'+modelKindPath[1];
    await proxy(req,res,url,key,requestId);return true;
   }
   if(req.method==='GET'&&pathname==='/api/9router/audio/voices'){
@@ -279,6 +296,11 @@ export async function handleNineRouterApi(req:IncomingMessage,res:ServerResponse
   const message=error instanceof Error?error.message:'9Router request failed.';
   const tooLarge=message.includes('too large')||message.includes('too_large');
   reply(res,tooLarge?413:502,{available:false,error:message.slice(0,240)},requestId);return true;
+ }finally{
+  const status=Number(res.statusCode)||500;
+  const outcome=status>=500?'gateway_error':status===429||status===408||status===425?'upstream_error':status>=400?'client_error':'success';
+  if(pool)void pool.query('INSERT INTO ninerouter_request_logs(user_id,request_id,endpoint,http_method,status_code,latency_ms,outcome) VALUES($1,$2,$3,$4,$5,$6,$7)',
+   [user.id,requestId,pathname.slice(0,160),(req.method||'GET').toUpperCase(),status,Math.max(0,Date.now()-startedAt),outcome]).catch(error=>console.warn('NINEROUTER_REQUEST_LOG_FAILED',error instanceof Error?error.message:'unknown_error'));
  }
 }
 type Json=Record<string,any>;
