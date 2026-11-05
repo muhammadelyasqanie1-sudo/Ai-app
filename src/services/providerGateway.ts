@@ -307,9 +307,8 @@ async function syncDiscoveredModels(provider: ChatProviderAdapter, models: Model
       [provider.id, model.id, model.displayName,
         Object.entries(model.capabilities).filter(([, enabled]) => enabled).map(([key]) => key),
         // Clean APIs' Free plan grants access to all 33 chat models within its monthly token allowance.
-        // For other gateways, automatically enable only models explicitly identified as free.
+        // Other gateways only auto-enable models explicitly identified as free.
         provider.id === 'cleanapis' ||
-          (provider.id === 'iteracompute' && model.id === 'qwen/qwen3.8-27b') ||
           model.id.toLowerCase().endsWith('-free') ||
           (model.pricing?.inputPerMillion === 0 && model.pricing?.outputPerMillion === 0) ||
           (provider.id === 'beatapi' && model.id === beatApiDefaultModelId),
@@ -418,9 +417,10 @@ export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> 
     let models: ModelDescriptor[];
     try {
       models = await provider.listModels();
-      // IteraCompute's no-recharge tier currently includes only this model.
+      // Exclude the Qwen 3 entry from IteraCompute at the source of the user-facing catalogue.
+      // Keep every other upstream model eligible for explicit admin verification and enablement.
       if (provider.id === 'iteracompute') {
-        models = models.filter((model) => model.id === 'qwen/qwen3.8-27b');
+        models = models.filter((model) => !/^qwen\/qwen3(?:[./:-]|$)/i.test(model.id));
       }
     } catch (error) {
       console.error('AI_PROVIDER_MODEL_CATALOG_ERROR', JSON.stringify({ provider: provider.id, error: error instanceof Error ? error.message : 'unknown_error' }));
