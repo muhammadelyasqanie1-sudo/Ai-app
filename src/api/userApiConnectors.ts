@@ -55,7 +55,7 @@ function normalizeOAuthConfig(input:unknown):Json{
  const value=input as Json,clientId=String(value.clientId||'').trim(),clientSecret=String(value.clientSecret||'').trim();
  const authorizationUrl=String(value.authorizationUrl||'').trim(),tokenUrl=String(value.tokenUrl||'').trim();
  const scopes=Array.isArray(value.scopes)?value.scopes.map((x:any)=>String(x).trim()).filter(Boolean).slice(0,40):String(value.scopes||'').split(/[ ,]+/).filter(Boolean).slice(0,40);
- if(!clientId||clientId.length>500||!clientSecret||clientSecret.length>4000)throw new Error('OAuth client ID and client secret are required.');
+ if(!clientId||clientId.length>500||clientSecret.length>4000)throw new Error('A valid OAuth client ID is required; the client secret is optional for public PKCE clients.');
  for(const raw of [authorizationUrl,tokenUrl]){const u=new URL(raw);if(u.protocol!=='https:'||u.username||u.password||u.hash)throw new Error('OAuth endpoints must use HTTPS without embedded credentials or fragments.');}
  return {clientId,clientSecret,authorizationUrl,tokenUrl,scopes};
 }
@@ -71,7 +71,7 @@ async function getOAuthAccessToken(row:any,userId:string,secrets:string[]):Promi
   if(access&&(!expires||expires>Date.now()+60_000)){secrets.push(access,String(config.clientSecret||''));await client.query('COMMIT');return access;}
   const refresh=String(tokens.refresh_token||'');if(!refresh)throw new Error('OAuth token expired and no refresh token was issued. Re-authorize this connector.');
   await safeEndpoint(String(config.tokenUrl||''));
-  const body=new URLSearchParams({grant_type:'refresh_token',refresh_token:refresh,client_id:String(config.clientId),client_secret:String(config.clientSecret)});
+  const body=new URLSearchParams({grant_type:'refresh_token',refresh_token:refresh,client_id:String(config.clientId)});if(config.clientSecret)body.set('client_secret',String(config.clientSecret));
   const response=await fetch(String(config.tokenUrl),{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body,redirect:'error',signal:AbortSignal.timeout(15000)});
   const raw=await readTextLimited(response,1_000_000);let next:Json;try{next=JSON.parse(raw);}catch{throw new Error('OAuth refresh returned an invalid response.');}
   if(!response.ok||typeof next.access_token!=='string'||!next.access_token)throw new Error('OAuth refresh failed with HTTP '+response.status+'.');
@@ -628,7 +628,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    const config=JSON.parse(decrypt(connector.oauth_config_encrypted)) as Json;
    const redirectUri=new URL('/api/api-hub/oauth/callback',oauthPublicBase()).toString();await safeEndpoint(String(config.tokenUrl||''));
    const verifier=decrypt(pending.code_verifier_encrypted);
-   const form=new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:redirectUri,client_id:String(config.clientId),client_secret:String(config.clientSecret),code_verifier:verifier});
+   const form=new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:redirectUri,client_id:String(config.clientId),code_verifier:verifier});if(config.clientSecret)form.set('client_secret',String(config.clientSecret));
    const response=await fetch(String(config.tokenUrl),{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body:form,redirect:'error',signal:AbortSignal.timeout(20000)});
    const raw=await readTextLimited(response,1000000);let tokens:Json;try{tokens=JSON.parse(raw);}catch{throw new Error('OAuth token endpoint returned an invalid response.');}
    if(!response.ok||typeof tokens.access_token!=='string'||!tokens.access_token)throw new Error('OAuth authorization exchange failed with HTTP '+response.status+'.');
