@@ -136,7 +136,7 @@ async function proxy(req:IncomingMessage,res:ServerResponse,target:URL,key:strin
    const retryAfter=response.headers.get('retry-after')||'';
    await response.body?.cancel().catch(()=>{});
    const seconds=Number(retryAfter);
-   const delay=Number.isFinite(seconds)&&seconds>=0?Math.min(5000,seconds*1000):Math.min(250*attempt,1000);
+   const retryDate=Date.parse(retryAfter);const delay=Number.isFinite(seconds)&&seconds>=0?Math.min(5000,seconds*1000):Number.isFinite(retryDate)?Math.min(5000,Math.max(0,retryDate-Date.now())):Math.min(250*attempt,1000);
    await new Promise(resolve=>setTimeout(resolve,delay));
   }
  }finally{clearTimeout(timeout);}
