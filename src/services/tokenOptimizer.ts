@@ -8,13 +8,13 @@
 export type OptimizableMessage = { role: string; content: string; [key: string]: unknown };
 
 function compactOutsideCode(text: string): string {
-  const parts = text.split(/(```[\\s\\S]*?```)/g);
+  const parts = text.split(/(```[\s\S]*?```)/g);
   return parts.map((part, index) => {
     if (index % 2 === 1) return part;
     return part
-      .replace(/[ \\t]+$/gm, '')
-      .replace(/\\n[ \\t]*\\n(?:[ \\t]*\\n)+/g, '\\n\\n')
-      .replace(/\\n{3,}/g, '\\n\\n');
+      .replace(/[ \t]+$/gm, '')
+      .replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, '\n\n')
+      .replace(/\n{3,}/g, '\n\n');
   }).join('');
 }
 
