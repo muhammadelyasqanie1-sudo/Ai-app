@@ -628,6 +628,38 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    await audit(user.id,'api.connector.credential_rotated',row.id,{authType:row.auth_type,requiresVerification:true});
    sendAuthJson(res,200,{updated:true,verified:false,enabled:false,requiresVerification:true});return true;
   }
+  const recoverMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/recover$/i);
+  if(req.method==='POST'&&recoverMatch){
+   const row=await ownerConnector(user.id,recoverMatch[1]);
+   if(!row){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
+   const resetAt=row.last_quota_reset_at?new Date(row.last_quota_reset_at).getTime():NaN;
+   if(![402,429].includes(Number(row.last_quota_status))||!Number.isFinite(resetAt)){
+    sendAuthJson(res,409,{recovered:false,error:'No confirmed upstream quota reset time is available. The connector remains in the waiting queue; no reset is guessed.'});return true;
+   }
+   if(resetAt>Date.now()){
+    sendAuthJson(res,409,{recovered:false,error:'The upstream-reported quota reset time has not arrived yet.',nextAvailableAt:row.last_quota_reset_at});return true;
+   }
+   const requestId=randomUUID();
+   try{
+    const result=await execute(row,row.sample_arguments_json,user.id,requestId,15_000);
+    await pool.query(`UPDATE user_api_connectors SET status='verified',queue_state='ready',next_available_at=NULL,enabled=false,last_tested_at=now(),last_http_status=$3,last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,user.id,result.status]);
+    await audit(user.id,'api.connector.quota_recovered',row.id,{httpStatus:result.status,durationMs:result.durationMs,resetEvidenceAt:row.last_quota_reset_at});
+    sendAuthJson(res,200,{recovered:true,verified:true,enabled:false,queueState:'ready',httpStatus:result.status,durationMs:result.durationMs});return true;
+   }catch(error){
+    const status=Number((error as any)?.httpStatus)||null;
+    const message=error instanceof Error?error.message.slice(0,250):'API connector recovery failed.';
+    if(status===402||status===429){
+     const retryAt=(error as any)?.retryAt;
+     const next=retryAt?new Date(retryAt):null;
+     const evidence=(error as any)?.rateLimitEvidence||{source:'upstream_response',observedAt:new Date().toISOString(),httpStatus:status,headers:{}};
+     await pool.query(`UPDATE user_api_connectors SET enabled=false,status='error',queue_state='waiting',next_available_at=$3,rate_limit_evidence=$4::jsonb,last_quota_status=$5,last_quota_observed_at=now(),last_quota_reset_at=$3,last_tested_at=now(),last_http_status=$5,last_error=$6,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,user.id,next,JSON.stringify(evidence),status,message]);
+    }else{
+     await pool.query(`UPDATE user_api_connectors SET last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,user.id,status,message]);
+    }
+    await audit(user.id,'api.connector.quota_recovery_failed',row.id,{status,error:message});
+    sendAuthJson(res,502,{recovered:false,error:message,httpStatus:status,waitingForQuota:status===402||status===429});return true;
+   }
+  }
   const testMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/(test|health)$/i);
   if(req.method==='POST'&&testMatch){
    const isHealthCheck=testMatch[2]==='health';
