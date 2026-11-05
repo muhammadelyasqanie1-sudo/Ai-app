@@ -1,7 +1,7 @@
 import React,{useCallback,useEffect,useState} from 'react';
 import {Activity,CheckCircle2,Code2,Power,RefreshCw,Trash2,Wrench} from 'lucide-react';
 import type {Language} from '../../types/afg';
-type Connector={id:string;catalogSourceKey:string|null;name:string;toolName:string;description:string;endpointUrl:string;httpMethod:string;authType:string;authHeaderName:string;hasCredential:boolean;inputSchema:any;sampleArguments:any;enabled:boolean;status:string;lastTestedAt:string|null;lastHttpStatus:number|null;lastError:string|null};
+type Connector={id:string;catalogSourceKey:string|null;name:string;toolName:string;description:string;endpointUrl:string;httpMethod:string;authType:string;authHeaderName:string;hasCredential:boolean;inputSchema:any;sampleArguments:any;fallbackGroup:string;fallbackPriority:number;enabled:boolean;status:string;lastTestedAt:string|null;lastHttpStatus:number|null;lastError:string|null};
 const csrf=()=>decodeURIComponent(document.cookie.split('; ').find(x=>x.startsWith('afg_csrf='))?.slice(9)||'');
 async function request(path:string,init:RequestInit={}){
  const headers=new Headers(init.headers||{});if(init.body!==undefined)headers.set('Content-Type','application/json');
