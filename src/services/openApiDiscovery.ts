@@ -127,7 +127,7 @@ function operationSchema(document:Json,operation:Json,pathItem:Json):{schema:Jso
 
 function boundedText(value:unknown,max=500):string|null{
  if(typeof value!=='string')return null;
- const clean=value.replace(/\\s+/g,' ').trim();
+ const clean=value.replace(/\s+/g,' ').trim();
  return clean?clean.slice(0,max):null;
 }
 function governanceEvidence(document:Json,operations:any[]){
@@ -152,7 +152,7 @@ function governanceEvidence(document:Json,operations:any[]){
   return item;
  });
  const effectiveSecurity=(operation:any)=>{
-  const requirements=operation.security??document.security??[];
+  const requirements=operation.securityRequirements??operation.security??document.security??[];
   if(!Array.isArray(requirements))return {status:'unknown',alternatives:[]};
   if(!requirements.length)return {status:'none',alternatives:[]};
   return {status:'required',alternatives:requirements.slice(0,20).map((entry:any)=>({
