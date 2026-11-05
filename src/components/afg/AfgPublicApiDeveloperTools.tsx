@@ -180,7 +180,7 @@ export const AfgPublicApiDeveloperTools:React.FC<{language:Language}>=({language
    }else{
     if(jwtKey.includes('PRIVATE KEY'))throw new Error('Only a public key can be used for JWT verification.');
     const pem=jwtKey.replace(/-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\s/g,'');
-    const binary=atob(pem),der=Uint8Array.from(binary,c=>c.charCodeAt(0));
+    const binary=atob(pem),derBuffer=new ArrayBuffer(binary.length),derView=new Uint8Array(derBuffer);for(let i=0;i<binary.length;i++)derView[i]=binary.charCodeAt(i);const der=derBuffer;
     if(algorithm.startsWith('RS')||algorithm.startsWith('PS')){
      const name=algorithm.startsWith('PS')?'RSA-PSS':'RSASSA-PKCS1-v1_5';
      key=await crypto.subtle.importKey('spki',der,{name,modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:hashName},false,['verify']);
@@ -192,7 +192,7 @@ export const AfgPublicApiDeveloperTools:React.FC<{language:Language}>=({language
      verifyAlgorithm={name:'ECDSA',hash:hashName};
     }else throw new Error('Unsupported JWT algorithm.');
    }
-   const verified=await crypto.subtle.verify(verifyAlgorithm,key,signature,input);
+   const signatureBuffer=new ArrayBuffer(signature.byteLength),signatureView=new Uint8Array(signatureBuffer);signatureView.set(signature);const inputBuffer=new ArrayBuffer(input.byteLength),inputView=new Uint8Array(inputBuffer);inputView.set(input);\n    const verified=await crypto.subtle.verify(verifyAlgorithm,key,signatureBuffer,inputBuffer);
    const now=Math.floor(Date.now()/1000);
    const exp=typeof payload.exp==='number'?payload.exp:null,nbf=typeof payload.nbf==='number'?payload.nbf:null;
    setOutput(JSON.stringify({header,payload,algorithm,signatureVerified:verified,claims:{expired:exp===null?null:now>=exp,notYetValid:nbf===null?null:now<nbf,expiresAt:exp===null?null:new Date(exp*1000).toISOString(),notBefore:nbf===null?null:new Date(nbf*1000).toISOString()},verificationKeyWasSentToServer:false},null,2));
