@@ -417,11 +417,6 @@ export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> 
     let models: ModelDescriptor[];
     try {
       models = await provider.listModels();
-      // Exclude the Qwen 3 entry from IteraCompute at the source of the user-facing catalogue.
-      // Keep every other upstream model eligible for explicit admin verification and enablement.
-      if (provider.id === 'iteracompute') {
-        models = models.filter((model) => !/^qwen\/qwen3(?:[./:-]|$)/i.test(model.id));
-      }
     } catch (error) {
       console.error('AI_PROVIDER_MODEL_CATALOG_ERROR', JSON.stringify({ provider: provider.id, error: error instanceof Error ? error.message : 'unknown_error' }));
       verified.push(...await getStoredModels(provider.id));
