@@ -132,7 +132,6 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  }
  if(/\{[a-zA-Z][a-zA-Z0-9_]*\}/.test(pathname))throw new Error('The API endpoint contains an unresolved path parameter.');
  const url=new URL(base.toString());url.pathname=pathname;
- if(query.size)url.search=query.toString();
  const headers=new Headers({Accept:'application/json'});
  const secrets:string[]=[];
  if(row.auth_type==='bearer'||row.auth_type==='header_key'||row.auth_type==='query_key'){
@@ -141,6 +140,7 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
   if(row.auth_type==='query_key')query.set(String(row.auth_header_name||'api_key'),secret);
   else {const key=row.auth_type==='bearer'?'Authorization':String(row.auth_header_name||'X-API-Key');headers.set(key,row.auth_type==='bearer'?'Bearer '+secret:secret);}
  }
+ if(query.size)url.search=query.toString();
  const init:RequestInit={method:row.http_method,headers,redirect:'error',signal:AbortSignal.timeout(timeoutMs)};
  if(['POST','PUT','PATCH'].includes(row.http_method)){headers.set('Content-Type','application/json');init.body=JSON.stringify(body);}
  const started=Date.now();
