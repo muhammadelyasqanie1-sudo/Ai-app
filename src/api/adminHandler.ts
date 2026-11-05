@@ -1097,7 +1097,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         sendAuthJson(res, 400, { error: 'Provide 1–1000 valid provider/model pairs and an enabled state.' });
         return true;
       }
-      const unique = [...new Map(requested.map((item: any) => [item.providerId + '::' + item.modelId, item])).values()] as Array<{providerId:string;modelId:string}>;
+      const unique = [...new Map<string, {providerId:string;modelId:string}>(requested.map((item: any) => [item.providerId + '::' + item.modelId, {providerId:item.providerId,modelId:item.modelId}] as const)).values()];
       const client = await pool.connect();
       let changed = 0;
       try {
