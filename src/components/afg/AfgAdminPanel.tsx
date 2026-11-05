@@ -221,6 +221,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
     adminApi('/api/auth/me').then((data)=>{
       if(data.authenticated && ['admin','superadmin'].includes(data.user?.role)){
         setAdminRole(data.user.role);
+        setAuthenticated(true);
         void loadAdminData();
       }
     }).catch(()=>{});
@@ -240,7 +241,12 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       )});
       setBootstrapToken('');
       const session=await adminApi('/api/auth/me');
-      if(session.user?.role==='admin'||session.user?.role==='superadmin')setAdminRole(session.user.role);
+      if(session.user?.role==='admin'||session.user?.role==='superadmin'){
+        setAdminRole(session.user.role);
+        setAuthenticated(true);
+      }else{
+        throw new Error('The account is not an administrator.');
+      }
       if(await loadAdminData())setNotice('Administrator session established.');
     }catch(err){setError(err instanceof Error?err.message:'Administrator authentication failed.');}
     finally{setLoading(false);}
@@ -607,10 +613,10 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
         {showBootstrap&&<>
           <input className={field} value={displayName} onChange={e=>setDisplayName(e.target.value)} placeholder="Administrator name"/>
           <input className={field} value={bootstrapToken} onChange={e=>setBootstrapToken(e.target.value)} type="password" placeholder="One-time bootstrap token"/>
-          <p className="text-xs text-amber-300">Requires AFG_ADMIN_BOOTSTRAP_TOKEN on the server. The first administrator becomes superadmin.</p>
+          <p className="text-xs text-amber-300">Requires AFG_ADMIN_BOOTSTRAP_TOKEN on the server. Creates the first superadmin, or recovers an existing administrator when you enter that administrator’s exact email address.</p>
         </>}
-        <button className={primary+' w-full'} disabled={loading||!email||!password||(showBootstrap&&!bootstrapToken)} onClick={()=>void signIn(showBootstrap)}>{loading?'…':showBootstrap?'Create first superadmin':'Sign in securely'}</button>
-        <button className="w-full py-2 text-xs text-cyan-300 underline" onClick={()=>setShowBootstrap(value=>!value)}>{showBootstrap?'Back to sign in':'Set up first administrator'}</button>
+        <button className={primary+' w-full'} disabled={loading||!email||!password||(showBootstrap&&!bootstrapToken)} onClick={()=>void signIn(showBootstrap)}>{loading?'…':showBootstrap?'Set up / recover administrator':'Sign in securely'}</button>
+        <button className="w-full py-2 text-xs text-cyan-300 underline" onClick={()=>setShowBootstrap(value=>!value)}>{showBootstrap?'Back to sign in':'Set up / recover administrator'}</button>
       </div>
       {error&&<p role="alert" className="mt-4 rounded-xl bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
     </div>
