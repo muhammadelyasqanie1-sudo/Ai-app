@@ -24,8 +24,7 @@ CREATE TABLE IF NOT EXISTS public_api_implementation_tracking (
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT public_api_implementation_status_check CHECK (
     discovery_status IN (
-      'catalogued','docs_discovered','contract_discovered','endpoint_verified',
-      'auth_configured','probe_passed','enabled','waiting','unsupported'
+      'catalogued','docs_discovered','contract_discovered','unsupported'
     )
   ),
   CONSTRAINT public_api_implementation_method_check CHECK (
