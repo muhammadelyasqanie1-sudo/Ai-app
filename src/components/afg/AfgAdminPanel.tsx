@@ -125,6 +125,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [modelProviderFilter,setModelProviderFilter] = useState('all');
   const [modelStatusFilter,setModelStatusFilter] = useState('all');
   const [modelPage,setModelPage] = useState(0);
+  const [selectedModelKeys,setSelectedModelKeys] = useState<Set<string>>(new Set());
 
   const [search,setSearch] = useState('');
   const [userRoleFilter,setUserRoleFilter] = useState('all');
@@ -361,6 +362,27 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       })});
       await reloadNotice('Model settings saved.');
     }catch(err){setError(err instanceof Error?err.message:'Model update failed.');}
+  };
+
+  const modelKey=(model:ModelRow)=>model.providerId+'::'+model.id;
+  const toggleModelSelection=(model:ModelRow)=>{
+    const key=modelKey(model);
+    setSelectedModelKeys(current=>{const next=new Set(current);if(next.has(key))next.delete(key);else next.add(key);return next;});
+  };
+  const selectFilteredModels=()=>{
+    if(filteredModels.length>1000){setError('Select up to 1,000 filtered models at a time. Narrow the filters to continue.');return;}
+    setSelectedModelKeys(new Set(filteredModels.map(modelKey)));
+  };
+  const bulkSetModels=async(enabled:boolean)=>{
+    const chosen=models.filter(model=>selectedModelKeys.has(modelKey(model)));
+    if(!chosen.length){setError('Select at least one model first.');return;}
+    try{
+      const result=await adminApi('/api/admin/models/bulk',{method:'POST',body:JSON.stringify({
+        enabled,models:chosen.map(model=>({providerId:model.providerId,modelId:model.id}))
+      })});
+      setSelectedModelKeys(new Set());
+      await reloadNotice((enabled?'Enabled ':'Disabled ')+String(result.changed||0)+' selected models.');
+    }catch(err){setError(err instanceof Error?err.message:'Bulk model update failed.');}
   };
 
   const testModel=async(model:ModelRow)=>{
@@ -678,9 +700,16 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
             <button className={primary+' mt-3'} disabled={!manualProviderId||!manualModelId.trim()} onClick={()=>void addManualModel()}>Register model</button>
           </div>
           <div className={panel}><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">Model catalogue</h2><p className="text-xs text-slate-500">All registered rows are manageable here. User availability still requires enablement and a recent successful model test.</p></div><button className={primary} onClick={()=>void discoverModels()}>Discover / refresh configured providers</button></div>
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+              <button className={secondary} onClick={selectFilteredModels}>Select all filtered ({fmt(filteredModels.length)})</button>
+              <span className="text-xs text-slate-400">{selectedModelKeys.size} selected</span>
+              <button className={primary} disabled={!selectedModelKeys.size} onClick={()=>void bulkSetModels(true)}>Enable selected</button>
+              <button className={secondary} disabled={!selectedModelKeys.size} onClick={()=>void bulkSetModels(false)}>Disable selected</button>
+              <button className={secondary} disabled={!selectedModelKeys.size} onClick={()=>setSelectedModelKeys(new Set())}>Clear selection</button>
+            </div>
             <div className="mb-3 grid gap-2 sm:grid-cols-3"><input className={field} value={modelSearch} onChange={e=>{setModelSearch(e.target.value);setModelPage(0);}} placeholder="Search provider or model ID"/><select className={field} value={modelProviderFilter} onChange={e=>{setModelProviderFilter(e.target.value);setModelPage(0);}}><option value="all">All providers</option>{providers.map(p=><option key={p.id} value={p.id}>{p.displayName}</option>)}</select><select className={field} value={modelStatusFilter} onChange={e=>{setModelStatusFilter(e.target.value);setModelPage(0);}}><option value="all">All model states</option><option value="verified">Verified</option><option value="unverified">Unverified</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select></div>
             <div className="space-y-3">{pageModels.map(model=><div key={model.providerId+':'+model.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-              <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold text-white">{model.displayName}</p><p className="text-[10px] text-slate-500">{model.providerId} · {model.id} · {fmt(model.contextWindow)} context · Max output {fmt(model.maxOutput)}</p><p className="mt-1 text-[10px] text-slate-500">Access tier: <b className="text-cyan-300">{(model.requiredTier||'free').toUpperCase()}</b></p></div>
+              <div className="flex flex-wrap items-start justify-between gap-3"><div className="flex min-w-0 items-start gap-2"><input aria-label={'Select '+model.id} type="checkbox" className="mt-1 h-4 w-4 accent-cyan-400" checked={selectedModelKeys.has(modelKey(model))} onChange={()=>toggleModelSelection(model)}/><div><p className="font-semibold text-white">{model.displayName}</p><p className="text-[10px] text-slate-500">{model.providerId} · {model.id} · {fmt(model.contextWindow)} context · Max output {fmt(model.maxOutput)}</p><p className="mt-1 text-[10px] text-slate-500">Access tier: <b className="text-cyan-300">{(model.requiredTier||'free').toUpperCase()}</b></p></div></div>
                 <div className="flex flex-wrap gap-2"><span className={model.verifiedAt?'text-emerald-300':'text-amber-300'}>{model.verifiedAt?'Verified':'Unverified'}</span><select aria-label="Required subscription tier" className={field+' max-w-28'} value={model.requiredTier||'free'} onChange={e=>void patchModel(model,{requiredTier:e.target.value})}><option value="free">Free</option><option value="pro">Pro</option><option value="max">Max</option><option value="ultra">Ultra</option></select><button className={model.enabled?primary:secondary} onClick={()=>void patchModel(model,{enabled:!model.enabled})}>{model.enabled?'Enabled':'Disabled'}</button><button className={secondary} onClick={()=>void testModel(model)}>Test</button><button className="rounded-xl border border-red-500/40 px-3 py-2 text-xs text-red-300" onClick={()=>void deleteModel(model)}>Delete</button></div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">{CAPABILITIES.map(cap=><label key={cap} className="flex items-center gap-1 rounded-lg border border-slate-800 px-2 py-1 text-[10px] text-slate-300"><input type="checkbox" checked={Boolean(model.capabilities?.[cap])} onChange={e=>{const next={...model.capabilities,[cap]:e.target.checked};void patchModel(model,{capabilities:Object.keys(next).filter(key=>next[key])});}}/>{cap}</label>)}</div>
