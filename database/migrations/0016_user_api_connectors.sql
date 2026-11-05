@@ -1,5 +1,7 @@
 -- User-owned generic HTTP API connectors. Credentials are encrypted and each request
 -- is executed server-side only after the owner explicitly verifies and enables it.
+-- This migration is intentionally idempotent so installations that already applied
+-- the earlier 0014_user_api_connectors.sql filename can safely adopt this sequence.
 CREATE TABLE IF NOT EXISTS user_api_connectors (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,

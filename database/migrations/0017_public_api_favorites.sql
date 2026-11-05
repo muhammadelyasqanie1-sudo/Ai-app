@@ -1,4 +1,5 @@
 -- User-owned API bookmarks keep catalog discovery useful across sessions and devices.
+-- Idempotent to support databases that applied the former 0015 filename.
 CREATE TABLE IF NOT EXISTS user_public_api_favorites (
   user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   source_key text NOT NULL REFERENCES public_api_catalog(source_key) ON DELETE CASCADE,
