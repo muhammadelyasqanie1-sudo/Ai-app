@@ -24,7 +24,7 @@ function ipv4Number(address:string):number|null{
  if(parts.length!==4)return null;
  let value=0;
  for(const part of parts){
-  if(!/^\\d{1,3}$/.test(part))return null;
+  if(!/^\d{1,3}$/.test(part))return null;
   const octet=Number(part);if(octet>255)return null;
   value=(value*256)+octet;
  }
