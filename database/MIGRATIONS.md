@@ -63,3 +63,7 @@ Migration `0027_api_connector_rate_limit_observations.sql` adds owner-scoped sto
 ## API connector quota recovery claims
 
 Migration `0031_api_connector_quota_recovery_claims.sql` adds a short-lived claim timestamp to serialize individual and batch quota recovery probes. The owner-triggered batch action checks at most five connectors whose observed upstream 402/429 reset timestamp has elapsed. Successful probes clear the old quota observation and return the connector to verified/ready while keeping it disabled for explicit owner activation. Unknown reset times are never guessed or probed. Apply with `npm run db:migrate` after reviewing the backup and recovery plan.
+
+## Scheduled API connector health monitoring
+
+Migration `0032_api_connector_health_monitor.sql` adds opt-in monitoring fields and a due-check index. Monitoring can be enabled only for verified, enabled GET connectors; non-idempotent methods are excluded. The scheduler endpoint `POST /api/internal/connector-monitor/run` is protected by the high-entropy `AFG_CONNECTOR_MONITOR_SECRET` bearer secret and checks at most five due connectors per run. Configure a hosting cron/scheduler to call it every 15 minutes. The connector-specific interval is 60–10,080 minutes, defaulting to 360. The migration is additive and must be applied with the normal migration runner after reviewing the backup/recovery plan.
