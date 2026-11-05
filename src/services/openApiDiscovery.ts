@@ -162,3 +162,71 @@ export async function discoverOpenApiOperations(specUrl:string){
  }
  return {specTitle:String(document.info?.title||'OpenAPI service').slice(0,160),specVersion:String(document.info?.version||'').slice(0,40),specUrl:url.toString(),operationCount:operations.length,operations};
 }
+
+export type OfficialDocsDiscovery = {
+ docsUrl:string;
+ title:string|null;
+ protocolTypes:string[];
+ authTypes:string[];
+ openApiCandidates:string[];
+ evidence:string[];
+};
+
+export async function discoverOfficialDocumentation(docsUrl:string,homepageUrl:string|null):Promise<OfficialDocsDiscovery>{
+ const docs=await safeSpecUrl(docsUrl);
+ if(homepageUrl){
+  const home=await safeSpecUrl(homepageUrl);
+  if(home.hostname.toLowerCase()!==docs.hostname.toLowerCase())
+   throw new Error('Documentation host does not match the catalogue homepage host; manual review is required.');
+ }
+ const response=await fetch(docs.toString(),{
+  headers:{Accept:'text/html,application/xhtml+xml;q=0.9,text/plain;q=0.8','User-Agent':'AFG-AI-API-Hub/1.0'},
+  redirect:'error',signal:AbortSignal.timeout(12_000),
+ });
+ if(!response.ok)throw new Error('Official documentation returned HTTP '+response.status+'.');
+ const html=await readTextLimited(response,1_000_000);
+ const contentType=(response.headers.get('content-type')||'').toLowerCase();
+ if(contentType&&!/(text\/html|application\/xhtml\+xml|text\/plain)/.test(contentType))
+  throw new Error('The official documentation URL did not return an HTML or plain-text document.');
+ const textContent=html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ')
+  .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,' ')
+  .replace(/<[^>]+>/g,' ').replace(/&nbsp;|&#160;/gi,' ')
+  .replace(/&amp;/gi,'&').replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'")
+  .replace(/\s+/g,' ').slice(0,500_000);
+ const titleMatch=html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
+ const title=titleMatch?.[1]?.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,180)||null;
+ const links=new Set<string>();
+ const anchor=/<a\b[^>]*href\s*=\s*["']([^"'<>]{1,2048})["'][^>]*>/gi;
+ let match:RegExpExecArray|null;
+ while((match=anchor.exec(html))!==null&&links.size<500){
+  try{
+   const candidate=new URL(match[1].replace(/&amp;/g,'&'),docs);
+   if(candidate.protocol!=='https:'||candidate.hostname.toLowerCase()!==docs.hostname.toLowerCase()||
+    candidate.username||candidate.password||candidate.hash)continue;
+   if(!/(openapi|swagger|api[-_]?reference|developer|documentation|\/docs?\/)/i.test(candidate.pathname+' '+candidate.search))continue;
+   links.add(candidate.toString());
+  }catch{}
+ }
+ const openApiCandidates=[...links].filter(value=>/(openapi|swagger)/i.test(value)).slice(0,30);
+ const protocolTypes:string[]=[];
+ const protocolPatterns:[string,RegExp][]=[
+  ['REST',/\bREST(?:ful)?\s+API\b|\bHTTP\s+API\b/i],
+  ['GraphQL',/\bGraphQL\b/i],['WebSocket',/\bWebSockets?\b|\bwss?:\/\//i],
+  ['gRPC',/\bgRPC\b/i],['RPC',/\bJSON[- ]RPC\b|\bXML[- ]RPC\b/i],
+  ['webhook',/\bwebhooks?\b/i],['streaming',/\b(server[- ]sent events|SSE|streaming API)\b/i],
+ ];
+ for(const [name,pattern] of protocolPatterns)if(pattern.test(textContent))protocolTypes.push(name);
+ const authTypes:string[]=[];
+ const authPatterns:[string,RegExp][]=[
+  ['OAuth 2.0',/\bOAuth\s*2(?:\.0)?\b/i],['Bearer token',/\bBearer\s+token\b|\bAuthorization:\s*Bearer\b/i],
+  ['API key',/\bAPI[- ]key\b|\bapi_key\b/i],['Basic authentication',/\bHTTP\s+Basic\s+authentication\b/i],
+  ['JWT',/\bJWT\b|JSON Web Token/i],['HMAC',/\bHMAC\b/i],
+ ];
+ for(const [name,pattern] of authPatterns)if(pattern.test(textContent))authTypes.push(name);
+ const evidence:string[]=[];
+ for(const [name,pattern] of protocolPatterns)if(pattern.test(textContent))evidence.push('protocol:'+name);
+ for(const [name,pattern] of authPatterns)if(pattern.test(textContent))evidence.push('auth:'+name);
+ if(openApiCandidates.length)evidence.push('same-host OpenAPI/Swagger links found in official documentation HTML');
+ if(!textContent.trim())throw new Error('The documentation page contained no readable text; it remains queued for manual review.');
+ return {docsUrl:docs.toString(),title,protocolTypes,authTypes,openApiCandidates,evidence};
+}
