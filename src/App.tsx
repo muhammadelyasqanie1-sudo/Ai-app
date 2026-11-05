@@ -289,6 +289,8 @@ export default function App() {
 
   const handleSelectModel = (model: string) => {
     setSelectedModel(model);
+    const selectedOption = modelOptions.find((item) => model === item.providerId + '::' + item.id);
+    if (selectedOption?.capabilities?.imageGen) setCurrentTab('image-gen');
     const csrf = document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '';
     fetch(API_BASE_URL + '/api/auth/preferences', {
       method: 'PATCH', credentials: 'include',
@@ -799,6 +801,8 @@ export default function App() {
         {currentTab === 'image-gen' && (
           <LazyAfgImageGenView
             language={language}
+            selectedModel={selectedModel}
+            modelOptions={modelOptions}
           />
         )}
 
