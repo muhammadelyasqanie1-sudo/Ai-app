@@ -177,3 +177,15 @@ For transient upstream responses, the proxy retries **GET only**, at most twice 
 Migration `0030_ninerouter_request_observability.sql` stores request metadata only: owner ID, request ID, endpoint path, HTTP method, status, latency, outcome and timestamp. It deliberately does not store prompts, request/response bodies, credentials, or provider tokens. The admin Usage view exposes 24-hour/7-day counts, latency, rate-limit/error counts, busiest endpoints and recent failed request IDs. The same view offers an audited gateway pause/resume control backed by `system_config.ninerouter_gateway_enabled`; a paused gateway rejects new requests with HTTP 503. Existing provider-side quota and 9Router account limits remain authoritative.
 
 Apply migration `0030` before expecting telemetry to appear. Until then, metrics may be unavailable; the gateway continues to operate, and telemetry insert failures are logged without exposing request payloads. Admin controls require an administrator session and CSRF validation. This monitoring is not a substitute for 9Router's own provider-level spend, quota, or account analytics.
+
+## Public API source-integrity safeguards
+
+The directory synchronizer reports parsed entry counts independently for the repository README and companion JSON directory, plus the deduplicated union count. It refuses to mark the companion source complete when an empty page explicitly claims that more pages exist, or when the exact same page repeats. A source that reaches the 100-page safety ceiling without a confirmed end remains partial. Partial syncs never deactivate previously catalogued entries. These checks improve completeness reporting; they do not claim that every directory listing is an executable API.
+
+## Provider-compatible OAuth token endpoint authentication
+
+The generic authorization-code + PKCE adapter supports the standard token endpoint client authentication methods `client_secret_post`, `client_secret_basic`, and `none` (public clients). The owner selects the method when configuring a connector. Both authorization-code exchange and refresh-token exchange use the same configured method. Client secrets remain encrypted at rest and are never returned to the browser. Providers using non-standard token payloads, JWT client assertions, signed requests, device authorization, or custom refresh semantics still require a dedicated adapter.
+
+## Bounded due-quota recovery
+
+The connector panel includes an owner-triggered batch action that checks at most five connectors per request, and only when the provider previously supplied an actual 402/429 reset timestamp that has elapsed. Concurrent probes are serialized with a short-lived database claim. A successful probe marks the connector verified and ready but **keeps it disabled** until the owner explicitly enables it. A repeated 402/429 returns it to waiting using only the new upstream reset evidence; other failures remain visible as errors. Connectors with unknown reset times are never probed automatically and remain in the owner-review queue. This feature requires migration `0031_api_connector_quota_recovery_claims.sql`.
