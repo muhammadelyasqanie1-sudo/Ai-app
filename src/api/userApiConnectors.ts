@@ -628,14 +628,20 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    await audit(user.id,'api.connector.credential_rotated',row.id,{authType:row.auth_type,requiresVerification:true});
    sendAuthJson(res,200,{updated:true,verified:false,enabled:false,requiresVerification:true});return true;
   }
-  const testMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/test$/i);
+  const testMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/(test|health)$/i);
   if(req.method==='POST'&&testMatch){
+   const isHealthCheck=testMatch[2]==='health';
    const row=await ownerConnector(user.id,testMatch[1]);if(!row){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
    const requestId=randomUUID();
    const multipart=String(req.headers['content-type']||'').toLowerCase().startsWith('multipart/form-data');
    const verificationPayload=multipart?await readMultipartRequest(req):null;
    try{
     const result=await execute(row,verificationPayload?.arguments||row.sample_arguments_json,user.id,requestId,15_000,verificationPayload?.files||{});
+    if(isHealthCheck){
+     await pool.query(`UPDATE user_api_connectors SET last_tested_at=now(),last_http_status=$3,last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,user.id,result.status]);
+     await audit(user.id,'api.connector.health_check',row.id,{status:'healthy',httpStatus:result.status,durationMs:result.durationMs});
+     sendAuthJson(res,200,{healthy:true,diagnosis:'healthy',httpStatus:result.status,durationMs:result.durationMs});return true;
+    }
     await pool.query(`UPDATE user_api_connectors SET status='verified',queue_state='ready',next_available_at=NULL,enabled=false,last_tested_at=now(),last_http_status=$3,last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2`,
      [row.id,user.id,result.status]);
     await audit(user.id,'api.connector.verify',row.id,{status:result.status,durationMs:result.durationMs});
@@ -643,7 +649,9 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    }catch(error){
     const status=Number((error as any)?.httpStatus)||null;
     const message=error instanceof Error?error.message.slice(0,250):'API connector verification failed.';
-    await pool.query(`UPDATE user_api_connectors SET enabled=false,status='error',queue_state=CASE WHEN $3 IN (402,429) THEN 'waiting' ELSE queue_state END,
+    await pool.query(`UPDATE user_api_connectors SET enabled=CASE WHEN $3 IN (402,429) THEN false ELSE enabled END,
+     status=CASE WHEN $3 IN (402,429) THEN 'error' ELSE status END,
+     queue_state=CASE WHEN $3 IN (402,429) THEN 'waiting' ELSE queue_state END,
      next_available_at=CASE WHEN $3 IN (402,429) THEN $5 ELSE next_available_at END,
      rate_limit_evidence=CASE WHEN $3 IN (402,429) THEN $6::jsonb ELSE rate_limit_evidence END,
      last_quota_status=CASE WHEN $3 IN (402,429) THEN $3 ELSE last_quota_status END,
@@ -651,8 +659,9 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
      last_quota_reset_at=CASE WHEN $3 IN (402,429) THEN $5 ELSE last_quota_reset_at END,
      last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1 AND user_id=$2`,
      [row.id,user.id,status,message,(error as any)?.retryAt?new Date((error as any).retryAt):null,JSON.stringify((error as any)?.rateLimitEvidence||{source:'upstream_response',observedAt:new Date().toISOString(),httpStatus:status,headers:{}})]);
-    await audit(user.id,'api.connector.verify_failed',row.id,{status,error:message});
-    sendAuthJson(res,502,{verified:false,error:message});return true;
+    const diagnosis=status===401||status===403?'authentication_failed':status===404?'endpoint_not_found':status===402||status===429?'quota_limited':status&&status>=500?'upstream_server_error':status&&status>=400?'upstream_client_error':'network_or_timeout';
+    await audit(user.id,isHealthCheck?'api.connector.health_check_failed':'api.connector.verify_failed',row.id,{status,error:message,diagnosis});
+    sendAuthJson(res,502,isHealthCheck?{healthy:false,diagnosis,httpStatus:status,error:message,waitingForQuota:status===402||status===429}:{verified:false,error:message});return true;
    }
   }
   const itemMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})$/i);
