@@ -78,7 +78,7 @@ function makeToolName(value:string,path:string,method:string):string{
  return /^[a-z]/.test(name)?name:'api_'+name.slice(0,60);
 }
 function authSummary(document:Json,operation:Json):string[]{
- const requirements=operation.security??document.security??[];
+ const requirements=operation.securityRequirements??document.security??[];
  if(!Array.isArray(requirements)||!requirements.length)return ['none'];
  const schemes=document.components?.securitySchemes||{};
  const result:string[]=[];
@@ -124,6 +124,109 @@ function operationSchema(document:Json,operation:Json,pathItem:Json):{schema:Jso
  }
  return {schema:{type:'object',properties,required:[...required],additionalProperties:false},required:[...required],unsupported};
 }
+
+function boundedText(value:unknown,max=500):string|null{
+ if(typeof value!=='string')return null;
+ const clean=value.replace(/\s+/g,' ').trim();
+ return clean?clean.slice(0,max):null;
+}
+function governanceEvidence(document:Json,operations:any[]){
+ const schemes=document.components?.securitySchemes&&typeof document.components.securitySchemes==='object'?document.components.securitySchemes:{};
+ const authentication=Object.entries(schemes).slice(0,40).map(([name,value]:[string,any])=>{
+  const type=String(value?.type||'unknown');
+  const item:any={name:name.slice(0,100),type};
+  if(type==='apiKey'){
+   item.location=['header','query','cookie'].includes(value.in)?value.in:'unknown';
+   item.parameterName=boundedText(value.name,120);
+  }else if(type==='http'){
+   item.scheme=boundedText(value.scheme,40);
+   item.bearerFormat=boundedText(value.bearerFormat,40);
+  }else if(type==='oauth2'){
+   const flows=value.flows&&typeof value.flows==='object'?value.flows:{};
+   item.flows=Object.entries(flows).slice(0,6).map(([flowName,flow]:[string,any])=>({
+    name:flowName,authorizationUrl:boundedText(flow?.authorizationUrl,500),
+    tokenUrl:boundedText(flow?.tokenUrl,500),refreshUrl:boundedText(flow?.refreshUrl,500),
+    scopes:Object.keys(flow?.scopes||{}).slice(0,50)
+   }));
+  }else if(type==='openIdConnect')item.openIdConnectUrl=boundedText(value.openIdConnectUrl,500);
+  return item;
+ });
+ const effectiveSecurity=(operation:any)=>{
+  const requirements=operation.securityRequirements??operation.security??document.security??[];
+  if(!Array.isArray(requirements))return {status:'unknown',alternatives:[]};
+  if(!requirements.length)return {status:'none',alternatives:[]};
+  return {status:'required',alternatives:requirements.slice(0,20).map((entry:any)=>({
+   schemes:Object.entries(entry||{}).slice(0,20).map(([scheme,scopes]:[string,any])=>({
+    name:String(scheme).slice(0,100),scopes:Array.isArray(scopes)?scopes.filter((x:any)=>typeof x==='string').slice(0,50):[]
+   }))
+  }))};
+ };
+ const operationsAuth=operations.map((operation:any)=>({
+  operationId:operation.operationId||operation.toolName,
+  method:operation.method,path:operation.endpointUrl,
+  security:effectiveSecurity({securityRequirements:operation.securityRequirements})
+ }));
+ const rateHeaders=new Set<string>();
+ const rateEvidence:any[]=[];
+ const scanObject=(value:any,path:string,depth=0)=>{
+  if(!value||typeof value!=='object'||depth>5)return;
+  for(const [key,child] of Object.entries(value)){
+   const next=path?path+'.'+key:key;
+   if(/^(retry-after|ratelimit-(limit|remaining|reset|reset-after)|x-ratelimit-[a-z0-9_-]+)$/i.test(key)){
+    rateHeaders.add(key.toLowerCase());
+    rateEvidence.push({kind:'declared_header',name:key,source:next,description:boundedText((child as any)?.description)});
+   }
+   if(/^x-(rate.?limit|quota|throttle)/i.test(key)&&child!==null&&typeof child!=='object')
+    rateEvidence.push({kind:'explicit_extension',name:key,value:typeof child==='string'||typeof child==='number'?String(child).slice(0,120):undefined,source:next});
+   if(/(rate.?limit|quota|throttl|retry.after|reset)/i.test(key)&&child&&typeof child==='object')
+    scanObject(child,next,depth+1);
+   else if(typeof child==='string'&&/(rate.?limit|quota|throttl|retry.after|reset)/i.test(child))
+    rateEvidence.push({kind:'documentation_text',source:next,text:child.slice(0,400)});
+  }
+ };
+ scanObject(document,'openapi');
+ const responseHeaders:any[]=[];
+ const declaredParameters:any[]=[];
+ for(const [path,pathItem] of Object.entries(document.paths||{})){
+  if(!pathItem||typeof pathItem!=='object')continue;
+  for(const method of ['get','post','put','patch','delete']){
+   const op=(pathItem as any)[method];if(!op||typeof op!=='object')continue;
+   for(const parameter of [...((pathItem as any).parameters||[]),...(op.parameters||[])]){
+    if(String(parameter?.in||'')==='header'&&/^(retry-after|ratelimit-|x-ratelimit-)/i.test(String(parameter?.name||''))){
+     rateHeaders.add(String(parameter.name).toLowerCase());
+     declaredParameters.push({method:method.toUpperCase(),path,name:String(parameter.name),description:boundedText(parameter.description)});
+    }
+   }
+   for(const [status,response] of Object.entries(op.responses||{})){
+    const headers=(response as any)?.headers||{};
+    for(const [headerName,header] of Object.entries(headers)){
+     if(/^(retry-after|ratelimit-|x-ratelimit-)/i.test(headerName)){
+      rateHeaders.add(headerName.toLowerCase());
+      responseHeaders.push({method:method.toUpperCase(),path,status,name:headerName,description:boundedText((header as any)?.description)});
+     }
+    }
+   }
+  }
+ }
+ for(const item of responseHeaders)rateEvidence.push({kind:'response_header',...item});
+ for(const item of declaredParameters)rateEvidence.push({kind:'declared_parameter_header',...item});
+ const descriptions:string[]=[];
+ const collectText=(value:any,path:string,depth=0)=>{
+  if(depth>5||!value||typeof value!=='object')return;
+  for(const [key,child] of Object.entries(value)){
+   if(typeof child==='string'&&/(rate.?limit|quota|throttl|retry.after|reset)/i.test(child))
+    descriptions.push(path+'.'+key+': '+child.slice(0,400));
+   else if(child&&typeof child==='object')collectText(child,path+'.'+key,depth+1);
+  }
+ };
+ collectText(document,'openapi');
+ return {
+  authentication:{status:authentication.length?'schemes_declared':'unknown',schemes:authentication,operationRequirements:operationsAuth},
+  rateLimits:{status:rateEvidence.length?'explicit_evidence_found':'unknown',headers:[...rateHeaders].slice(0,40),evidence:rateEvidence.slice(0,100),documentationHints:descriptions.slice(0,50),observedLiveQuota:null},
+  servers:Array.isArray(document.servers)?document.servers.slice(0,10).map((server:any)=>({url:boundedText(server?.url,500),description:boundedText(server?.description,300)})):[]
+ };
+}
+
 export async function discoverOpenApiOperations(specUrl:string){
  const url=await safeSpecUrl(specUrl);
  const response=await fetch(url.toString(),{headers:{Accept:'application/vnd.oai.openapi+json, application/json'},redirect:'error',signal:AbortSignal.timeout(15_000)});
@@ -155,14 +258,14 @@ export async function discoverOpenApiOperations(specUrl:string){
     tags:Array.isArray(operation.tags)?operation.tags.filter((tag:any)=>typeof tag==='string').slice(0,12).map((tag:string)=>tag.slice(0,80)):[],
     deprecated:operation.deprecated===true,
     method:method.toUpperCase(),endpointUrl:endpoint,inputSchema:built.schema,
-    authOptions:auth,unsupportedParameters:built.unsupported,
+    authOptions:auth,securityRequirements:operation.security??document.security??[],unsupportedParameters:built.unsupported,
     usable:built.unsupported.length===0&&auth.every(item=>['none','bearer'].includes(item)||item.startsWith('header_key:')||item.startsWith('query_key:')),
    });
    if(operations.length>=100)break;
   }
   if(operations.length>=100)break;
  }
- return {specTitle:String(document.info?.title||'OpenAPI service').slice(0,160),specVersion:String(document.info?.version||'').slice(0,40),specUrl:url.toString(),operationCount:operations.length,operations};
+ return {specTitle:String(document.info?.title||'OpenAPI service').slice(0,160),specVersion:String(document.info?.version||'').slice(0,40),specUrl:url.toString(),operationCount:operations.length,operations,governance:governanceEvidence(document,operations)};
 }
 
 export type OfficialDocsDiscovery = {
