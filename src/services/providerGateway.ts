@@ -1,36 +1,8 @@
-import { createAnthropicAdapter } from '../providers/anthropic.ts';
 import { createOllamaAdapter } from '../providers/ollama.ts';
 import { createOpenAICompatibleAdapter } from '../providers/openAiCompatible.ts';
-import { gptOssProxy } from '../providers/gptOssProxy.ts';
 import { pool } from '../api/database.ts';
-import { BlockList, isIP } from 'node:net';
-import { lookup } from 'node:dns/promises';
-
-const providerPrivateNetworks = new BlockList();
-for(const [subnet,prefix] of [
-  ['0.0.0.0',8],['10.0.0.0',8],['100.64.0.0',10],['127.0.0.0',8],['169.254.0.0',16],
-  ['172.16.0.0',12],['192.0.0.0',24],['192.0.2.0',24],['192.168.0.0',16],
-  ['198.18.0.0',15],['198.51.100.0',24],['203.0.113.0',24],['224.0.0.0',4],['240.0.0.0',4],
-] as const) providerPrivateNetworks.addSubnet(subnet,prefix,'ipv4');
-for(const [subnet,prefix] of [
-  ['::',128],['::1',128],['::ffff:0:0',96],['64:ff9b::',96],['100::',64],
-  ['2001:db8::',32],['fc00::',7],['fe80::',10],['ff00::',8],
-] as const) providerPrivateNetworks.addSubnet(subnet,prefix,'ipv6');
-function isPublicProviderAddress(address:string):boolean{
-  const family=isIP(address);
-  if(family===0)return false;
-  if(family===4)return !providerPrivateNetworks.check(address,'ipv4');
-  if(address.toLowerCase().startsWith('::ffff:')){
-    const mapped=address.slice(7);
-    if(isIP(mapped)===4)return !providerPrivateNetworks.check(mapped,'ipv4');
-  }
-  return !providerPrivateNetworks.check(address,'ipv6');
-}
-
-import { decryptProviderSecret } from '../security/providerVault.ts';
 import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescriptor, CapabilityFlags, HealthStatus } from '../providers/providerTypes.ts';
 
-const openAICompatible = createOpenAICompatibleAdapter();
 // Optional external 9Router instance. It is only registered when both server-side
 // credentials are present; the AFG client never sees this API key.
 const nineRouterKey = (process.env.NINEROUTER_API_KEY?.trim() || '').replace(/^Bearer\s+/i, '').trim();
@@ -48,189 +20,22 @@ const nineRouterBaseAdapter = nineRouterBase
       catalogOnlyHealthCheck: true,
     })
   : null;
-// 9Router exposes separate capability catalogues. Merge them into one server-side
-// catalogue while preserving upstream model IDs and assigning only endpoint-backed capabilities.
-const nineRouterModelKinds = new Map<string, string>();
-const nineRouterAdapter: ChatProviderAdapter | null = nineRouterBaseAdapter
-  ? {
-      ...nineRouterBaseAdapter,
-      async listModels(): Promise<ModelDescriptor[]> {
-        const chatModels = await nineRouterBaseAdapter.listModels();
-        const kinds = [
-          { kind: 'image', path: '/models/image', capability: 'imageGen' as const },
-          { kind: 'image-to-text', path: '/models/image-to-text', capability: 'vision' as const },
-          { kind: 'tts', path: '/models/tts', capability: 'tts' as const },
-          { kind: 'stt', path: '/models/stt', capability: 'stt' as const },
-          { kind: 'embedding', path: '/models/embedding', capability: 'embedding' as const },
-          { kind: 'web', path: '/models/web', capability: 'web' as const },
-        ];
-        const additional = await Promise.all(kinds.map(async ({ kind, path, capability }) => {
-          try {
-            const response = await fetch(nineRouterBase + path, {
-              headers: { ...(nineRouterKey ? { Authorization: 'Bearer ' + nineRouterKey } : {}), Accept: 'application/json' },
-              signal: AbortSignal.timeout(15_000),
-              redirect: 'error',
-            });
-            if (!response.ok) return [];
-            const payload = await response.json() as any;
-            const rows = Array.isArray(payload?.data) ? payload.data
-              : Array.isArray(payload?.models) ? payload.models
-              : Array.isArray(payload?.data?.data) ? payload.data.data : [];
-            return rows.filter((item: any) => item && typeof item.id === 'string').map((item: any): ModelDescriptor => {
-              const catalogKind = kind === 'web'
-                ? (item.kind === 'webFetch' || item.id.endsWith('/fetch') ? 'webFetch' : 'webSearch')
-                : kind;
-              nineRouterModelKinds.set(item.id, kind);
-              return {
-              id: item.id,
-              catalogKind,
-              providerId: '9router',
-              displayName: typeof item.name === 'string' ? item.name : item.id,
-              description: 'Discovered from the 9Router ' + kind + ' catalogue.',
-              contextWindow: Number(item.context_length || item.context_window || 0) || 0,
-              pricing: undefined,
-              capabilities: {
-                text: false, streaming: false, vision: capability === 'vision',
-                imageGen: capability === 'imageGen', imageEdit: false,
-                ocr: false, tts: capability === 'tts', stt: capability === 'stt',
-                tools: false, jsonMode: false,
-                embedding: capability === 'embedding',
-                webSearch: capability === 'web' && catalogKind === 'webSearch',
-                webFetch: capability === 'web' && catalogKind === 'webFetch',
-              },
-              enabled: true,
-              verifiedAt: null,
-            };});
-          } catch {
-            return [];
-          }
-        }));
-        const merged = [
-          ...chatModels.map((model) => ({ ...model, catalogKind: 'llm' })),
-          ...additional.flat(),
-        ];
-        return merged.filter((model, index) =>
-          merged.findIndex((candidate) => candidate.id === model.id) === index);
-      },
-      async healthCheck(modelId: string): Promise<HealthStatus> {
-        const kind = nineRouterModelKinds.get(modelId);
-        if (!kind) return nineRouterBaseAdapter.healthCheck(modelId);
-        const paths: Record<string, string> = {
-          image: '/models/image',
-          'image-to-text': '/models/image-to-text',
-          tts: '/models/tts',
-          stt: '/models/stt',
-          embedding: '/models/embedding',
-          web: '/models/web',
-        };
-        const path = paths[kind] || '/models';
-        const checkedAt = new Date().toISOString();
-        try {
-          const response = await fetch(nineRouterBase + path, {
-            headers: { ...(nineRouterKey ? { Authorization: 'Bearer ' + nineRouterKey } : {}), Accept: 'application/json' },
-            signal: AbortSignal.timeout(15_000), redirect: 'error',
-          });
-          if (!response.ok) return { healthy: false, checkedAt, message: '9Router capability catalogue check failed.' };
-          const payload = await response.json() as any;
-          const rows = Array.isArray(payload?.data) ? payload.data
-            : Array.isArray(payload?.models) ? payload.models
-            : Array.isArray(payload?.data?.data) ? payload.data.data : [];
-          return { healthy: rows.some((item: any) => item?.id === modelId), checkedAt,
-            ...(rows.some((item: any) => item?.id === modelId) ? {} : { message: 'Model is not present in its 9Router capability catalogue.' }) };
-        } catch {
-          return { healthy: false, checkedAt, message: '9Router capability catalogue is unreachable.' };
-        }
-      },
-    }
-  : null;
-// Accept either a raw API key or the common "Bearer <key>" form pasted from API docs.
-const beatApiKey = (process.env.BEATAPI_API_KEY?.trim() || '').replace(/^Bearer\s+/i, '').trim();
-// BeatAPI's OpenAI-compatible endpoints live under /v1. Normalize both host-only and /v1 values.
-const configuredBeatApiBaseUrl = (process.env.BEATAPI_BASE_URL?.trim() || 'https://direct.beatapi.io').replace(/\/+$/, '');
-const beatApiBaseUrl = /\/v1$/i.test(configuredBeatApiBaseUrl)
-  ? configuredBeatApiBaseUrl
-  : configuredBeatApiBaseUrl + '/v1';
-const beatApiAdapter = beatApiKey
-  ? createOpenAICompatibleAdapter({
-      id: 'beatapi',
-      displayName: 'BeatAPI',
-      baseUrl: beatApiBaseUrl,
-      // BeatAPI serves inference on direct.beatapi.io; keep model catalogue requests
-      // on its standard API host.
-      catalogBaseUrl: 'https://api.beatapi.io/v1',
-      apiKey: beatApiKey,
-      catalogOnlyHealthCheck: true,
-    })
-  : null;
-const cleanApisKey = (process.env.CLEANAPIS_API_KEY?.trim() || '').replace(/^Bearer\\s+/i, '').trim();
-const cleanApisAdapter = cleanApisKey
-  ? createOpenAICompatibleAdapter({
-      id: 'cleanapis',
-      displayName: 'Clean APIs',
-      baseUrl: 'https://cleanapis.com/v1',
-      catalogOnlyHealthCheck: true,
-      apiKey: cleanApisKey,
-    })
-  : null;
-const staticProviderRegistry: ChatProviderAdapter[] = [openAICompatible, gptOssProxy, ...(nineRouterAdapter ? [nineRouterAdapter] : []), ...(beatApiAdapter ? [beatApiAdapter] : []), ...(cleanApisAdapter ? [cleanApisAdapter] : [])];
+const staticProviderRegistry: ChatProviderAdapter[] = nineRouterAdapter ? [nineRouterAdapter] : [];
 let databaseProviderRegistry: ChatProviderAdapter[] = [];
-let databaseProviderRefreshAt = 0;
 const DATABASE_PROVIDER_REFRESH_MS = 15_000;
+let databaseProviderRefreshAt = 0;
 
 export async function refreshDatabaseProviderAdapters(force = false): Promise<void> {
   if (!pool || (!force && Date.now() - databaseProviderRefreshAt < DATABASE_PROVIDER_REFRESH_MS)) return;
   databaseProviderRefreshAt = Date.now();
   try {
-    const result = await pool.query(`SELECT p.slug,p.display_name,p.base_url,p.kind,p.enabled,
-          pk.key_encrypted,pk.status AS key_status,p.config_json
-        FROM providers p
-        LEFT JOIN provider_keys pk ON pk.provider_id=p.id AND pk.alias='default' AND pk.status='active'
-        WHERE p.source='custom' OR p.kind IN ('openai_compat','anthropic','ollama')
-        ORDER BY p.slug`);
-    const next: ChatProviderAdapter[] = [];
-    for (const row of result.rows) {
-      if (String(row.kind) === 'ollama') {
-        const localBase = process.env.OLLAMA_BASE_URL?.trim() || String(row.base_url || 'http://127.0.0.1:11434');
-        next.push(createOllamaAdapter(String(row.slug),String(row.display_name),localBase));
-        continue;
-      }
-      if (!row.key_encrypted || !row.base_url) continue;
-      if (!['custom','openai_compat','anthropic'].includes(String(row.kind))) continue;
-      try {
-        const apiKey = decryptProviderSecret(String(row.key_encrypted));
-        const baseUrl = String(row.base_url);
-        const parsed = new URL(baseUrl);
-        if (!['https:','http:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.hash ||
-            (parsed.protocol === 'https:' && (isIP(parsed.hostname)||parsed.hostname==='localhost'||parsed.hostname.endsWith('.localhost')||parsed.hostname.endsWith('.local')||parsed.hostname.endsWith('.internal')))||
-            (parsed.protocol === 'http:' && (process.env.NODE_ENV==='production'||!['localhost','127.0.0.1'].includes(parsed.hostname)))) continue;
-        if(parsed.protocol==='https:'){
-          const resolved=await lookup(parsed.hostname,{all:true,verbatim:true});
-          if(!resolved.length||resolved.some(entry=>!isPublicProviderAddress(entry.address)))continue;
-        }
-        const providerConfig=(row.config_json&&typeof row.config_json==='object')?row.config_json as Record<string,unknown>:{};
-        if (String(row.kind) === 'anthropic' || providerConfig.protocol === 'anthropic-messages') {
-          next.push(createAnthropicAdapter({id:String(row.slug),displayName:String(row.display_name),baseUrl,apiKey}));
-        } else {
-          next.push(createOpenAICompatibleAdapter({
-            id: String(row.slug), displayName: String(row.display_name), baseUrl, apiKey,
-          }));
-        }
-      } catch {
-        console.error('AI_PROVIDER_RUNTIME_CONFIGURATION_INVALID', JSON.stringify({ provider: String(row.slug) }));
-      }
-    }
-    databaseProviderRegistry = next;
+    const result = await pool.query(`SELECT slug,display_name,base_url FROM providers WHERE slug='ollama' AND kind='ollama' AND enabled=true`);
+    databaseProviderRegistry = result.rows.map((row) => createOllamaAdapter(String(row.slug), String(row.display_name), process.env.OLLAMA_BASE_URL?.trim() || String(row.base_url || 'http://127.0.0.1:11434')));
   } catch {
-    // A not-yet-applied migration should not make the pre-existing environment adapters disappear.
     databaseProviderRegistry = [];
   }
 }
 
-function allProviderAdapters(): ChatProviderAdapter[] {
-  const map = new Map<string, ChatProviderAdapter>();
-  for (const provider of [...staticProviderRegistry, ...databaseProviderRegistry]) map.set(provider.id, provider);
-  return [...map.values()];
-}
 const HEALTH_TTL_MS = 5 * 60 * 1000;
 const healthCache = new Map<string, { healthy: boolean; checkedAt: string }>();
 
@@ -305,12 +110,7 @@ async function syncDiscoveredModels(provider: ChatProviderAdapter, models: Model
   try {
   // Prefer the paid GLM 5.3 Flash model when this key can access it; otherwise
   // bootstrap the free GLM 5.3 Flash model for keys restricted to free credit.
-  const beatApiDefaultModelId = provider.id === 'beatapi'
-    ? (models.some((model) => model.id === 'glm-5.3-flash')
-        ? 'glm-5.3-flash'
-        : (models.some((model) => model.id === 'glm-5.3-flash-free') ? 'glm-5.3-flash-free' : null))
-    : null;
-  for (const model of models) {
+    for (const model of models) {
     await pool.query(
       `INSERT INTO model_catalog
         (provider_key, model_key, display_name, capabilities, enabled, context_window)
@@ -327,12 +127,10 @@ async function syncDiscoveredModels(provider: ChatProviderAdapter, models: Model
         // Show every discovered 9Router model in the chat model picker by default.
         // Existing admin choices are preserved by the UPSERT above; new rows are enabled.
         provider.id === '9router' ||
-        // Clean APIs' Free plan grants access to all 33 chat models within its monthly token allowance.
-        // Other gateways only auto-enable models explicitly identified as free.
-        provider.id === 'cleanapis' ||
-          model.id.toLowerCase().endsWith('-free') ||
-          (model.pricing?.inputPerMillion === 0 && model.pricing?.outputPerMillion === 0) ||
-          (provider.id === 'beatapi' && model.id === beatApiDefaultModelId),
+        // 9Router catalogue entries are selectable after the health probe; other models
+        // are enabled only when explicitly identified as free by upstream metadata.
+        model.id.toLowerCase().endsWith('-free') ||
+          (model.pricing?.inputPerMillion === 0 && model.pricing?.outputPerMillion === 0),
         model.contextWindow],
     );
   }
