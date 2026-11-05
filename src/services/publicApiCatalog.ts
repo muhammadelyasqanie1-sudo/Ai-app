@@ -363,17 +363,17 @@ export async function queryPublicApiCatalog(filters:{
   if(!pool)throw new Error('The API catalog requires PostgreSQL.');
   const page=Math.max(1,Math.min(100000,Math.trunc(filters.page||1)));
   const pageSize=Math.max(1,Math.min(100,Math.trunc(filters.pageSize||24)));
-  const where:string[]=['is_active=true'];
+  const where:string[]=['c.is_active=true'];
   const values:unknown[]=[];
   const add=(value:unknown)=>{values.push(value);return '$'+values.length;};
   if(filters.q?.trim()){
     const needle='%'+filters.q.trim().slice(0,120).replace(/[\\%_]/g,'\\$&')+'%';
-    where.push('(name ILIKE '+add(needle)+' OR description ILIKE '+add(needle)+' OR category ILIKE '+add(needle)+')');
+    where.push('(c.name ILIKE '+add(needle)+' OR c.description ILIKE '+add(needle)+' OR c.category ILIKE '+add(needle)+')');
   }
-  if(filters.category&&filters.category!=='all')where.push('category='+add(filters.category.slice(0,100)));
-  if(filters.auth&&filters.auth!=='all')where.push('lower(auth)=lower('+add(filters.auth.slice(0,40))+')');
-  if(filters.https&&filters.https!=='all')where.push('lower(https)=lower('+add(filters.https==='true'?'Yes':'No')+')');
-  if(filters.cors&&filters.cors!=='all')where.push('lower(cors)=lower('+add(filters.cors==='true'?'Yes':'No')+')');
+  if(filters.category&&filters.category!=='all')where.push('c.category='+add(filters.category.slice(0,100)));
+  if(filters.auth&&filters.auth!=='all')where.push('lower(c.auth)=lower('+add(filters.auth.slice(0,40))+')');
+  if(filters.https&&filters.https!=='all')where.push('lower(c.https)=lower('+add(filters.https==='true'?'Yes':'No')+')');
+  if(filters.cors&&filters.cors!=='all')where.push('lower(c.cors)=lower('+add(filters.cors==='true'?'Yes':'No')+')');
   const clause=where.join(' AND ');
   const count=await pool.query('SELECT count(*)::int AS total FROM public_api_catalog WHERE '+clause,values);
   const rows=await pool.query(`SELECT source_key,name,description,auth,https,cors,category,
@@ -390,7 +390,7 @@ export async function queryPublicApiCatalog(filters:{
     END AS capability,
     homepage_url,docs_url,icon_url,image_url,site_name,site_description,health_status,response_time_ms,last_health_check,imported_at,
     COALESCE(tracking.discovery_status,'catalogued') AS implementation_status
-    FROM public_api_catalog LEFT JOIN public_api_implementation_tracking tracking USING(source_key) WHERE ${clause} ORDER BY category,name LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`,values);
+    FROM public_api_catalog c LEFT JOIN public_api_implementation_tracking tracking ON tracking.source_key=c.source_key WHERE ${clause} ORDER BY c.category,c.name LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`,values);
   return {items:rows.rows,page,pageSize,total:Number(count.rows[0]?.total||0),categories:await listPublicApiCategories()};
 }
 
