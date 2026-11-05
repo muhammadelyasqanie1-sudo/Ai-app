@@ -367,8 +367,8 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
   }finally{reader?.releaseLock();}
   if(!streamTo.destroyed)streamTo.end();
   await persistRateLimitObservation(row,userId,rateLimitEvidence,null,null);
-  await pool!.query(\`INSERT INTO user_api_connector_runs(connector_id,user_id,request_id,http_method,http_status,duration_ms,outcome)
-   VALUES($1,$2,$3,$4,$5,$6,'success')\`,[row.id,userId,requestId,row.http_method,response.status,Date.now()-started]);
+  await pool!.query(`INSERT INTO user_api_connector_runs(connector_id,user_id,request_id,http_method,http_status,duration_ms,outcome)
+   VALUES($1,$2,$3,$4,$5,$6,'success')`,[row.id,userId,requestId,row.http_method,response.status,Date.now()-started]);
   return {data:{kind:'stream',contentType:streamType,sizeBytes:total},status:response.status,durationMs:Date.now()-started};
  }
  const announcedType=(response.headers.get('content-type')||'application/octet-stream').split(';')[0].trim().toLowerCase();
