@@ -119,6 +119,7 @@ export interface AfgModelOption {
   pricing?: { inputPerMillion: number | null; outputPerMillion: number | null; currency?: string };
   requiresSubscription?: boolean;
   accessTier?: 'free' | 'pro' | 'max' | 'ultra' | 'unknown';
+  catalogKind?: string;
 }
 
 export interface AfgCapabilitySnapshot {
