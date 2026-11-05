@@ -848,9 +848,9 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
      WHERE id=$1 AND user_id=$2 AND credential_encrypted IS NOT NULL
       AND NOT EXISTS(SELECT 1 FROM user_api_connector_keys WHERE connector_id=$1)
      ON CONFLICT(connector_id,label) DO NOTHING`,[connector.id,user.id]);
-    const result=await pool.query(`SELECT id,label,priority,is_active,created_at,updated_at
+    const result=await pool.query(`SELECT id,label,priority,is_active,queue_state,next_available_at,last_quota_status,last_quota_observed_at,last_error,created_at,updated_at
      FROM user_api_connector_keys WHERE connector_id=$1 AND user_id=$2 ORDER BY priority ASC,created_at ASC`,[connector.id,user.id]);
-    sendAuthJson(res,200,{keys:result.rows.map((key:any)=>({id:key.id,label:key.label,priority:Number(key.priority),active:Boolean(key.is_active),createdAt:key.created_at,updatedAt:key.updated_at}))});return true;
+    sendAuthJson(res,200,{keys:result.rows.map((key:any)=>({id:key.id,label:key.label,priority:Number(key.priority),active:Boolean(key.is_active),queueState:key.queue_state||'ready',nextAvailableAt:key.next_available_at||null,lastQuotaStatus:key.last_quota_status||null,lastQuotaObservedAt:key.last_quota_observed_at||null,lastError:key.last_error||null,createdAt:key.created_at,updatedAt:key.updated_at}))});return true;
    }
    if(req.method==='POST'){
     const body=await readJsonBody(req,12_000);
