@@ -343,8 +343,6 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  if(streamTo){
   const announced=(response.headers.get('content-type')||'application/octet-stream').split(';')[0].trim().toLowerCase();
   const streamType=/^[a-z0-9][a-z0-9!_.+-]{0,80}\/[a-z0-9][a-z0-9!_.+-]{0,80}$/.test(announced)?announced:'application/octet-stream';
- const announcedType=^_.+-]{0,80}\/[a-z0-9][a-z0-9!# const retryAt=parseUpstreamResetAt(response);
- const announcedType=^_.+-]{0,80}$/.test(announced)?announced:'application/octet-stream';
   const disposition=response.headers.get('content-disposition')||'';
   const streamHeaders:Record<string,string>={'Content-Type':streamType,'Cache-Control':'no-cache, no-transform','X-Content-Type-Options':'nosniff','X-Request-Id':requestId};
   if(/(?:^|;)\s*attachment\b/i.test(disposition))streamHeaders['Content-Disposition']='attachment; filename="'+safeDownloadName(disposition,streamType).replace(/"/g,'')+'"';
