@@ -84,7 +84,7 @@ function inferPaymentRequirement(...parts: string[]): PaymentRequirement {
   const value = parts.join(' ').toLowerCase();
   if (/phone\s+verification|phone\s+verified|sms\s+verification/.test(value)) return 'phone_verification';
   if (/credit\s+card\s+required|card\s+required|requires?\s+a\s+card/.test(value)) return 'card';
-  if (/no\s+credit\s+card|without\s+(?:a\s+)?credit\s+card|no\s+card|anonymous\s+access/.test(value)) return 'no_card';
+  if (parts.some(part => part.trim().toLowerCase() === 'no') || /no\s+credit\s+card|without\s+(?:a\s+)?credit\s+card|no\s+card|anonymous\s+access/.test(value)) return 'no_card';
   if (/registration|sign[ -]?up|account\s+required|requires?\s+an?\s+account/.test(value)) return 'registration';
   return 'unknown';
 }
@@ -148,7 +148,7 @@ function parseMnfstDataset(raw: string): { records: LlmApiRecord[]; updatedAt: s
     const providerSlug = slugify(providerName);
     const description = safeString(provider.description, 2000);
     const providerType = provider.category === 'provider_api' ? 'provider_api' : provider.category === 'inference_provider' ? 'inference_provider' : 'unknown';
-    const baseUrl = typeof provider.baseUrl === 'string' ? provider.baseUrl.trim().slice(0, 2048) : null;
+    const baseUrl = safeHttpsUrl(provider.baseUrl);
     const apiKeyUrl = safeHttpsUrl(provider.url);
     const models = Array.isArray(provider.models) ? provider.models : [];
     if (!models.length) {
