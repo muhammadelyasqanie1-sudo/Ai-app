@@ -42,6 +42,23 @@ function decrypt(value:string):string{
  decipher.setAuthTag(Buffer.from(tag,'base64'));
  return Buffer.concat([decipher.update(Buffer.from(data,'base64')),decipher.final()]).toString('utf8');
 }
+async function readTextLimited(response:Response,maxBytes:number):Promise<string>{
+ const declared=Number(response.headers.get('content-length')||0);
+ if(declared>maxBytes){await response.body?.cancel().catch(()=>{});throw new Error('Remote response exceeds the '+maxBytes+' byte safety limit.');}
+ if(!response.body)return '';
+ const reader=response.body.getReader(),chunks:Uint8Array[]=[];let total=0;
+ try{
+  while(true){
+   const part=await reader.read();if(part.done)break;
+   total+=part.value.byteLength;
+   if(total>maxBytes){await reader.cancel().catch(()=>{});throw new Error('Remote response exceeds the '+maxBytes+' byte safety limit.');}
+   chunks.push(part.value);
+  }
+ }finally{reader.releaseLock();}
+ const merged=new Uint8Array(total);let offset=0;
+ for(const chunk of chunks){merged.set(chunk,offset);offset+=chunk.byteLength;}
+ return new TextDecoder().decode(merged);
+}
 async function safeEndpoint(value:string):Promise<URL>{
  let url:URL;try{url=new URL(value);}catch{throw new Error('Enter a valid API endpoint URL.');}
  if(url.protocol!=='https:'||url.username||url.password||url.hash||url.search||
@@ -149,9 +166,8 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
   if(error instanceof Error&&error.name==='TimeoutError')throw Object.assign(new Error('The API endpoint timed out.'),{retryable:true});
   throw Object.assign(new Error('The API endpoint could not be reached.'),{retryable:true});
  }
- const raw=await response.text();
+ const raw=await readTextLimited(response,1_000_000);
  const durationMs=Date.now()-started;
- if(raw.length>1_000_000)throw new Error('API response exceeded the 1 MB safety limit.');
  const safeRaw=secrets.reduce((value,secret)=>value.split(secret).join('[redacted]'),raw);
  let data:unknown=safeRaw;
  if(safeRaw){try{data=JSON.parse(safeRaw);}catch{}}
