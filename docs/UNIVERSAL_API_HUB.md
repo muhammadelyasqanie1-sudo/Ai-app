@@ -84,3 +84,8 @@ Catalog search results now include a derived `capability` label (AI/language, im
 ## Durable catalogue discovery queue
 
 Migration `0025_public_api_discovery_work_queue.sql` adds a persistent review queue for all tracked catalogue entries. The admin panel can claim a bounded batch (up to 25; default 10), inspect the catalogue's candidate documentation link, and record one of four outcomes: official docs verified, OpenAPI contract found, unsupported with a reason, or return to queue. Claims have a 20-minute lease; interrupted work becomes claimable again and concurrent admins cannot claim the same row. Queue completion is an administrative review record only: it does not prove endpoint health, authenticate a user, test a paid quota, create a connector, or enable an API. Official HTTPS URLs and human-supplied reasons are validated before recording. The queue intentionally avoids speculative endpoint extraction and automated third-party calls.
+
+
+## Official documentation discovery
+
+The admin work queue can scan an already-claimed catalogue entry's official HTTPS docs/homepage. The bounded scanner refuses redirects, private/reserved DNS targets, cross-host documentation links, and oversized responses. It records only evidence explicitly present in the page: protocol/authentication terms and same-host OpenAPI/Swagger link candidates. A candidate spec is not automatically imported or trusted; it must be reviewed and parsed as an OpenAPI contract separately. These labels never mark an endpoint verified, establish quota/reset information, configure credentials, or enable a connector. Requires migration 0026.
