@@ -110,27 +110,32 @@ function operationSchema(document:Json,operation:Json,pathItem:Json):{schema:Jso
   schema['x-in']=location;properties[name]=schema;if(parameter.required===true)required.add(name);
  }
  const body=operation.requestBody;
+ let requestContentType:string|undefined;
  if(body&&typeof body==='object'){
-  const jsonMedia=body.content?.['application/json']||body.content?.['application/*+json'];
-  const multipartMedia=body.content?.['multipart/form-data'];
-  const media=multipartMedia||jsonMedia;
+  const content=body.content&&typeof body.content==='object'?body.content:{};
+  const supported=['application/json','application/*+json','multipart/form-data','application/x-www-form-urlencoded','text/plain','application/xml','text/xml'];
+  requestContentType=supported.find(type=>content[type]&&typeof content[type]==='object');
+  const media=requestContentType?content[requestContentType]:null;
   if(media?.schema){
    let schema:any=media.schema;
    if(typeof schema.$ref==='string')schema=resolveLocalRef(document,schema.$ref)||{};
    if(schema.type==='object'&&schema.properties&&typeof schema.properties==='object'){
     for(const [name,value] of Object.entries(schema.properties)){
      let property:Json|null=null;
-     if(multipartMedia&&(value as any)?.type==='string'&&(value as any)?.format==='binary')property={type:'string',format:'binary',description:String((value as any).description||'Uploaded file').slice(0,500)};
+     if(requestContentType==='multipart/form-data'&&(value as any)?.type==='string'&&(value as any)?.format==='binary')property={type:'string',format:'binary',description:String((value as any).description||'Uploaded file').slice(0,500)};
      else property=primitiveSchema(document,value);
      if(!property){unsupported.push('body:'+name);continue;}
      property['x-in']='body';properties[name]=property;
     }
     if(Array.isArray(schema.required))for(const name of schema.required)if(typeof name==='string'&&properties[name])required.add(name);
-   }else unsupported.push('requestBody:non_flat_json_schema');
+   }else if(['text/plain','application/xml','text/xml'].includes(requestContentType)&&schema.type==='string'){
+    properties.body={type:'string',description:String(schema.description||'Raw request body').slice(0,500),'x-in':'body'};
+    if(body.required===true)required.add('body');
+   }else unsupported.push('requestBody:non_flat_or_unsupported_schema');
   }else unsupported.push('requestBody:unsupported_content_type');
   if(body.required===true&&Object.keys(properties).length===0)unsupported.push('requestBody:required_but_unsupported');
  }
- return {schema:{type:'object',properties,required:[...required],additionalProperties:false,...(body?.content?.['multipart/form-data']?{'x-content-type':'multipart/form-data'}:{})},required:[...required],unsupported};
+ return {schema:{type:'object',properties,required:[...required],additionalProperties:false,...(requestContentType?{'x-content-type':requestContentType}:{})},required:[...required],unsupported};
 }
 
 function boundedText(value:unknown,max=500):string|null{
