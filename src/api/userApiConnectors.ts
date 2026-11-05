@@ -87,7 +87,7 @@ async function readMultipartRequest(req:IncomingMessage,maxBytes=12*1024*1024):P
   const name=nameMatch[1];parts++;if(parts>50)throw new Error('Multipart request contains too many parts.');
   const filenameMatch=headers.match(/\bfilename="([^"]{0,255})"/i);
   if(filenameMatch){
-   const safeFilename=filenameMatch[1].replace(/[\\/]/g,'_').replace(/[\\u0000-\\u001f\\u007f]/g,'').slice(0,180);
+   const safeFilename=filenameMatch[1].replace(/[\\/]/g,'_').replace(/[\u0000-\u001f\u007f]/g,'').slice(0,180);
    if(!safeFilename||safeFilename==='.'||safeFilename==='..')throw new Error('Uploaded filename is invalid.');
    const mime=headers.match(/\bcontent-type:\s*([^\r\n]+)/i)?.[1]?.trim().toLowerCase()||'application/octet-stream';
    if(!/^[a-z0-9][a-z0-9!#async function safeEndpoint(value:string):Promise<URL>{^_.+-]{0,80}\/[a-z0-9][a-z0-9!#async function safeEndpoint(value:string):Promise<URL>{^_.+-]{0,80}$/.test(mime))throw new Error('Uploaded file content type is invalid.');
