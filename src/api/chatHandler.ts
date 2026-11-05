@@ -19,11 +19,11 @@ const chatRequestSchema = ChatRequestSchema;
 function selectRelevantChatTools(definitions:any[],messages:ChatMessage[],limit=16):any[]{
   if(definitions.length<=limit)return definitions;
   const latestUser=[...messages].reverse().find(message=>message.role==='user')?.content||'';
-  const queryTokens=new Set(String(latestUser).toLocaleLowerCase().match(/[\\p{L}\\p{N}_-]{2,}/gu)||[]);
+  const queryTokens=new Set(String(latestUser).toLocaleLowerCase().match(/[\p{L}\p{N}_-]{2,}/gu)||[]);
   const ranked=definitions.map((definition,index)=>{
     const fn=definition?.function||{};
     const searchable=[fn.name,fn.description,...Object.keys(fn.parameters?.properties||{})].join(' ').toLocaleLowerCase();
-    const tokens=searchable.match(/[\\p{L}\\p{N}_-]{2,}/gu)||[];
+    const tokens=searchable.match(/[\p{L}\p{N}_-]{2,}/gu)||[];
     let score=0;
     for(const token of tokens)if(queryTokens.has(token))score+=token.length>=7?3:2;
     for(const token of queryTokens)if(token.length>=5&&searchable.includes(token))score+=1;
