@@ -28,7 +28,7 @@ function isPublicProviderAddress(address:string):boolean{
 }
 
 import { decryptProviderSecret } from '../security/providerVault.ts';
-import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescriptor, CapabilityFlags } from '../providers/providerTypes.ts';
+import type { AfgCapability, ChatProviderAdapter, ProviderCatalog, ModelDescriptor, CapabilityFlags, HealthStatus } from '../providers/providerTypes.ts';
 
 const openAICompatible = createOpenAICompatibleAdapter();
 // Optional external 9Router instance. It is only registered when both server-side
