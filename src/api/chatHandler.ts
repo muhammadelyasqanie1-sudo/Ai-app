@@ -11,6 +11,7 @@ import { pool } from './database.ts';
 import { enforceModelSubscription } from './modelAccess.ts';
 import { redactSecret } from '../security/providerVault.ts';
 import { ChatRequestSchema } from '../../packages/shared/src/schemas';
+import { estimateTokenCount, optimizeChatMessages } from '../services/tokenOptimizer.ts';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system' | 'tool'; content: string; name?: string; tool_call_id?: string; tool_calls?: Array<{id:string;type:'function';function:{name:string;arguments:string}}> };
 const chatRequestSchema = ChatRequestSchema;
@@ -319,6 +320,21 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       .filter((message) => message.role === 'user' || message.role === 'assistant')
       .map((message) => ({ role: message.role as 'user' | 'assistant', content: message.content }))
       .filter((message) => message.content.length > 0));
+
+    const tokenOptimization = optimizeChatMessages(upstreamMessages, body.token_saver !== false);
+    upstreamMessages.splice(0, upstreamMessages.length, ...tokenOptimization.messages);
+    estimatedInputTokens = tokenOptimization.messages.reduce(
+      (total, message) => total + estimateTokenCount(message.content), 0,
+    );
+    console.info('AFG_TOKEN_OPTIMIZATION', JSON.stringify({
+      requestId: id,
+      enabled: body.token_saver !== false,
+      beforeChars: tokenOptimization.beforeChars,
+      afterChars: tokenOptimization.afterChars,
+      removedDuplicateTurns: tokenOptimization.removedDuplicates,
+      estimatedInputTokensBefore: Math.ceil(tokenOptimization.beforeChars / 4),
+      estimatedInputTokensAfter: estimatedInputTokens,
+    }));
 
     if (!upstreamMessages.some((message) => message.role === 'user')) {
       sendJson(req, res, 400, { error: 'At least one user message is required.', requestId: id }, id);
