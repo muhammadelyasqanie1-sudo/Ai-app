@@ -359,8 +359,9 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
   }
   const callMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/call$/i);
   if(req.method==='POST'&&callMatch){
+   await refreshDueQueueEntries(user.id);
    const row=await ownerConnector(user.id,callMatch[1]);
-   if(!row||!row.enabled||row.status!=='verified'){sendAuthJson(res,409,{error:'API connector is not verified and enabled.'});return true;}
+   if(!row||!row.enabled||row.status!=='verified'||row.queue_state!=='ready'){sendAuthJson(res,409,{error:row?.queue_state==='waiting'?'API connector is waiting for its upstream quota reset.':'API connector is not verified and enabled.'});return true;}
    if(!await reserveConnectorCall(user.id,row.id)){sendAuthJson(res,429,{error:'API connector limit is 30 calls per minute.'});return true;}
    const requestId=randomUUID(),body=await readJsonBody(req,60_000);
    try{
