@@ -333,7 +333,8 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  const durationMs=Date.now()-started;
  const rateLimitEvidence=readRateLimitEvidence(response);
  const retryAt=parseUpstreamResetAt(response);
- const contentType=(response.headers.get('content-type')||'application/octet-stream').split(';')[0].trim().toLowerCase();
+ const announcedType=(response.headers.get('content-type')||'application/octet-stream').split(';')[0].trim().toLowerCase();
+ const contentType=/^[a-z0-9][a-z0-9!#const contentType=(response.headers.get('content-type')||'application/octet-stream').split(';')[0].trim().toLowerCase();^_.+-]{0,80}\/[a-z0-9][a-z0-9!#const contentType=(response.headers.get('content-type')||'application/octet-stream').split(';')[0].trim().toLowerCase();^_.+-]{0,80}$/.test(announcedType)?announcedType:'application/octet-stream';
  const isTextual=contentType==='application/json'||contentType.endsWith('+json')||contentType.startsWith('text/')||contentType==='application/xml'||contentType.endsWith('+xml');
  let data:unknown;
  if(isTextual){
@@ -495,6 +496,7 @@ export async function executeUserApiTool(userId:string,toolName:string,args:unkn
  if(!await reserveConnectorCall(userId,row.id))throw new Error('This API connector has reached its limit of 30 calls per minute.');
  const requestId=randomUUID();
  const result=await executeConnectorWithFallback(row,args,userId,requestId);
+ if((result.data as any)?.kind==='file')return {...result,data:{kind:'file',filename:(result.data as any).filename,contentType:(result.data as any).contentType,sizeBytes:(result.data as any).sizeBytes,downloadAvailableInConnectorPanel:true}};
  const serialized=JSON.stringify(result.data);
  if(serialized.length>16_000)return {...result,truncated:true,responsePreview:serialized.slice(0,16_000)};
  return result;
