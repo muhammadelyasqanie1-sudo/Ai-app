@@ -70,7 +70,7 @@ async function requestOAuthToken(config:Json,form:URLSearchParams,timeoutMs:numb
   const encoded=(value:string)=>new URLSearchParams([['v',value]]).toString().slice(2);
   const credentials=encoded(String(config.clientId))+':'+encoded(String(config.clientSecret||''));
   headers.set('Authorization','Basic '+Buffer.from(credentials,'utf8').toString('base64'));
-  form.delete('client_secret');
+  form.delete('client_id');form.delete('client_secret');
  }else if(method==='client_secret_post'){
   if(config.clientSecret)form.set('client_secret',String(config.clientSecret));
  }else{
