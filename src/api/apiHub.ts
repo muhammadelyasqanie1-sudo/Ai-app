@@ -154,7 +154,12 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
       const result=await pool.query(`SELECT work_state,count(*)::int AS count FROM public_api_implementation_tracking GROUP BY work_state`);
       const counts:Record<string,number>={queued:0,claimed:0,done:0,blocked:0};
       for(const row of result.rows)counts[String(row.work_state)]=Number(row.count||0);
-      sendAuthJson(res,200,{counts,total:Object.values(counts).reduce((sum,n)=>sum+n,0)});return true;
+      const mine=await pool.query(`SELECT t.source_key,t.discovery_status,t.official_docs_url,t.openapi_spec_url,t.attempts,t.lease_until,
+        c.name,c.description,c.category,c.auth,c.homepage_url,c.docs_url
+        FROM public_api_implementation_tracking t JOIN public_api_catalog c ON c.source_key=t.source_key
+        WHERE t.work_state='claimed' AND t.claimed_by=$1 AND t.lease_until>now() AND c.is_active=true
+        ORDER BY t.claimed_at ASC LIMIT 25`,[String(user.id)]);
+      sendAuthJson(res,200,{counts,total:Object.values(counts).reduce((sum,n)=>sum+n,0),claimedItems:mine.rows});return true;
     }
     if (req.method === 'POST' && pathname === '/api/api-hub/openapi/discover') {
       const body = await readJsonBody(req,4000);
