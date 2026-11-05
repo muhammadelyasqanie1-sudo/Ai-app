@@ -25,7 +25,7 @@ function isPublicRoutableAddress(address:string):boolean{
   return !privateNetworkBlockList.check(address,'ipv6');
 }
 
-import { authenticateRequest, refreshAdminSession, readJsonBody, sendAuthJson, verifyCsrf, verifyUserPassword, requestAdminPasswordReset } from './auth.ts';
+import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf, verifyUserPassword, requestAdminPasswordReset } from './auth.ts';
 import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors, refreshDatabaseProviderAdapters, recordModelHealthResult, invalidateProviderHealth } from '../services/providerGateway.ts';
 import { encryptProviderSecret, providerKeyHint } from '../security/providerVault.ts';
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
@@ -101,7 +101,6 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     return true;
   }
   const rootRole = ['admin','superadmin'].includes(user.role);
-  if (rootRole) await refreshAdminSession(req,res,user).catch(() => {});
   let permissions: Record<string, boolean> = {};
   if (!rootRole) {
     try {
