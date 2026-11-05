@@ -25,9 +25,27 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
   const dari = language !== 'english';
   const selected = models.find(m => selectedModel === m.providerId + '::' + m.id);
   const groups = useMemo(() => {
-    const filtered = models.filter(m => (m.displayName + ' ' + m.providerId).toLowerCase().includes(query.toLowerCase()));
-    return [...new Set(filtered.map(m => m.providerId))].map(provider => ({ provider, items: filtered.filter(m => m.providerId === provider) }));
-  }, [models, query]);
+    const filtered = models.filter(m => (m.displayName + ' ' + m.providerId + ' ' + m.id).toLowerCase().includes(query.toLowerCase()));
+    const categoryOf = (model: AfgModelOption) => {
+      const id = (model.id + ' ' + model.displayName).toLowerCase();
+      if (model.capabilities?.imageGen || model.capabilities?.imageEdit) return 'image';
+      if (/video|grok-imagine-video/.test(id)) return 'video';
+      if (/coder|coding|code-|codegen|deepseek-coder|qwen.*coder|starcoder|code llama/.test(id)) return 'coding';
+      if (model.capabilities?.tts || model.capabilities?.stt) return 'audio';
+      if (model.capabilities?.vision || model.capabilities?.ocr) return 'vision';
+      if (model.capabilities?.text && model.capabilities?.streaming) return 'chat';
+      return 'other';
+    };
+    const order = ['chat','coding','image','video','audio','vision','other'];
+    const labels: Record<string,string> = dari
+      ? {chat:'مدل‌های چت',coding:'مدل‌های کدنویسی',image:'مدل‌های تصویر',video:'مدل‌های ویدیو',audio:'مدل‌های صوتی',vision:'درک تصویر',other:'سایر مدل‌ها'}
+      : {chat:'Chat models',coding:'Coding models',image:'Image models',video:'Video models',audio:'Audio models',vision:'Image understanding',other:'Other models'};
+    return order.map(category => ({
+      category,
+      label: labels[category],
+      items: filtered.filter(model => categoryOf(model) === category),
+    })).filter(group => group.items.length);
+  }, [models, query, dari]);
   const choose = (model: AfgModelOption) => {
     if (!model.selectable) {
       setShowUpgrade(model);
@@ -54,7 +72,7 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
           <button className={'afg-model-row '+(!selected?'is-selected':'')} onClick={()=>{onSelect('auto');setOpen(false);}}>
             <span className="afg-brand-mark bg-slate-800 text-white">✦</span><span className="min-w-0 flex-1"><strong>Auto</strong><small>{dari?'انتخاب خودکار مدل سالم':'Choose the healthiest eligible model'}</small></span><span className="text-xs opacity-60">AUTO</span>{!selected&&<Check size={18}/>}
           </button>
-          {groups.map(group=><div key={group.provider}><div className="afg-model-group-title">{group.provider}</div>{group.items.map(model=>{const active=selectedModel===model.providerId+'::'+model.id;const disabled=!model.selectable;return <button key={model.providerId+'::'+model.id} className={'afg-model-row '+(active?'is-selected ':'')+(disabled?'is-disabled':'')} onClick={()=>choose(model)} aria-disabled={disabled}>
+          {groups.map(group=><div key={group.category}><div className="afg-model-group-title">{group.label}</div>{group.items.map(model=>{const active=selectedModel===model.providerId+'::'+model.id;const disabled=!model.selectable;return <button key={model.providerId+'::'+model.id} className={'afg-model-row '+(active?'is-selected ':'')+(disabled?'is-disabled':'')} onClick={()=>choose(model)} aria-disabled={disabled}>
             <ProviderIcon provider={model.providerId} model={model.id} /><span className="min-w-0 flex-1 text-start"><strong>{model.displayName}</strong><small>{model.disabledReason || (model.contextWindow ? model.contextWindow.toLocaleString()+' context' : (dari?'مدل گفت‌وگو':'Chat model'))}</small></span>
             <span className="afg-model-cost">{model.requiresSubscription ? <span className="afg-premium-badge">Premium</span> : priceLabel(model)}</span>{disabled?<Lock size={16}/>:active?<Check size={18}/>:null}
           </button>;})}</div>)}
