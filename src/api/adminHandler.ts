@@ -1087,6 +1087,44 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       return true;
     }
 
+    if (req.method === 'POST' && pathname === '/api/admin/models/bulk') {
+      const body = await readJsonBody(req, 64_000);
+      const enabled = body.enabled;
+      const requested = body.models;
+      if (typeof enabled !== 'boolean' || !Array.isArray(requested) || requested.length < 1 || requested.length > 500 ||
+          requested.some((item: any) => !item || typeof item.providerId !== 'string' || !/^[a-z0-9][a-z0-9-]{1,47}$/.test(item.providerId) ||
+            typeof item.modelId !== 'string' || !/^[a-zA-Z0-9@][a-zA-Z0-9._:/-]{0,299}$/.test(item.modelId))) {
+        sendAuthJson(res, 400, { error: 'Provide 1–500 valid provider/model pairs and an enabled state.' });
+        return true;
+      }
+      const unique = [...new Map(requested.map((item: any) => [item.providerId + '::' + item.modelId, item])).values()] as Array<{providerId:string;modelId:string}>;
+      const client = await pool.connect();
+      let changed = 0;
+      try {
+        await client.query('BEGIN');
+        for (const item of unique) {
+          const before = await client.query('SELECT enabled FROM model_catalog WHERE provider_key=$1 AND model_key=$2 FOR UPDATE', [item.providerId, item.modelId]);
+          if (!before.rows[0]) continue;
+          await client.query('UPDATE model_catalog SET enabled=$3,updated_at=now() WHERE provider_key=$1 AND model_key=$2', [item.providerId, item.modelId, enabled]);
+          await client.query(
+            'INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+            [user.id,user.role,'model.bulk_toggle','model',item.providerId+':'+item.modelId,
+              JSON.stringify({enabled:Boolean(before.rows[0].enabled)}),JSON.stringify({enabled}),
+              JSON.stringify({bulk:true})],
+          );
+          changed++;
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+      sendAuthJson(res, 200, { enabled, changed, requested: unique.length });
+      return true;
+    }
+
     if (req.method === 'PATCH' && pathname === '/api/admin/models') {
       const body = await readJsonBody(req);
       const providerId = typeof body.providerId === 'string' ? body.providerId : '';
