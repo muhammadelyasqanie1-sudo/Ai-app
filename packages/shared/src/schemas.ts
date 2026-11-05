@@ -10,7 +10,7 @@ export const ChatRequestSchema = z.object({
   messages: z.array(ChatMessageSchema).min(1).max(100),
   model: z.string().trim().min(1).max(300).refine(isModelId,'Invalid model identifier'),
   language: LocaleSchema.optional(),
-  no_fallback: z.boolean().optional(),
+  no_fallback: z.boolean().optional(),\n  token_saver: z.boolean().optional(),\n  context_compression: z.boolean().optional(),
 }).passthrough();
 export type SharedChatRequest = z.infer<typeof ChatRequestSchema>;
 export const ApiErrorSchema = z.object({
