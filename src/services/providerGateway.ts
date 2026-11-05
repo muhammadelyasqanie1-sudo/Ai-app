@@ -38,7 +38,7 @@ const configuredNineRouterBase = (process.env.NINEROUTER_BASE_URL?.trim() || '')
 const nineRouterBase = configuredNineRouterBase
   ? (/\/v1$/i.test(configuredNineRouterBase) ? configuredNineRouterBase : configuredNineRouterBase + '/v1')
   : '';
-const nineRouterAdapter = nineRouterBase
+const nineRouterBaseAdapter = nineRouterBase
   ? createOpenAICompatibleAdapter({
       id: '9router',
       displayName: '9Router Gateway',
@@ -47,6 +47,57 @@ const nineRouterAdapter = nineRouterBase
       allowEmptyApiKey: true,
       catalogOnlyHealthCheck: true,
     })
+  : null;
+// 9Router exposes separate capability catalogues. Merge them into one server-side
+// catalogue while preserving upstream model IDs and assigning only endpoint-backed capabilities.
+const nineRouterAdapter: ChatProviderAdapter | null = nineRouterBaseAdapter
+  ? {
+      ...nineRouterBaseAdapter,
+      async listModels(): Promise<ModelDescriptor[]> {
+        const chatModels = await nineRouterBaseAdapter.listModels();
+        const kinds = [
+          { kind: 'image', path: '/models/image', capability: 'imageGen' as const },
+          { kind: 'image-to-text', path: '/models/image-to-text', capability: 'vision' as const },
+          { kind: 'tts', path: '/models/tts', capability: 'tts' as const },
+          { kind: 'stt', path: '/models/stt', capability: 'stt' as const },
+        ];
+        const additional = await Promise.all(kinds.map(async ({ kind, path, capability }) => {
+          try {
+            const response = await fetch(nineRouterBase + path, {
+              headers: { ...(nineRouterKey ? { Authorization: 'Bearer ' + nineRouterKey } : {}), Accept: 'application/json' },
+              signal: AbortSignal.timeout(15_000),
+              redirect: 'error',
+            });
+            if (!response.ok) return [];
+            const payload = await response.json() as any;
+            const rows = Array.isArray(payload?.data) ? payload.data
+              : Array.isArray(payload?.models) ? payload.models
+              : Array.isArray(payload?.data?.data) ? payload.data.data : [];
+            return rows.filter((item: any) => item && typeof item.id === 'string').map((item: any): ModelDescriptor => ({
+              id: item.id,
+              providerId: '9router',
+              displayName: typeof item.name === 'string' ? item.name : item.id,
+              description: 'Discovered from the 9Router ' + kind + ' catalogue.',
+              contextWindow: Number(item.context_length || item.context_window || 0) || 0,
+              pricing: undefined,
+              capabilities: {
+                text: false, streaming: false, vision: capability === 'vision',
+                imageGen: capability === 'imageGen', imageEdit: capability === 'imageGen',
+                ocr: false, tts: capability === 'tts', stt: capability === 'stt',
+                tools: false, jsonMode: false,
+              },
+              enabled: true,
+              verifiedAt: null,
+            }));
+          } catch {
+            return [];
+          }
+        }));
+        const merged = [...chatModels, ...additional.flat()];
+        return merged.filter((model, index) =>
+          merged.findIndex((candidate) => candidate.id === model.id) === index);
+      },
+    }
   : null;
 // Accept either a raw API key or the common "Bearer <key>" form pasted from API docs.
 const beatApiKey = (process.env.BEATAPI_API_KEY?.trim() || '').replace(/^Bearer\s+/i, '').trim();
