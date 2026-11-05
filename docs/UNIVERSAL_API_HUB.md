@@ -74,3 +74,8 @@ Current milestone: backend catalog synchronization/browsing, user-owned API conn
 ## OpenAPI discovery milestone
 
 Authenticated users can submit a public HTTPS URL for an OpenAPI 3.0/3.1 JSON document to `POST /api/api-hub/openapi/discover`. The server rejects private/reserved document hosts, redirects, oversized documents and non-JSON specifications. It returns up to 100 operations with endpoint templates, supported scalar path/query/JSON-body parameters, security-scheme hints and an explicit `usable` flag. Both the specification host and each advertised operation-server host are checked for public HTTPS DNS/IP targets before an operation is surfaced. Discovery is metadata-only: it does not create or enable connectors, does not store credentials, and does not call the discovered operations. YAML, remote references, complex nested schemas, OAuth authorization flows, multipart uploads and binary/streaming operations are not imported by this first pass. Every imported endpoint still passes the connector executor's own HTTPS/SSRF checks and must be configured, credentialed and verified by its owner.
+
+
+## Capability labels in the Public API catalog
+
+Catalog search results now include a derived `capability` label (AI/language, image, coding, weather, finance, maps, news, food, or general) based on the upstream category, name, and description. This is discovery metadata only: it does not certify that an API can generate images, run code, or perform another capability. A connector still requires its real endpoint contract, supported request schema, required credentials, and a successful verification before it can be enabled.
