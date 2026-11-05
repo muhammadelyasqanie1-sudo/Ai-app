@@ -187,9 +187,9 @@ async function executeConnectorWithFallback(row:any,args:unknown,userId:string,r
   if(!row.fallback_group||!isRetryableUpstreamFailure(primaryError))throw primaryError;
   const alternatives=await pool!.query(`SELECT * FROM user_api_connectors
    WHERE user_id=$1 AND fallback_group=$2 AND id<>$3 AND enabled=true AND status='verified'
-    AND http_method=$4 AND input_schema_json=$5::jsonb
+    AND http_method=$4 AND input_schema_json=$5::jsonb AND endpoint_url<>$6
    ORDER BY fallback_priority ASC,created_at ASC LIMIT 8`,
-   [userId,row.fallback_group,row.id,row.http_method,JSON.stringify(row.input_schema_json)]);
+   [userId,row.fallback_group,row.id,row.http_method,JSON.stringify(row.input_schema_json),row.endpoint_url]);
   let lastError:unknown=primaryError;
   for(const candidate of alternatives.rows){
    if(!await reserveConnectorCall(userId,candidate.id))continue;
