@@ -298,14 +298,14 @@ async function syncDiscoveredModels(provider: ChatProviderAdapter, models: Model
          display_name = EXCLUDED.display_name,
          capabilities = COALESCE(model_catalog.capabilities_override, EXCLUDED.capabilities),
          context_window = EXCLUDED.context_window,
-         -- Bootstrap only the chosen BeatAPI default before an admin health-check decision exists.
-         enabled = CASE
-           WHEN EXCLUDED.enabled THEN true
-           ELSE model_catalog.enabled
-         END,
+         -- Preserve an administrator's existing enabled/disabled choice on catalogue refresh.
+         -- New rows inherit the provider-specific bootstrap decision from INSERT.
          updated_at = now()`,
       [provider.id, model.id, model.displayName,
         Object.entries(model.capabilities).filter(([, enabled]) => enabled).map(([key]) => key),
+        // Show every discovered 9Router model in the chat model picker by default.
+        // Existing admin choices are preserved by the UPSERT above; new rows are enabled.
+        provider.id === '9router' ||
         // Clean APIs' Free plan grants access to all 33 chat models within its monthly token allowance.
         // Other gateways only auto-enable models explicitly identified as free.
         provider.id === 'cleanapis' ||
