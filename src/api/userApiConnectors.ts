@@ -59,6 +59,33 @@ async function readTextLimited(response:Response,maxBytes:number):Promise<string
  for(const chunk of chunks){merged.set(chunk,offset);offset+=chunk.byteLength;}
  return new TextDecoder().decode(merged);
 }
+async function readBytesLimited(response:Response,maxBytes:number):Promise<Buffer>{
+ const declared=Number(response.headers.get('content-length')||0);
+ if(declared>maxBytes){await response.body?.cancel().catch(()=>{});throw new Error('Remote file exceeds the '+maxBytes+' byte safety limit.');}
+ if(!response.body)return Buffer.alloc(0);
+ const reader=response.body.getReader(),chunks:Buffer[]=[];let total=0;
+ try{
+  while(true){
+   const part=await reader.read();if(part.done)break;
+   total+=part.value.byteLength;
+   if(total>maxBytes){await reader.cancel().catch(()=>{});throw new Error('Remote file exceeds the '+maxBytes+' byte safety limit.');}
+   chunks.push(Buffer.from(part.value));
+  }
+ }finally{reader.releaseLock();}
+ return Buffer.concat(chunks,total);
+}
+function safeDownloadName(value:string|null,contentType:string):string{
+ const raw=(value||'').match(/filename\*?=(?:UTF-8''|")?([^";]+)/i)?.[1]||'';
+ let name=raw;
+ try{name=decodeURIComponent(name);}catch{}
+ name=name.replace(/[\\/]/g,'_').replace(/[\u0000-\u001f\u007f]/g,'').replace(/[<>:"|?*]/g,'_').trim().slice(0,160);
+ if(!name||name==='.'||name==='..')name='api-response';
+ if(!/\.[a-z0-9]{1,8}$/i.test(name)){
+  const ext:Record<string,string>={'image/png':'png','image/jpeg':'jpg','image/gif':'gif','image/webp':'webp','application/pdf':'pdf','audio/mpeg':'mp3','audio/wav':'wav','audio/ogg':'ogg','video/mp4':'mp4','application/zip':'zip'};
+  name+='.'+(ext[contentType]||'bin');
+ }
+ return name;
+}
 type UploadedFile={filename:string;contentType:string;data:Buffer};
 async function readMultipartRequest(req:IncomingMessage,maxBytes=12*1024*1024):Promise<{arguments:Json;files:Record<string,UploadedFile>}>{
  const contentType=String(req.headers['content-type']||'');
@@ -90,7 +117,34 @@ async function readMultipartRequest(req:IncomingMessage,maxBytes=12*1024*1024):P
    const safeFilename=filenameMatch[1].replace(/[\\/]/g,'_').replace(/[\u0000-\u001f\u007f]/g,'').slice(0,180);
    if(!safeFilename||safeFilename==='.'||safeFilename==='..')throw new Error('Uploaded filename is invalid.');
    const mime=headers.match(/\bcontent-type:\s*([^\r\n]+)/i)?.[1]?.trim().toLowerCase()||'application/octet-stream';
-   if(!/^[a-z0-9][a-z0-9!#async function safeEndpoint(value:string):Promise<URL>{^_.+-]{0,80}\/[a-z0-9][a-z0-9!#async function safeEndpoint(value:string):Promise<URL>{^_.+-]{0,80}$/.test(mime))throw new Error('Uploaded file content type is invalid.');
+   if(!/^[a-z0-9][a-z0-9!#   if(!/^[a-z0-9][a-z0-9!#async function readBytesLimited(response:Response,maxBytes:number):Promise<Buffer>{
+ const declared=Number(response.headers.get('content-length')||0);
+ if(declared>maxBytes){await response.body?.cancel().catch(()=>{});throw new Error('Remote file exceeds the '+maxBytes+' byte safety limit.');}
+ if(!response.body)return Buffer.alloc(0);
+ const reader=response.body.getReader(),chunks:Buffer[]=[];let total=0;
+ try{
+  while(true){
+   const part=await reader.read();if(part.done)break;
+   total+=part.value.byteLength;
+   if(total>maxBytes){await reader.cancel().catch(()=>{});throw new Error('Remote file exceeds the '+maxBytes+' byte safety limit.');}
+   chunks.push(Buffer.from(part.value));
+  }
+ }finally{reader.releaseLock();}
+ return Buffer.concat(chunks,total);
+}
+function safeDownloadName(value:string|null,contentType:string):string{
+ const raw=(value||'').replace(/^attachment;\\s*/i,'').match(/filename\\*?=(?:UTF-8''|")?([^";]+)/i)?.[1]||'';
+ let name=raw;
+ try{name=decodeURIComponent(name);}catch{}
+ name=name.replace(/[\\\\/]/g,'_').replace(/[\\u0000-\\u001f\\u007f]/g,'').replace(/[<>:"|?*]/g,'_').trim().slice(0,160);
+ if(!name||name==='.'||name==='..')name='api-response';
+ if(!/\\.[a-z0-9]{1,8}$/i.test(name)){
+  const ext:Record<string,string>={'image/png':'png','image/jpeg':'jpg','image/gif':'gif','image/webp':'webp','application/pdf':'pdf','audio/mpeg':'mp3','audio/wav':'wav','audio/ogg':'ogg','video/mp4':'mp4','application/zip':'zip'};
+  name+='.'+(ext[contentType]||'bin');
+ }
+ return name;
+}
+   if(!/^[a-z0-9][a-z0-9!#$&^_.+-]{0,80}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,80}$/.test(mime))throw new Error('Uploaded file content type is invalid.');
    if(data.length>10*1024*1024)throw new Error('Each uploaded file is limited to 10 MB.');
    if(files[name])throw new Error('Duplicate uploaded file field: '+name+'.');
    files[name]={filename:safeFilename,contentType:mime,data};
@@ -247,7 +301,7 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  }
  if(/\{[a-zA-Z][a-zA-Z0-9_]*\}/.test(pathname))throw new Error('The API endpoint contains an unresolved path parameter.');
  const url=new URL(base.toString());url.pathname=pathname;
- const headers=new Headers({Accept:'application/json'});
+ const headers=new Headers({Accept:'application/json, application/octet-stream, image/*, audio/*, video/*, */*;q=0.8'});
  for(const [key,value] of Object.entries(parameterHeaders))headers.set(key,value);
  const secrets:string[]=[];
  if(row.auth_type==='bearer'||row.auth_type==='basic'||row.auth_type==='header_key'||row.auth_type==='query_key'){
@@ -279,10 +333,21 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  const durationMs=Date.now()-started;
  const rateLimitEvidence=readRateLimitEvidence(response);
  const retryAt=parseUpstreamResetAt(response);
- const raw=await readTextLimited(response,1_000_000);
- const safeRaw=secrets.reduce((value,secret)=>value.split(secret).join('[redacted]'),raw);
- let data:unknown=safeRaw;
- if(safeRaw){try{data=JSON.parse(safeRaw);}catch{}}
+ const announcedType=(response.headers.get('content-type')||'application/octet-stream').split(';')[0].trim().toLowerCase();
+ const contentType=/^[a-z0-9][a-z0-9!#$&^_.+-]{0,80}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,80}$/.test(announcedType)?announcedType:'application/octet-stream';
+ const contentDisposition=response.headers.get('content-disposition')||'';
+ const downloadable=/(?:^|;)\s*attachment\b/i.test(contentDisposition)||contentType==='image/svg+xml';
+ const isTextual=!downloadable&&(contentType==='application/json'||contentType.endsWith('+json')||contentType.startsWith('text/')||contentType==='application/xml'||contentType.endsWith('+xml'));
+ let data:unknown;
+ if(isTextual){
+  const raw=await readTextLimited(response,1_000_000);
+  const safeRaw=secrets.reduce((value,secret)=>value.split(secret).join('[redacted]'),raw);
+  data=safeRaw;
+  if(safeRaw){try{data=JSON.parse(safeRaw);}catch{}}
+ }else{
+  const bytes=await readBytesLimited(response,8*1024*1024);
+  data={kind:'file',contentType,filename:safeDownloadName(response.headers.get('content-disposition'),contentType),sizeBytes:bytes.length,dataBase64:bytes.toString('base64')};
+ }
  if(!response.ok){
   if(![402,429].includes(response.status))await persistRateLimitObservation(row,userId,rateLimitEvidence,null,null);
   throw Object.assign(new Error('The external API returned HTTP '+response.status+'.'),{
@@ -433,6 +498,7 @@ export async function executeUserApiTool(userId:string,toolName:string,args:unkn
  if(!await reserveConnectorCall(userId,row.id))throw new Error('This API connector has reached its limit of 30 calls per minute.');
  const requestId=randomUUID();
  const result=await executeConnectorWithFallback(row,args,userId,requestId);
+ if((result.data as any)?.kind==='file')return {...result,data:{kind:'file',filename:(result.data as any).filename,contentType:(result.data as any).contentType,sizeBytes:(result.data as any).sizeBytes,downloadAvailableInConnectorPanel:true}};
  const serialized=JSON.stringify(result.data);
  if(serialized.length>16_000)return {...result,truncated:true,responsePreview:serialized.slice(0,16_000)};
  return result;
