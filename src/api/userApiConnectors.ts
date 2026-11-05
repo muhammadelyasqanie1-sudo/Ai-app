@@ -646,7 +646,7 @@ async function audit(userId:string,action:string,id:string,metadata:Json={}){
 export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerResponse,pathname:string):Promise<boolean>{
  if(pathname==='/api/internal/connector-monitor/run'&&req.method==='POST'){
   const configured=process.env.AFG_CONNECTOR_MONITOR_SECRET||'';
-  const supplied=(req.headers.authorization||'').replace(/^Bearer\\s+/i,'').trim();
+  const supplied=(req.headers.authorization||'').replace(/^Bearer\s+/i,'').trim();
   const expected=Buffer.from(configured),actual=Buffer.from(supplied);
   if(!configured||expected.length!==actual.length||!timingSafeEqual(expected,actual)){sendAuthJson(res,401,{error:'Connector monitor authentication failed.'});return true;}
   if(!pool){sendAuthJson(res,503,{error:'Database is unavailable.'});return true;}
