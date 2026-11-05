@@ -1,9 +1,8 @@
 /**
- * Conservative, lossless token optimization for chat payloads.
- *
- * This deliberately does not summarize, truncate, rewrite code, JSON, URLs,
- * identifiers, or user instructions. It only normalizes redundant whitespace
- * outside fenced code blocks and removes immediately repeated identical turns.
+ * Lossless, conservative optimization for chat request messages.
+ * Never removes a turn: repeated questions can be intentional.
+ * Only trims trailing horizontal whitespace and collapses excessive blank lines
+ * outside fenced code blocks.
  */
 export type OptimizableMessage = { role: string; content: string; [key: string]: unknown };
 
@@ -25,17 +24,10 @@ export function optimizeChatMessages<T extends OptimizableMessage>(
   const beforeChars = messages.reduce((sum, message) => sum + message.content.length, 0);
   if (!enabled) return { messages, beforeChars, afterChars: beforeChars, removedDuplicates: 0 };
 
-  const optimized: T[] = [];
-  let removedDuplicates = 0;
-  for (const message of messages) {
-    const content = compactOutsideCode(message.content);
-    const previous = optimized[optimized.length - 1];
-    if (previous && previous.role === message.role && previous.content === content) {
-      removedDuplicates++;
-      continue;
-    }
-    optimized.push({ ...message, content });
-  }
+  const optimized = messages.map((message) => ({
+    ...message,
+    content: compactOutsideCode(message.content),
+  }));
   const afterChars = optimized.reduce((sum, message) => sum + message.content.length, 0);
   return { messages: optimized, beforeChars, afterChars, removedDuplicates: 0 };
 }
