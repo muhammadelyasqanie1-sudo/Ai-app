@@ -175,6 +175,7 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  let data:unknown=safeRaw;
  if(safeRaw){try{data=JSON.parse(safeRaw);}catch{}}
  if(!response.ok){
+  if(![402,429].includes(response.status))await persistRateLimitObservation(row,userId,rateLimitEvidence,null,null);
   throw Object.assign(new Error('The external API returned HTTP '+response.status+'.'),{
    httpStatus:response.status,durationMs,retryAt:retryAt||undefined,rateLimitEvidence
   });
