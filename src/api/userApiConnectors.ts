@@ -540,15 +540,42 @@ async function refreshDueQueueEntries(userId:string):Promise<void>{
  await pool!.query(`UPDATE user_api_connectors SET queue_state='ready',next_available_at=NULL,last_error=NULL,updated_at=now()
   WHERE user_id=$1 AND queue_state='waiting' AND next_available_at IS NOT NULL AND next_available_at<=now()`,[userId]);
 }
+async function rotateQuotaLimitedConnectorKey(row:any,userId:string,error:unknown):Promise<boolean>{
+ if(!isQuotaFailure(error)||row.auth_type==='none'||row.auth_type==='oauth2')return false;
+ const value=error as {retryAt?:number;httpStatus?:number;rateLimitEvidence?:Json};
+ const retryAt=Number(value.retryAt||0),next=retryAt>Date.now()?new Date(retryAt):null;
+ const client=await pool!.connect();let switched=false;
+ try{
+  await client.query('BEGIN');
+  await client.query(`INSERT INTO user_api_connector_keys(connector_id,user_id,label,credential_encrypted,is_active)
+   SELECT id,user_id,'Primary key',credential_encrypted,true FROM user_api_connectors
+   WHERE id=$1 AND user_id=$2 AND credential_encrypted IS NOT NULL
+    AND NOT EXISTS(SELECT 1 FROM user_api_connector_keys WHERE connector_id=$1)
+   ON CONFLICT(connector_id,label) DO NOTHING`,[row.id,userId]);
+  const current=await client.query('SELECT id FROM user_api_connector_keys WHERE connector_id=$1 AND user_id=$2 AND is_active=true ORDER BY priority,created_at LIMIT 1 FOR UPDATE',[row.id,userId]);
+  if(current.rows[0])await client.query(`UPDATE user_api_connector_keys SET is_active=false,queue_state='waiting',next_available_at=$3,last_quota_status=$4,last_quota_observed_at=now(),last_quota_reset_at=$3,last_error=$5,updated_at=now() WHERE id=$1 AND connector_id=$2`,[current.rows[0].id,row.id,next,Number(value.httpStatus)||null,'Upstream quota exhausted; retained in key queue.']);
+  const candidate=await client.query(`SELECT id,credential_encrypted FROM user_api_connector_keys WHERE connector_id=$1 AND user_id=$2 AND is_active=false AND queue_state='ready' AND (next_available_at IS NULL OR next_available_at<=now()) ORDER BY priority ASC,created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED`,[row.id,userId]);
+  if(candidate.rows[0]){
+   await client.query('UPDATE user_api_connector_keys SET is_active=false WHERE connector_id=$1 AND user_id=$2',[row.id,userId]);
+   await client.query('UPDATE user_api_connector_keys SET is_active=true,last_used_at=now(),updated_at=now() WHERE id=$1',[candidate.rows[0].id]);
+   await client.query(`UPDATE user_api_connectors SET credential_encrypted=$3,enabled=true,status='verified',queue_state='ready',next_available_at=NULL,last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,userId,candidate.rows[0].credential_encrypted]);
+   switched=true;
+  }else{
+   const evidence=value.rateLimitEvidence||{source:'upstream_response',observedAt:new Date().toISOString(),httpStatus:value.httpStatus||null,headers:{}};
+   await client.query(`UPDATE user_api_connectors SET enabled=false,queue_state='waiting',next_available_at=$3,rate_limit_evidence=$4::jsonb,last_quota_status=$5,last_quota_observed_at=now(),last_quota_reset_at=$3,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,userId,next,JSON.stringify(evidence),Number(value.httpStatus)||null]);
+  }
+  await client.query('COMMIT');
+ }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+ await audit(userId,'api.connector.key_quota_rotation',String(row.id),{switched,observedStatus:Number(value.httpStatus)||null,resetObserved:Boolean(next)});
+ return switched;
+}
 async function parkQuotaLimitedConnector(row:any,userId:string,error:unknown):Promise<void>{
  if(!isQuotaFailure(error))return;
+ if(await rotateQuotaLimitedConnectorKey(row,userId,error))return;
  const value=error as {retryAt?:number;httpStatus?:number;rateLimitEvidence?:Json};
- const retryAt=Number(value.retryAt||0);
- const next=retryAt>Date.now()?new Date(retryAt):null;
+ const retryAt=Number(value.retryAt||0),next=retryAt>Date.now()?new Date(retryAt):null;
  const evidence=value.rateLimitEvidence||{source:'upstream_response',observedAt:new Date().toISOString(),httpStatus:value.httpStatus||null,headers:{}};
- await pool!.query(`UPDATE user_api_connectors SET queue_state='waiting',next_available_at=$3,
-  rate_limit_evidence=$4::jsonb,last_quota_status=$5,last_quota_observed_at=now(),last_quota_reset_at=$3,updated_at=now()
-  WHERE id=$1 AND user_id=$2`,[row.id,userId,next,JSON.stringify(evidence),Number(value.httpStatus)||null]);
+ await pool!.query(`UPDATE user_api_connectors SET queue_state='waiting',next_available_at=$3,rate_limit_evidence=$4::jsonb,last_quota_status=$5,last_quota_observed_at=now(),last_quota_reset_at=$3,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,userId,next,JSON.stringify(evidence),Number(value.httpStatus)||null]);
 }
 function isRetryableUpstreamFailure(error:unknown):boolean{
  const value=error as {httpStatus?:number;retryable?:boolean};
