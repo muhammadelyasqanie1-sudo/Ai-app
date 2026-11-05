@@ -266,18 +266,18 @@ function classifyApiCapability(row:any):string{
  const schema=row.input_schema_json&&typeof row.input_schema_json==='object'?row.input_schema_json:{};
  const haystack=[row.name,row.tool_name,row.description,row.endpoint_url,...Object.keys(schema.properties||{})].filter(Boolean).join(' ').toLowerCase();
  const rules:Array<[string,RegExp]>=[
-  ['image',/\\b(image|images|vision|picture|photo|ocr|visual)\\b|\\/(images|image|vision|ocr)(\\/|\\b)/],
-  ['video',/\\b(video|videos|movie|clip|streaming video)\\b|\\/(videos|video)(\\/|\\b)/],
-  ['audio',/\\b(audio|speech|tts|stt|transcri|transcription|voice|sound|music)\\b|\\/(audio|speech|voices|transcriptions)(\\/|\\b)/],
-  ['coding',/\\b(code|coding|programming|compiler|repository|github|gitlab|terminal|sandbox|execution)\\b/],
-  ['weather',/\\b(weather|forecast|temperature|meteorolog|climate)\\b/],
-  ['maps',/\\b(map|maps|mapping|geocod|geolocation|directions|route|places|location)\\b/],
-  ['finance',/\\b(finance|financial|bank|payment|currency|exchange rate|stock|crypto|invoice|billing)\\b/],
-  ['news',/\\b(news|headline|article|journalism|rss)\\b/],
-  ['food',/\\b(food|recipe|restaurant|nutrition|meal|ingredient)\\b/],
-  ['search',/\\b(search|web search|browser|fetch|crawl|scrape|serp)\\b/],
-  ['storage',/\\b(storage|file|files|upload|download|bucket|object store|database|cloud storage)\\b/],
-  ['ai_language',/\\b(ai|llm|language model|chat|completion|embedding|generation|translate|translation|summari[sz])\\b/],
+  ['image',/\b(image|images|vision|picture|photo|ocr|visual)\b|\/(images|image|vision|ocr)(\/|\b)/],
+  ['video',/\b(video|videos|movie|clip|streaming video)\b|\/(videos|video)(\/|\b)/],
+  ['audio',/\b(audio|speech|tts|stt|transcri|transcription|voice|sound|music)\b|\/(audio|speech|voices|transcriptions)(\/|\b)/],
+  ['coding',/\b(code|coding|programming|compiler|repository|github|gitlab|terminal|sandbox|execution)\b/],
+  ['weather',/\b(weather|forecast|temperature|meteorolog|climate)\b/],
+  ['maps',/\b(map|maps|mapping|geocod|geolocation|directions|route|places|location)\b/],
+  ['finance',/\b(finance|financial|bank|payment|currency|exchange rate|stock|crypto|invoice|billing)\b/],
+  ['news',/\b(news|headline|article|journalism|rss)\b/],
+  ['food',/\b(food|recipe|restaurant|nutrition|meal|ingredient)\b/],
+  ['search',/\b(search|web search|browser|fetch|crawl|scrape|serp)\b/],
+  ['storage',/\b(storage|file|files|upload|download|bucket|object store|database|cloud storage)\b/],
+  ['ai_language',/\b(ai|llm|language model|chat|completion|embedding|generation|translate|translation|summari[sz])\b/],
  ];
  for(const [category,pattern] of rules)if(pattern.test(haystack))return category;
  return 'general';
