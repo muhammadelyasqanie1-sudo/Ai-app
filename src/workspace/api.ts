@@ -58,11 +58,6 @@ export interface ProviderInfo {
 
 /** API INJECTION POINT: configured model providers and their connection state. */
 export async function listProviders(): Promise<ProviderInfo[]> {
-  await wait(100);
-  return [
-    { id: 'gemini', name: 'Google Gemini', model: 'gemini-2.5-pro', connected: true },
-    { id: 'openai', name: 'OpenAI', model: 'gpt-4.1', connected: false },
-    { id: 'anthropic', name: 'Anthropic', model: 'claude', connected: false },
-    { id: 'local', name: 'On-device model', model: 'local', connected: false },
-  ];
+  // No mock provider inventory: the production control plane exposes only 9Router and Ollama.
+  return [];
 }

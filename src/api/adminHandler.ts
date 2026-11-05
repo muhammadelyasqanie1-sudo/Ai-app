@@ -189,7 +189,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           EXISTS(SELECT 1 FROM provider_keys k WHERE k.provider_id=p.id AND k.status='active') AS has_key,
           (SELECT k.key_hint FROM provider_keys k WHERE k.provider_id=p.id AND k.alias='default' AND k.status='active' LIMIT 1) AS key_hint,
           (SELECT k.status FROM provider_keys k WHERE k.provider_id=p.id AND k.alias='default' ORDER BY k.created_at DESC LIMIT 1) AS key_status
-        FROM providers p ORDER BY p.source,p.display_name`);
+        FROM providers p WHERE p.slug IN ('9router','ollama') ORDER BY p.source,p.display_name`);
       const providers=await Promise.all(result.rows.map(async(row)=>{
         const id=String(row.slug||row.kind);
         const adapter=getProviderAdapter(id);
@@ -206,6 +206,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     }
 
     if(req.method==='POST' && pathname==='/api/admin/providers/custom'){
+      sendAuthJson(res,410,{error:'Custom AI providers are disabled. Only 9Router and Ollama are supported.'});return true;
       if(user.role!=='superadmin'){sendAuthJson(res,403,{error:'Only a superadmin can register custom provider endpoints.'});return true;}
       const body=await readJsonBody(req,8000);
       const parsed=customProviderInput.safeParse(body);
@@ -236,6 +237,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
 
     const providerConfigRoute=pathname.match(/^\/api\/admin\/providers\/([a-z0-9-]+)\/config$/);
     if(req.method==='PATCH'&&providerConfigRoute){
+      sendAuthJson(res,409,{error:'Provider endpoints are managed by the 9Router integration or Ollama host configuration.'});return true;
       if(user.role!=='superadmin'){sendAuthJson(res,403,{error:'Only a superadmin can change provider configuration.'});return true;}
       const providerSlug=providerConfigRoute[1];
       const body=await readJsonBody(req,8000);
@@ -267,6 +269,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
 
     const keyRoute = pathname.match(/^\/api\/admin\/providers\/([a-z0-9-]+)\/keys(?:\/rotate)?$/);
     if (keyRoute && ((req.method==='PUT' && !pathname.endsWith('/rotate')) || (req.method==='POST' && pathname.endsWith('/rotate')))) {
+      sendAuthJson(res,409,{error:'Provider keys are managed by the 9Router integration. Other provider credentials are disabled.'});return true;
       if (user.role !== 'superadmin') { sendAuthJson(res,403,{error:'Superadmin access is required to manage provider keys.'}); return true; }
       const providerSlug=keyRoute[1];
       const body=await readJsonBody(req,10000);
@@ -995,6 +998,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       const parsed=manualModelInput.safeParse(body);
       if(!parsed.success){sendAuthJson(res,400,{error:'Provide a valid provider slug, exact model ID, and context window.'});return true;}
       const providerId=parsed.data.providerId;
+      if(!['9router','ollama'].includes(providerId)){sendAuthJson(res,400,{error:'Only 9Router and Ollama model registration is allowed.'});return true;}
       const modelId=parsed.data.modelId;
       const displayName=parsed.data.displayName||modelId;
       const contextWindow=parsed.data.contextWindow||0;

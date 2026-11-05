@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ShieldCheck, LockKeyhole, RefreshCw, LogOut, LayoutDashboard, Users, Network, TerminalSquare,
   Cpu, Activity, Gauge, HardDrive, Flag, ClipboardList, ShieldAlert, CheckCircle2,
-  Search, Play, Power, Save, Plus, AlertTriangle, Settings, FileWarning, KeyRound, PlugZap
+  Search, Play, Power, Save, Plus, AlertTriangle, Settings, FileWarning, PlugZap
 } from 'lucide-react';
 import { AfgConnectionsPanel } from './AfgConnectionsPanel.tsx';
 import { AfgApiHubPanel } from './AfgApiHubPanel.tsx';
@@ -115,14 +115,8 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [announcements,setAnnouncements] = useState<any[]>([]);
   const [selectedUser,setSelectedUser] = useState<any|null>(null);
 
-  const [providerSecrets,setProviderSecrets] = useState<Record<string,string>>({});
-  const [providerBaseUrls,setProviderBaseUrls] = useState<Record<string,string>>({});
-  const [customSlug,setCustomSlug] = useState('');
-  const [customName,setCustomName] = useState('');
-  const [customBaseUrl,setCustomBaseUrl] = useState('');
-  const [customProtocol,setCustomProtocol] = useState<'openai-compatible'|'anthropic-messages'>('openai-compatible');
 
-  const [manualProviderId,setManualProviderId] = useState('deepseek');
+  const [manualProviderId,setManualProviderId] = useState('9router');
   const [manualModelId,setManualModelId] = useState('');
   const [manualModelName,setManualModelName] = useState('');
   const [manualContext,setManualContext] = useState('');
@@ -340,43 +334,6 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       await adminApi('/api/admin/providers',{method:'PATCH',body:JSON.stringify({providerId:provider.id,enabled:!provider.enabled})});
       await reloadNotice(provider.displayName+(provider.enabled?' disabled.':' enabled.'));
     }catch(err){setError(err instanceof Error?err.message:'Provider status update failed.');}
-  };
-
-  const saveProviderConfig=async(provider:ProviderRow)=>{
-    const baseUrl=(providerBaseUrls[provider.id]??provider.base_url??'').trim();
-    if(!baseUrl){setError('Enter a provider base URL.');return;}
-    if(!isSuperadmin){setError('Only superadmin can change provider configuration.');return;}
-    try{
-      await adminApi('/api/admin/providers/'+encodeURIComponent(provider.id)+'/config',{method:'PATCH',
-        body:JSON.stringify({baseUrl,protocol:provider.config_json?.protocol||'openai-compatible'})});
-      setProviderBaseUrls(current=>({...current,[provider.id]:''}));
-      await reloadNotice(provider.displayName+' configuration updated; verification cache cleared.');
-    }catch(err){setError(err instanceof Error?err.message:'Provider configuration could not be saved.');}
-  };
-
-  const saveProviderKey=async(provider:ProviderRow,rotate=false)=>{
-    const apiKey=(providerSecrets[provider.id]||'').trim();
-    if(!apiKey){setError('Enter the provider API key first.');return;}
-    if(!isSuperadmin){setError('Only superadmin can manage provider keys.');return;}
-    const currentPassword=window.prompt('Re-authenticate: enter your current administrator password.');
-    if(!currentPassword){setError('Password confirmation is required.');return;}
-    try{
-      const route='/api/admin/providers/'+encodeURIComponent(provider.id)+'/keys'+(rotate?'/rotate':'');
-      await adminApi(route,{method:rotate?'POST':'PUT',body:JSON.stringify({apiKey,alias:'default',currentPassword})});
-      setProviderSecrets(current=>({...current,[provider.id]:''}));
-      await reloadNotice(provider.displayName+' key securely saved.');
-    }catch(err){setError(err instanceof Error?err.message:'Provider key could not be saved.');}
-  };
-
-  const createCustomProvider=async()=>{
-    try{
-      const result=await adminApi('/api/admin/providers/custom',{method:'POST',body:JSON.stringify({
-        slug:customSlug,displayName:customName,baseUrl:customBaseUrl,protocol:customProtocol
-      })});
-      setCustomSlug('');setCustomName('');setCustomBaseUrl('');
-      await loadAdminData();
-      setNotice('Custom provider '+result.provider.slug+' created. Add its key in the provider card.');
-    }catch(err){setError(err instanceof Error?err.message:'Custom provider could not be created.');}
   };
 
   const patchModel=async(model:ModelRow,patch:Record<string,any>)=>{
@@ -717,28 +674,17 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
         </div>}
 
         {tab==='providers'&&<div className="space-y-4">
-          {isSuperadmin&&<div className={panel}><h2 className="text-lg font-bold text-white">Add custom provider</h2><p className="mb-3 text-xs text-slate-500">Register multiple public HTTPS OpenAI-compatible or Anthropic Messages endpoints. New providers start disabled.</p>
-            <div className="grid gap-2 md:grid-cols-4"><input className={field} value={customSlug} onChange={e=>setCustomSlug(e.target.value)} placeholder="provider-slug"/><input className={field} value={customName} onChange={e=>setCustomName(e.target.value)} placeholder="Display name"/><input className={field} value={customBaseUrl} onChange={e=>setCustomBaseUrl(e.target.value)} placeholder="https://api.example.com/v1"/><select className={field} value={customProtocol} onChange={e=>setCustomProtocol(e.target.value as any)}><option value="openai-compatible">OpenAI-compatible</option><option value="anthropic-messages">Anthropic Messages API</option></select></div>
-            <button className={primary+' mt-3'} disabled={!customSlug.trim()||!customName.trim()||!customBaseUrl.trim()} onClick={()=>void createCustomProvider()}>Register custom provider</button>
-          </div>}
-          <div className={panel}><div className="mb-4"><h2 className="text-lg font-bold text-white">Provider inventory</h2><p className="text-xs text-slate-500">Built-in providers are pre-seeded. Secrets remain encrypted in server-side storage.</p></div>
+          <div className={panel}><div className="mb-4"><h2 className="text-lg font-bold text-white">Provider inventory</h2><p className="text-xs text-slate-500">Only 9Router Gateway and Ollama (Local) are supported AI providers.</p></div>
             <div className="grid gap-3 md:grid-cols-2">{providers.map(provider=><div key={provider.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
               <div className="flex items-start justify-between gap-3"><div><h3 className="font-bold text-white">{provider.displayName}</h3><p className="mt-1 text-xs text-slate-500">{provider.id} · {provider.kind||'provider'} · {provider.source||'system'}</p></div><span className={provider.last_health_ok===true?'text-emerald-300':provider.last_health_ok===false?'text-red-300':provider.configured?'text-cyan-300':'text-amber-300'}>{provider.last_health_ok===true?'Healthy':provider.last_health_ok===false?'Health error':provider.configured?'Configured':provider.has_key?'Key stored · adapter unavailable':'Missing credentials'}</span></div>
               <p className="mt-2 break-all text-[11px] text-slate-500">{provider.base_url||'Managed by Cloudflare environment'} · Last check {date(provider.last_health_at)} {provider.keyStatus?'· Key '+provider.keyStatus:''} {isSuperadmin&&provider.keyHint?'· hint …'+provider.keyHint:''}</p>
-              <div className="mt-3 flex flex-wrap gap-2"><button className={secondary} onClick={()=>void testProvider(provider)}><Play className="mr-1 inline h-3 w-3"/>Test connection</button><button className={secondary} onClick={()=>void discoverProvider(provider)}><RefreshCw className="mr-1 inline h-3 w-3"/>Discover models</button><button className={secondary} onClick={()=>void toggleProvider(provider)}><Power className="mr-1 inline h-3 w-3"/>{provider.enabled?'Disable':'Enable'}</button></div>
-              {isSuperadmin&&provider.kind!=='cloudflare'&&provider.kind!=='ollama'&&<div className="mt-3 space-y-2 rounded-lg border border-slate-800 bg-slate-950 p-3">
-                <label className="block text-[11px] text-slate-400">Provider base URL</label><input className={field} value={providerBaseUrls[provider.id]??provider.base_url??''} onChange={e=>setProviderBaseUrls(current=>({...current,[provider.id]:e.target.value}))} placeholder="https://api.example.com/v1"/>
-                <button className={secondary} onClick={()=>void saveProviderConfig(provider)}>Save endpoint configuration</button>
-                <label className="block text-[11px] text-slate-400">Provider API key · saved value is never displayed</label><input className={field} type="password" autoComplete="new-password" value={providerSecrets[provider.id]||''} onChange={e=>setProviderSecrets(current=>({...current,[provider.id]:e.target.value}))} placeholder="Paste a new API key"/>
-                <div className="flex flex-wrap gap-2"><button className={secondary} onClick={()=>void saveProviderKey(provider,false)}><KeyRound className="mr-1 inline h-3 w-3"/>Save key</button><button className={secondary} onClick={()=>void saveProviderKey(provider,true)}>Rotate key</button></div>
-              </div>}
-            </div>)}</div>
+              <div className="mt-3 flex flex-wrap gap-2"><button className={secondary} onClick={()=>void testProvider(provider)}><Play className="mr-1 inline h-3 w-3"/>Test connection</button><button className={secondary} onClick={()=>void discoverProvider(provider)}><RefreshCw className="mr-1 inline h-3 w-3"/>Discover models</button><button className={secondary} onClick={()=>void toggleProvider(provider)}><Power className="mr-1 inline h-3 w-3"/>{provider.enabled?'Disable':'Enable'}</button></div>            </div>)}</div>
           </div>
         </div>}
 
         {tab==='models'&&<div className="space-y-4">
           <div className={panel}><h2 className="mb-2 text-lg font-bold text-white">Manual model registration</h2><p className="mb-3 text-xs text-slate-500">Exact upstream ID only. Manually registered entries are disabled and unverified until a real inference probe succeeds.</p>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4"><select className={field} value={manualProviderId} onChange={e=>setManualProviderId(e.target.value)}>{providers.map(p=><option key={p.id} value={p.id}>{p.displayName}</option>)}</select><input className={field} value={manualModelId} onChange={e=>setManualModelId(e.target.value)} placeholder="Exact model ID"/><input className={field} value={manualModelName} onChange={e=>setManualModelName(e.target.value)} placeholder="Display name (optional)"/><input className={field} type="number" value={manualContext} onChange={e=>setManualContext(e.target.value)} placeholder="Context window (optional)"/></div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4"><select className={field} value={manualProviderId} onChange={e=>setManualProviderId(e.target.value)}>{providers.filter(p=>['9router','ollama'].includes(p.id)).map(p=><option key={p.id} value={p.id}>{p.displayName}</option>)}</select><input className={field} value={manualModelId} onChange={e=>setManualModelId(e.target.value)} placeholder="Exact model ID"/><input className={field} value={manualModelName} onChange={e=>setManualModelName(e.target.value)} placeholder="Display name (optional)"/><input className={field} type="number" value={manualContext} onChange={e=>setManualContext(e.target.value)} placeholder="Context window (optional)"/></div>
             <button className={primary+' mt-3'} disabled={!manualProviderId||!manualModelId.trim()} onClick={()=>void addManualModel()}>Register model</button>
           </div>
           <div className={panel}><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">Model catalogue</h2><p className="text-xs text-slate-500">All registered rows are manageable here. User availability still requires enablement and a recent successful model test.</p></div><button className={primary} onClick={()=>void discoverModels()}>Discover / refresh configured providers</button></div>
