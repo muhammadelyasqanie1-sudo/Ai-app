@@ -23,6 +23,7 @@ export const AfgApiConnectorPanel:React.FC<{language:Language;catalogSelection?:
  const [sample,setSample]=useState('{}');const [sourceKey,setSourceKey]=useState('');
  const [busy,setBusy]=useState('');const [error,setError]=useState('');const [notice,setNotice]=useState('');
  const [argumentsJson,setArgumentsJson]=useState<Record<string,string>>({});
+ const [uploadFiles,setUploadFiles]=useState<Record<string,Record<string,File>>>({});
  useEffect(()=>{if(!catalogSelection)return;setName(catalogSelection.name.slice(0,120));setToolName(catalogSelection.name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,64)||'api_tool');setDescription(catalogSelection.description.slice(0,1000));setSourceKey(catalogSelection.source_key);setEndpoint('');setCredential('');setAuthType(/api.?key|key/i.test(catalogSelection.auth)?'header_key':/basic/i.test(catalogSelection.auth)?'basic':/oauth|bearer/i.test(catalogSelection.auth)?'bearer':'none');setAuthHeader('X-API-Key');setFallbackGroup('');setFallbackPriority('100');},[catalogSelection]);
  useEffect(()=>{if(!openApiSelection)return;setName(openApiSelection.name.slice(0,120));setToolName(openApiSelection.toolName);setDescription(openApiSelection.description.slice(0,1000));setEndpoint(openApiSelection.endpointUrl);setMethod(openApiSelection.method);setSchema(JSON.stringify(openApiSelection.inputSchema,null,2));setSample('{}');setSourceKey('');setCredential('');const auth=openApiSelection.authOptions[0]||'none';if(auth==='bearer'){setAuthType('bearer');setAuthHeader('Authorization');}else if(auth==='basic'){setAuthType('basic');setAuthHeader('Authorization');}else if(auth.startsWith('header_key:')){setAuthType('header_key');setAuthHeader(auth.slice(11)||'X-API-Key');}else if(auth.startsWith('query_key:')){setAuthType('query_key');setAuthHeader(auth.slice(10)||'api_key');}else{setAuthType('none');setAuthHeader('X-API-Key');}setFallbackGroup('');setFallbackPriority('100');},[openApiSelection]);
  const [results,setResults]=useState<Record<string,string>>({});
@@ -40,12 +41,28 @@ export const AfgApiConnectorPanel:React.FC<{language:Language;catalogSelection?:
   setName('');setToolName('');setDescription('');setEndpoint('');setCredential('');setSourceKey('');setFallbackGroup('');setFallbackPriority('100');
   return request('/api/api-hub/connectors/'+result.connector.id+'/test',{method:'POST',body:'{}'});
  });
- const verify=(row:Connector)=>act(row.id,()=>request('/api/api-hub/connectors/'+row.id+'/test',{method:'POST',body:'{}'}));
+ const verify=(row:Connector)=>act(row.id,async()=>{
+  const files=uploadFiles[row.id]||{};
+  if(Object.keys(files).length){
+   const form=new FormData();form.append('arguments',JSON.stringify(row.sampleArguments||{}));
+   for(const [key,file] of Object.entries(files))form.append(key,file,file.name);
+   const response=await fetch('/api/api-hub/connectors/'+row.id+'/test',{method:'POST',headers:{'X-CSRF-Token':csrf()},body:form,credentials:'include',cache:'no-store'});
+   const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||('HTTP '+response.status));return data;
+  }
+  return request('/api/api-hub/connectors/'+row.id+'/test',{method:'POST',body:'{}'});
+ });
  const toggle=(row:Connector)=>act(row.id,()=>request('/api/api-hub/connectors/'+row.id,{method:'PATCH',body:JSON.stringify({enabled:!row.enabled})}));
  const remove=(row:Connector)=>{if(!window.confirm(t('Delete this connector and its encrypted API credential?','این اتصال و کلید رمزگذاری‌شده API حذف شود؟')))return;void act(row.id,()=>request('/api/api-hub/connectors/'+row.id,{method:'DELETE'}));};
  const call=(row:Connector)=>act('call-'+row.id,async()=>{
   let args:any;try{args=JSON.parse(argumentsJson[row.id]||'{}');}catch{throw new Error('Tool arguments must be valid JSON.');}
-  const result=await request('/api/api-hub/connectors/'+row.id+'/call',{method:'POST',body:JSON.stringify({arguments:args})});
+  const files=uploadFiles[row.id]||{};
+  let result:any;
+  if(Object.keys(files).length){
+   const form=new FormData();form.append('arguments',JSON.stringify(args));
+   for(const [key,file] of Object.entries(files))form.append(key,file,file.name);
+   const response=await fetch('/api/api-hub/connectors/'+row.id+'/call',{method:'POST',headers:{'X-CSRF-Token':csrf()},body:form,credentials:'include',cache:'no-store'});
+   result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||('HTTP '+response.status));
+  }else result=await request('/api/api-hub/connectors/'+row.id+'/call',{method:'POST',body:JSON.stringify({arguments:args})});
   setResults(prev=>({...prev,[row.id]:JSON.stringify(result.result,null,2)}));
   return result;
  });
@@ -71,6 +88,7 @@ export const AfgApiConnectorPanel:React.FC<{language:Language;catalogSelection?:
     <input className={field} type="number" min="1" max="1000" value={fallbackPriority} onChange={e=>setFallbackPriority(e.target.value)} placeholder={t('Priority: lower runs first','اولویت: عدد کمتر زودتر اجرا می‌شود')}/>
     <p className="text-[10px] leading-4 text-slate-500 sm:col-span-2">{t('Give compatible APIs the same fallback group and matching parameter schema. When one provider is rate-limited or temporarily unavailable, the next verified connector is tried.','به APIهای هم‌کاربرد گروه یکسان و schema پارامتر یکسان بدهید. اگر سرویس محدود یا موقتاً قطع شد، اتصال تأییدشده بعدی امتحان می‌شود.')}</p>
     <label className="text-[11px] text-slate-400 sm:col-span-2">{t('Parameter JSON Schema','JSON Schema پارامترها')}<textarea className={field+' mt-1 min-h-32 font-mono'} value={schema} onChange={e=>setSchema(e.target.value)}/></label>
+    <p className="text-[10px] leading-4 text-slate-500 sm:col-span-2">{t('For uploads, set root x-content-type to multipart/form-data and declare each file property as type string, format binary. File pickers appear after the connector is saved. Maximum 10 MB per file, 12 MB per request.','برای بارگذاری فایل، در ریشه Schema مقدار x-content-type را multipart/form-data بگذارید و هر فایل را با type string و format binary تعریف کنید. انتخاب‌گر فایل پس از ذخیره اتصال نمایش داده می‌شود. حداکثر ۱۰ مگابایت برای هر فایل و ۱۲ مگابایت برای هر درخواست.')}</p>
     <label className="text-[11px] text-slate-400 sm:col-span-2">{t('Sample arguments used for verification','نمونه پارامترهای آزمایش اتصال')}<textarea className={field+' mt-1 min-h-20 font-mono'} value={sample} onChange={e=>setSample(e.target.value)}/></label>
    </div>
    <button disabled={busy==='add'||!name.trim()||!toolName.trim()||!endpoint.trim()||(authType!=='none'&&(!credential.trim()||!encryption))} onClick={()=>void add()} className="mt-3 rounded-xl bg-cyan-400 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-40">{busy==='add'?t('Saving and testing…','در حال ذخیره و آزمایش…'):t('Save and test API','ذخیره و آزمایش API')}</button>
@@ -79,6 +97,7 @@ export const AfgApiConnectorPanel:React.FC<{language:Language;catalogSelection?:
   {rows.map(row=><article key={row.id} className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
    <div className="flex flex-wrap items-start justify-between gap-2"><div><h4 className="font-bold text-white">{row.name} <span className="ml-1 font-mono text-[10px] text-cyan-300">{row.toolName}</span></h4><p className="mt-1 break-all text-[10px] text-slate-500">{row.httpMethod} {row.endpointUrl}</p><p className="mt-1 text-[10px] text-slate-400">{row.description}</p>{row.fallbackGroup&&<p className="mt-1 text-[10px] text-violet-300">Fallback: {row.fallbackGroup} · Priority {row.fallbackPriority}</p>}</div><span className={'rounded-full border px-2 py-1 text-[10px] '+(row.enabled?'border-emerald-500/30 text-emerald-300':row.status==='error'?'border-red-500/30 text-red-300':'border-slate-700 text-slate-400')}>{row.queueState==='waiting'?t('Waiting for quota reset','در صف انتظار تمدید سهمیه'):row.enabled?t('Enabled','فعال'):row.status}</span></div>{row.nextAvailableAt&&<p className="mt-1 text-[10px] text-amber-300">{t('Next eligible time: ','زمان بازگشت به صف: ')}{new Date(row.nextAvailableAt).toLocaleString()}</p>}
    {row.lastError&&<p className="mt-2 text-xs text-red-300">{row.lastError}</p>}
+   {Object.entries(row.inputSchema?.properties||{}).filter(([,property]:[string,any])=>property?.format==='binary').map(([key])=><label key={key} className="mt-2 grid gap-1 text-[10px] text-slate-400">{t('Upload file: ','بارگذاری فایل: ')}{key}<input type="file" onChange={e=>{const file=e.target.files?.[0];setUploadFiles(prev=>({...prev,[row.id]:{...(prev[row.id]||{}),...(file?{[key]:file}:{})}}));}} className={field}/>{uploadFiles[row.id]?.[key]&&<span className="text-cyan-300">{uploadFiles[row.id][key].name} · {Math.ceil(uploadFiles[row.id][key].size/1024)} KB</span>}</label>)}
    <div className="mt-3 flex flex-wrap gap-2"><button onClick={()=>void verify(row)} disabled={busy===row.id} className="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-3 py-2 text-[10px] text-slate-300"><Activity className="h-3 w-3"/>Test</button>{row.status==='verified'&&<button onClick={()=>void toggle(row)} disabled={busy===row.id} className="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-3 py-2 text-[10px] text-slate-300"><Power className="h-3 w-3"/>{row.enabled?'Disable':'Enable'}</button>}<button onClick={()=>remove(row)} disabled={busy===row.id} className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 px-3 py-2 text-[10px] text-red-300"><Trash2 className="h-3 w-3"/>Delete</button></div>
    {row.enabled&&<div className="mt-3 grid gap-2"><textarea value={argumentsJson[row.id]||JSON.stringify(row.sampleArguments||{},null,2)} onChange={e=>setArgumentsJson(v=>({...v,[row.id]:e.target.value}))} rows={3} className={field+' font-mono'} placeholder="{}"/><button onClick={()=>void call(row)} disabled={busy==='call-'+row.id} className="inline-flex w-fit items-center gap-1 rounded-lg bg-cyan-400 px-3 py-2 text-[10px] font-bold text-slate-950"><Code2 className="h-3 w-3"/>Run tool</button>{results[row.id]&&<pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-slate-950 p-3 text-[10px] text-emerald-200">{results[row.id]}</pre>}</div>}
   </article>)}

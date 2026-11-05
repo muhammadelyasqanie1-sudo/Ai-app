@@ -59,6 +59,50 @@ async function readTextLimited(response:Response,maxBytes:number):Promise<string
  for(const chunk of chunks){merged.set(chunk,offset);offset+=chunk.byteLength;}
  return new TextDecoder().decode(merged);
 }
+type UploadedFile={filename:string;contentType:string;data:Buffer};
+async function readMultipartRequest(req:IncomingMessage,maxBytes=12*1024*1024):Promise<{arguments:Json;files:Record<string,UploadedFile>}>{
+ const contentType=String(req.headers['content-type']||'');
+ const boundaryMatch=contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+ const boundary=(boundaryMatch?.[1]||boundaryMatch?.[2]||'').trim();
+ if(!/^[-0-9A-Za-z'()+_,./:=?]{1,70}$/.test(boundary))throw new Error('Multipart boundary is missing or invalid.');
+ const chunks:Buffer[]=[];let total=0;
+ for await(const part of req){
+  const chunk=Buffer.isBuffer(part)?part:Buffer.from(part);total+=chunk.length;
+  if(total>maxBytes)throw new Error('Multipart upload exceeds the 12 MB request limit.');
+  chunks.push(chunk);
+ }
+ const raw=Buffer.concat(chunks),delimiter=Buffer.from('--'+boundary),separator=Buffer.from('\r\n\r\n');
+ const files:Record<string,UploadedFile>=Object.create(null);let args:Json|null=null,offset=0,parts=0;
+ while(true){
+  const start=raw.indexOf(delimiter,offset);if(start<0)break;
+  let cursor=start+delimiter.length;
+  if(raw.subarray(cursor,cursor+2).toString()==='--')break;
+  if(raw.subarray(cursor,cursor+2).toString()==='\r\n')cursor+=2;
+  const headerEnd=raw.indexOf(separator,cursor);if(headerEnd<0)throw new Error('Multipart part headers are malformed.');
+  const headers=raw.subarray(cursor,headerEnd).toString('utf8');
+  const next=raw.indexOf(Buffer.concat([Buffer.from('\r\n'),delimiter]),headerEnd+4);
+  if(next<0)throw new Error('Multipart part terminator is missing.');
+  const data=raw.subarray(headerEnd+4,next),nameMatch=headers.match(/content-disposition:\s*form-data;[^\r\n]*\bname="([^"]{1,100})"/i);
+  if(!nameMatch)throw new Error('Multipart part name is missing.');
+  const name=nameMatch[1];parts++;if(parts>50)throw new Error('Multipart request contains too many parts.');
+  const filenameMatch=headers.match(/\bfilename="([^"]{0,255})"/i);
+  if(filenameMatch){
+   const safeFilename=filenameMatch[1].replace(/[\\/]/g,'_').replace(/[\u0000-\u001f\u007f]/g,'').slice(0,180);
+   if(!safeFilename||safeFilename==='.'||safeFilename==='..')throw new Error('Uploaded filename is invalid.');
+   const mime=headers.match(/\bcontent-type:\s*([^\r\n]+)/i)?.[1]?.trim().toLowerCase()||'application/octet-stream';
+   if(!/^[a-z0-9][a-z0-9!#async function safeEndpoint(value:string):Promise<URL>{^_.+-]{0,80}\/[a-z0-9][a-z0-9!#async function safeEndpoint(value:string):Promise<URL>{^_.+-]{0,80}$/.test(mime))throw new Error('Uploaded file content type is invalid.');
+   if(data.length>10*1024*1024)throw new Error('Each uploaded file is limited to 10 MB.');
+   if(files[name])throw new Error('Duplicate uploaded file field: '+name+'.');
+   files[name]={filename:safeFilename,contentType:mime,data};
+  }else{
+   if(name!=='arguments'||args)throw new Error('Only one arguments field and declared file fields are accepted.');
+   try{args=JSON.parse(data.toString('utf8'));}catch{throw new Error('Multipart arguments must contain valid JSON.');}
+  }
+  offset=next+2;
+ }
+ if(!args||typeof args!=='object'||Array.isArray(args))throw new Error('Multipart arguments JSON is required.');
+ return {arguments:args,files};
+}
 async function safeEndpoint(value:string):Promise<URL>{
  let url:URL;try{url=new URL(value);}catch{throw new Error('Enter a valid API endpoint URL.');}
  if(url.protocol!=='https:'||url.username||url.password||url.hash||url.search||
@@ -78,6 +122,7 @@ function normalizeJsonProperty(input:unknown,depth=0):Json{
  if(!['string','number','integer','boolean','object','array'].includes(source.type))throw new Error('API connector parameters must use supported JSON types.');
  const output:Json={type:source.type};
  if(typeof source.description==='string')output.description=source.description.slice(0,500);
+ if(source.format!==undefined){if(source.type!=='string'||source.format!=='binary'||depth!==1)throw new Error('Binary file properties are supported only at the connector input root.');output.format='binary';}
  if(source['x-in']!==undefined){if(!['path','query','body','header'].includes(source['x-in']))throw new Error('API parameter location is invalid.');output['x-in']=source['x-in'];}
  if(Array.isArray(source.enum)){
   if(source.enum.length>100||source.enum.some((value:any)=>value!==null&&!['string','number','boolean'].includes(typeof value)))throw new Error('Parameter enum is invalid.');
@@ -115,12 +160,17 @@ function validateSchema(schema:unknown):Json{
  const value=schema as Json;
  if(value.type!=='object'||!value.properties||typeof value.properties!=='object'||Array.isArray(value.properties))throw new Error('Input schema must use type object and a properties map.');
  const normalized=normalizeJsonProperty(value);
+ if(value['x-content-type']!==undefined){if(value['x-content-type']!=='multipart/form-data')throw new Error('Only multipart/form-data is supported for file uploads.');normalized['x-content-type']='multipart/form-data';}
+ const hasBinary=Object.values(normalized.properties as Json).some((property:any)=>property?.format==='binary');
+ if(hasBinary&&normalized['x-content-type']!=='multipart/form-data')throw new Error('Binary file fields require x-content-type multipart/form-data.');
  if(Object.keys(normalized.properties as Json).length>40)throw new Error('An API tool may define at most 40 input parameters.');
  return normalized;
 }
 function modelToolSchema(input:unknown):Json{
  const schema=validateSchema(input);
- return {...schema,additionalProperties:false};
+ const properties={...(schema.properties as Json)};
+ for(const [key,value] of Object.entries(properties))if((value as Json).format==='binary')delete properties[key];
+ return {...schema,properties,required:(schema.required as string[]).filter(key=>(schema.properties as Json)[key]?.format!=='binary'),additionalProperties:false};
 }
 function validateJsonValue(schema:Json,value:unknown,path:string,depth=0):void{
  if(depth>6)throw new Error(path+' exceeds the maximum JSON nesting depth.');
@@ -137,7 +187,7 @@ function validateJsonValue(schema:Json,value:unknown,path:string,depth=0):void{
  }else if(schema.type==='object'){
   if(!value||typeof value!=='object'||Array.isArray(value))throw new Error(path+' must be an object.');
   const object=value as Json,properties=schema.properties as Json,required=schema.required as string[];
-  for(const key of required)if(!Object.prototype.hasOwnProperty.call(object,key))throw new Error(path+'.'+key+' is required.');
+  for(const key of required)if(!((properties[key] as Json)?.format==='binary')&&!Object.prototype.hasOwnProperty.call(object,key))throw new Error(path+'.'+key+' is required.');
   for(const [key,item] of Object.entries(object)){
    const child=properties[key] as Json|undefined;
    if(!child)throw new Error(path+' contains an unknown property: '+key+'.');
@@ -170,8 +220,13 @@ async function ownerConnector(userId:string,id:string){
  const result=await pool!.query('SELECT * FROM user_api_connectors WHERE id=$1 AND user_id=$2 LIMIT 1',[id,userId]);
  return result.rows[0]||null;
 }
-async function execute(row:any,args:unknown,userId:string,requestId:string,timeoutMs=15_000){
+async function execute(row:any,args:unknown,userId:string,requestId:string,timeoutMs=15_000,files:Record<string,UploadedFile>={}){
  const schema=validateSchema(row.input_schema_json),values=validateArgs(schema,args);
+ const fileProperties=Object.entries(schema.properties as Json).filter(([,value])=>(value as Json).format==='binary').map(([key])=>key);
+ for(const key of fileProperties){if((schema.required as string[]).includes(key)&&!files[key])throw new Error('Required upload field is missing: '+key+'.');}
+ for(const key of Object.keys(files))if(!fileProperties.includes(key))throw new Error('Undeclared upload field: '+key+'.');
+ if(Object.keys(files).length&&!schema['x-content-type'])throw new Error('This API connector is not configured for multipart/form-data uploads.');
+ if(Object.keys(files).length&&!['POST','PUT','PATCH'].includes(row.http_method))throw new Error('Multipart file uploads require POST, PUT or PATCH.');
  const base=await safeEndpoint(row.endpoint_url);
  let pathname=base.pathname;
  const query=new URLSearchParams();
@@ -207,7 +262,14 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  }
  if(query.size)url.search=query.toString();
  const init:RequestInit={method:row.http_method,headers,redirect:'error',signal:AbortSignal.timeout(timeoutMs)};
- if(['POST','PUT','PATCH'].includes(row.http_method)){headers.set('Content-Type','application/json');init.body=JSON.stringify(body);}
+ if(['POST','PUT','PATCH'].includes(row.http_method)){
+  if(schema['x-content-type']==='multipart/form-data'){
+   const form=new FormData();
+   for(const [key,value] of Object.entries(body))form.append(key,typeof value==='string'?value:JSON.stringify(value));
+   for(const [key,file] of Object.entries(files))form.append(key,new Blob([Uint8Array.from(file.data)],{type:file.contentType}),file.filename);
+   init.body=form;
+  }else{headers.set('Content-Type','application/json');init.body=JSON.stringify(body);}
+ }
  const started=Date.now();
  let response:Response;
  try{response=await fetch(url.toString(),init);}catch(error){
@@ -307,8 +369,8 @@ async function recordConnectorFailure(row:any,userId:string,requestId:string,err
   VALUES($1,$2,$3,$4,$5,$6,'error',$7)`,
   [row.id,userId,requestId,row.http_method,Number(value?.httpStatus)||null,Math.max(0,Number(value?.durationMs)||0),message]).catch(()=>{});
 }
-async function executeConnectorWithFallback(row:any,args:unknown,userId:string,requestId:string){
- try{return {...await execute(row,args,userId,requestId,10_000),connectorId:row.id,connectorName:row.name,fallbackUsed:false};}
+async function executeConnectorWithFallback(row:any,args:unknown,userId:string,requestId:string,files:Record<string,UploadedFile>={}){
+ try{return {...await execute(row,args,userId,requestId,10_000,files),connectorId:row.id,connectorName:row.name,fallbackUsed:false};}
  catch(primaryError){
   await recordConnectorFailure(row,userId,requestId,primaryError);
   await parkQuotaLimitedConnector(row,userId,primaryError);
@@ -322,7 +384,7 @@ async function executeConnectorWithFallback(row:any,args:unknown,userId:string,r
   for(const candidate of alternatives.rows){
    if(!await reserveConnectorCall(userId,candidate.id))continue;
    try{
-    const result=await execute(candidate,args,userId,requestId,10_000);
+    const result=await execute(candidate,args,userId,requestId,10_000,files);
     console.info('AFG_API_CONNECTOR_FALLBACK',JSON.stringify({requestId,userId,group:row.fallback_group,from:row.id,to:candidate.id,outcome:'success'}));
     return {...result,connectorId:candidate.id,connectorName:candidate.name,fallbackUsed:true,fallbackFrom:row.name};
    }catch(error){
@@ -343,7 +405,11 @@ export async function getEnabledUserApiToolDefinitions(userId:string){
   await refreshDueQueueEntries(userId);
   const result=await pool.query(`SELECT tool_name,description,input_schema_json,fallback_group FROM user_api_connectors
    WHERE user_id=$1 AND enabled=true AND status='verified' AND queue_state='ready' ORDER BY fallback_priority ASC,created_at DESC LIMIT 32`,[userId]);
-  return result.rows.map(row=>({
+  const available=result.rows.filter(row=>{
+   const schema=validateSchema(row.input_schema_json);
+   return !(schema.required as string[]).some(key=>(schema.properties as Json)[key]?.format==='binary');
+  });
+  return available.map(row=>({
    type:'function' as const,
    function:{
     name:String(row.tool_name),
@@ -435,8 +501,10 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
   if(req.method==='POST'&&testMatch){
    const row=await ownerConnector(user.id,testMatch[1]);if(!row){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
    const requestId=randomUUID();
+   const multipart=String(req.headers['content-type']||'').toLowerCase().startsWith('multipart/form-data');
+   const verificationPayload=multipart?await readMultipartRequest(req):null;
    try{
-    const result=await execute(row,row.sample_arguments_json,user.id,requestId);
+    const result=await execute(row,verificationPayload?.arguments||row.sample_arguments_json,user.id,requestId,15_000,verificationPayload?.files||{});
     await pool.query(`UPDATE user_api_connectors SET status='verified',queue_state='ready',next_available_at=NULL,enabled=false,last_tested_at=now(),last_http_status=$3,last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2`,
      [row.id,user.id,result.status]);
     await audit(user.id,'api.connector.verify',row.id,{status:result.status,durationMs:result.durationMs});
@@ -478,9 +546,12 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    const row=await ownerConnector(user.id,callMatch[1]);
    if(!row||!row.enabled||row.status!=='verified'||row.queue_state!=='ready'){sendAuthJson(res,409,{error:row?.queue_state==='waiting'?'API connector is waiting for its upstream quota reset.':'API connector is not verified and enabled.'});return true;}
    if(!await reserveConnectorCall(user.id,row.id)){sendAuthJson(res,429,{error:'API connector limit is 30 calls per minute.'});return true;}
-   const requestId=randomUUID(),body=await readJsonBody(req,60_000);
+   const requestId=randomUUID();
+   const multipart=String(req.headers['content-type']||'').toLowerCase().startsWith('multipart/form-data');
+   const payload=multipart?await readMultipartRequest(req):{arguments:await readJsonBody(req,60_000),files:{}};
    try{
-    const result=await executeConnectorWithFallback(row,body.arguments||{},user.id,requestId);
+    const callArguments=multipart?payload.arguments:(payload.arguments.arguments||payload.arguments);
+    const result=await executeConnectorWithFallback(row,callArguments,user.id,requestId,payload.files);
     sendAuthJson(res,200,{requestId,result});return true;
    }catch(error){
     const message=error instanceof Error?error.message.slice(0,250):'API connector call failed.';
