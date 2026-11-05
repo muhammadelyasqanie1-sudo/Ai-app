@@ -65,6 +65,7 @@ function primitiveSchema(document:Json,input:unknown,depth=0):Json|null{
  const type=Array.isArray(schema.type)?schema.type.find((item:string)=>item!=='null'):schema.type;
  if(!['string','integer','number','boolean'].includes(type))return null;
  const output:Json={type};
+ if(type==='string'&&schema.format==='binary')output.format='binary';
  if(typeof schema.description==='string')output.description=schema.description.slice(0,500);
  if(Array.isArray(schema.enum))output.enum=schema.enum.slice(0,100).filter((item:any)=>['string','number','boolean'].includes(typeof item));
  if(Number.isInteger(schema.maxLength))output.maxLength=Math.max(0,Math.min(10000,schema.maxLength));
@@ -110,13 +111,18 @@ function operationSchema(document:Json,operation:Json,pathItem:Json):{schema:Jso
  }
  const body=operation.requestBody;
  if(body&&typeof body==='object'){
-  const media=body.content?.['application/json']||body.content?.['application/*+json'];
+  const jsonMedia=body.content?.['application/json']||body.content?.['application/*+json'];
+  const multipartMedia=body.content?.['multipart/form-data'];
+  const media=jsonMedia||multipartMedia;
   if(media?.schema){
    let schema:any=media.schema;
    if(typeof schema.$ref==='string')schema=resolveLocalRef(document,schema.$ref)||{};
    if(schema.type==='object'&&schema.properties&&typeof schema.properties==='object'){
     for(const [name,value] of Object.entries(schema.properties)){
-     const property=primitiveSchema(document,value);if(!property){unsupported.push('body:'+name);continue;}
+     let property:Json|null=null;
+     if(multipartMedia&&(value as any)?.type==='string'&&(value as any)?.format==='binary')property={type:'string',format:'binary',description:String((value as any).description||'Uploaded file').slice(0,500)};
+     else property=primitiveSchema(document,value);
+     if(!property){unsupported.push('body:'+name);continue;}
      property['x-in']='body';properties[name]=property;
     }
     if(Array.isArray(schema.required))for(const name of schema.required)if(typeof name==='string'&&properties[name])required.add(name);
@@ -124,7 +130,7 @@ function operationSchema(document:Json,operation:Json,pathItem:Json):{schema:Jso
   }else unsupported.push('requestBody:unsupported_content_type');
   if(body.required===true&&Object.keys(properties).length===0)unsupported.push('requestBody:required_but_unsupported');
  }
- return {schema:{type:'object',properties,required:[...required],additionalProperties:false},required:[...required],unsupported};
+ return {schema:{type:'object',properties,required:[...required],additionalProperties:false,...(body?.content?.['multipart/form-data']?{'x-content-type':'multipart/form-data'}:{})},required:[...required],unsupported};
 }
 
 function boundedText(value:unknown,max=500):string|null{
