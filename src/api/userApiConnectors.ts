@@ -656,7 +656,8 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
     await pool.query(`UPDATE user_api_connectors SET credential_encrypted=$3,enabled=false,status='error',
      queue_state='ready',next_available_at=NULL,last_error='API key changed; verify the connector before enabling it.',updated_at=now()
      WHERE id=$1 AND user_id=$2`,[connector.id,user.id,key.credential_encrypted]);
-    await pool.query('UPDATE user_api_connector_keys SET is_active=(id=$2),updated_at=now() WHERE connector_id=$1 AND user_id=$3',[connector.id,key.id,user.id]);
+    await pool.query('UPDATE user_api_connector_keys SET is_active=false,updated_at=now() WHERE connector_id=$1 AND user_id=$2',[connector.id,user.id]);
+    await pool.query('UPDATE user_api_connector_keys SET is_active=true,updated_at=now() WHERE id=$1 AND connector_id=$2 AND user_id=$3',[key.id,connector.id,user.id]);
     await audit(user.id,'api.connector.key_activated',connector.id,{keyId:key.id,label:key.label,requiresVerification:true});
     sendAuthJson(res,200,{activated:true,verified:false,enabled:false,requiresVerification:true});return true;
    }
