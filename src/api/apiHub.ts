@@ -69,8 +69,7 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
       const saved=await pool.query(`UPDATE public_api_implementation_tracking
         SET official_docs_url=$3,docs_evidence=$4::jsonb,protocol_types=$5::text[],auth_evidence=$6::text[],
           discovery_status=CASE WHEN discovery_status='catalogued' THEN 'docs_discovered' ELSE discovery_status END,
-          work_state='done',claimed_by=NULL,claimed_at=NULL,lease_until=NULL,last_work_error=NULL,
-          last_discovered_at=now(),updated_at=now()
+          last_work_error=NULL,last_discovered_at=now(),updated_at=now()
         WHERE source_key=$1 AND work_state='claimed' AND claimed_by=$2 AND lease_until>now()
         RETURNING source_key,discovery_status,work_state,protocol_types,auth_evidence`,
         [sourceKey,String(user.id),evidence.docsUrl,JSON.stringify(evidence),evidence.protocolTypes,evidence.authTypes]);
