@@ -263,13 +263,15 @@ async function persistApiBatch(rows:PublicApiRecord[]):Promise<void> {
   finally{client.release();}
 }
 
-export async function syncPublicApiCatalog():Promise<{imported:number;pages:number;complete:boolean;sourceCoverage:{repositoryReadme:boolean;directoryApi:boolean}}> {
+export async function syncPublicApiCatalog():Promise<{imported:number;pages:number;complete:boolean;sourceCoverage:{repositoryReadme:boolean;directoryApi:boolean};sourceCounts:{repositoryReadme:number;directoryApi:number;unique:number}}> {
   if(!pool)throw new Error('The API catalog requires PostgreSQL.');
   if(syncInFlight)return syncInFlight;
   syncInFlight=(async():Promise<CatalogSyncResult>=>{
     await pool.query("INSERT INTO public_api_sync_state(source,status,last_started_at,last_error,updated_at) VALUES($1,'running',now(),NULL,now()) ON CONFLICT(source) DO UPDATE SET status='running',last_started_at=now(),last_error=NULL,updated_at=now()",[REPOSITORY_SOURCE]);
     let imported=0,pages=0;
     let repositoryReadme=false,directoryApi=false;
+    let repositoryEntries=0,directoryEntries=0;
+    const directoryPageFingerprints=new Set<string>();
     const all=new Map<string,PublicApiRecord>();
     const errors:string[]=[];
     try{
@@ -277,6 +279,7 @@ export async function syncPublicApiCatalog():Promise<{imported:number;pages:numb
       // entries that exist only in the companion JSON directory (and vice versa).
       try{
         const result=await fetchRepositoryReadme();
+        repositoryEntries=result.rows.length;
         for(const row of result.rows)all.set(row.sourceKey,{...row,raw:{...row.raw,catalogSource:'public-apis-readme'}});
         repositoryReadme=true;pages++;
       }catch(error){
@@ -287,7 +290,14 @@ export async function syncPublicApiCatalog():Promise<{imported:number;pages:numb
         for(let page=1;page<=MAX_PAGES;page++){
           const result=await fetchDirectoryApiPage(page);
           pages++;
-          if(!result.rows.length){directoryApi=true;break;}
+          if(!result.rows.length){
+            if(result.hasMore===true)throw new Error('The directory returned an empty page while claiming that more pages exist.');
+            directoryApi=true;break;
+          }
+          const fingerprint=createHash('sha256').update(result.rows.map(row=>row.sourceKey).sort().join('|')).digest('hex');
+          if(directoryPageFingerprints.has(fingerprint))throw new Error('The directory repeated a page; refusing to report complete source coverage.');
+          directoryPageFingerprints.add(fingerprint);
+          directoryEntries+=result.rows.length;
           for(const row of result.rows){
             const existing=all.get(row.sourceKey);
             all.set(row.sourceKey,existing
@@ -314,7 +324,7 @@ export async function syncPublicApiCatalog():Promise<{imported:number;pages:numb
       const lastError=errors.length?errors.join(' | ').slice(0,500):null;
       await pool.query("UPDATE public_api_sync_state SET status=$2,items_imported=$3,pages_fetched=$4,repository_readme_ok=$6,directory_api_ok=$7,last_completed_at=now(),last_error=$5,updated_at=now() WHERE source=$1",
         [REPOSITORY_SOURCE,status,imported,pages,lastError,repositoryReadme,directoryApi]);
-      return {imported,pages,complete,sourceCoverage:{repositoryReadme,directoryApi}};
+      return {imported,pages,complete,sourceCoverage:{repositoryReadme,directoryApi},sourceCounts:{repositoryReadme:repositoryEntries,directoryApi:directoryEntries,unique:records.length}};
     }catch(error){
       const message=error instanceof Error?error.message.slice(0,500):'Catalog sync failed.';
       await pool.query("UPDATE public_api_sync_state SET status='error',items_imported=$2,pages_fetched=$3,repository_readme_ok=$5,directory_api_ok=$6,last_completed_at=now(),last_error=$4,updated_at=now() WHERE source=$1",
