@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useState} from 'react';
-import { Activity, ArrowUpRight, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { Activity, ArrowUpRight, ChevronLeft, ChevronRight, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import type { Language } from '../../types/afg';
 
 type LlmCatalogItem={
@@ -30,15 +30,18 @@ export const AfgLlmApiCatalogPanel:React.FC<{language:Language}>=({language})=>{
  const [loading,setLoading]=useState(false);
  const [error,setError]=useState('');
  const [refreshKey,setRefreshKey]=useState(0);
+ const [page,setPage]=useState(1);
+ const pageSize=60;
+ const pageCount=Math.max(1,Math.ceil((data?.total||0)/pageSize));
  const load=useCallback(async()=>{
   setLoading(true);setError('');
   try{
-   const params=new URLSearchParams({q:query.trim(),freeTier,page:'1',pageSize:'60'});
+   const params=new URLSearchParams({q:query.trim(),freeTier,page:String(page),pageSize:String(pageSize)});
    const result=await request('/api/api-hub/llm-catalog?'+params.toString());
    setData(result as ResponseData);
   }catch(e){setError(e instanceof Error?e.message:'LLM API catalogue is unavailable.');}
   finally{setLoading(false);}
- },[query,freeTier,refreshKey]);
+ },[query,freeTier,refreshKey,page]);
  useEffect(()=>{void load();},[load]);
  const tierLabel=(tier:string)=>({
   permanent:label('Permanent free tier','رایگان دائمی'),
@@ -65,8 +68,8 @@ export const AfgLlmApiCatalogPanel:React.FC<{language:Language}>=({language})=>{
    <button onClick={()=>setRefreshKey(v=>v+1)} disabled={loading} className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 disabled:opacity-50"><RefreshCw className={'h-4 w-4 '+(loading?'animate-spin':'')}/>{label('Refresh list','تازه‌سازی فهرست')}</button>
   </div>
   <div className="grid gap-2 sm:grid-cols-[1fr_200px]">
-   <label className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2"><Search className="h-4 w-4 text-slate-500"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={label('Search providers and model IDs…','جستجوی ارائه‌دهنده و شناسه مدل…')} className="w-full bg-transparent text-xs text-white outline-none"/></label>
-   <select value={freeTier} onChange={e=>setFreeTier(e.target.value)} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300">
+   <label className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2"><Search className="h-4 w-4 text-slate-500"/><input value={query} onChange={e=>{setQuery(e.target.value);setPage(1);}} placeholder={label('Search providers and model IDs…','جستجوی ارائه‌دهنده و شناسه مدل…')} className="w-full bg-transparent text-xs text-white outline-none"/></label>
+   <select value={freeTier} onChange={e=>{setFreeTier(e.target.value);setPage(1);}} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300">
     <option value="all">{label('All free-tier types','همه انواع رایگان')}</option>
     <option value="permanent">{label('Permanent free','رایگان دائمی')}</option>
     <option value="renewable">{label('Renewable credits','اعتبار تمدیدشونده')}</option>
@@ -108,6 +111,11 @@ export const AfgLlmApiCatalogPanel:React.FC<{language:Language}>=({language})=>{
    </article>)}
   </div>
   {data&&data.items.length===0&&!loading&&<div className="rounded-xl border border-slate-800 p-6 text-center text-xs text-slate-500">{label('No LLM entries match this search.','موردی مطابق جستجو پیدا نشد.')}</div>}
+  {data&&data.total>pageSize&&<div className="flex items-center justify-center gap-3">
+   <button disabled={page<=1||loading} onClick={()=>setPage(value=>Math.max(1,value-1))} className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 disabled:opacity-40"><ChevronLeft className="h-4 w-4"/>{label('Previous','قبلی')}</button>
+   <span className="text-xs text-slate-400">{page} / {pageCount}</span>
+   <button disabled={page>=pageCount||loading} onClick={()=>setPage(value=>Math.min(pageCount,value+1))} className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 disabled:opacity-40">{label('Next','بعدی')}<ChevronRight className="h-4 w-4"/></button>
+  </div>}
   <div className="flex flex-wrap gap-2 text-[10px] text-slate-500">
    <a href="https://github.com/mnfst/awesome-free-llm-apis" target="_blank" rel="noreferrer noopener" className="hover:text-cyan-300">mnfst/awesome-free-llm-apis ↗</a>
    <a href="https://github.com/open-free-llm-api/awesome-freellm-apis" target="_blank" rel="noreferrer noopener" className="hover:text-cyan-300">open-free-llm-api/awesome-freellm-apis ↗</a>
