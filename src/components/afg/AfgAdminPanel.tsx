@@ -109,6 +109,7 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
   const [fallbacks,setFallbacks] = useState<any[]>([]);
   const [usageRecords,setUsageRecords] = useState<any[]>([]);
   const [usageSummary,setUsageSummary] = useState<any|null>(null);
+  const [nineRouterMetrics,setNineRouterMetrics] = useState<any|null>(null);
   const [errorRows,setErrorRows] = useState<any[]>([]);
   const [sessions,setSessions] = useState<any[]>([]);
   const [systemConfig,setSystemConfig] = useState<any[]>([]);
@@ -198,6 +199,8 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       setSessions(values[12].sessions||[]);
       setSystemConfig(values[13].config||[]);
       setAnnouncements(values[14].announcements||[]);
+      const routerMetrics = await adminApi('/api/admin/9router/metrics').catch(()=>null);
+      setNineRouterMetrics(routerMetrics);
       const staffData = await adminApi('/api/admin/staff/roles').catch(()=>({roles:[]}));
       setStaffRoles(staffData.roles||[]);
       setAuthenticated(true);
@@ -213,6 +216,18 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
       return false;
     }finally{adminLoadInFlight.current=false;setLoading(false);}
   },[]);
+
+  const loadNineRouterMetrics = useCallback(async()=>{
+    try{setNineRouterMetrics(await adminApi('/api/admin/9router/metrics'));}
+    catch(err){setError(err instanceof Error?err.message:'Could not load 9Router metrics.');}
+  },[]);
+  const toggleNineRouter = async()=>{
+    try{
+      const result=await adminApi('/api/admin/9router/gateway',{method:'PATCH',body:JSON.stringify({enabled:!nineRouterMetrics?.enabled})});
+      setNineRouterMetrics((current:any)=>({...current,enabled:result.enabled}));
+      setNotice(result.enabled?'9Router gateway resumed.':'9Router gateway paused.');
+    }catch(err){setError(err instanceof Error?err.message:'Could not update 9Router gateway state.');}
+  };
 
   const loadHealth = useCallback(async()=>{
     try{setHealth(await adminApi('/api/admin/system-health'));}
@@ -719,6 +734,23 @@ export const AfgAdminPanel: React.FC<AfgAdminPanelProps> = ({language}) => {
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4"><input className={field} type="datetime-local" value={usageFrom} onChange={e=>setUsageFrom(e.target.value)}/><input className={field} type="datetime-local" value={usageTo} onChange={e=>setUsageTo(e.target.value)}/><select className={field} value={usageProvider} onChange={e=>setUsageProvider(e.target.value)}><option value="">All providers</option>{providers.map(p=><option key={p.id} value={p.id}>{p.displayName}</option>)}</select><input className={field} value={usageModel} onChange={e=>setUsageModel(e.target.value)} placeholder="Exact model ID"/></div>
           <button className={primary+' mt-3'} onClick={()=>void loadUsage()}>Apply usage filters</button><p className="mt-2 text-[10px] text-slate-500">Cost totals include only requests whose providers publish pricing. Unknown prices are not displayed as zero.</p></div>
+          <div className={panel}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div><h3 className="font-bold text-white">9Router gateway analytics</h3><p className="mt-1 text-[10px] text-slate-500">Metadata-only request telemetry · last 24 hours and 7 days</p></div>
+              <div className="flex gap-2"><button className={secondary} onClick={()=>void loadNineRouterMetrics()}>Refresh</button><button className={nineRouterMetrics?.enabled?secondary:primary} onClick={()=>void toggleNineRouter()}>{nineRouterMetrics?.enabled?'Pause gateway':'Resume gateway'}</button></div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-lg bg-slate-900 p-3"><p className="text-[10px] text-slate-500">Requests · 24h</p><b className="text-xl text-white">{fmt(nineRouterMetrics?.summary?.requests_24h)}</b></div>
+              <div className="rounded-lg bg-slate-900 p-3"><p className="text-[10px] text-slate-500">Errors · 24h</p><b className="text-xl text-rose-300">{fmt(nineRouterMetrics?.summary?.errors_24h)}</b></div>
+              <div className="rounded-lg bg-slate-900 p-3"><p className="text-[10px] text-slate-500">Average latency</p><b className="text-xl text-white">{fmt(nineRouterMetrics?.summary?.avg_latency_24h)} ms</b></div>
+              <div className="rounded-lg bg-slate-900 p-3"><p className="text-[10px] text-slate-500">Rate limited · 24h</p><b className="text-xl text-amber-200">{fmt(nineRouterMetrics?.summary?.rate_limited_24h)}</b></div>
+            </div>
+            <p className="mt-2 text-[10px] text-slate-500">7-day requests: {fmt(nineRouterMetrics?.summary?.requests_7d)} · 7-day errors: {fmt(nineRouterMetrics?.summary?.errors_7d)} · 5xx: {fmt(nineRouterMetrics?.summary?.gateway_errors_24h)} · State: {nineRouterMetrics?.enabled===false?'Paused':'Enabled / not yet paused'}</p>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              <div><h4 className="mb-2 text-xs font-semibold text-slate-300">Most-used endpoints · 7d</h4><div className="space-y-1">{(nineRouterMetrics?.endpoints||[]).slice(0,8).map((row:any)=><div key={row.endpoint} className="flex items-center justify-between gap-2 rounded-lg bg-slate-900 px-3 py-2 text-[10px]"><span className="truncate font-mono text-slate-300">{row.endpoint}</span><span className="shrink-0 text-cyan-200">{fmt(row.requests)} · {fmt(row.errors)} err</span></div>)}{!nineRouterMetrics?.endpoints?.length&&<p className="text-[10px] text-slate-500">No 9Router telemetry yet. Apply migration 0030 and make requests.</p>}</div></div>
+              <div><h4 className="mb-2 text-xs font-semibold text-slate-300">Recent failed requests</h4><div className="space-y-1">{(nineRouterMetrics?.recentErrors||[]).slice(0,8).map((row:any)=><div key={row.request_id} className="rounded-lg bg-slate-900 px-3 py-2 text-[10px]"><div className="flex justify-between gap-2"><span className="truncate font-mono text-slate-300">{row.endpoint}</span><span className="shrink-0 text-rose-300">HTTP {row.status_code}</span></div><p className="mt-1 text-slate-500">{row.request_id} · {fmt(row.latency_ms)} ms</p></div>)}{!nineRouterMetrics?.recentErrors?.length&&<p className="text-[10px] text-slate-500">No failed 9Router requests recorded.</p>}</div></div>
+            </div>
+          </div>
           <div className={panel}><h3 className="mb-3 font-bold text-white">Usage detail</h3><div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left text-xs"><thead className="text-slate-500"><tr>{['Time','User','Provider','Model','Input','Output','Cost','Latency','Status'].map(value=><th key={value} className="border-b border-slate-800 p-3">{value}</th>)}</tr></thead><tbody>{usageRecords.map((row:any)=><tr key={row.id} className="border-b border-slate-900 text-slate-300"><td className="p-3">{date(row.created_at)}</td><td className="p-3">{row.user_id||'Guest'}</td><td className="p-3">{row.provider_key||'—'}</td><td className="p-3 font-mono">{row.model_key||row.model_id||'—'}</td><td className="p-3">{fmt(row.tokens_in)}</td><td className="p-3">{fmt(row.tokens_out)}</td><td className="p-3">{money(row.cost_usd,5)}</td><td className="p-3">{fmt(row.latency_ms)} ms</td><td className="p-3">{row.status}</td></tr>)}</tbody></table>{!usageRecords.length&&<p className="py-6 text-center text-xs text-slate-500">No usage records match these filters.</p>}</div></div>
         </div>}
 

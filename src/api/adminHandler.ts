@@ -695,6 +695,45 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       return true;
     }
 
+    if(req.method==='GET' && pathname==='/api/admin/9router/metrics'){
+      const [summary,endpoints,recent,setting]=await Promise.all([
+        pool.query(`SELECT count(*) FILTER(WHERE created_at>=now()-interval '24 hours')::int AS requests_24h,
+          count(*) FILTER(WHERE created_at>=now()-interval '7 days')::int AS requests_7d,
+          count(*) FILTER(WHERE created_at>=now()-interval '24 hours' AND outcome<>'success')::int AS errors_24h,
+          count(*) FILTER(WHERE created_at>=now()-interval '7 days' AND outcome<>'success')::int AS errors_7d,
+          COALESCE(avg(latency_ms) FILTER(WHERE created_at>=now()-interval '24 hours'),0)::numeric(12,2) AS avg_latency_24h,
+          count(*) FILTER(WHERE created_at>=now()-interval '24 hours' AND status_code=429)::int AS rate_limited_24h,
+          count(*) FILTER(WHERE created_at>=now()-interval '24 hours' AND status_code>=500)::int AS gateway_errors_24h
+          FROM ninerouter_request_logs`),
+        pool.query(`SELECT endpoint,count(*)::int AS requests,
+          count(*) FILTER(WHERE outcome<>'success')::int AS errors,
+          COALESCE(avg(latency_ms),0)::numeric(12,2) AS avg_latency_ms,
+          max(created_at) AS last_request_at
+          FROM ninerouter_request_logs WHERE created_at>=now()-interval '7 days'
+          GROUP BY endpoint ORDER BY requests DESC LIMIT 20`),
+        pool.query(`SELECT request_id,endpoint,http_method,status_code,latency_ms,outcome,created_at
+          FROM ninerouter_request_logs WHERE outcome<>'success'
+          ORDER BY created_at DESC LIMIT 30`),
+        pool.query("SELECT value_json FROM system_config WHERE key='ninerouter_gateway_enabled' LIMIT 1")
+      ]);
+      sendAuthJson(res,200,{enabled:setting.rows[0]?.value_json!==false,summary:summary.rows[0]||{},endpoints:endpoints.rows,recentErrors:recent.rows});return true;
+    }
+
+    if(req.method==='PATCH' && pathname==='/api/admin/9router/gateway'){
+      const body=await readJsonBody(req,2000);
+      if(typeof body.enabled!=='boolean'){sendAuthJson(res,400,{error:'A boolean enabled value is required.'});return true;}
+      const before=await pool.query("SELECT value_json FROM system_config WHERE key='ninerouter_gateway_enabled' LIMIT 1");
+      await pool.query(`INSERT INTO system_config(key,value_json,updated_by,updated_at)
+        VALUES('ninerouter_gateway_enabled',$1::jsonb,$2,now())
+        ON CONFLICT(key) DO UPDATE SET value_json=EXCLUDED.value_json,updated_by=EXCLUDED.updated_by,updated_at=now()`,
+        [JSON.stringify(body.enabled),user.id]);
+      await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
+        [user.id,user.role,'ninerouter.gateway.toggle','system_config','ninerouter_gateway_enabled',
+          before.rows[0]?JSON.stringify(before.rows[0].value_json):JSON.stringify(true),JSON.stringify(body.enabled),
+          JSON.stringify({enabled:body.enabled})]);
+      sendAuthJson(res,200,{enabled:body.enabled});return true;
+    }
+
     if(req.method==='GET' && pathname==='/api/admin/usage'){
       const query=new URL(req.url||'/','http://localhost').searchParams;
       const values:unknown[]=[];const where:string[]=[];
