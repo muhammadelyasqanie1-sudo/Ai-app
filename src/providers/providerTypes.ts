@@ -21,6 +21,9 @@ export interface CapabilityFlags {
   stt: boolean;
   tools: boolean;
   jsonMode: boolean;
+  embedding?: boolean;
+  webSearch?: boolean;
+  webFetch?: boolean;
 }
 
 export interface ModelDescriptor {
@@ -34,6 +37,7 @@ export interface ModelDescriptor {
   capabilities: CapabilityFlags;
   enabled: boolean;
   verifiedAt: string | null;
+  catalogKind?: string;
 }
 
 export interface ConfigStatus {
