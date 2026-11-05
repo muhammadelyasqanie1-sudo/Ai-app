@@ -193,23 +193,6 @@ export async function verifyUserPassword(userId:string,password:string):Promise<
   return verifyPassword(password,encoded);
 }
 
-export async function refreshAdminSession(req: IncomingMessage, res: ServerResponse, user: AuthenticatedUser): Promise<void> {
-  if (!pool || !['admin','superadmin'].includes(user.role)) return;
-  const jar = cookies(req);
-  const sessionToken = jar.afg_session || '';
-  const csrfToken = jar.afg_csrf || '';
-  if (sessionToken.length < 32 || sessionToken.length > 256 || csrfToken.length < 32) return;
-  const refreshed = await pool.query(
-    `UPDATE sessions
-        SET expires_at=now()+interval '8 hours',last_seen_at=now()
-      WHERE token_hash=$1 AND user_id=$2 AND revoked_at IS NULL
-        AND expires_at>now() AND expires_at<now()+interval '6 hours'
-      RETURNING id`,
-    [hash(sessionToken),user.id],
-  );
-  if (refreshed.rows[0]) setSessionCookies(res,sessionToken,csrfToken,8*60*60);
-}
-
 export async function createSession(userId: string, res: ServerResponse): Promise<void> {
   if (!pool) throw new Error('Database is not configured.');
   const sessionToken = randomBytes(32).toString('base64url');
