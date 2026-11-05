@@ -61,6 +61,8 @@ const nineRouterAdapter: ChatProviderAdapter | null = nineRouterBaseAdapter
           { kind: 'image-to-text', path: '/models/image-to-text', capability: 'vision' as const },
           { kind: 'tts', path: '/models/tts', capability: 'tts' as const },
           { kind: 'stt', path: '/models/stt', capability: 'stt' as const },
+          { kind: 'embedding', path: '/models/embedding', capability: 'embedding' as const },
+          { kind: 'web', path: '/models/web', capability: 'web' as const },
         ];
         const additional = await Promise.all(kinds.map(async ({ kind, path, capability }) => {
           try {
@@ -75,9 +77,13 @@ const nineRouterAdapter: ChatProviderAdapter | null = nineRouterBaseAdapter
               : Array.isArray(payload?.models) ? payload.models
               : Array.isArray(payload?.data?.data) ? payload.data.data : [];
             return rows.filter((item: any) => item && typeof item.id === 'string').map((item: any): ModelDescriptor => {
+              const catalogKind = kind === 'web'
+                ? (item.kind === 'webFetch' || item.id.endsWith('/fetch') ? 'webFetch' : 'webSearch')
+                : kind;
               nineRouterModelKinds.set(item.id, kind);
               return {
               id: item.id,
+              catalogKind,
               providerId: '9router',
               displayName: typeof item.name === 'string' ? item.name : item.id,
               description: 'Discovered from the 9Router ' + kind + ' catalogue.',
@@ -88,6 +94,9 @@ const nineRouterAdapter: ChatProviderAdapter | null = nineRouterBaseAdapter
                 imageGen: capability === 'imageGen', imageEdit: false,
                 ocr: false, tts: capability === 'tts', stt: capability === 'stt',
                 tools: false, jsonMode: false,
+                embedding: capability === 'embedding',
+                webSearch: capability === 'web' && catalogKind === 'webSearch',
+                webFetch: capability === 'web' && catalogKind === 'webFetch',
               },
               enabled: true,
               verifiedAt: null,
@@ -96,16 +105,25 @@ const nineRouterAdapter: ChatProviderAdapter | null = nineRouterBaseAdapter
             return [];
           }
         }));
-        const merged = [...chatModels, ...additional.flat()];
+        const merged = [
+          ...chatModels.map((model) => ({ ...model, catalogKind: 'llm' })),
+          ...additional.flat(),
+        ];
         return merged.filter((model, index) =>
           merged.findIndex((candidate) => candidate.id === model.id) === index);
       },
       async healthCheck(modelId: string): Promise<HealthStatus> {
         const kind = nineRouterModelKinds.get(modelId);
         if (!kind) return nineRouterBaseAdapter.healthCheck(modelId);
-        const path = kind === 'image' ? '/models/image'
-          : kind === 'image-to-text' ? '/models/image-to-text'
-          : kind === 'tts' ? '/models/tts' : '/models/stt';
+        const paths: Record<string, string> = {
+          image: '/models/image',
+          'image-to-text': '/models/image-to-text',
+          tts: '/models/tts',
+          stt: '/models/stt',
+          embedding: '/models/embedding',
+          web: '/models/web',
+        };
+        const path = paths[kind] || '/models';
         const checkedAt = new Date().toISOString();
         try {
           const response = await fetch(nineRouterBase + path, {
@@ -251,6 +269,9 @@ function capabilityFlagsFromStored(value: unknown): CapabilityFlags {
     tts: has('tts'),
     stt: has('stt'),
     tools: has('tools'),
+    embedding: has('embedding'),
+    webSearch: has('webSearch'),
+    webFetch: has('webFetch'),
     jsonMode: has('jsonMode'),
   };
 }
@@ -426,10 +447,17 @@ export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> 
     try {
       const enabledModels = await syncDiscoveredModels(provider, models);
       const withOverrides = await applyCapabilityOverrides(provider.id, models);
-      const configuredModels = withOverrides.map((model) => ({
-        ...model,
-        enabled: enabledModels.get(model.id) ?? false,
-      }));
+      const liveIds = new Set(models.map((model) => model.id));
+      // Keep administrator-registered catalogue entries alongside the live upstream
+      // catalogue. They remain non-selectable until their own health probe succeeds.
+      const storedOnly = (await getStoredModels(provider.id)).filter((model) => !liveIds.has(model.id));
+      const configuredModels = [
+        ...withOverrides.map((model) => ({
+          ...model,
+          enabled: enabledModels.get(model.id) ?? false,
+        })),
+        ...storedOnly,
+      ];
       for (let i = 0; i < configuredModels.length; i += 4) {
         const batch = configuredModels.slice(i, i + 4);
         verified.push(...await Promise.all(batch.map((model) => model.enabled ? verifyModel(provider, model) : Promise.resolve({ ...model, verifiedAt: null }))));
