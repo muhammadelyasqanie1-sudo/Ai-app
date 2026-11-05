@@ -642,7 +642,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
   }
  }
  if(!pathname.startsWith('/api/api-hub/connectors'))return false;
- if(!pool){sendAuthJson(res,503,{error:'API connectors require PostgreSQL and migrations 0014, 0023 and 0027.'});return true;}
+ if(!pool){sendAuthJson(res,503,{error:'API connectors require PostgreSQL and migrations 0014, 0023 and 0027; key vault and OAuth features also require 0028 and 0029.'});return true;}
  const user=await authenticateRequest(req).catch(()=>null);
  if(!user){sendAuthJson(res,401,{error:'Sign in is required.'});return true;}
  if(req.method!=='GET'&&!verifyCsrf(req)){sendAuthJson(res,403,{error:'CSRF validation failed.'});return true;}
