@@ -48,7 +48,7 @@ Migration `0024_public_api_implementation_tracking.sql` adds a durable per-catal
 
 ## Public API discovery work queue
 
-Migration `0025_public_api_discovery_work_queue.sql` adds a durable, bounded admin review queue for each tracked Public API entry. Admins claim up to 25 entries per batch with a 20-minute renewable-by-reclaim lease; expired claims return to the queue and concurrent admins use row locks with `SKIP LOCKED`. Recording verified documentation or an OpenAPI contract completes the work item; explicitly unsupported protocols are marked blocked; retry returns the item to the queue. This queue does not execute third-party APIs, infer quotas, create credentials, or enable connectors. Apply migration 0025 after 0024 before using the queue controls.
+Migration `0025_public_api_discovery_work_queue.sql` adds a durable, bounded admin review queue for each tracked Public API entry. Admins claim up to 25 entries per batch with a 20-minute renewable-by-reclaim lease; expired claims return to the queue and concurrent admins use row locks with `SKIP LOCKED`. Manually recording verified documentation or a discovered contract completes the work item; the automatic official-docs scan keeps the claim active for the next contract-extraction step. Explicitly unsupported protocols are marked blocked; retry returns the item to the queue. This queue does not execute third-party APIs, infer quotas, create credentials, or enable connectors. Apply migration 0025 after 0024 before using the queue controls.
 
 
 ## Public API official documentation evidence

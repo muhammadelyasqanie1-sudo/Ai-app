@@ -69,8 +69,7 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
       const saved=await pool.query(`UPDATE public_api_implementation_tracking
         SET official_docs_url=$3,docs_evidence=$4::jsonb,protocol_types=$5::text[],auth_evidence=$6::text[],
           discovery_status=CASE WHEN discovery_status='catalogued' THEN 'docs_discovered' ELSE discovery_status END,
-          work_state='done',claimed_by=NULL,claimed_at=NULL,lease_until=NULL,last_work_error=NULL,
-          last_discovered_at=now(),updated_at=now()
+          last_work_error=NULL,last_discovered_at=now(),updated_at=now()
         WHERE source_key=$1 AND work_state='claimed' AND claimed_by=$2 AND lease_until>now()
         RETURNING source_key,discovery_status,work_state,protocol_types,auth_evidence`,
         [sourceKey,String(user.id),evidence.docsUrl,JSON.stringify(evidence),evidence.protocolTypes,evidence.authTypes]);
@@ -78,6 +77,47 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
       await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
         [user.id,'api_hub.discovery.docs_scan','api_catalog',sourceKey,JSON.stringify({openApiCandidates:evidence.openApiCandidates.length,protocolTypes:evidence.protocolTypes,authTypes:evidence.authTypes})]).catch(()=>{});
       sendAuthJson(res,200,{item:saved.rows[0],evidence});return true;
+    }
+    if (req.method === 'POST' && pathname === '/api/admin/api-hub/work-queue/discover-contract') {
+      if (!admin) { sendAuthJson(res,403,{error:'Administrator access is required.'}); return true; }
+      const body=await readJsonBody(req,2000);
+      const sourceKey=typeof body.sourceKey==='string'?body.sourceKey.trim():'';
+      if(!/^[a-f0-9]{64}$/i.test(sourceKey)){sendAuthJson(res,400,{error:'A valid source key is required.'});return true;}
+      const selected=await pool.query(`SELECT t.source_key,t.claimed_by,t.lease_until,t.official_docs_url,t.docs_evidence
+        FROM public_api_implementation_tracking t JOIN public_api_catalog c ON c.source_key=t.source_key
+        WHERE t.source_key=$1 AND t.work_state='claimed' AND t.claimed_by=$2 AND t.lease_until>now() AND c.is_active=true`,
+        [sourceKey,String(user.id)]);
+      const row=selected.rows[0];
+      if(!row){sendAuthJson(res,409,{error:'Claim this API first; the review lease may have expired.'});return true;}
+      const evidence=row.docs_evidence&&typeof row.docs_evidence==='object'?row.docs_evidence:{};
+      const candidates=Array.isArray(evidence.openApiCandidates)?evidence.openApiCandidates.slice(0,10):[];
+      if(!row.official_docs_url||!candidates.length){sendAuthJson(res,422,{error:'No official same-host OpenAPI/Swagger candidate was discovered. Scan the official docs or provide a reviewed specification URL.'});return true;}
+      const officialHost=new URL(row.official_docs_url).hostname.toLowerCase();
+      let contract:any=null;const failures:string[]=[];
+      for(const candidate of candidates){
+        try{
+          const candidateUrl=new URL(String(candidate));
+          if(candidateUrl.protocol!=='https:'||candidateUrl.hostname.toLowerCase()!==officialHost||candidateUrl.username||candidateUrl.password)
+            throw new Error('Candidate is not on the official documentation host.');
+          const discovered=await discoverOpenApiOperations(candidateUrl.toString());
+          if(!discovered.operationCount)throw new Error('The specification contains no supported operations.');
+          const tagGroups=[...new Set(discovered.operations.flatMap((operation:any)=>operation.tags||[]))].slice(0,100);
+          contract={...discovered,tagGroups,discoveredAt:new Date().toISOString(),source:'official_docs_link'};
+          break;
+        }catch(error){failures.push(error instanceof Error?error.message:'Unsupported specification');}
+      }
+      if(!contract){sendAuthJson(res,422,{error:'No supported OpenAPI JSON contract could be extracted from the official documentation links.',details:failures.slice(0,5)});return true;}
+      const saved=await pool.query(`UPDATE public_api_implementation_tracking
+        SET openapi_spec_url=$3,contract=$4::jsonb,discovery_status='contract_discovered',
+          work_state='done',claimed_by=NULL,claimed_at=NULL,lease_until=NULL,last_work_error=NULL,
+          last_discovered_at=now(),updated_at=now()
+        WHERE source_key=$1 AND work_state='claimed' AND claimed_by=$2 AND lease_until>now()
+        RETURNING source_key,discovery_status,work_state,openapi_spec_url`,
+        [sourceKey,String(user.id),contract.specUrl,JSON.stringify(contract)]);
+      if(!saved.rows[0]){sendAuthJson(res,409,{error:'The review lease expired while the contract was being extracted. Please claim it again.'});return true;}
+      await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+        [user.id,'api_hub.discovery.openapi_contract','api_catalog',sourceKey,JSON.stringify({specUrl:contract.specUrl,operationCount:contract.operationCount,tagGroups:contract.tagGroups})]).catch(()=>{});
+      sendAuthJson(res,200,{item:saved.rows[0],contract});return true;
     }
     if (req.method === 'POST' && pathname === '/api/admin/api-hub/work-queue/complete') {
       if (!admin) { sendAuthJson(res,403,{error:'Administrator access is required.'}); return true; }
@@ -114,7 +154,12 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
       const result=await pool.query(`SELECT work_state,count(*)::int AS count FROM public_api_implementation_tracking GROUP BY work_state`);
       const counts:Record<string,number>={queued:0,claimed:0,done:0,blocked:0};
       for(const row of result.rows)counts[String(row.work_state)]=Number(row.count||0);
-      sendAuthJson(res,200,{counts,total:Object.values(counts).reduce((sum,n)=>sum+n,0)});return true;
+      const mine=await pool.query(`SELECT t.source_key,t.discovery_status,t.official_docs_url,t.openapi_spec_url,t.attempts,t.lease_until,
+        c.name,c.description,c.category,c.auth,c.homepage_url,c.docs_url
+        FROM public_api_implementation_tracking t JOIN public_api_catalog c ON c.source_key=t.source_key
+        WHERE t.work_state='claimed' AND t.claimed_by=$1 AND t.lease_until>now() AND c.is_active=true
+        ORDER BY t.claimed_at ASC LIMIT 25`,[String(user.id)]);
+      sendAuthJson(res,200,{counts,total:Object.values(counts).reduce((sum,n)=>sum+n,0),claimedItems:mine.rows});return true;
     }
     if (req.method === 'POST' && pathname === '/api/api-hub/openapi/discover') {
       const body = await readJsonBody(req,4000);
@@ -189,7 +234,7 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
       const result = await pool.query(`SELECT c.source_key,c.name,c.description,c.auth,c.https,c.cors,c.category,c.homepage_url,c.docs_url,c.icon_url,c.image_url,c.site_name,c.site_description,
         c.health_status,c.response_time_ms,c.last_health_check,c.source_payload,
         COALESCE(t.discovery_status,'catalogued') AS implementation_status,t.official_docs_url,t.openapi_spec_url,
-        t.endpoint_url,t.http_method,t.auth_type,t.endpoint_verified,t.auth_configured,t.last_probe_at,t.last_probe_status,t.unsupported_reason
+        t.endpoint_url,t.http_method,t.auth_type,t.endpoint_verified,t.auth_configured,t.last_probe_at,t.last_probe_status,t.unsupported_reason,t.contract,t.protocol_types,t.auth_evidence,t.docs_evidence
         FROM public_api_catalog c LEFT JOIN public_api_implementation_tracking t ON t.source_key=c.source_key
         WHERE c.source_key=$1 AND c.is_active=true LIMIT 1`,[detailMatch[1]]);
       if (!result.rows[0]) { sendAuthJson(res,404,{error:'API catalog entry was not found.'}); return true; }

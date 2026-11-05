@@ -152,6 +152,8 @@ export async function discoverOpenApiOperations(specUrl:string){
     toolName:makeToolName(String(operation.operationId||''),operationPath,method),
     name:String(operation.summary||operation.operationId||method.toUpperCase()+' '+operationPath).slice(0,160),
     description:String(operation.description||operation.summary||'Imported from an OpenAPI document.').slice(0,1000),
+    tags:Array.isArray(operation.tags)?operation.tags.filter((tag:any)=>typeof tag==='string').slice(0,12).map((tag:string)=>tag.slice(0,80)):[],
+    deprecated:operation.deprecated===true,
     method:method.toUpperCase(),endpointUrl:endpoint,inputSchema:built.schema,
     authOptions:auth,unsupportedParameters:built.unsupported,
     usable:built.unsupported.length===0&&auth.every(item=>['none','bearer'].includes(item)||item.startsWith('header_key:')||item.startsWith('query_key:')),
