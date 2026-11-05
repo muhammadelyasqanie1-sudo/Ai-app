@@ -132,6 +132,12 @@ export async function refreshDatabaseProviderAdapters(force = false): Promise<vo
   }
 }
 
+function allProviderAdapters(): ChatProviderAdapter[] {
+  const map = new Map<string, ChatProviderAdapter>();
+  for (const provider of [...staticProviderRegistry, ...databaseProviderRegistry]) map.set(provider.id, provider);
+  return [...map.values()];
+}
+
 const HEALTH_TTL_MS = 5 * 60 * 1000;
 const healthCache = new Map<string, { healthy: boolean; checkedAt: string }>();
 
