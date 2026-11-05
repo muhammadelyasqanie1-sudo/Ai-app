@@ -967,7 +967,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
     sendAuthJson(res,502,isHealthCheck?{healthy:false,diagnosis,httpStatus:status,error:message,waitingForQuota:status===402||status===429}:{verified:false,error:message});return true;
    }
   }
-  const monitorMatch=pathname.match(/^\\/api\\/api-hub\\/connectors\\/([0-9a-f-]{36})\\/monitor$/i);
+  const monitorMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/monitor$/i);
   if(req.method==='POST'&&monitorMatch){
    const body=await readJsonBody(req,2000),enabled=body.enabled===true,interval=Number(body.intervalMinutes??360);
    if(typeof body.enabled!=='boolean'||!Number.isInteger(interval)||interval<60||interval>10080){sendAuthJson(res,400,{error:'Health monitoring requires a boolean enabled value and an interval from 60 to 10080 minutes.'});return true;}
