@@ -70,9 +70,12 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
     }
     const detailMatch = pathname.match(/^\/api\/api-hub\/catalog\/([a-f0-9]{64})$/i);
     if (req.method === 'GET' && detailMatch) {
-      const result = await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,icon_url,image_url,site_name,site_description,
-        health_status,response_time_ms,last_health_check,source_payload
-        FROM public_api_catalog WHERE source_key=$1 AND is_active=true LIMIT 1`,[detailMatch[1]]);
+      const result = await pool.query(`SELECT c.source_key,c.name,c.description,c.auth,c.https,c.cors,c.category,c.homepage_url,c.docs_url,c.icon_url,c.image_url,c.site_name,c.site_description,
+        c.health_status,c.response_time_ms,c.last_health_check,c.source_payload,
+        COALESCE(t.discovery_status,'catalogued') AS implementation_status,t.official_docs_url,t.openapi_spec_url,
+        t.endpoint_url,t.http_method,t.auth_type,t.endpoint_verified,t.auth_configured,t.last_probe_at,t.last_probe_status,t.unsupported_reason
+        FROM public_api_catalog c LEFT JOIN public_api_implementation_tracking t ON t.source_key=c.source_key
+        WHERE c.source_key=$1 AND c.is_active=true LIMIT 1`,[detailMatch[1]]);
       if (!result.rows[0]) { sendAuthJson(res,404,{error:'API catalog entry was not found.'}); return true; }
       const item=result.rows[0];
       const alternatives=await pool.query(`SELECT source_key,name,description,auth,https,cors,category,homepage_url,docs_url,icon_url,image_url,site_name,site_description
