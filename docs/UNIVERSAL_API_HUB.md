@@ -79,3 +79,8 @@ Authenticated users can submit a public HTTPS URL for an OpenAPI 3.0/3.1 JSON do
 ## Capability labels in the Public API catalog
 
 Catalog search results now include a derived `capability` label (AI/language, image, coding, weather, finance, maps, news, food, or general) based on the upstream category, name, and description. This is discovery metadata only: it does not certify that an API can generate images, run code, or perform another capability. A connector still requires its real endpoint contract, supported request schema, required credentials, and a successful verification before it can be enabled.
+
+
+## Durable catalogue discovery queue
+
+Migration `0025_public_api_discovery_work_queue.sql` adds a persistent review queue for all tracked catalogue entries. The admin panel can claim a bounded batch (up to 25; default 10), inspect the catalogue's candidate documentation link, and record one of four outcomes: official docs verified, OpenAPI contract found, unsupported with a reason, or return to queue. Claims have a 20-minute lease; interrupted work becomes claimable again and concurrent admins cannot claim the same row. Queue completion is an administrative review record only: it does not prove endpoint health, authenticate a user, test a paid quota, create a connector, or enable an API. Official HTTPS URLs and human-supplied reasons are validated before recording. The queue intentionally avoids speculative endpoint extraction and automated third-party calls.

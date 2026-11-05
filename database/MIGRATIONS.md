@@ -44,3 +44,8 @@ Migration `0023_api_connector_quota_queue.sql` adds a durable queue state to own
 ## Public API implementation coverage
 
 Migration `0024_public_api_implementation_tracking.sql` adds a durable per-catalog-entry implementation ledger and records whether both upstream catalogue sources were fully synchronized. New entries begin as `catalogued`; later verified documentation/OpenAPI discovery advances them without resetting progress on future catalogue syncs. Statuses distinguish catalogue-only entries, documentation discovery, contract discovery and unsupported protocols. Endpoint verification, credential configuration, successful probes, enabled state and quota waiting remain owner-scoped in the connector records and quota queue. This table contains public integration metadata only; user API credentials remain encrypted in owner-scoped connector records. Apply the migration before using the new tracking dashboard or running another catalog sync.
+
+
+## Public API discovery work queue
+
+Migration `0025_public_api_discovery_work_queue.sql` adds a durable, bounded admin review queue for each tracked Public API entry. Admins claim up to 25 entries per batch with a 20-minute renewable-by-reclaim lease; expired claims return to the queue and concurrent admins use row locks with `SKIP LOCKED`. Recording verified documentation or an OpenAPI contract completes the work item; explicitly unsupported protocols are marked blocked; retry returns the item to the queue. This queue does not execute third-party APIs, infer quotas, create credentials, or enable connectors. Apply migration 0025 after 0024 before using the queue controls.
