@@ -222,7 +222,7 @@ async function fetchDirectoryApiPage(page:number):Promise<{rows:PublicApiRecord[
   return {rows:extracted.rows.map(normalize).filter((row):row is PublicApiRecord=>row!==null),hasMore:extracted.hasMore};
 }
 
-type CatalogSyncResult={imported:number;pages:number;complete:boolean;sourceCoverage:{repositoryReadme:boolean;directoryApi:boolean}};
+type CatalogSyncResult={imported:number;pages:number;complete:boolean;sourceCoverage:{repositoryReadme:boolean;directoryApi:boolean};sourceCounts:{repositoryReadme:number;directoryApi:number;unique:number}};
 let syncInFlight:Promise<CatalogSyncResult>|null=null;
 
 async function persistApiBatch(rows:PublicApiRecord[]):Promise<void> {
