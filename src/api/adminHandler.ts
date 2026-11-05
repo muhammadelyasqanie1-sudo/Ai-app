@@ -1088,13 +1088,13 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     }
 
     if (req.method === 'POST' && pathname === '/api/admin/models/bulk') {
-      const body = await readJsonBody(req, 64_000);
+      const body = await readJsonBody(req, 256_000);
       const enabled = body.enabled;
       const requested = body.models;
-      if (typeof enabled !== 'boolean' || !Array.isArray(requested) || requested.length < 1 || requested.length > 500 ||
+      if (typeof enabled !== 'boolean' || !Array.isArray(requested) || requested.length < 1 || requested.length > 1000 ||
           requested.some((item: any) => !item || typeof item.providerId !== 'string' || !/^[a-z0-9][a-z0-9-]{1,47}$/.test(item.providerId) ||
             typeof item.modelId !== 'string' || !/^[a-zA-Z0-9@][a-zA-Z0-9._:/-]{0,299}$/.test(item.modelId))) {
-        sendAuthJson(res, 400, { error: 'Provide 1–500 valid provider/model pairs and an enabled state.' });
+        sendAuthJson(res, 400, { error: 'Provide 1–1000 valid provider/model pairs and an enabled state.' });
         return true;
       }
       const unique = [...new Map(requested.map((item: any) => [item.providerId + '::' + item.modelId, item])).values()] as Array<{providerId:string;modelId:string}>;
