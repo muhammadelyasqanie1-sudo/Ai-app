@@ -127,7 +127,7 @@ async function proxy(req:IncomingMessage,res:ServerResponse,target:URL,key:strin
  res.once('close',()=>{if(!res.writableEnded)controller.abort(new Error('Client disconnected.'));});
  let response:Response;
  try{
-  response=await fetch(target.toString(),{method,headers,body,redirect:'error',signal:controller.signal});
+  response=await fetch(target.toString(),{method,headers,body:body?new Blob([Uint8Array.from(body)]):undefined,redirect:'error',signal:controller.signal});
  }finally{clearTimeout(timeout);}
  const type=cleanContentType(response.headers.get('content-type'));
  const length=response.headers.get('content-length');

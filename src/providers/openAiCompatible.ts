@@ -225,10 +225,10 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
         throw new ProviderAdapterError('Could not contact the OpenAI-compatible provider.', 502, 'provider_unreachable');
       }
       if (!response.ok || !response.body) {
-        const upstreamError = await response.clone().json().then((body: any) => ({
+        const upstreamError: { code?: string; type?: string } = await response.clone().json().then((body: any): { code?: string; type?: string } => ({
           code: typeof body?.error?.code === 'string' ? body.error.code : undefined,
           type: typeof body?.error?.type === 'string' ? body.error.type : undefined,
-        })).catch(() => ({}));
+        })).catch((): { code?: string; type?: string } => ({}));
         const errorCode = response.status === 402 ? 'insufficient_funds'
           : response.status === 429 ? 'rate_limit_exceeded'
           : upstreamError.code || 'provider_request_rejected';

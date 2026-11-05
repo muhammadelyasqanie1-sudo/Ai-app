@@ -180,10 +180,10 @@ export const AfgPublicApiDeveloperTools:React.FC<{language:Language}>=({language
    }else{
     if(jwtKey.includes('PRIVATE KEY'))throw new Error('Only a public key can be used for JWT verification.');
     const pem=jwtKey.replace(/-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\s/g,'');
-    const binary=atob(pem),der=Uint8Array.from(binary,c=>c.charCodeAt(0));
+    const binary=atob(pem),derBuffer=new ArrayBuffer(binary.length),derView=new Uint8Array(derBuffer);for(let i=0;i<binary.length;i++)derView[i]=binary.charCodeAt(i);const der=derBuffer;
     if(algorithm.startsWith('RS')||algorithm.startsWith('PS')){
      const name=algorithm.startsWith('PS')?'RSA-PSS':'RSASSA-PKCS1-v1_5';
-     key=await crypto.subtle.importKey('spki',der,{name,modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:hashName},false,['verify']);
+     key=await crypto.subtle.importKey('spki',der,{name,hash:hashName},false,['verify']);
      verifyAlgorithm=algorithm.startsWith('PS')?{name:'RSA-PSS',saltLength:Number(hashName.slice(5))/8}:{name:'RSASSA-PKCS1-v1_5'};
     }else if(algorithm.startsWith('ES')){
      const namedCurve=algorithm==='ES256'?'P-256':algorithm==='ES384'?'P-384':algorithm==='ES512'?'P-521':'';
@@ -192,14 +192,15 @@ export const AfgPublicApiDeveloperTools:React.FC<{language:Language}>=({language
      verifyAlgorithm={name:'ECDSA',hash:hashName};
     }else throw new Error('Unsupported JWT algorithm.');
    }
-   const verified=await crypto.subtle.verify(verifyAlgorithm,key,signature,input);
+   const signatureBuffer=new ArrayBuffer(signature.byteLength),signatureView=new Uint8Array(signatureBuffer);signatureView.set(signature);const inputBuffer=new ArrayBuffer(input.byteLength),inputView=new Uint8Array(inputBuffer);inputView.set(input);
+    const verified=await crypto.subtle.verify(verifyAlgorithm,key,signatureBuffer,inputBuffer);
    const now=Math.floor(Date.now()/1000);
    const exp=typeof payload.exp==='number'?payload.exp:null,nbf=typeof payload.nbf==='number'?payload.nbf:null;
    setOutput(JSON.stringify({header,payload,algorithm,signatureVerified:verified,claims:{expired:exp===null?null:now>=exp,notYetValid:nbf===null?null:now<nbf,expiresAt:exp===null?null:new Date(exp*1000).toISOString(),notBefore:nbf===null?null:new Date(nbf*1000).toISOString()},verificationKeyWasSentToServer:false},null,2));
   }catch(e){setMessage(e instanceof Error?e.message:'JWT verification failed.');}
  };
 
- const base64=()=>run(()=>{if(active==='base64'){try{return new TextDecoder().decode(b64ToBytes(input));}catch{throw new Error('Invalid Base64/Base64URL text.');}}const encoded=bytesToB64(new TextEncoder().encode(input));return base64Url?encoded.replace(/=/g,'').replace(/\\+/g,'-').replace(/\\//g,'_'):encoded;});
+ const base64=()=>run(()=>{if(active==='base64'){try{return new TextDecoder().decode(b64ToBytes(input));}catch{throw new Error('Invalid Base64/Base64URL text.');}}const encoded=bytesToB64(new TextEncoder().encode(input));return base64Url?encoded.replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_'):encoded;});
  const convertCurl=()=>run(()=>{const result=curlToCode(curl);return ['--- JavaScript fetch ---',result.js,'--- Axios ---',result.axios,'--- Python requests ---',result.python,'--- Go ---',result.go,'--- PHP ---',result.php,'--- Ruby ---',result.ruby].join('\n\n');});
  const explainCron=()=>run(()=>{const parts=cron.trim().split(/\s+/);if(parts.length!==5)throw new Error('Use five fields: minute hour day month weekday.');const next=nextCron(cron);return 'Minute: '+parts[0]+'\nHour: '+parts[1]+'\nDay of month: '+parts[2]+'\nMonth: '+parts[3]+'\nDay of week: '+parts[4]+'\n\nNext matching local runs:\n'+next.map((v,i)=>(i+1)+'. '+v).join('\n');});
  const generateTool=()=>run(()=>{const schema=JSON.parse(toolSchema);if(schema.type!=='object'||!schema.properties)throw new Error('Tool schema needs type object and properties.');const properties={type:'object',properties:schema.properties,required:schema.required||[],additionalProperties:false};const fn={type:'function',function:{name:toolName,description:toolDescription,parameters:properties}};const mcp={name:toolName,description:toolDescription,inputSchema:properties};return JSON.stringify({openaiTool:fn,mcpTool:mcp,httpRequestTemplate:{method:toolMethod,url:toolUrl,security:'Keep credentials in server-side secret storage.'}},null,2);});
