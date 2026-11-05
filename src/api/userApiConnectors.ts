@@ -501,8 +501,10 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
   if(req.method==='POST'&&testMatch){
    const row=await ownerConnector(user.id,testMatch[1]);if(!row){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
    const requestId=randomUUID();
+   const multipart=String(req.headers['content-type']||'').toLowerCase().startsWith('multipart/form-data');
+   const verificationPayload=multipart?await readMultipartRequest(req):null;
    try{
-    const result=await execute(row,row.sample_arguments_json,user.id,requestId);
+    const result=await execute(row,verificationPayload?.arguments||row.sample_arguments_json,user.id,requestId,15_000,verificationPayload?.files||{});
     await pool.query(`UPDATE user_api_connectors SET status='verified',queue_state='ready',next_available_at=NULL,enabled=false,last_tested_at=now(),last_http_status=$3,last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2`,
      [row.id,user.id,result.status]);
     await audit(user.id,'api.connector.verify',row.id,{status:result.status,durationMs:result.durationMs});
