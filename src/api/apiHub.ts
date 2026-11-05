@@ -16,10 +16,22 @@ export async function handleApiHubApi(req: IncomingMessage, res: ServerResponse,
     if (req.method === 'POST' && pathname === '/api/api-hub/openapi/discover') {
       const body = await readJsonBody(req,4000);
       const specUrl = typeof body.specUrl === 'string' ? body.specUrl.trim() : '';
+      const sourceKey = typeof body.sourceKey === 'string' ? body.sourceKey.trim() : '';
       if (!specUrl || specUrl.length > 2048) { sendAuthJson(res,400,{error:'A valid OpenAPI JSON document URL is required.'}); return true; }
+      if (sourceKey && !/^[a-f0-9]{64}$/i.test(sourceKey)) { sendAuthJson(res,400,{error:'A valid catalog source key is required.'}); return true; }
       const result = await discoverOpenApiOperations(specUrl);
+      if (sourceKey) {
+        const tracked = await pool.query(`UPDATE public_api_implementation_tracking t
+          SET openapi_spec_url=$2,
+            discovery_status=CASE WHEN t.discovery_status IN ('catalogued','docs_discovered') THEN 'contract_discovered' ELSE t.discovery_status END,
+            last_discovered_at=now(),updated_at=now()
+          FROM public_api_catalog c
+          WHERE t.source_key=c.source_key AND t.source_key=$1 AND c.is_active=true
+          RETURNING t.source_key`,[sourceKey,result.specUrl]);
+        if (!tracked.rows[0]) { sendAuthJson(res,404,{error:'The selected API catalog entry was not found or has no tracking record.'}); return true; }
+      }
       await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
-        [user.id,'api_hub.openapi.discover','api_catalog',result.specUrl,JSON.stringify({operationCount:result.operationCount})]).catch(()=>{});
+        [user.id,'api_hub.openapi.discover','api_catalog',result.specUrl,JSON.stringify({operationCount:result.operationCount,sourceKey:sourceKey||null})]).catch(()=>{});
       sendAuthJson(res,200,result); return true;
     }
     if (req.method === 'GET' && pathname === '/api/api-hub/catalog') {
