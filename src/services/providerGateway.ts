@@ -210,9 +210,7 @@ async function getStoredModels(providerId: string, forceDisabled = false): Promi
 async function syncDiscoveredModels(provider: ChatProviderAdapter, models: ModelDescriptor[]): Promise<Map<string, boolean>> {
   if (!pool) return new Map(models.map((model) => [model.id, model.enabled]));
   try {
-  // Prefer the paid GLM 5.3 Flash model when this key can access it; otherwise
-  // bootstrap the free GLM 5.3 Flash model for keys restricted to free credit.
-    for (const model of models) {
+  for (const model of models) {
     await pool.query(
       `INSERT INTO model_catalog
         (provider_key, model_key, display_name, capabilities, enabled, context_window)
