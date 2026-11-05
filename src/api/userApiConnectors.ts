@@ -854,10 +854,12 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    if(resetAt>Date.now()){
     sendAuthJson(res,409,{recovered:false,error:'The upstream-reported quota reset time has not arrived yet.',nextAvailableAt:row.last_quota_reset_at});return true;
    }
+   const claim=await pool.query("UPDATE user_api_connectors SET quota_recovery_claimed_at=now() WHERE id=$1 AND user_id=$2 AND (quota_recovery_claimed_at IS NULL OR quota_recovery_claimed_at<now()-interval '2 minutes') RETURNING id",[row.id,user.id]);
+   if(!claim.rows[0]){sendAuthJson(res,409,{recovered:false,error:'A quota recovery check is already running for this connector.'});return true;}
    const requestId=randomUUID();
    try{
     const result=await execute(row,row.sample_arguments_json,user.id,requestId,15_000);
-    await pool.query(`UPDATE user_api_connectors SET status='verified',queue_state='ready',next_available_at=NULL,enabled=false,last_tested_at=now(),last_http_status=$3,last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,user.id,result.status]);
+    await pool.query(`UPDATE user_api_connectors SET status='verified',queue_state='ready',next_available_at=NULL,enabled=false,quota_recovery_claimed_at=NULL,last_quota_status=NULL,last_quota_observed_at=NULL,last_quota_reset_at=NULL,last_tested_at=now(),last_http_status=$3,last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,user.id,result.status]);
     await audit(user.id,'api.connector.quota_recovered',row.id,{httpStatus:result.status,durationMs:result.durationMs,resetEvidenceAt:row.last_quota_reset_at});
     sendAuthJson(res,200,{recovered:true,verified:true,enabled:false,queueState:'ready',httpStatus:result.status,durationMs:result.durationMs});return true;
    }catch(error){
@@ -867,9 +869,9 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
      const retryAt=(error as any)?.retryAt;
      const next=retryAt?new Date(retryAt):null;
      const evidence=(error as any)?.rateLimitEvidence||{source:'upstream_response',observedAt:new Date().toISOString(),httpStatus:status,headers:{}};
-     await pool.query(`UPDATE user_api_connectors SET enabled=false,status='error',queue_state='waiting',next_available_at=$3,rate_limit_evidence=$4::jsonb,last_quota_status=$5,last_quota_observed_at=now(),last_quota_reset_at=$3,last_tested_at=now(),last_http_status=$5,last_error=$6,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,user.id,next,JSON.stringify(evidence),status,message]);
+     await pool.query(`UPDATE user_api_connectors SET enabled=false,status='error',queue_state='waiting',next_available_at=$3,quota_recovery_claimed_at=NULL,rate_limit_evidence=$4::jsonb,last_quota_status=$5,last_quota_observed_at=now(),last_quota_reset_at=$3,last_tested_at=now(),last_http_status=$5,last_error=$6,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,user.id,next,JSON.stringify(evidence),status,message]);
     }else{
-     await pool.query(`UPDATE user_api_connectors SET last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,user.id,status,message]);
+     await pool.query(`UPDATE user_api_connectors SET quota_recovery_claimed_at=NULL,last_tested_at=now(),last_http_status=$3,last_error=$4,updated_at=now() WHERE id=$1 AND user_id=$2`,[row.id,user.id,status,message]);
     }
     await audit(user.id,'api.connector.quota_recovery_failed',row.id,{status,error:message});
     sendAuthJson(res,502,{recovered:false,error:message,httpStatus:status,waitingForQuota:status===402||status===429});return true;
