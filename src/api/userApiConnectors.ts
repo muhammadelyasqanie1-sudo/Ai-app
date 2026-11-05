@@ -884,6 +884,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
     sendAuthJson(res,200,{activated:true,verified:false,enabled:false,requiresVerification:true});return true;
    }
    if(action==='delete'&&(req.method==='DELETE'||req.method==='POST')){
+    if(key.lifecycle_state==='waiting'||key.lifecycle_state==='expired'){sendAuthJson(res,409,{error:'Renewal-waiting and expired API keys are retained in the queue and cannot be deleted.'});return true;}
     if(key.is_active){sendAuthJson(res,409,{error:'Select another key before deleting the active key.'});return true;}
     await pool.query('DELETE FROM user_api_connector_keys WHERE id=$1 AND connector_id=$2 AND user_id=$3',[key.id,connector.id,user.id]);
     await audit(user.id,'api.connector.key_deleted',connector.id,{keyId:key.id,label:key.label});
