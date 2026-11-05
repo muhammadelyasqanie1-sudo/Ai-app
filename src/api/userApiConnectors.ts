@@ -369,6 +369,21 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    await audit(user.id,'api.connector.create',created.rows[0].id,{toolName,method,authType});
    sendAuthJson(res,201,{connector:publicRow(created.rows[0])});return true;
   }
+  const credentialMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/credentials$/i);
+  if(req.method==='POST'&&credentialMatch){
+   const row=await ownerConnector(user.id,credentialMatch[1]);
+   if(!row){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
+   if(row.auth_type==='none'){sendAuthJson(res,409,{error:'This API connector is configured without authentication. Change its documented authentication method by creating a new connector.'});return true;}
+   const body=await readJsonBody(req,12_000);
+   const secret=typeof body.credential==='string'?body.credential.trim():'';
+   if(!secret||secret.length>8192){sendAuthJson(res,400,{error:'A credential between 1 and 8192 characters is required.'});return true;}
+   const encrypted=encrypt(secret);
+   await pool.query(`UPDATE user_api_connectors SET credential_encrypted=$3,enabled=false,status='error',
+    queue_state='ready',next_available_at=NULL,last_error='Credential updated; verify the connector before enabling it.',updated_at=now()
+    WHERE id=$1 AND user_id=$2`,[row.id,user.id,encrypted]);
+   await audit(user.id,'api.connector.credential_rotated',row.id,{authType:row.auth_type,requiresVerification:true});
+   sendAuthJson(res,200,{updated:true,verified:false,enabled:false,requiresVerification:true});return true;
+  }
   const testMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/test$/i);
   if(req.method==='POST'&&testMatch){
    const row=await ownerConnector(user.id,testMatch[1]);if(!row){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
