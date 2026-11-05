@@ -189,11 +189,15 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  const url=new URL(base.toString());url.pathname=pathname;
  const headers=new Headers({Accept:'application/json'});
  const secrets:string[]=[];
- if(row.auth_type==='bearer'||row.auth_type==='header_key'||row.auth_type==='query_key'){
+ if(row.auth_type==='bearer'||row.auth_type==='basic'||row.auth_type==='header_key'||row.auth_type==='query_key'){
   if(!row.credential_encrypted)throw new Error('API connector credential is missing.');
   const secret=decrypt(row.credential_encrypted);secrets.push(secret);
   if(row.auth_type==='query_key')query.set(String(row.auth_header_name||'api_key'),secret);
-  else {const key=row.auth_type==='bearer'?'Authorization':String(row.auth_header_name||'X-API-Key');headers.set(key,row.auth_type==='bearer'?'Bearer '+secret:secret);}
+  else if(row.auth_type==='basic'){
+   const separator=secret.indexOf(':');
+   if(separator<1||separator===secret.length-1)throw new Error('HTTP Basic credentials must be stored as username:password.');
+   headers.set('Authorization','Basic '+Buffer.from(secret,'utf8').toString('base64'));
+  }else {const key=row.auth_type==='bearer'?'Authorization':String(row.auth_header_name||'X-API-Key');headers.set(key,row.auth_type==='bearer'?'Bearer '+secret:secret);}
  }
  if(query.size)url.search=query.toString();
  const init:RequestInit={method:row.http_method,headers,redirect:'error',signal:AbortSignal.timeout(timeoutMs)};
@@ -388,7 +392,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    const fallbackPriority=Number(body.fallbackPriority??100);
    const secret=typeof body.credential==='string'?body.credential.trim():'';
    if(name.length<2||name.length>120||!/^[a-z][a-z0-9_]{1,63}$/.test(toolName)||description.length>2000||
-    !['GET','POST','PUT','PATCH','DELETE'].includes(method)||!['none','bearer','header_key','query_key'].includes(authType)||
+    !['GET','POST','PUT','PATCH','DELETE'].includes(method)||!['none','bearer','basic','header_key','query_key'].includes(authType)||
     (authType==='none'&&secret)||(authType!=='none'&&!secret)||
     ((authType==='header_key'||authType==='query_key')&&!/^[A-Za-z0-9_.-]{1,64}$/.test(authHeader))||
     (fallbackGroup&&!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(fallbackGroup))||!Number.isInteger(fallbackPriority)||fallbackPriority<1||fallbackPriority>1000){
