@@ -2,10 +2,11 @@ import React,{useCallback,useEffect,useMemo,useState} from 'react';
 import { Activity, ArrowUpRight, ChevronLeft, ChevronRight, Database, Globe, RefreshCw, Search, Sparkles } from 'lucide-react';
 import type { Language } from '../../types/afg';
 import { AfgApiConnectorPanel } from './AfgApiConnectorPanel.tsx';
+import { AfgLlmApiCatalogPanel } from './AfgLlmApiCatalogPanel.tsx';
 
 type CatalogItem={source_key:string;name:string;description:string;auth:string;https:string;cors:string;category:string;capability?:string;implementation_status?:string;homepage_url:string|null;docs_url:string|null;icon_url:string|null;image_url:string|null;site_name:string|null;site_description:string|null;health_status:string;response_time_ms:number|null;last_health_check:string|null};
 type CatalogResponse={items:CatalogItem[];page:number;pageSize:number;total:number;categories:Array<{category:string;count:number}>};
-type SyncState={configured?:boolean;sync?:{status:string;items_imported:number;pages_fetched:number;repository_readme_ok?:boolean;directory_api_ok?:boolean;last_started_at:string|null;last_completed_at:string|null;last_error:string|null}|null;implementationTracking?:{configured:boolean;total:number;byStatus:Record<string,number>};mcpDirectory?:{total:number}};
+type SyncState={configured?:boolean;sync?:{status:string;items_imported:number;pages_fetched:number;repository_readme_ok?:boolean;directory_api_ok?:boolean;last_started_at:string|null;last_completed_at:string|null;last_error:string|null}|null;implementationTracking?:{configured:boolean;total:number;byStatus:Record<string,number>};mcpDirectory?:{total:number};llmCatalog?:{configured:boolean;providers:number;models:number;candidateRecords?:number;sources?:Array<{source:string;status:string;items_imported:number;providers_imported:number;last_error:string|null}>;error?:string}};
 type Provider={id:string;displayName:string;configured:boolean;enabled:boolean};
 const csrf=()=>decodeURIComponent(document.cookie.split('; ').find(x=>x.startsWith('afg_csrf='))?.slice(9)||'');
 async function request(path:string,init:RequestInit={}){
@@ -79,9 +80,10 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean;canSy
    try{
      const result=await request('/api/admin/api-hub/sync',{method:'POST',body:'{}'});
      const apiCount=Number(result.result?.catalog?.imported||0);const mcpCount=Number(result.result?.mcpDirectory?.imported||0);
+     const llmCount=Number(result.result?.llmCatalog?.imported||0);const llmProviders=Number(result.result?.llmCatalog?.providers||0);
      const sourceCounts=result.result?.catalog?.sourceCounts||{};
      const sourceSummary='README '+Number(sourceCounts.repositoryReadme||0)+' · publicapis.lol '+Number(sourceCounts.directoryApi||0)+' · unique '+Number(sourceCounts.unique||apiCount);
-     setNotice(dari?('همگام‌سازی: '+apiCount+' API یکتا و '+mcpCount+' سرور MCP. منابع: '+sourceSummary):('Synced '+apiCount+' unique APIs and '+mcpCount+' MCP servers. Source rows: '+sourceSummary+'.'));
+     setNotice(dari?('همگام‌سازی: '+apiCount+' API عمومی، '+mcpCount+' سرور MCP و '+llmCount+' رکورد LLM از '+llmProviders+' ارائه‌دهنده. منابع: '+sourceSummary):('Synced '+apiCount+' public APIs, '+mcpCount+' MCP servers and '+llmCount+' LLM records from '+llmProviders+' providers. Source rows: '+sourceSummary+'.'));
      setPage(1);
      await load();
      if(result.status==='partial')setNotice(dari?'همگام‌سازی ناقص بود؛ وضعیت را بررسی کنید.':'Catalog sync was partial; review the sync status.');
@@ -152,6 +154,7 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean;canSy
     <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('MCP servers','سرورهای MCP')}</p><b className="text-xl text-white">{(sync?.mcpDirectory?.total||0).toLocaleString()}</b></div>
     <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('Catalog sync','وضعیت همگام‌سازی')}</p><b className="text-sm text-white">{sync?.sync?.status||'—'}</b></div>
     <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('Implementation progress','پیشرفت پیاده‌سازی')}</p><b className="text-sm text-white">{sync?.implementationTracking?.configured?(sync.implementationTracking.byStatus.contract_discovered||0)+'/'+sync.implementationTracking.total:label('Migration needed','نیازمند مهاجرت')}</b><p className="mt-1 text-[9px] text-slate-500">{label('Contracts discovered','قراردادهای شناسایی‌شده')}</p></div>
+    <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">{label('LLM API models','مدل‌های API هوش مصنوعی')}</p><b className="text-xl text-white">{(sync?.llmCatalog?.models||0).toLocaleString()}</b><p className="text-[9px] text-slate-500">{(sync?.llmCatalog?.providers||0).toLocaleString()} {label('candidate providers','ارائه‌دهنده کاندید')}</p></div>
     <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><p className="text-[10px] text-slate-500">9Router Gateway</p><b className={'text-sm '+(gateway?.configured?'text-emerald-300':'text-amber-300')}>{gateway?.configured?label('Configured','تنظیم شده'):label('Not configured','تنظیم نشده')}</b></div>
    </div>
    {sync?.sync&&<p className="mt-3 text-[10px] text-slate-400">{label('Source coverage','پوشش منابع')}: GitHub README {sync.sync.repository_readme_ok? '✓':'—'} · publicapis.lol {sync.sync.directory_api_ok?'✓':'—'} · {label('Imported','واردشده')}: {sync.sync.items_imported||0}</p>}
@@ -224,6 +227,7 @@ export const AfgApiHubPanel:React.FC<{language:Language;adminMode?:boolean;canSy
   {data&&data.items.length===0&&!loading&&<div className="rounded-xl border border-slate-800 p-8 text-center text-sm text-slate-400">{label('No APIs match these filters.','هیچ API مطابق این فیلترها یافت نشد.')}</div>}
   <div className="flex items-center justify-center gap-3"><button disabled={page<=1||loading} onClick={()=>setPage(v=>Math.max(1,v-1))} className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 disabled:opacity-40"><ChevronLeft className="h-4 w-4"/>{label('Previous','قبلی')}</button><span className="text-xs text-slate-400">{page} / {pageCount}</span><button disabled={page>=pageCount||loading} onClick={()=>setPage(v=>Math.min(pageCount,v+1))} className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 disabled:opacity-40">{label('Next','بعدی')}<ChevronRight className="h-4 w-4"/></button></div>
   <p className="text-[10px] leading-5 text-slate-500">{label('Importing this directory does not grant credentials or permission to call every service. API contracts, authentication, rate limits and terms must be reviewed before a connector is enabled.','واردکردن این فهرست به معنی دسترسی به کلید یا مجوز اجرای سرویس‌ها نیست. قرارداد API، احراز هویت، سهمیه و شرایط استفاده باید پیش از فعال‌سازی اتصال بررسی شوند.')}</p>
+  <AfgLlmApiCatalogPanel language={language}/>
   <AfgApiConnectorPanel language={language} catalogSelection={connectorSelection} openApiSelection={openApiSelection}/>
  </div>;
 };
