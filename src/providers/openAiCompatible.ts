@@ -158,7 +158,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
       try {
         // Some gateways charge for even a one-token generation. For those providers,
         // verify only authenticated catalog access and model visibility.
-        if (options?.catalogOnlyHealthCheck || current.id === 'iteracompute') {
+        if (options?.catalogOnlyHealthCheck) {
           const response = await fetch(current.catalogBaseUrl + '/models', {
             headers: { ...(current.apiKey ? { Authorization: 'Bearer ' + current.apiKey } : {}), Accept: 'application/json' },
             signal: AbortSignal.timeout(15_000), redirect: 'error',
@@ -181,17 +181,12 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
             : { healthy: false, checkedAt, message: 'Model is not present in the provider catalog.' };
         }
         // Prove actual inference access with a one-token probe for ordinary providers.
-        const probePayload = current.id === 'iteracompute'
-          ? { model: modelId, messages: [{ role: 'user', content: 'Reply with exactly: OK' }], max_tokens: 512, reasoning: false, stream: false }
-          : { model: modelId, messages: [{ role: 'user', content: 'Reply with OK.' }], max_tokens: 1, stream: false };
+        const probePayload = { model: modelId, messages: [{ role: 'user', content: 'Reply with OK.' }], max_tokens: 1, stream: false };
         const response = await fetch(current.baseUrl + '/chat/completions', {
           method: 'POST',
           headers: { ...(current.apiKey ? { Authorization: 'Bearer ' + current.apiKey } : {}), 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify(probePayload),
-          // IteraCompute's free inference tier can have a long cold-start queue.
-          // Allow extra time for its verification probe so a slow first token does
-          // not incorrectly lock the only free model in the catalogue.
-          signal: AbortSignal.timeout(current.id === 'iteracompute' ? 90_000 : 15_000), redirect: 'error',
+          signal: AbortSignal.timeout(15_000), redirect: 'error',
         });
         if (!response.ok) {
           console.warn('AI_PROVIDER_HEALTH_CHECK_FAILED', JSON.stringify({ provider: current.id, model: modelId, status: response.status }));
