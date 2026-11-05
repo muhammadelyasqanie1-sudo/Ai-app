@@ -20,6 +20,102 @@ const nineRouterBaseAdapter = nineRouterBase
       catalogOnlyHealthCheck: true,
     })
   : null;
+// 9Router exposes separate capability catalogues. Merge them into one server-side
+// catalogue while preserving upstream model IDs and assigning only endpoint-backed capabilities.
+const nineRouterModelKinds = new Map<string, string>();
+const nineRouterAdapter: ChatProviderAdapter | null = nineRouterBaseAdapter
+  ? {
+      ...nineRouterBaseAdapter,
+      async listModels(): Promise<ModelDescriptor[]> {
+        const chatModels = await nineRouterBaseAdapter.listModels();
+        const kinds = [
+          { kind: 'image', path: '/models/image', capability: 'imageGen' as const },
+          { kind: 'image-to-text', path: '/models/image-to-text', capability: 'vision' as const },
+          { kind: 'tts', path: '/models/tts', capability: 'tts' as const },
+          { kind: 'stt', path: '/models/stt', capability: 'stt' as const },
+          { kind: 'embedding', path: '/models/embedding', capability: 'embedding' as const },
+          { kind: 'web', path: '/models/web', capability: 'web' as const },
+        ];
+        const additional = await Promise.all(kinds.map(async ({ kind, path, capability }) => {
+          try {
+            const response = await fetch(nineRouterBase + path, {
+              headers: { ...(nineRouterKey ? { Authorization: 'Bearer ' + nineRouterKey } : {}), Accept: 'application/json' },
+              signal: AbortSignal.timeout(15_000),
+              redirect: 'error',
+            });
+            if (!response.ok) return [];
+            const payload = await response.json() as any;
+            const rows = Array.isArray(payload?.data) ? payload.data
+              : Array.isArray(payload?.models) ? payload.models
+              : Array.isArray(payload?.data?.data) ? payload.data.data : [];
+            return rows.filter((item: any) => item && typeof item.id === 'string').map((item: any): ModelDescriptor => {
+              const catalogKind = kind === 'web'
+                ? (item.kind === 'webFetch' || item.id.endsWith('/fetch') ? 'webFetch' : 'webSearch')
+                : kind;
+              nineRouterModelKinds.set(item.id, kind);
+              return {
+              id: item.id,
+              catalogKind,
+              providerId: '9router',
+              displayName: typeof item.name === 'string' ? item.name : item.id,
+              description: 'Discovered from the 9Router ' + kind + ' catalogue.',
+              contextWindow: Number(item.context_length || item.context_window || 0) || 0,
+              pricing: undefined,
+              capabilities: {
+                text: false, streaming: false, vision: capability === 'vision',
+                imageGen: capability === 'imageGen', imageEdit: false,
+                ocr: false, tts: capability === 'tts', stt: capability === 'stt',
+                tools: false, jsonMode: false,
+                embedding: capability === 'embedding',
+                webSearch: capability === 'web' && catalogKind === 'webSearch',
+                webFetch: capability === 'web' && catalogKind === 'webFetch',
+              },
+              enabled: true,
+              verifiedAt: null,
+            };});
+          } catch {
+            return [];
+          }
+        }));
+        const merged = [
+          ...chatModels.map((model) => ({ ...model, catalogKind: 'llm' })),
+          ...additional.flat(),
+        ];
+        return merged.filter((model, index) =>
+          merged.findIndex((candidate) => candidate.id === model.id) === index);
+      },
+      async healthCheck(modelId: string): Promise<HealthStatus> {
+        const kind = nineRouterModelKinds.get(modelId);
+        if (!kind) return nineRouterBaseAdapter.healthCheck(modelId);
+        const paths: Record<string, string> = {
+          image: '/models/image',
+          'image-to-text': '/models/image-to-text',
+          tts: '/models/tts',
+          stt: '/models/stt',
+          embedding: '/models/embedding',
+          web: '/models/web',
+        };
+        const path = paths[kind] || '/models';
+        const checkedAt = new Date().toISOString();
+        try {
+          const response = await fetch(nineRouterBase + path, {
+            headers: { ...(nineRouterKey ? { Authorization: 'Bearer ' + nineRouterKey } : {}), Accept: 'application/json' },
+            signal: AbortSignal.timeout(15_000), redirect: 'error',
+          });
+          if (!response.ok) return { healthy: false, checkedAt, message: '9Router capability catalogue check failed.' };
+          const payload = await response.json() as any;
+          const rows = Array.isArray(payload?.data) ? payload.data
+            : Array.isArray(payload?.models) ? payload.models
+            : Array.isArray(payload?.data?.data) ? payload.data.data : [];
+          return { healthy: rows.some((item: any) => item?.id === modelId), checkedAt,
+            ...(rows.some((item: any) => item?.id === modelId) ? {} : { message: 'Model is not present in its 9Router capability catalogue.' }) };
+        } catch {
+          return { healthy: false, checkedAt, message: '9Router capability catalogue is unreachable.' };
+        }
+      },
+    }
+  : null;
+
 const staticProviderRegistry: ChatProviderAdapter[] = nineRouterAdapter ? [nineRouterAdapter] : [];
 let databaseProviderRegistry: ChatProviderAdapter[] = [];
 const DATABASE_PROVIDER_REFRESH_MS = 15_000;
