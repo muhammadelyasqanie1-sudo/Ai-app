@@ -37,7 +37,7 @@ export function optimizeChatMessages<T extends OptimizableMessage>(
     optimized.push({ ...message, content });
   }
   const afterChars = optimized.reduce((sum, message) => sum + message.content.length, 0);
-  return { messages: optimized, beforeChars, afterChars, removedDuplicates };
+  return { messages: optimized, beforeChars, afterChars, removedDuplicates: 0 };
 }
 
 export function estimateTokenCount(text: string): number {
