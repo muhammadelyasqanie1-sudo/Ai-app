@@ -74,6 +74,7 @@ export interface ChatRequest {
   userId?: string | null;
   signal?: AbortSignal;
   noFallback?: boolean;
+  contextCompression?: boolean;
   onModelSelected?: (providerId: string, modelId: string) => void | Promise<void>;
 }
 

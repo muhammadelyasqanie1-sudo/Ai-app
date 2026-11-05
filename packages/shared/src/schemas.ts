@@ -11,6 +11,8 @@ export const ChatRequestSchema = z.object({
   model: z.string().trim().min(1).max(300).refine(isModelId,'Invalid model identifier'),
   language: LocaleSchema.optional(),
   no_fallback: z.boolean().optional(),
+  token_saver: z.boolean().optional(),
+  context_compression: z.boolean().optional(),
 }).passthrough();
 export type SharedChatRequest = z.infer<typeof ChatRequestSchema>;
 export const ApiErrorSchema = z.object({
