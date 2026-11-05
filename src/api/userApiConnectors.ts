@@ -614,6 +614,33 @@ async function audit(userId:string,action:string,id:string,metadata:Json={}){
   [userId,action,'api_connector',id,JSON.stringify(metadata)]).catch(()=>{});
 }
 export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerResponse,pathname:string):Promise<boolean>{
+ if(pathname==='/api/api-hub/oauth/callback'&&req.method==='GET'){
+  try{
+   if(!pool)throw new Error('OAuth storage is unavailable.');
+   const incoming=new URL(req.url||'/', 'https://afg.invalid'),code=incoming.searchParams.get('code')||'',state=incoming.searchParams.get('state')||'',providerError=incoming.searchParams.get('error')||'';
+   if(providerError)throw new Error('OAuth provider denied authorization: '+providerError.slice(0,100));
+   if(!code||!state||state.length>300)throw new Error('OAuth callback is missing its code or state.');
+   const stateHash=createHash('sha256').update(state).digest('hex');
+   const claimed=await pool.query('DELETE FROM user_api_connector_oauth_states WHERE state_hash=$1 AND expires_at>now() RETURNING connector_id,user_id,code_verifier_encrypted',[stateHash]);
+   const pending=claimed.rows[0];if(!pending)throw new Error('OAuth state is invalid, expired, or already used. Start again.');
+   const connector=await ownerConnector(String(pending.user_id),String(pending.connector_id));
+   if(!connector||connector.auth_type!=='oauth2'||!connector.oauth_config_encrypted)throw new Error('OAuth connector configuration is unavailable.');
+   const config=JSON.parse(decrypt(connector.oauth_config_encrypted)) as Json;
+   const redirectUri=new URL('/api/api-hub/oauth/callback',oauthPublicBase()).toString();await safeEndpoint(String(config.tokenUrl||''));
+   const verifier=decrypt(pending.code_verifier_encrypted);
+   const form=new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:redirectUri,client_id:String(config.clientId),client_secret:String(config.clientSecret),code_verifier:verifier});
+   const response=await fetch(String(config.tokenUrl),{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body:form,redirect:'error',signal:AbortSignal.timeout(20000)});
+   const raw=await readTextLimited(response,1000000);let tokens:Json;try{tokens=JSON.parse(raw);}catch{throw new Error('OAuth token endpoint returned an invalid response.');}
+   if(!response.ok||typeof tokens.access_token!=='string'||!tokens.access_token)throw new Error('OAuth authorization exchange failed with HTTP '+response.status+'.');
+   tokens.expires_at=tokens.expires_in?Date.now()+Number(tokens.expires_in)*1000:null;
+   await pool.query("UPDATE user_api_connectors SET credential_encrypted=$3,enabled=false,status='unverified',queue_state='ready',next_available_at=NULL,last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2",[connector.id,pending.user_id,encrypt(JSON.stringify(tokens))]);
+   await audit(String(pending.user_id),'api.connector.oauth_connected',String(connector.id),{scopes:config.scopes||[],hasRefreshToken:Boolean(tokens.refresh_token)});
+   const destination=new URL('/',oauthPublicBase());destination.searchParams.set('api_oauth','connected');res.writeHead(302,{Location:destination.toString(),'Cache-Control':'no-store'});res.end();return true;
+  }catch(error){
+   let destination='';try{const url=new URL('/',oauthPublicBase());url.searchParams.set('api_oauth','error');url.searchParams.set('reason',(error instanceof Error?error.message:'OAuth failed').slice(0,180));destination=url.toString();}catch{}
+   if(destination){res.writeHead(302,{Location:destination,'Cache-Control':'no-store'});res.end();}else sendAuthJson(res,400,{error:error instanceof Error?error.message:'OAuth callback failed.'});return true;
+  }
+ }
  if(!pathname.startsWith('/api/api-hub/connectors'))return false;
  if(!pool){sendAuthJson(res,503,{error:'API connectors require PostgreSQL and migrations 0014, 0023 and 0027.'});return true;}
  const user=await authenticateRequest(req).catch(()=>null);
@@ -630,13 +657,14 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    const name=String(body.name||'').trim(),toolName=String(body.toolName||'').trim().toLowerCase();
    const description=String(body.description||'').trim(),endpoint=String(body.endpointUrl||'').trim();
    const method=String(body.method||'GET').toUpperCase(),authType=String(body.authType||'none');
+   const oauthConfig=authType==='oauth2'?normalizeOAuthConfig(body.oauthConfig):null;
    const authHeader=String(body.authHeaderName||'X-API-Key');
    const fallbackGroup=String(body.fallbackGroup||'').trim().toLowerCase();
    const fallbackPriority=Number(body.fallbackPriority??100);
    const secret=typeof body.credential==='string'?body.credential.trim():'';
    if(name.length<2||name.length>120||!/^[a-z][a-z0-9_]{1,63}$/.test(toolName)||description.length>2000||
-    !['GET','POST','PUT','PATCH','DELETE'].includes(method)||!['none','bearer','basic','header_key','query_key'].includes(authType)||
-    (authType==='none'&&secret)||(authType!=='none'&&!secret)||
+    !['GET','POST','PUT','PATCH','DELETE'].includes(method)||!['none','bearer','basic','header_key','query_key','oauth2'].includes(authType)||
+    (authType==='none'&&secret)||(authType!=='none'&&authType!=='oauth2'&&!secret)||(authType==='oauth2'&&secret)||
     ((authType==='header_key'||authType==='query_key')&&!/^[A-Za-z0-9_.-]{1,64}$/.test(authHeader))||
     (fallbackGroup&&!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(fallbackGroup))||!Number.isInteger(fallbackPriority)||fallbackPriority<1||fallbackPriority>1000){
     sendAuthJson(res,400,{error:'Invalid API connector settings.'});return true;
@@ -647,11 +675,34 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    const sourceKey=typeof body.catalogSourceKey==='string'?body.catalogSourceKey:null;
    if(sourceKey){const exists=await pool.query('SELECT 1 FROM public_api_catalog WHERE source_key=$1',[sourceKey]);if(!exists.rows[0]){sendAuthJson(res,404,{error:'Public API catalog entry was not found.'});return true;}}
    const encrypted=secret?encrypt(secret):null;
-   const created=await pool.query(`INSERT INTO user_api_connectors(user_id,catalog_source_key,name,tool_name,description,endpoint_url,http_method,auth_type,auth_header_name,credential_encrypted,input_schema_json,sample_arguments_json,fallback_group,fallback_priority)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14) RETURNING *`,
-    [user.id,sourceKey,name,toolName,description,endpoint,method,authType,authHeader,encrypted,JSON.stringify(schema),JSON.stringify(sample),fallbackGroup||null,fallbackPriority]);
+   const oauthEncrypted=oauthConfig?encrypt(JSON.stringify(oauthConfig)):null;
+   const created=await pool.query(`INSERT INTO user_api_connectors(user_id,catalog_source_key,name,tool_name,description,endpoint_url,http_method,auth_type,auth_header_name,credential_encrypted,oauth_config_encrypted,input_schema_json,sample_arguments_json,fallback_group,fallback_priority)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15) RETURNING *`,
+    [user.id,sourceKey,name,toolName,description,endpoint,method,authType,authHeader,encrypted,oauthEncrypted,JSON.stringify(schema),JSON.stringify(sample),fallbackGroup||null,fallbackPriority]);
    await audit(user.id,'api.connector.create',created.rows[0].id,{toolName,method,authType});
    sendAuthJson(res,201,{connector:publicRow(created.rows[0])});return true;
+  }
+  const oauthConfigMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/oauth\/config$/i);
+  if(req.method==='POST'&&oauthConfigMatch){
+   const row=await ownerConnector(user.id,oauthConfigMatch[1]);if(!row){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
+   if(row.auth_type!=='oauth2'){sendAuthJson(res,409,{error:'This connector is not configured for OAuth 2.0.'});return true;}
+   const config=normalizeOAuthConfig(await readJsonBody(req,12000)),encrypted=encrypt(JSON.stringify(config));
+   await pool.query("UPDATE user_api_connectors SET oauth_config_encrypted=$3,credential_encrypted=NULL,enabled=false,status='unverified',last_error=NULL,updated_at=now() WHERE id=$1 AND user_id=$2",[row.id,user.id,encrypted]);
+   await audit(user.id,'api.connector.oauth_configured',row.id,{scopes:config.scopes});
+   sendAuthJson(res,200,{configured:true,redirectUri:new URL('/api/api-hub/oauth/callback',oauthPublicBase()).toString()});return true;
+  }
+  const oauthStartMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/oauth\/start$/i);
+  if(req.method==='POST'&&oauthStartMatch){
+   const row=await ownerConnector(user.id,oauthStartMatch[1]);if(!row){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
+   if(row.auth_type!=='oauth2'||!row.oauth_config_encrypted){sendAuthJson(res,409,{error:'Save OAuth client settings before starting authorization.'});return true;}
+   const config=JSON.parse(decrypt(row.oauth_config_encrypted)) as Json,authUrl=new URL(String(config.authorizationUrl||''));
+   await safeEndpoint(authUrl.origin+authUrl.pathname);const redirectUri=new URL('/api/api-hub/oauth/callback',oauthPublicBase()).toString();
+   const state=randomBytes(32).toString('base64url'),verifier=randomBytes(32).toString('base64url'),challenge=createHash('sha256').update(verifier).digest('base64url');
+   await pool.query('DELETE FROM user_api_connector_oauth_states WHERE expires_at<=now()');
+   await pool.query('INSERT INTO user_api_connector_oauth_states(connector_id,user_id,state_hash,code_verifier_encrypted,expires_at) VALUES($1,$2,$3,$4,now()+interval \'10 minutes\')',[row.id,user.id,createHash('sha256').update(state).digest('hex'),encrypt(verifier)]);
+   authUrl.searchParams.set('response_type','code');authUrl.searchParams.set('client_id',String(config.clientId));authUrl.searchParams.set('redirect_uri',redirectUri);authUrl.searchParams.set('state',state);
+   authUrl.searchParams.set('code_challenge',challenge);authUrl.searchParams.set('code_challenge_method','S256');if(Array.isArray(config.scopes)&&config.scopes.length)authUrl.searchParams.set('scope',config.scopes.join(' '));
+   await audit(user.id,'api.connector.oauth_started',row.id,{scopes:config.scopes||[]});sendAuthJson(res,200,{authorizationUrl:authUrl.toString(),expiresInSeconds:600});return true;
   }
   const keysMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/keys$/i);
   if(keysMatch){
