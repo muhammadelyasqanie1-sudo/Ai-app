@@ -78,7 +78,7 @@ function makeToolName(value:string,path:string,method:string):string{
  return /^[a-z]/.test(name)?name:'api_'+name.slice(0,60);
 }
 function authSummary(document:Json,operation:Json):string[]{
- const requirements=operation.security??document.security??[];
+ const requirements=operation.securityRequirements??document.security??[];
  if(!Array.isArray(requirements)||!requirements.length)return ['none'];
  const schemes=document.components?.securitySchemes||{};
  const result:string[]=[];
@@ -164,7 +164,7 @@ function governanceEvidence(document:Json,operations:any[]){
  const operationsAuth=operations.map((operation:any)=>({
   operationId:operation.operationId||operation.toolName,
   method:operation.method,path:operation.endpointUrl,
-  security:effectiveSecurity(operation._source||{})
+  security:effectiveSecurity({securityRequirements:operation.securityRequirements})
  }));
  const rateHeaders=new Set<string>();
  const rateEvidence:any[]=[];
@@ -250,7 +250,7 @@ export async function discoverOpenApiOperations(specUrl:string){
     tags:Array.isArray(operation.tags)?operation.tags.filter((tag:any)=>typeof tag==='string').slice(0,12).map((tag:string)=>tag.slice(0,80)):[],
     deprecated:operation.deprecated===true,
     method:method.toUpperCase(),endpointUrl:endpoint,inputSchema:built.schema,
-    authOptions:auth,unsupportedParameters:built.unsupported,
+    authOptions:auth,securityRequirements:operation.security??document.security??[],unsupportedParameters:built.unsupported,
     usable:built.unsupported.length===0&&auth.every(item=>['none','bearer'].includes(item)||item.startsWith('header_key:')||item.startsWith('query_key:')),
    });
    if(operations.length>=100)break;
