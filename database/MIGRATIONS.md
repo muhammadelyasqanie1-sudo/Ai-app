@@ -29,3 +29,8 @@ Migration `0009_staff_rbac_foundation.sql` adds backend-enforced staff roles and
 
 
 Migration `0011_remove_cloudflare_workers_ai.sql` removes Cloudflare Workers AI from the provider registry and clears its model/fallback selections. Cloudflare R2/KV storage configuration is independent and is not removed by this migration.
+
+
+## Public API connector fallback groups
+
+Migration `0022_api_connector_fallback_groups.sql` adds optional per-user fallback group and priority fields to API connectors. Connectors in the same group are eligible as sequential alternatives only when they are enabled, verified, owned by the same user, and have the same HTTP method and exact JSON input schema. Apply with `npm run db:migrate` after reviewing `BACKUP-RESTORE.md`. The migration has not been run against any hosted database as part of source changes.
