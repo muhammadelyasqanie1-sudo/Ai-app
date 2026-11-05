@@ -19,12 +19,29 @@ const chatRequestSchema = ChatRequestSchema;
 function selectRelevantChatTools(definitions:any[],messages:ChatMessage[],limit=16):any[]{
   if(definitions.length<=limit)return definitions;
   const latestUser=[...messages].reverse().find(message=>message.role==='user')?.content||'';
-  const queryTokens=new Set(String(latestUser).toLocaleLowerCase().match(/[\p{L}\p{N}_-]{2,}/gu)||[]);
+  const queryTokens=new Set(String(latestUser).toLocaleLowerCase().match(/[\\p{L}\\p{N}_-]{2,}/gu)||[]);
+  const intentSignals:Array<[string,RegExp]>=[
+    ['image',/\b(image|images|picture|photo|illustration|drawing|ocr|vision)\b|تصویر|عکس|عکاسی|نقاشی|بینایی|استخراج متن/i],
+    ['video',/\b(video|videos|movie|clip|render video)\b|ویدیو|ویدئو|فیلم|کلیپ/i],
+    ['audio',/\b(audio|speech|voice|tts|stt|transcri|music|sound)\b|صدا|گفتار|موسیقی|آهنگ|تبدیل گفتار|رونویسی/i],
+    ['coding',/\b(code|coding|programming|compiler|repository|github|gitlab|terminal|execute code)\b|کدنویسی|برنامه نویسی|برنامه‌نویسی|کد|مخزن|گیتهاب|ترمینال/i],
+    ['weather',/\b(weather|forecast|temperature|climate)\b|آب و هوا|آب‌وهوا|هواشناسی|پیشبینی هوا|پیش‌بینی هوا/i],
+    ['maps',/\b(map|maps|geocod|directions|route|places|location)\b|نقشه|مسیر|مکان|آدرس|موقعیت/i],
+    ['finance',/\b(finance|bank|payment|currency|exchange rate|stock|crypto|invoice)\b|مالی|بانک|پرداخت|ارز|نرخ تبدیل|قیمت ارز|سهام/i],
+    ['news',/\b(news|headline|article|rss)\b|خبر|اخبار|مقاله|سرخط/i],
+    ['food',/\b(food|recipe|restaurant|nutrition|meal)\b|غذا|دستور پخت|رستوران|تغذیه/i],
+    ['search',/\b(search|web search|browser|fetch|crawl|scrape|serp)\b|جستجو|جست‌وجو|وبگردی|مرورگر|پیدا کن/i],
+    ['storage',/\b(storage|file|files|upload|download|bucket|database)\b|فایل|ذخیره|بارگذاری|آپلود|دانلود|پایگاه داده/i],
+    ['ai_language',/\b(ai|llm|language model|chat|completion|embedding|generation|translate|translation|summari[sz])\b|هوش مصنوعی|مدل زبانی|چت|ترجمه|خلاصه سازی|خلاصه‌سازی|تولید متن/i],
+  ];
+  const matchedIntents=new Set(intentSignals.filter(([,pattern])=>pattern.test(String(latestUser))).map(([category])=>category));
   const ranked=definitions.map((definition,index)=>{
     const fn=definition?.function||{};
-    const searchable=[fn.name,fn.description,...Object.keys(fn.parameters?.properties||{})].join(' ').toLocaleLowerCase();
+    const description=String(fn.description||'');
+    const searchable=[fn.name,description,...Object.keys(fn.parameters?.properties||{})].join(' ').toLocaleLowerCase();
     const tokens=searchable.match(/[\p{L}\p{N}_-]{2,}/gu)||[];
-    let score=0;
+    const capability=/Capability category:\s*([a-z_]+)/i.exec(description)?.[1]||'general';
+    let score=matchedIntents.has(capability)?18:0;
     for(const token of tokens)if(queryTokens.has(token))score+=token.length>=7?3:2;
     for(const token of queryTokens)if(token.length>=5&&searchable.includes(token))score+=1;
     return {definition,index,score};
