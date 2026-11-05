@@ -1,5 +1,13 @@
 -- Durable bounded work queue for per-entry Public API discovery.
 -- Claims expire automatically so interrupted admin sessions do not strand catalogue entries.
+-- Backfill every catalogue row that existed before migration 0024 was installed.
+INSERT INTO public_api_implementation_tracking(
+  source_key,discovery_status,official_docs_url,last_discovered_at,created_at,updated_at
+)
+SELECT source_key,'catalogued',docs_url,now(),now(),now()
+FROM public_api_catalog
+ON CONFLICT(source_key) DO NOTHING;
+
 ALTER TABLE public_api_implementation_tracking
   ADD COLUMN IF NOT EXISTS work_state text NOT NULL DEFAULT 'queued',
   ADD COLUMN IF NOT EXISTS claimed_by text,
