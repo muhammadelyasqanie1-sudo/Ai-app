@@ -78,6 +78,7 @@ function normalizeJsonProperty(input:unknown,depth=0):Json{
  if(!['string','number','integer','boolean','object','array'].includes(source.type))throw new Error('API connector parameters must use supported JSON types.');
  const output:Json={type:source.type};
  if(typeof source.description==='string')output.description=source.description.slice(0,500);
+ if(source['x-in']!==undefined){if(!['path','query','body','header'].includes(source['x-in']))throw new Error('API parameter location is invalid.');output['x-in']=source['x-in'];}
  if(Array.isArray(source.enum)){
   if(source.enum.length>100||source.enum.some((value:any)=>value!==null&&!['string','number','boolean'].includes(typeof value)))throw new Error('Parameter enum is invalid.');
   output.enum=source.enum;
@@ -175,6 +176,7 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
  let pathname=base.pathname;
  const query=new URLSearchParams();
  const body:Json={};
+ const parameterHeaders:Record<string,string>={};
  for(const [key,value] of Object.entries(values)){
   const property=(schema.properties as Json)[key] as Json;
   const location=property['x-in']||(row.http_method==='GET'||row.http_method==='DELETE'?'query':'body');
@@ -183,11 +185,15 @@ async function execute(row:any,args:unknown,userId:string,requestId:string,timeo
    if(!pathname.includes(marker))throw new Error('Path template is missing {'+key+'}.');
    pathname=pathname.split(marker).join(encodeURIComponent(String(value)));
   }else if(location==='query')query.set(key,String(value));
-  else body[key]=value;
+  else if(location==='header'){
+   if(!/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}$/.test(key)||/^(authorization|proxy-authorization|host|cookie|content-length|content-type|connection|transfer-encoding)$/i.test(key)||key.toLowerCase().startsWith('proxy-'))throw new Error('The API contract contains a reserved or invalid header parameter: '+key+'.');
+   parameterHeaders[key]=String(value);
+  }else body[key]=value;
  }
  if(/\{[a-zA-Z][a-zA-Z0-9_]*\}/.test(pathname))throw new Error('The API endpoint contains an unresolved path parameter.');
  const url=new URL(base.toString());url.pathname=pathname;
  const headers=new Headers({Accept:'application/json'});
+ for(const [key,value] of Object.entries(parameterHeaders))headers.set(key,value);
  const secrets:string[]=[];
  if(row.auth_type==='bearer'||row.auth_type==='basic'||row.auth_type==='header_key'||row.auth_type==='query_key'){
   if(!row.credential_encrypted)throw new Error('API connector credential is missing.');
