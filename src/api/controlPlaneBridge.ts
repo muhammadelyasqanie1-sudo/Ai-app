@@ -27,7 +27,7 @@ function readBridgeActor(req: IncomingMessage) {
   const email = String(req.headers['x-9router-actor-email'] || '').trim().toLowerCase();
   const role = String(req.headers['x-9router-actor-role'] || '').trim();
   const rawPermissions = String(req.headers['x-9router-actor-permissions'] || '[]');
-  if (!id || id.length > 128 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || email.length > 254) return null;
+  if (!id || id.length > 128 || !/^[^\s@]+@[^\s@]+$/.test(email) || email.length > 254) return null;
   if (!['superadmin', 'admin', 'staff'].includes(role) || rawPermissions.length > 4096) return null;
   try {
     const permissions = JSON.parse(rawPermissions);
