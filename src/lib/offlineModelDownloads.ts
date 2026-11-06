@@ -361,7 +361,7 @@ export async function downloadGGUF(options: {
 export const NEEDLE3_DOWNLOAD = {
   repoId: 'Cactus-Compute/needle3',
   fileName: 'needle3.cact',
-  revision: 'main',
+  revision: 'd6c7d6a2e9655505e0f8e23339356dd1705900eb',
   expectedSha256: 'c9d915eca282ed42d1a09b143b592adb4cc6744ffe2d294adf5cfc5548170c38',
 } as const;
 
