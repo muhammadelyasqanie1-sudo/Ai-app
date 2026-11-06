@@ -228,6 +228,8 @@ public class AFGOfflineModelsPlugin extends Plugin {
         if ("youtube".equals(app)) packageName = "com.google.android.youtube";
         else if ("maps".equals(app)) packageName = "com.google.android.apps.maps";
         else if ("chrome".equals(app)) packageName = "com.android.chrome";
+        else if ("telegram".equals(app)) packageName = "org.telegram.messenger";
+        else if ("whatsapp".equals(app)) packageName = "com.whatsapp";
         else if ("settings".equals(app)) {
             try {
                 Intent settings = new Intent(android.provider.Settings.ACTION_SETTINGS);
