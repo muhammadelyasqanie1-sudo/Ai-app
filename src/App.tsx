@@ -298,7 +298,7 @@ export default function App() {
       .then(async (response) => {
         const data = response.ok ? await response.json() : null;
         const target = typeof data?.dashboardUrl === 'string' ? new URL(data.dashboardUrl) : null;
-        if (!target || target.protocol !== 'https:' || !data?.configured || !data?.reachable) throw new Error('9Router admin portal is unavailable.');
+        if (!target || target.protocol !== 'https:' || target.pathname !== '/control-plane' || target.search || target.hash || target.username || target.password || !data?.configured || !data?.reachable) throw new Error('9Router control plane is unavailable.');
         portal.location.replace(target.toString());
       })
       .catch(() => { try { portal.close(); } catch {} window.alert(language === 'dari' ? 'دسترسی به پنل مدیریت تأیید نشد.' : 'Administrator portal access could not be verified.'); });
