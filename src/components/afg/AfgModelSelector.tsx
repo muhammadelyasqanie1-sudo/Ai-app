@@ -27,9 +27,17 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
   const selected = models.find(m => selectedModel === m.providerId + '::' + m.id);
   const providerEntries = useMemo(() => {
     const ids = Array.from(new Set(models.map((model) => model.providerId)));
-    const preferred = ['public-apis', 'public_apis', 'publicapis', '9router', 'apinex'];
-    const known = preferred.filter((id) => ids.includes(id));
-    return [...known, ...ids.filter((id) => !known.includes(id)).sort()].map((id) => ({ id, count: models.filter((model) => model.providerId === id).length }));
+    const known = [
+      { label: 'Public APIs', aliases: ['public-apis', 'public_apis', 'publicapis', 'public-api', 'public'] },
+      { label: '9Router', aliases: ['9router'] },
+      { label: 'APInex', aliases: ['apinex'] },
+    ].map((provider) => {
+      const id = ids.find((candidate) => provider.aliases.includes(candidate.toLowerCase())) || null;
+      return { id: id || provider.aliases[0], label: provider.label, available: Boolean(id), count: id ? models.filter((model) => model.providerId === id).length : 0 };
+    });
+    const knownIds = known.filter((provider) => provider.available).map((provider) => provider.id);
+    const extras = ids.filter((id) => !knownIds.includes(id)).sort().map((id) => ({ id, label: id, available: true, count: models.filter((model) => model.providerId === id).length }));
+    return [...known, ...extras];
   }, [models]);
   const providerLabel = (id: string) => {
     const key = id.toLowerCase().replace(/[_\s]/g, '-');
@@ -87,9 +95,9 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
         </header>
         {selectedProvider && <div className="px-4 pt-3"><label className="afg-model-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={dari?'جستجوی مدل یا ارائه‌دهنده':'Search models or providers'}/></label></div>}
         {!selectedProvider ? <div className="afg-provider-list">
-          {providerEntries.map((provider) => <button key={provider.id} type="button" className="afg-provider-card" onClick={() => { setSelectedProvider(provider.id); setQuery(''); }}>
+          {providerEntries.map((provider) => <button key={provider.id} type="button" disabled={!provider.available} className="afg-provider-card" onClick={() => { setSelectedProvider(provider.id); setQuery(''); }}>
             <ProviderIcon provider={provider.id} />
-            <span className="min-w-0 flex-1 text-start"><strong>{providerLabel(provider.id)}</strong><small>{provider.count} {dari ? 'مدل موجود' : 'available models'}</small></span>
+            <span className="min-w-0 flex-1 text-start"><strong>{provider.label || providerLabel(provider.id)}</strong><small>{provider.available ? provider.count + ' ' + (dari ? 'مدل موجود' : 'available models') : (dari ? 'هنوز پیکربندی نشده' : 'Not configured yet')}</small></span>
             <ChevronDown className="afg-provider-next" size={18} />
           </button>)}
           {!providerEntries.length && <p className="p-6 text-center text-sm opacity-60">{dari ? 'هیچ ارائه‌دهنده فعالی موجود نیست' : 'No active providers available'}</p>}
