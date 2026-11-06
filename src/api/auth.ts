@@ -381,7 +381,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
     const state = query.get('state') || '';
     const code = query.get('code') || '';
     if (!state || !jar.afg_oauth_state || state.length !== jar.afg_oauth_state.length || !timingSafeEqual(Buffer.from(state), Buffer.from(jar.afg_oauth_state)) || !code) {
-      clearOAuthState(res); res.writeHead(302, { Location: configuredAppOrigin() + '/?auth=google_failed' }); res.end(); return true;
+      clearOAuthState(res); res.writeHead(302, { Location: jar.afg_oauth_mobile === '1' ? 'afgai://auth/callback?error=state' : configuredAppOrigin() + '/?auth=google_failed', 'Cache-Control': 'no-store' }); res.end(); return true;
     }
     try {
       const origin = configuredAppOrigin();
@@ -423,7 +423,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         clearOAuthState(res); res.writeHead(302, { Location: origin + '/', 'Cache-Control': 'no-store' }); res.end();
       }
     } catch {
-      clearOAuthState(res); res.writeHead(302, { Location: configuredAppOrigin() + '/?auth=google_failed' }); res.end();
+      clearOAuthState(res); res.writeHead(302, { Location: jar.afg_oauth_mobile === '1' ? 'afgai://auth/callback?error=google' : configuredAppOrigin() + '/?auth=google_failed', 'Cache-Control': 'no-store' }); res.end();
     }
     return true;
   }
