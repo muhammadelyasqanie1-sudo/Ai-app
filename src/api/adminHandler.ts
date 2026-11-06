@@ -150,6 +150,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         'users:read','users:manage','users:suspend','audit:read','security:read','security:manage',
         'dashboard:read','usage:read','system:read','settings:read','settings:manage',
         'subscriptions:read','subscriptions:manage','notifications:broadcast',
+        'ninerouter:read','ninerouter:providers:manage','ninerouter:routing:manage','ninerouter:security:manage','ninerouter:dashboard:access',
       ]);
       if (!/^[a-z][a-z0-9_]{1,47}$/.test(role) || ['user','admin','superadmin'].includes(role) ||
           !value || typeof value !== 'object' || Array.isArray(value) ||
