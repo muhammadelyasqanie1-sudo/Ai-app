@@ -29,7 +29,7 @@ export async function getNativeNeedleRuntimeInfo(): Promise<NativeNeedleRuntimeI
 
 export async function loadNativeNeedleModel(path: string, systemPrompt: string, toolsJson: string): Promise<void> {
   requireAndroid();
-  if (!path || !path.endsWith('/needle3.cact')) throw new Error('Select the official Needle 3 model file.');
+  if (!path || !path.endsWith('needle3.cact')) throw new Error('Select the official Needle 3 model file.');
   await AFGOfflineModels.loadNeedleModel({ path, systemPrompt, toolsJson });
 }
 
