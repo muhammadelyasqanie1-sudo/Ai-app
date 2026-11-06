@@ -3,6 +3,7 @@
 #include "needle_api.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <fstream>
 #include <iterator>
 #include <mutex>
@@ -41,6 +42,9 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeLoadNeedleModel(
     }
 
     if (!g_needle_loaded) {
+        // The upstream engine enables anonymous telemetry by default; opt out before initialization.
+        setenv("NEEDLE_TELEMETRY", "0", 1);
+        setenv("DO_NOT_TRACK", "1", 1);
         std::ifstream input(path, std::ios::binary);
         if (!input) {
             g_needle_error = "Unable to open the verified Needle .cact model.";
