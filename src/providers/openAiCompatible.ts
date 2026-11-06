@@ -116,7 +116,10 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
           const completionPrice = Number(model.pricing?.completion);
           const beatApiInputPrice = Number(model.input_usd_per_million);
           const beatApiOutputPrice = Number(model.output_usd_per_million);
-          const labels = model.capabilities || [];
+          // 9Router model metadata is not fully OpenRouter-shaped: capabilities may
+          // be an object or omitted. Normalize defensively instead of calling .some()
+          // on an arbitrary upstream value.
+          const labels = Array.isArray(model.capabilities) ? model.capabilities : [];
           const inputHasImage = inputModalities.includes('image') || labels.some((value) => /vision|image/i.test(value));
           const outputHasImage = outputModalities.includes('image') || labels.some((value) => /image.?generation/i.test(value));
           return {
