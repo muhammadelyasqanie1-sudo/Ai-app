@@ -12,10 +12,18 @@ if (!connectionString) {
   process.exitCode = 1;
 } else {
   const useDatabaseTls = shouldUseDatabaseTls(connectionString, process.env.DATABASE_SSL);
+  const databaseSslCa = process.env.DATABASE_SSL_CA?.replace(/\\n/g, '\n').trim();
   const pool = new Pool({
     connectionString,
     max: 1,
-    ...(useDatabaseTls ? { ssl: { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false' } } : {}),
+    ...(useDatabaseTls
+      ? {
+          ssl: {
+            rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false',
+            ...(databaseSslCa ? { ca: databaseSslCa } : {}),
+          },
+        }
+      : {}),
   });
   const here = path.dirname(fileURLToPath(import.meta.url));
   const directory = path.join(here, '..', 'database', 'migrations');
