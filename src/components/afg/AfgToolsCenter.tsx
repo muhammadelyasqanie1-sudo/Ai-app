@@ -23,9 +23,7 @@ import {
 import type { Language, ToolSubTab } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
 import { AfgProductivityCenter } from './AfgProductivityCenter';
-import { AfgApiHubPanel } from './AfgApiHubPanel';
-import { AfgMcpPanel } from './AfgMcpPanel';
-import { AfgNineRouterPanel } from './AfgNineRouterPanel';
+import { AfgApiConnectorPanel } from './AfgApiConnectorPanel';
 import { AfgPublicApiDeveloperTools } from './AfgPublicApiDeveloperTools';
 
 interface AfgToolsCenterProps {
@@ -315,9 +313,9 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
       )}
 
       {activeSubTab === 'productivity' && <AfgProductivityCenter language={language} onRunTool={onRunTool} />}
-      {activeSubTab === 'api-hub' && <AfgApiHubPanel language={language}/>}
-      {activeSubTab === 'mcp' && <AfgMcpPanel language={language}/>}
-      {activeSubTab === '9router' && <AfgNineRouterPanel language={language}/>}
+      {activeSubTab === 'api-hub' && <AfgApiConnectorPanel language={language}/>}
+      {activeSubTab === 'mcp' && <div className="rounded-2xl border border-cyan-500/20 bg-slate-950/70 p-4 text-sm text-slate-300">{language==='dari'?'اتصال MCP فقط زمانی فعال می‌شود که یک runtime سازگار واقعاً متصل باشد.':'MCP tools are available only when a compatible runtime is actually connected.'}</div>}
+      {activeSubTab === '9router' && <div className="rounded-2xl border border-cyan-500/20 bg-slate-950/70 p-4 text-sm text-slate-300">{language==='dari'?'مدیریت درگاه 9Router در پنل امن و جداگانه انجام می‌شود.':'9Router administration is handled in the separate authenticated control plane.'}</div>}
       {activeSubTab === 'developer-tools' && <AfgPublicApiDeveloperTools language={language}/>}
 
       {/* Tool 1: Interactive Translator (Text & Voice) */}
