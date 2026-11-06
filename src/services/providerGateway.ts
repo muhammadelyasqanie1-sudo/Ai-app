@@ -126,6 +126,10 @@ const apinexKeys = (() => {
   } catch { return []; }
 })();
 const apinexBase = (process.env.APINEX_BASE_URL?.trim() || 'https://api.apinex.bond/v1').replace(/\/+$/, '');
+const configuredApinexMaxOutput = Number(process.env.APINEX_MAX_OUTPUT_TOKENS || 4096);
+const apinexMaxOutputTokens = Number.isInteger(configuredApinexMaxOutput)
+  ? Math.min(8192, Math.max(512, configuredApinexMaxOutput))
+  : 4096;
 let apinexKeyIndex = 0;
 const apinexAdapters = apinexKeys.map((apiKey) => createOpenAICompatibleAdapter({
   id: 'apinex',
@@ -221,7 +225,7 @@ const apinexAdapter: ChatProviderAdapter | null = apinexPrimary ? {
       const index = (startIndex + attempt) % apinexAdapters.length;
       let emitted = false;
       try {
-        for await (const chunk of apinexAdapters[index].streamChat(input)) {
+        for await (const chunk of apinexAdapters[index].streamChat({ ...input, maxOutputTokens: apinexMaxOutputTokens })) {
           emitted = true;
           yield chunk;
         }
