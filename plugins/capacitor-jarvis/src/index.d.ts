@@ -1,5 +1,5 @@
 export type JarvisAction = 'back' | 'home' | 'notifications' | 'quickSettings' | 'scrollForward' | 'scrollBackward';
-export type JarvisSpeechLanguage = 'en-US' | 'fa-IR' | 'ps-AF' | 'ar';
+export type JarvisSpeechLanguage = 'en-US' | 'fa-AF' | 'fa-IR' | 'ps-AF' | 'ar';
 export interface JarvisStatus {
   supported: boolean; accessibilityEnabled: boolean; serviceConnected: boolean;
   androidVersion: number | null; speechRecognizerAvailable: boolean;
