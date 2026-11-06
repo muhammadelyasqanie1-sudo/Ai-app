@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { AFGJarvis, type JarvisStatus, type JarvisAction } from '@afg-ai/capacitor-jarvis';
+import { AFGJarvis, type JarvisStatus, type JarvisAction, type JarvisSpeechEvent, type JarvisSpeechLanguage } from '@afg-ai/capacitor-jarvis';
 import type { Language } from '../../types/afg';
 
 const actions: Array<{ id: JarvisAction; en: string; fa: string }> = [
@@ -25,6 +25,9 @@ export function AfgJarvisView({ language }: { language: Language }) {
   const [packageName, setPackageName] = useState('');
   const [targetText, setTargetText] = useState('');
   const [typedText, setTypedText] = useState('');
+  const [speechState, setSpeechState] = useState('idle');
+  const [transcript, setTranscript] = useState('');
+  const [speechError, setSpeechError] = useState('');
   const label = (en: string, fa: string) => dari ? fa : en;
   const card = 'rounded-2xl border border-cyan-400/20 bg-slate-950/50 p-4 shadow-[0_0_28px_rgba(6,182,212,.06)]';
   const button = 'rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-3 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/20 disabled:opacity-40';
@@ -34,6 +37,18 @@ export function AfgJarvisView({ language }: { language: Language }) {
     catch (e: any) { setError(e?.message || 'Could not read Android service status.'); }
   }, [native]);
   useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    if (!native) return;
+    let active = true;
+    let handle: { remove: () => Promise<void> } | undefined;
+    void AFGJarvis.addListener('speechEvent', (event: JarvisSpeechEvent) => {
+      if (!active) return;
+      setSpeechState(event.state);
+      if (event.text) setTranscript(event.text);
+      setSpeechError(event.state === 'error' ? event.error : '');
+    }).then(value => { handle = value; if (!active) void value.remove(); });
+    return () => { active = false; if (handle) void handle.remove(); };
+  }, [native]);
   async function run(key: string, task: () => Promise<unknown>) {
     setBusy(key); setError(''); setNotice('');
     try { await task(); setNotice(label('Command sent to Android.', 'فرمان به اندروید فرستاده شد.')); await refresh(); }
@@ -48,6 +63,31 @@ export function AfgJarvisView({ language }: { language: Language }) {
     </header>
     {!native && <section className={card}><p className="font-semibold text-amber-300">{label('Android app required', 'نسخه اندروید لازم است')}</p><p className="mt-2 text-sm text-slate-300">{label('Device-control features are available only in the installed AFG AI Android app, not in a browser tab.', 'قابلیت‌های کنترل دستگاه فقط در نسخه نصب‌شده اندروید AFG AI فعال‌اند، نه در مرورگر.')}</p></section>}
     {native && <>
+      <section className={card}>
+        <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-bold text-white">{label('Voice control', 'کنترل صوتی')}</h2><span className="rounded-full border border-cyan-400/20 px-3 py-1 text-xs text-cyan-200">{speechState}</span></div>
+        <p className="mt-2 text-xs leading-5 text-slate-400">{label('Android speech recognition is requested with its offline preference. The recognition provider may ignore it or require network access; offline operation is not guaranteed. Install the required language pack in Android voice settings.', 'تشخیص گفتار اندروید با درخواست اولویت آفلاین اجرا می‌شود؛ اما سرویس تشخیص ممکن است این درخواست را نادیده بگیرد یا به اینترنت نیاز داشته باشد. آفلاین بودن تضمین‌شده نیست. بسته زبان را در تنظیمات صوتی اندروید نصب کنید.')}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button className={button} disabled={!!busy || !status?.speechRecognizerAvailable} onClick={() => void run('listen', async () => { await AFGJarvis.requestMicrophonePermission(); setSpeechError(''); setTranscript(''); await AFGJarvis.startListening({ language: (dari ? 'fa-IR' : language === 'pashto' ? 'ps-AF' : language === 'arabic' ? 'ar' : 'en-US') as JarvisSpeechLanguage }); })}>{label('Start listening', 'شروع شنیدن')}</button>
+          <button className={button} disabled={!!busy} onClick={() => void run('stop', () => AFGJarvis.stopListening())}>{label('Stop', 'توقف')}</button>
+        </div>
+        {transcript && <p className="mt-3 rounded-xl bg-black/30 p-3 text-sm text-white">{transcript}</p>}
+        {speechError && <p role="alert" className="mt-2 text-sm text-rose-300">{speechError}</p>}
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button className={button} disabled={!transcript.trim() || !!busy} onClick={() => {
+            const command = transcript.trim().toLowerCase();
+            const app = apps.find(item => command === item.en.toLowerCase() || command === ('open ' + item.en.toLowerCase()) || (dari && command === item.fa));
+            const action = command === 'back' || command === 'go back' || command === 'بازگشت' ? 'back'
+              : command === 'home' || command === 'go home' || command === 'صفحه اصلی' ? 'home'
+              : command === 'notifications' || command === 'اعلان‌ها' ? 'notifications'
+              : command === 'quick settings' || command === 'تنظیمات سریع' ? 'quickSettings' : null;
+            if (app) { if (window.confirm(label('Open ' + app.en + '?', 'برنامه ' + app.fa + ' باز شود؟'))) void run('voice-app', () => AFGJarvis.openApp({ packageName: app.packageName })); }
+            else if (action) { if (window.confirm(label('Run ' + action + '?', 'فرمان اجرا شود؟'))) void run('voice-action', () => AFGJarvis.performAction({ action })); }
+            else setSpeechError(label('No matching safe command. Try “open Telegram”, “back”, or “home”.', 'فرمان امن شناخته نشد. «بازگشت»، «صفحه اصلی» یا نام برنامه را بگویید.'));
+          }}>{label('Confirm voice command', 'تأیید فرمان صوتی')}</button>
+          <button className={button} disabled={!transcript.trim() || !!busy} onClick={() => void run('speak', () => AFGJarvis.speak({ text: transcript, language: (dari ? 'fa-IR' : language === 'pashto' ? 'ps-AF' : language === 'arabic' ? 'ar' : 'en-US') as JarvisSpeechLanguage }))}>{label('Speak transcript', 'خواندن متن با صدا')}</button>
+        </div>
+        <p className="mt-3 text-xs text-slate-400">{label('Only listed app-launch and navigation phrases are mapped to actions, and every action requires your confirmation. Unknown speech is never executed as a command.', 'فقط عبارت‌های مشخص‌شده برای بازکردن برنامه و پیمایش به فرمان تبدیل می‌شوند و هر فرمان نیازمند تأیید شماست. گفتار ناشناخته هرگز خودکار اجرا نمی‌شود.')}</p>
+      </section>
       <section className={card}>
         <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-bold text-white">{label('Permission status', 'وضعیت دسترسی')}</h2><button className={button} onClick={() => void refresh()}>{label('Refresh', 'تازه‌سازی')}</button></div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
