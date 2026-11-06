@@ -594,6 +594,7 @@ export default function App() {
     setAgentActivities([]);
     let fullContent = '';
     let requestId = '';
+    let localOfflineHint = '';
     try {
       // Local-first policy: on Android, use a verified on-device GGUF model before any cloud request.
       // If no compatible local model is installed, preserve the existing server-side chat path.
@@ -621,7 +622,13 @@ export default function App() {
           }
           return;
         }
+        if (!navigator.onLine) localOfflineHint = language === 'dari'
+          ? 'برای گفت‌وگوی کاملاً آفلاین، ابتدا یک مدل GGUF سازگار و تأییدشده را در مرکز هوش مصنوعی آفلاین نصب کنید.'
+          : 'To chat fully offline, first install a compatible, integrity-verified GGUF model in the Offline AI Hub.';
       } catch {
+        if (!navigator.onLine) localOfflineHint = language === 'dari'
+          ? 'موتور یا مدل محلی آماده نیست. مرکز هوش مصنوعی آفلاین را باز کرده و مدل سازگار را بررسی کنید.'
+          : 'The local runtime or model is not ready. Open Offline AI Hub and check the installed compatible model.';
         // A local runtime failure is not treated as a successful answer; try the configured cloud path.
         setAgentActivities([{
           id: crypto.randomUUID(),
@@ -727,9 +734,9 @@ export default function App() {
       setMessages((previous) => previous.map((message) => message.id === assistantId ? { ...message, isStreaming: false } : message));
     } catch {
       const supportReference = requestId ? (language === 'dari' ? `\nشناسه پیگیری: ${requestId}` : `\nRequest ID: ${requestId}`) : '';
-      const userFacingError = (language === 'dari'
+      const userFacingError = (localOfflineHint || (language === 'dari'
         ? 'پاسخ کامل نشد. پیام شما باقی مانده است؛ اتصال و مدل را بررسی کرده و دوباره تلاش کنید.'
-        : 'The response could not be completed. Your prompt is preserved; check the connection and model, then retry.') + supportReference;
+        : 'The response could not be completed. Your prompt is preserved; check the connection and model, then retry.')) + supportReference;
 
       if (abortController.signal.aborted) {
         setMessages(prev => prev.filter((message) => message.id !== assistantId));
