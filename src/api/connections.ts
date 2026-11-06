@@ -249,6 +249,26 @@ export async function handleConnectionsApi(req: IncomingMessage,res: ServerRespo
 }
 
 const githubOAuthStates = new Map<string,{userId:string;expiresAt:number}>();
+
+// Return only the requesting user's OAuth token. The token is encrypted at rest and
+// is never exposed to the browser or written to logs.
+export async function getLinkedGitHubToken(userId:string):Promise<string|null>{
+  if(!pool||!userId)return null;
+  try{
+    const result=await pool.query(`SELECT c.credential_value_encrypted
+      FROM integration_user_credentials c
+      JOIN integrations i ON i.id=c.integration_id
+      JOIN integration_user_links l ON l.integration_id=i.id AND l.user_id=c.user_id
+      WHERE i.slug='github' AND c.user_id=$1 AND c.credential_key='oauth_token'
+        AND l.revoked_at IS NULL
+      LIMIT 1`,[userId]);
+    const encrypted=result.rows[0]?.credential_value_encrypted;
+    return typeof encrypted==='string'&&encrypted?decryptSecret(encrypted):null;
+  }catch{
+    console.warn('AFG_GITHUB_CREDENTIAL_LOOKUP_FAILED');
+    return null;
+  }
+}
 export async function handleUserIntegrationApi(req: IncomingMessage,res: ServerResponse,pathname: string): Promise<boolean> {
   if (!pathname.startsWith('/api/integrations/github/')) return false;
   if (!pool) { sendAuthJson(res,503,{error:'Account integrations require the database.'}); return true; }
