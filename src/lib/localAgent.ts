@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { listOfflineDownloads } from './offlineModelDownloads';
+import { runExplicitDeviceCommand } from './localAgentDeviceTools';
 import {
   generateNativeLlamaResponse,
   getNativeLlamaRuntimeInfo,
@@ -23,6 +24,12 @@ export async function tryLocalFirstResponse(
   language: string,
 ): Promise<LocalAgentResult | null> {
   if (Capacitor.getPlatform() !== 'android') return null;
+
+  const latestUserMessage = [...messages].reverse().find((item) => item.role === 'user');
+  if (latestUserMessage) {
+    const deviceResult = await runExplicitDeviceCommand(latestUserMessage.content);
+    if (deviceResult.handled) return { text: deviceResult.text, modelLabel: 'AFG AI Android device tools' };
+  }
 
   const runtime = await getNativeLlamaRuntimeInfo();
   if (!runtime.available) return null;
