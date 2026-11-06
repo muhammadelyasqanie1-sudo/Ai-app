@@ -18,6 +18,7 @@ import { ErrorBoundary } from './components/afg/AfgDesignSystem';
 import { applyDocumentLocale } from './utils/i18n';
 import { apiFetch } from './lib/apiClient';
 import { useAlwaysLiveConnection } from './hooks/useAlwaysLiveConnection';
+import { tryLocalFirstResponse } from './lib/localAgent';
 
 import type { 
   Language, 
@@ -594,6 +595,42 @@ export default function App() {
     let fullContent = '';
     let requestId = '';
     try {
+      // Local-first policy: on Android, use a verified on-device GGUF model before any cloud request.
+      // If no compatible local model is installed, preserve the existing server-side chat path.
+      try {
+        const localResult = await tryLocalFirstResponse(
+          [...baseMessages, userMessage].map((message) => ({ role: message.role, content: message.content })),
+          language,
+        );
+        if (localResult?.text?.trim()) {
+          fullContent = localResult.text.trim();
+          setAgentActivities([{
+            id: crypto.randomUUID(),
+            name: 'local-inference',
+            label: language === 'dari' ? 'پاسخ با مدل محلی روی دستگاه' : 'Answered with on-device model',
+            detail: localResult.modelLabel,
+            status: 'completed',
+            timestamp: Date.now(),
+          }]);
+          setMessages((previous) => previous.map((message) => message.id === assistantId
+            ? { ...message, content: fullContent, isStreaming: false }
+            : message));
+          if (persistedConversationId && userMessagePersisted) {
+            try { await persistServerMessage(persistedConversationId, 'assistant', fullContent, 'complete', assistantId); }
+            catch { console.warn('AFG_CONVERSATION_ASSISTANT_MESSAGE_SAVE_FAILED'); }
+          }
+          return;
+        }
+      } catch {
+        // A local runtime failure is not treated as a successful answer; try the configured cloud path.
+        setAgentActivities([{
+          id: crypto.randomUUID(),
+          name: 'local-inference',
+          label: language === 'dari' ? 'مدل محلی آماده نبود؛ بررسی اتصال ابری' : 'Local model unavailable; checking cloud connection',
+          status: 'failed',
+          timestamp: Date.now(),
+        }]);
+      }
       let streamCompleted = false;
       for (let attempt = 0; attempt < 3 && !streamCompleted; attempt++) {
         try {
