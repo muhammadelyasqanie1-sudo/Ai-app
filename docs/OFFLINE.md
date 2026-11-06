@@ -1,6 +1,8 @@
-# AFG AI Offline Learning — implementation status
+# AFG AI Offline Runtime — implementation status
 
-## Current status: foundation only; user-facing tutor disabled
+## Current status: Android GGUF inference foundation connected to chat; offline learning tutor remains disabled
+
+The native Android chat path now attempts verified local GGUF inference before the existing cloud chat route. See [Local Agent](./LOCAL_AGENT.md) for the default behavior and limitations.
 
 The repository now contains reusable foundations under `packages/offline`:
 
@@ -43,7 +45,7 @@ Migration `0007_offline_pack_registry.sql` adds pack registry/version metadata a
 1. Implement an actual signed catalog API, publisher approval and key rotation/revocation.
 2. Implement resumable downloads with exact progress and disk quota checks; verify signature before install and hashes before load.
 3. Ship a licensed English learning pack and validate its references, quiz content and model license.
-4. Implement WebLLM or llama.cpp WASM model execution, model loading/health checks and strict network isolation.
+4. Complete runtime health checks, model compatibility validation, memory preflight and strict network-isolation verification for Android llama.cpp inference.
 5. Implement a desktop app and localhost-only Ollama bridge; do not point cloud servers at localhost.
 6. Add offline tutor chat, lesson browser, quiz, flashcards, progress dashboard, pack manager and uninstall confirmation.
 7. Implement exact out-of-scope refusal, high-stakes refusal, answer language enforcement and lesson citation validation around the runtime.
