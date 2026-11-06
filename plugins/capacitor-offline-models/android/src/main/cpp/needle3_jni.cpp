@@ -114,3 +114,9 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeGetNeedleError(JNIEnv*
     std::lock_guard<std::mutex> lock(g_needle_mutex);
     return env->NewStringUTF(g_needle_error.c_str());
 }
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeIsNeedleModelLoaded(JNIEnv*, jobject) {
+    std::lock_guard<std::mutex> lock(g_needle_mutex);
+    return g_needle_loaded ? JNI_TRUE : JNI_FALSE;
+}
