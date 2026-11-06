@@ -201,7 +201,7 @@ export async function handleNineRouterApi(req:IncomingMessage,res:ServerResponse
     const healthHeaders=new Headers({Accept:'application/json'});if(key)healthHeaders.set('Authorization','Bearer '+key);
     const response=await fetch(healthUrl.toString(),{headers:healthHeaders,redirect:'error',signal:AbortSignal.timeout(8000)});
     const health=await response.json().catch(()=>null);
-    reply(res,response.ok?200:503,{configured:true,reachable:response.ok,health,dashboardUrl:new URL('/dashboard',base.origin).toString()},requestId);
+    reply(res,response.ok?200:503,{configured:true,reachable:response.ok,health,dashboardUrl:new URL('/control-plane',base.origin).toString()},requestId);
    }catch{
     reply(res,503,{configured:true,reachable:false,error:'The 9Router health endpoint could not be reached.'},requestId);
    }
