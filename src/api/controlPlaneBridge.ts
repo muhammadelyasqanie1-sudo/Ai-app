@@ -62,7 +62,9 @@ async function handleUserStatusUpdate(req: IncomingMessage, res: ServerResponse)
     return true;
   }
   if (!pool) { reply(res, 503, { error: 'AFG AI database is unavailable.' }); return true; }
-  const body = await readJsonBody(req, 8000);
+  let body: Record<string, unknown>;
+  try { body = await readJsonBody(req, 8000); }
+  catch { reply(res, 400, { error: 'Invalid JSON request body.' }); return true; }
   const targetId = typeof body.userId === 'string' ? body.userId : '';
   const status = typeof body.status === 'string' ? body.status : '';
   if (!/^[0-9a-f-]{36}$/i.test(targetId) || !['active', 'suspended'].includes(status)) {
@@ -93,6 +95,11 @@ async function handleUserStatusUpdate(req: IncomingMessage, res: ServerResponse)
     if (previous.role === 'superadmin' && actor.role !== 'superadmin') {
       await client.query('ROLLBACK');
       reply(res, 403, { error: 'Only the control-plane superadmin may change a superadmin account.' });
+      return true;
+    }
+    if (actor.id === 'bootstrap' && previous.role === 'superadmin' && status === 'suspended') {
+      await client.query('ROLLBACK');
+      reply(res, 403, { error: 'Use a named superadmin control-plane account to manage AFG AI superadmin access.' });
       return true;
     }
     if (previous.status === 'active' && status === 'suspended' && ['admin', 'superadmin'].includes(previous.role)) {
