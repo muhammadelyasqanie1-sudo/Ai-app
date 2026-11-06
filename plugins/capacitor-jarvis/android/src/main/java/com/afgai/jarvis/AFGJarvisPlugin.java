@@ -50,7 +50,13 @@ import org.json.JSONObject;
 
 @CapacitorPlugin(
     name = "AFGJarvis",
-    permissions = {\n        @Permission(alias = "microphone", strings = { Manifest.permission.RECORD_AUDIO }),\n        @Permission(alias = "location", strings = { Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION }),\n        @Permission(alias = "contacts", strings = { Manifest.permission.READ_CONTACTS }),\n        @Permission(alias = "smsRead", strings = { Manifest.permission.READ_SMS }),\n        @Permission(alias = "camera", strings = { Manifest.permission.CAMERA })\n    }
+    permissions = {
+        @Permission(alias = "microphone", strings = { Manifest.permission.RECORD_AUDIO }),
+        @Permission(alias = "location", strings = { Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION }),
+        @Permission(alias = "contacts", strings = { Manifest.permission.READ_CONTACTS }),
+        @Permission(alias = "smsRead", strings = { Manifest.permission.READ_SMS }),
+        @Permission(alias = "camera", strings = { Manifest.permission.CAMERA })
+    }
 )
 public class AFGJarvisPlugin extends Plugin {
     private SpeechRecognizer speechRecognizer;
