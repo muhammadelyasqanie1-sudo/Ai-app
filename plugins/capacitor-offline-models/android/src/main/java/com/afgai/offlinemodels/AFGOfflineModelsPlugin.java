@@ -215,7 +215,7 @@ public class AFGOfflineModelsPlugin extends Plugin {
             String rootPath = modelRoot.getCanonicalPath() + File.separator;
             String modelPath = model.getCanonicalPath();
             if (!modelPath.startsWith(rootPath) || !model.isFile() || model.length() <= 0 ||
-                model.length() > 64L * 1024L * 1024L || !model.getName().equals("needle3.cact")) {
+                model.length() > 64L * 1024L * 1024L || !model.getName().endsWith("-needle3.cact")) {
                 call.reject("A valid Needle 3 .cact file inside AFG AI's private model directory is required.");
                 return;
             }
