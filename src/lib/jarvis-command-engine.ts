@@ -63,8 +63,8 @@ export function parseJarvisCommand(input: string): JarvisCommand {
   if (!command || command.length > 120) return { kind: 'unknown' };
 
   const politeCommand = command
-    .replace(/^(please|kindly|لطفا|لطفاً|مهرباني وکړئ)\\s+/, '')
-    .replace(/\\s+(please|لطفا|لطفاً)$/, '')
+    .replace(/^(please|kindly|لطفا|لطفاً|مهرباني وکړئ)\s+/, '')
+    .replace(/\s+(please|لطفا|لطفاً)$/, '')
     .trim();
 
   const app = appAliases.find(item => item.aliases.some(alias =>
