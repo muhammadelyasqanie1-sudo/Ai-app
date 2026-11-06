@@ -29,13 +29,15 @@ export async function tryLocalFirstResponse(
   const latestUserMessage = [...messages].reverse().find((item) => item.role === 'user');
   if (latestUserMessage) {
     try {
-      const deviceResult = await runExplicitDeviceCommand(latestUserMessage.content);
+      const deviceResult = await runExplicitDeviceCommand(latestUserMessage.content, language);
       if (deviceResult.handled) return { text: deviceResult.text, modelLabel: 'AFG AI Android device tools', kind: 'device-tool' };
     } catch (error) {
       // Never forward a failed explicit device action to a cloud model: that could
       // produce a misleading claim that the phone action succeeded.
       const detail = error instanceof Error ? error.message : 'Android rejected the requested action.';
-      return { text: 'The phone action was not completed. ' + detail, modelLabel: 'AFG AI Android device tools', kind: 'device-tool' };
+      return { text: language === 'dari' || language === 'persian'
+        ? 'دستور روی گوشی اجرا نشد. ' + detail
+        : 'The phone action was not completed. ' + detail, modelLabel: 'AFG AI Android device tools', kind: 'device-tool' };
     }
   }
 
