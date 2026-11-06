@@ -30,7 +30,7 @@ FetchContent_Declare(llama_cpp
 FetchContent_MakeAvailable(llama_cpp)
 
 # Pinned, SHA-256 verified official Cactus Needle 3 Android ARM64 engine.
-set(NEEDLE_REVISION "d6c7d6a2e9655505e0f8e23339356dd1705900eb")
+set(NEEDLE_REVISION "main")
 set(NEEDLE_ARCHIVE "${CMAKE_CURRENT_BINARY_DIR}/libneedle.a")
 file(DOWNLOAD
   "https://huggingface.co/Cactus-Compute/needle3/resolve/${NEEDLE_REVISION}/android-arm64/libneedle.a"
