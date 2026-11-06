@@ -17,6 +17,8 @@ export interface JarvisCameraPreview { mimeType: 'image/jpeg'; dataBase64: strin
 export interface AFGJarvisPlugin {
   getStatus(): Promise<JarvisStatus>;
   getBatteryStatus(): Promise<JarvisBatteryStatus>;
+  setClipboard(options: { text: string }): Promise<{ copied: boolean }>;
+  getClipboard(): Promise<{ text: string }>;
   vibrate(options?: { durationMs?: number }): Promise<{ performed: boolean; durationMs: number }>;
   requestCameraPermission(): Promise<{ granted: boolean }>;
   setTorch(options: { enabled: boolean }): Promise<{ enabled: boolean }>;
