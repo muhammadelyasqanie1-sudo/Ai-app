@@ -29,7 +29,16 @@ When local inference succeeds, the conversation prompt is passed to the native m
 
 ## Device-control boundary
 
-This change adds local-first text inference only. It does not yet grant the model access to SMS, contacts, call logs, camera, microphone, GPS, fingerprint hardware, arbitrary installed apps, or unrestricted shell commands. Those require separate Android-native tools, narrowly scoped permissions, explicit user consent, allowlists and per-action confirmation for sensitive operations. Do not expose these capabilities as available until their native implementation and permission flows exist.
+The Android plugin now exposes a small allowlisted tool set:
+- Read battery percentage, charging state and temperature.
+- Trigger a short vibration.
+- Open YouTube, Maps, Chrome, Android Settings or the camera app.
+- Open the system dialer with a requested number; the user must tap Call.
+- Open the system SMS composer with a recipient and draft; the user must tap Send.
+
+The chat coordinator routes explicit, deterministic device commands to these tools before local text generation. The model cannot execute arbitrary shell commands or choose arbitrary Android packages. Calls and SMS are never placed or sent silently.
+
+Not implemented: reading the SMS inbox, contacts or call history; capturing and returning a photo; GPS/location; fingerprint hardware; arbitrary sensor access; smart-home controls; background Telegram control. These require separate native integrations, runtime permissions, platform-policy review and additional consent flows. Do not claim these capabilities are available.
 
 ## Verification status
 
