@@ -88,16 +88,16 @@ export function AfgJarvisView({ language }: { language: Language }) {
       };
       if (window.confirm(labels[parsed.action])) {
         const tasks: Record<string,() => Promise<unknown>> = {
-          battery: async () => setDeviceData(v => ({...v,battery:await AFGJarvis.getBatteryStatus()})),
-          network: async () => setDeviceData(v => ({...v,network:await AFGJarvis.getNetworkStatus()})),
-          sensors: async () => setDeviceData(v => ({...v,sensors:await AFGJarvis.getSensors()})),
+          battery: async () => { const battery = await AFGJarvis.getBatteryStatus(); setDeviceData(v => ({...v,battery})); },
+          network: async () => { const network = await AFGJarvis.getNetworkStatus(); setDeviceData(v => ({...v,network})); },
+          sensors: async () => { const sensors = await AFGJarvis.getSensors(); setDeviceData(v => ({...v,sensors})); },
           vibrate: () => AFGJarvis.vibrate({durationMs:500}),
           torchOn: async () => { await AFGJarvis.requestCameraPermission(); await AFGJarvis.setTorch({enabled:true}); setTorchEnabled(true); },
           torchOff: async () => { await AFGJarvis.requestCameraPermission(); await AFGJarvis.setTorch({enabled:false}); setTorchEnabled(false); },
-          location: async () => { await AFGJarvis.requestLocationPermission(); setDeviceData(v => ({...v,location:await AFGJarvis.getLocation()})); },
-          contacts: async () => { await AFGJarvis.requestContactsPermission(); setDeviceData(v => ({...v,contacts:await AFGJarvis.getContacts({limit:20})})); },
-          recentSms: async () => { await AFGJarvis.requestSmsReadPermission(); setDeviceData(v => ({...v,sms:await AFGJarvis.getRecentSms({limit:5})})); },
-          camera: async () => setDeviceData(v => ({...v,photo:await AFGJarvis.takePhoto()})),
+          location: async () => { await AFGJarvis.requestLocationPermission(); const location = await AFGJarvis.getLocation(); setDeviceData(v => ({...v,location})); },
+          contacts: async () => { await AFGJarvis.requestContactsPermission(); const contacts = await AFGJarvis.getContacts({limit:20}); setDeviceData(v => ({...v,contacts})); },
+          recentSms: async () => { await AFGJarvis.requestSmsReadPermission(); const sms = await AFGJarvis.getRecentSms({limit:5}); setDeviceData(v => ({...v,sms})); },
+          camera: async () => { const photo = await AFGJarvis.takePhoto(); setDeviceData(v => ({...v,photo})); },
         };
         void run('voice-device', tasks[parsed.action]);
       }
@@ -158,23 +158,23 @@ export function AfgJarvisView({ language }: { language: Language }) {
         <div className="flex items-center justify-between gap-3"><h2 className="font-bold text-white">{label('Local device toolkit', 'ابزارهای محلی دستگاه')}</h2><span className="rounded-full border border-emerald-400/20 px-2 py-1 text-xs text-emerald-200">On-device</span></div>
         <p className="mt-2 text-xs leading-5 text-slate-400">{label('These tools run locally. Sensitive information is shown only after you tap the relevant action and grant Android permission.', 'این ابزارها محلی اجرا می‌شوند. معلومات حساس فقط پس از لمس دکمه مربوط و دادن مجوز اندروید نمایش داده می‌شود.')}</p>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <button className={button} disabled={!!busy} onClick={() => void run('battery', async () => setDeviceData(v => ({...v,battery:await AFGJarvis.getBatteryStatus()})))}>{label('Battery status', 'وضعیت باتری')}</button>
-          <button className={button} disabled={!!busy} onClick={() => void run('network', async () => setDeviceData(v => ({...v,network:await AFGJarvis.getNetworkStatus()})))}>{label('Network status', 'وضعیت شبکه')}</button>
-          <button className={button} disabled={!!busy} onClick={() => void run('sensors', async () => setDeviceData(v => ({...v,sensors:await AFGJarvis.getSensors()})))}>{label('Sensors & biometrics', 'حسگرها و بایومتریک')}</button>
+          <button className={button} disabled={!!busy} onClick={() => void run('battery', async () => { const battery = await AFGJarvis.getBatteryStatus(); setDeviceData(v => ({...v,battery})); })}>{label('Battery status', 'وضعیت باتری')}</button>
+          <button className={button} disabled={!!busy} onClick={() => void run('network', async () => { const network = await AFGJarvis.getNetworkStatus(); setDeviceData(v => ({...v,network})); })}>{label('Network status', 'وضعیت شبکه')}</button>
+          <button className={button} disabled={!!busy} onClick={() => void run('sensors', async () => { const sensors = await AFGJarvis.getSensors(); setDeviceData(v => ({...v,sensors})); })}>{label('Sensors & biometrics', 'حسگرها و بایومتریک')}</button>
           <button className={button} disabled={!!busy} onClick={() => void run('vibrate', () => AFGJarvis.vibrate({durationMs:500}))}>{label('Vibrate 0.5 sec', 'لرزش نیم ثانیه')}</button>
           <button className={button} disabled={!!busy} onClick={() => { if (window.confirm(label('Toggle the camera flashlight?', 'چراغ‌قوه دوربین تغییر کند؟'))) void run('torch', async () => { await AFGJarvis.requestCameraPermission(); const next=!torchEnabled; await AFGJarvis.setTorch({enabled:next}); setTorchEnabled(next); }); }}>{torchEnabled ? label('Turn flashlight off','خاموش کردن چراغ‌قوه') : label('Turn flashlight on','روشن کردن چراغ‌قوه')}</button>
-          <button className={button} disabled={!!busy} onClick={() => { if (window.confirm(label('Open the camera? You will take the photo yourself.', 'دوربین باز شود؟ عکس را خودتان می‌گیرید.'))) void run('camera', async () => setDeviceData(v => ({...v,photo:await AFGJarvis.takePhoto()}))); }}>{label('Take a photo', 'گرفتن عکس')}</button>
+          <button className={button} disabled={!!busy} onClick={() => { if (window.confirm(label('Open the camera? You will take the photo yourself.', 'دوربین باز شود؟ عکس را خودتان می‌گیرید.'))) void run('camera', async () => { const photo = await AFGJarvis.takePhoto(); setDeviceData(v => ({...v,photo})); }); }}>{label('Take a photo', 'گرفتن عکس')}</button>
         </div>
         <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
           <h3 className="text-sm font-semibold text-white">{label('Location', 'موقعیت مکانی')}</h3>
-          <button className={button + ' mt-2 w-full'} disabled={!!busy} onClick={() => { if (window.confirm(label('Allow AFG AI to read your current cached location?', 'اجازه می‌دهید AFG AI موقعیت ذخیره‌شده فعلی را بخواند؟'))) void run('location', async () => { await AFGJarvis.requestLocationPermission(); setDeviceData(v => ({...v,location:await AFGJarvis.getLocation()})); }); }}>{label('Read current location', 'خواندن موقعیت فعلی')}</button>
+          <button className={button + ' mt-2 w-full'} disabled={!!busy} onClick={() => { if (window.confirm(label('Allow AFG AI to read your current cached location?', 'اجازه می‌دهید AFG AI موقعیت ذخیره‌شده فعلی را بخواند؟'))) void run('location', async () => { await AFGJarvis.requestLocationPermission(); const location = await AFGJarvis.getLocation(); setDeviceData(v => ({...v,location})); }); }}>{label('Read current location', 'خواندن موقعیت فعلی')}</button>
         </div>
         <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
           <h3 className="text-sm font-semibold text-white">{label('Contacts & recent SMS', 'مخاطبین و پیامک‌های اخیر')}</h3>
           <p className="mt-1 text-xs text-slate-400">{label('Android will ask for permission. Data stays in this screen and is not uploaded by this plugin.', 'اندروید مجوز می‌خواهد. معلومات در همین صفحه می‌ماند و توسط این افزونه آپلود نمی‌شود.')}</p>
           <div className="mt-2 grid grid-cols-2 gap-2">
-            <button className={button} disabled={!!busy} onClick={() => { if (window.confirm(label('Read up to 20 contacts?', 'تا ۲۰ مخاطب خوانده شود؟'))) void run('contacts', async () => { await AFGJarvis.requestContactsPermission(); setDeviceData(v => ({...v,contacts:await AFGJarvis.getContacts({limit:20})})); }); }}>{label('Read contacts', 'خواندن مخاطبین')}</button>
-            <button className={button} disabled={!!busy} onClick={() => { if (window.confirm(label('Read your 5 most recent SMS messages?', 'پنج پیامک اخیر شما خوانده شود؟'))) void run('sms', async () => { await AFGJarvis.requestSmsReadPermission(); setDeviceData(v => ({...v,sms:await AFGJarvis.getRecentSms({limit:5})})); }); }}>{label('Read last 5 SMS', 'خواندن ۵ پیامک اخیر')}</button>
+            <button className={button} disabled={!!busy} onClick={() => { if (window.confirm(label('Read up to 20 contacts?', 'تا ۲۰ مخاطب خوانده شود؟'))) void run('contacts', async () => { await AFGJarvis.requestContactsPermission(); const contacts = await AFGJarvis.getContacts({limit:20}); setDeviceData(v => ({...v,contacts})); }); }}>{label('Read contacts', 'خواندن مخاطبین')}</button>
+            <button className={button} disabled={!!busy} onClick={() => { if (window.confirm(label('Read your 5 most recent SMS messages?', 'پنج پیامک اخیر شما خوانده شود؟'))) void run('sms', async () => { await AFGJarvis.requestSmsReadPermission(); const sms = await AFGJarvis.getRecentSms({limit:5}); setDeviceData(v => ({...v,sms})); }); }}>{label('Read last 5 SMS', 'خواندن ۵ پیامک اخیر')}</button>
           </div>
         </div>
 
