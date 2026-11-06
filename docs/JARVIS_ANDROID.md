@@ -41,6 +41,7 @@ The Android bridge now exposes additional explicit, pull-based tools:
 - Last-known GPS/network location after runtime location permission. This is a cached location read, not continuous/live tracking.
 - Up to 20 contacts after runtime contacts permission.
 - Up to five recent SMS messages after runtime SMS permission. This permission is sensitive and may make the app ineligible for Google Play distribution unless it qualifies under Google's SMS/Call Log policy.
+- Explicitly invoked clipboard read/write (up to 4,000 characters). Clipboard reads may be restricted by Android while the app is in the background; this plugin reads only after a foreground user action.
 - Camera capture through the Android camera app. The user must frame and press the shutter; AFG AI receives only the returned preview bitmap.
 - Phone dialer and SMS composer intents. The user must press Call or Send in the system app; the plugin never places a call or sends an SMS directly.
 - A list of available sensor names/types and whether fingerprint hardware is advertised by Android. Fingerprint templates and sensor-private biometric data are never accessible to this app; no fingerprint bypass or raw sensor capture is implemented.
@@ -65,7 +66,7 @@ The current command parser is deterministic phrase matching and works offline; i
 
 ## API surface
 
-The native bridge exports `getStatus()`, `getBatteryStatus()`, `vibrate()`, `requestCameraPermission()`, `setTorch()`, `getNetworkStatus()`, `requestLocationPermission()`, `getLocation()`, `requestContactsPermission()`, `getContacts()`, `requestSmsReadPermission()`, `getRecentSms()`, `openSmsComposer()`, `openDialer()`, `takePhoto()`, `getSensors()`, `openAccessibilitySettings()`, `openApp()`, `performAction()`, `clickText()`, `typeText()`, microphone permission and speech methods, and the `speechEvent` listener. It is registered through the local Capacitor package in `package.json`.
+The native bridge exports `getStatus()`, `getBatteryStatus()`, `vibrate()`, `requestCameraPermission()`, `setTorch()`, `getNetworkStatus()`, `requestLocationPermission()`, `getLocation()`, `requestContactsPermission()`, `getContacts()`, `requestSmsReadPermission()`, `getRecentSms()`, `setClipboard()`, `getClipboard()`, `openSmsComposer()`, `openDialer()`, `takePhoto()`, `getSensors()`, `openAccessibilitySettings()`, `openApp()`, `performAction()`, `clickText()`, `typeText()`, microphone permission and speech methods, and the `speechEvent` listener. It is registered through the local Capacitor package in `package.json`.
 
 ## Verification status
 
