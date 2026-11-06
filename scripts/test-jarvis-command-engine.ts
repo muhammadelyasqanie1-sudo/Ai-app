@@ -10,6 +10,8 @@ const cases: Array<{ input: string; expected: ReturnType<typeof parseJarvisComma
   { input: 'چراغ قوه روشن کن', expected: { kind: 'device', action: 'torchOn' } },
   { input: 'فلش را خاموش کن', expected: { kind: 'device', action: 'torchOff' } },
   { input: 'مهرباني وکړئ بازگشت', expected: { kind: 'action', action: 'back' } },
+  { input: 'مهربانی وکړئ بازگشت', expected: { kind: 'action', action: 'back' } },
+  { input: 'لطفاً بازگشت', expected: { kind: 'action', action: 'back' } },
   { input: 'read recent sms', expected: { kind: 'device', action: 'recentSms' } },
   { input: 'do something unsafe', expected: { kind: 'unknown' } },
   { input: '', expected: { kind: 'unknown' } },
