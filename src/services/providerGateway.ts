@@ -124,7 +124,7 @@ const apinexKeys = (() => {
     return Array.isArray(value) ? [...new Set(value.filter((key): key is string => typeof key === 'string' && key.trim().length > 0).map((key) => key.trim()))] : [];
   } catch { return []; }
 })();
-const apinexBase = (process.env.APINEX_BASE_URL?.trim() || 'https://api.apinex.bond/v1').replace(/\\/+$/, '');
+const apinexBase = (process.env.APINEX_BASE_URL?.trim() || 'https://api.apinex.bond/v1').replace(/\/+$/, '');
 let apinexKeyIndex = 0;
 const apinexAdapters = apinexKeys.map((apiKey) => createOpenAICompatibleAdapter({
   id: 'apinex',
