@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { AFGJarvis, type JarvisStatus, type JarvisAction, type JarvisSpeechEvent, type JarvisSpeechLanguage } from '@afg-ai/capacitor-jarvis';
 import type { Language } from '../../types/afg';
+import { parseJarvisCommand } from '../../lib/jarvis-command-engine';
 
 const actions: Array<{ id: JarvisAction; en: string; fa: string }> = [
   { id: 'back', en: 'Back', fa: 'بازگشت' }, { id: 'home', en: 'Home', fa: 'صفحه اصلی' },
@@ -74,15 +75,18 @@ export function AfgJarvisView({ language }: { language: Language }) {
         {speechError && <p role="alert" className="mt-2 text-sm text-rose-300">{speechError}</p>}
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button className={button} disabled={!transcript.trim() || !!busy} onClick={() => {
-            const command = transcript.trim().toLowerCase();
-            const app = apps.find(item => command === item.en.toLowerCase() || command === ('open ' + item.en.toLowerCase()) || (dari && command === item.fa));
-            const action = command === 'back' || command === 'go back' || command === 'بازگشت' ? 'back'
-              : command === 'home' || command === 'go home' || command === 'صفحه اصلی' ? 'home'
-              : command === 'notifications' || command === 'اعلان‌ها' ? 'notifications'
-              : command === 'quick settings' || command === 'تنظیمات سریع' ? 'quickSettings' : null;
-            if (app) { if (window.confirm(label('Open ' + app.en + '?', 'برنامه ' + app.fa + ' باز شود؟'))) void run('voice-app', () => AFGJarvis.openApp({ packageName: app.packageName })); }
-            else if (action) { if (window.confirm(label('Run ' + action + '?', 'فرمان اجرا شود؟'))) void run('voice-action', () => AFGJarvis.performAction({ action })); }
-            else setSpeechError(label('No matching safe command. Try “open Telegram”, “back”, or “home”.', 'فرمان امن شناخته نشد. «بازگشت»، «صفحه اصلی» یا نام برنامه را بگویید.'));
+            const parsed = parseJarvisCommand(transcript);
+            if (parsed.kind === 'app') {
+              if (window.confirm(label('Open ' + parsed.label + '?', 'برنامه ' + parsed.label + ' باز شود؟'))) {
+                void run('voice-app', () => AFGJarvis.openApp({ packageName: parsed.packageName }));
+              }
+            } else if (parsed.kind === 'action') {
+              if (window.confirm(label('Run ' + parsed.action + '?', 'فرمان ' + parsed.action + ' اجرا شود؟'))) {
+                void run('voice-action', () => AFGJarvis.performAction({ action: parsed.action }));
+              }
+            } else {
+              setSpeechError(label('No safe local command matched. Try “open Telegram”, “back”, “home”, or a Dari/Pashto/Arabic phrase.', 'فرمان امن محلی شناخته نشد. نام تلگرام، بازگشت، خانه یا فرمان دری/پشتو/عربی را بگویید.'));
+            }
           }}>{label('Confirm voice command', 'تأیید فرمان صوتی')}</button>
           <button className={button} disabled={!transcript.trim() || !!busy} onClick={() => void run('speak', () => AFGJarvis.speak({ text: transcript, language: (dari ? 'fa-IR' : language === 'pashto' ? 'ps-AF' : language === 'arabic' ? 'ar' : 'en-US') as JarvisSpeechLanguage }))}>{label('Speak transcript', 'خواندن متن با صدا')}</button>
         </div>
