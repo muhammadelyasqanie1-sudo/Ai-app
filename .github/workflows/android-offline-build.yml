@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'src/components/afg/AfgOfflineHubView.tsx'
+      - 'src/components/afg/AfgJarvisView.tsx'
+      - 'src/lib/jarvis-local-agent.ts'
+      - 'src/lib/jarvis-command-engine.ts'
       - 'src/lib/offline*.ts'
       - 'src/lib/huggingFaceOfflineCatalog.ts'
       - 'plugins/**'

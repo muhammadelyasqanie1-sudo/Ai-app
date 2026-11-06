@@ -1,8 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { AFGJarvis, type JarvisStatus, type JarvisAction, type JarvisSpeechEvent, type JarvisSpeechLanguage } from '@afg-ai/capacitor-jarvis';
 import type { Language } from '../../types/afg';
 import { parseJarvisCommand } from '../../lib/jarvis-command-engine';
+import { buildJarvisLocalCommandPrompt, extractJarvisLocalCommand } from '../../lib/jarvis-local-agent';
+import { listOfflineDownloads, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
+import { generateNativeLlamaResponse, getNativeLlamaRuntimeInfo, loadNativeLlamaModel, unloadNativeLlamaModel, type NativeLlamaRuntimeInfo } from '../../lib/offlineLlamaRuntime';
 
 const actions: Array<{ id: JarvisAction; en: string; fa: string }> = [
   { id: 'back', en: 'Back', fa: 'بازگشت' }, { id: 'home', en: 'Home', fa: 'صفحه اصلی' },
@@ -20,6 +23,7 @@ export function AfgJarvisView({ language }: { language: Language }) {
   const dari = language === 'dari';
   const rtl = ['dari', 'persian', 'pashto', 'arabic', 'urdu'].includes(language);
   const native = Capacitor.isNativePlatform();
+  const androidNative = Capacitor.getPlatform() === 'android';
   const [status, setStatus] = useState<JarvisStatus | null>(null);
   const [busy, setBusy] = useState('');
   const [notice, setNotice] = useState('');
@@ -36,6 +40,16 @@ export function AfgJarvisView({ language }: { language: Language }) {
   const [deviceMessage, setDeviceMessage] = useState('');
   const [clipboardInput, setClipboardInput] = useState('');
   const [torchEnabled, setTorchEnabled] = useState(false);
+  const [localRuntime, setLocalRuntime] = useState<NativeLlamaRuntimeInfo | null>(null);
+  const [localModels, setLocalModels] = useState<OfflineDownloadState[]>([]);
+  const [selectedLocalModelId, setSelectedLocalModelId] = useState('');
+  const [loadedLocalModelId, setLoadedLocalModelId] = useState('');
+  const [localAiPrompt, setLocalAiPrompt] = useState('');
+  const [localAiReply, setLocalAiReply] = useState('');
+  const [localAiError, setLocalAiError] = useState('');
+  const [localAiBusy, setLocalAiBusy] = useState(false);
+  const [pendingAiCommand, setPendingAiCommand] = useState('');
+  const localModelLoadedRef = useRef(false);
   const label = (en: string, fa: string) => dari ? fa : en;
   const speechLanguage: JarvisSpeechLanguage = language === 'dari' ? 'fa-AF' : language === 'persian' ? 'fa-IR' : language === 'pashto' ? 'ps-AF' : language === 'arabic' ? 'ar' : 'en-US';
   const card = 'rounded-2xl border border-cyan-400/20 bg-slate-950/50 p-4 shadow-[0_0_28px_rgba(6,182,212,.06)]';
@@ -45,7 +59,23 @@ export function AfgJarvisView({ language }: { language: Language }) {
     try { setStatus(await AFGJarvis.getStatus()); setError(''); }
     catch (e: any) { setError(e?.message || 'Could not read Android service status.'); }
   }, [native]);
+  const refreshLocalAi = useCallback(async () => {
+    if (!androidNative) return;
+    try {
+      const [runtimeInfo, downloads] = await Promise.all([getNativeLlamaRuntimeInfo(), listOfflineDownloads()]);
+      setLocalRuntime(runtimeInfo);
+      setLocalModels(downloads);
+      setSelectedLocalModelId(current => current || downloads.find(item => item.status === 'installed' && item.localPath && item.expectedSha256 && item.hashVerified === true)?.id || '');
+      setLocalAiError('');
+    } catch (e: any) {
+      setLocalAiError(e?.message || 'Unable to inspect the local Android model runtime.');
+    }
+  }, [androidNative]);
+  const verifiedLocalModels = localModels.filter(item => item.status === 'installed' && Boolean(item.localPath) && Boolean(item.expectedSha256) && item.hashVerified === true);
+  const selectedLocalModel = verifiedLocalModels.find(item => item.id === selectedLocalModelId) || null;
   useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { void refreshLocalAi(); }, [refreshLocalAi]);
+  useEffect(() => () => { if (localModelLoadedRef.current) void unloadNativeLlamaModel().catch(() => undefined); }, []);
   useEffect(() => {
     if (!native) return;
     const onVisibilityChange = () => {
@@ -130,6 +160,45 @@ export function AfgJarvisView({ language }: { language: Language }) {
       setSpeechError(label('No safe local command matched. Try open Telegram, battery status, flashlight, location, or a Dari/Pashto phrase.', 'فرمان امن محلی شناخته نشد. تلگرام، وضعیت باتری، چراغ‌قوه، موقعیت یا عبارت دری/پشتو را امتحان کنید.'));
     }
   }
+  async function loadJarvisLocalModel() {
+    if (!selectedLocalModel?.localPath) { setLocalAiError(label('Choose a downloaded, SHA-256 verified GGUF model first.', 'ابتدا یک مدل GGUF دانلودشده و تأییدشده با SHA-256 انتخاب کنید.')); return; }
+    setLocalAiBusy(true); setLocalAiError(''); setLocalAiReply(''); setPendingAiCommand('');
+    try {
+      await unloadNativeLlamaModel().catch(() => undefined);
+      await loadNativeLlamaModel(selectedLocalModel.localPath, 1024, 2);
+      localModelLoadedRef.current = true;
+      setLoadedLocalModelId(selectedLocalModel.id);
+    } catch (e: any) {
+      localModelLoadedRef.current = false; setLoadedLocalModelId('');
+      setLocalAiError(e?.message || label('The GGUF model could not be loaded. Check free RAM and model compatibility.', 'مدل GGUF بارگذاری نشد. حافظه آزاد و سازگاری مدل را بررسی کنید.'));
+    } finally { setLocalAiBusy(false); }
+  }
+
+  async function unloadJarvisLocalModel() {
+    setLocalAiBusy(true);
+    try { await unloadNativeLlamaModel(); localModelLoadedRef.current = false; setLoadedLocalModelId(''); setPendingAiCommand(''); setLocalAiReply(''); }
+    catch (e: any) { setLocalAiError(e?.message || 'Unable to unload the local model.'); }
+    finally { setLocalAiBusy(false); }
+  }
+
+  async function interpretWithLocalAi() {
+    const request = localAiPrompt.trim();
+    if (!request || request.length > 300 || !loadedLocalModelId || localAiBusy) return;
+    setLocalAiBusy(true); setLocalAiError(''); setLocalAiReply(''); setPendingAiCommand('');
+    try {
+      const raw = await generateNativeLlamaResponse([
+        { role: 'system', content: buildJarvisLocalCommandPrompt(language) },
+        { role: 'user', content: request },
+      ], 96);
+      const candidate = extractJarvisLocalCommand(raw);
+      if (!candidate) { setLocalAiReply(label('No safe supported action was identified. Try a simple device command.', 'فرمان امن و پشتیبانی‌شده‌ای تشخیص داده نشد. یک فرمان ساده دستگاه را امتحان کنید.')); return; }
+      const parsed = parseJarvisCommand(candidate);
+      if (parsed.kind === 'unknown') { setLocalAiReply(label('The local model suggested an unsupported action, so nothing was executed.', 'مدل محلی فرمان پشتیبانی‌نشده پیشنهاد کرد؛ بنابراین هیچ عملی اجرا نشد.')); return; }
+      setPendingAiCommand(candidate);
+      setLocalAiReply(label('A supported action was identified. Review it and confirm before execution: ', 'یک فرمان پشتیبانی‌شده شناسایی شد. پیش از اجرا آن را بررسی و تأیید کنید: ') + candidate);
+    } catch (e: any) { setLocalAiError(e?.message || label('Local AI command understanding failed.', 'درک فرمان با هوش محلی ناموفق بود.')); }
+    finally { setLocalAiBusy(false); }
+  }
   return <main className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6" dir={rtl ? 'rtl' : 'ltr'}>
     <header className="relative overflow-hidden rounded-3xl border border-cyan-400/25 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-5 sm:p-7">
       <div className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full bg-cyan-400/10 blur-3xl" />
@@ -160,6 +229,38 @@ export function AfgJarvisView({ language }: { language: Language }) {
             <button className={button} disabled={!localCommand.trim() || !!busy}>{label('Run', 'اجرا')}</button>
           </form>
         </div>
+      </section>
+      <section className={card}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-bold text-white">{label('Local AI command brain', 'مغز هوش مصنوعی محلی')}</h2>
+          <span className="rounded-full border border-violet-400/25 px-2 py-1 text-xs text-violet-200">{localRuntime?.available ? localRuntime.engine + ' · ' + localRuntime.abi : label('Runtime unavailable', 'موتور در دسترس نیست')}</span>
+        </div>
+        <p className="mt-2 text-xs leading-5 text-slate-400">{label('JARVIS can use a GGUF model already downloaded in Offline AI Hub. This local model only translates your request into a strict allowlisted device command. It never receives permission to call Android tools directly; the existing command parser and your confirmation remain mandatory. Inference stays on this phone.', 'جارویس می‌تواند از مدل GGUF که قبلاً در مرکز هوش آفلاین دانلود کرده‌اید استفاده کند. این مدل فقط درخواست شما را به یک فرمان محدود و مجاز دستگاه تبدیل می‌کند؛ مستقیماً اجازه اجرای ابزارهای اندروید را ندارد و بررسی فرمان و تأیید شما همچنان اجباری است. پردازش روی همین گوشی انجام می‌شود.')}</p>
+        {!androidNative && <p className="mt-3 text-sm text-amber-200">{label('This local native runtime is available only in the Android APK.', 'این موتور محلی فقط در نسخه APK اندروید موجود است.')}</p>}
+        {androidNative && <>
+          <p className="mt-3 text-sm text-slate-300">{label('Native runtime', 'موتور بومی')}: <strong className={localRuntime?.available ? 'text-emerald-300' : 'text-amber-300'}>{localRuntime?.available ? label('Ready', 'آماده') : localRuntime?.reason || label('Checking…', 'در حال بررسی…')}</strong></p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <select value={selectedLocalModelId} onChange={event => setSelectedLocalModelId(event.target.value)} disabled={localAiBusy || verifiedLocalModels.length === 0} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-sm text-white">
+              <option value="">{label('Select a verified downloaded GGUF model', 'انتخاب مدل GGUF تأییدشده')}</option>
+              {verifiedLocalModels.map(model => <option key={model.id} value={model.id}>{model.repoId} / {model.fileName}</option>)}
+            </select>
+            <button type="button" className={button} disabled={localAiBusy} onClick={() => void refreshLocalAi()}>{label('Refresh', 'تازه‌سازی')}</button>
+          </div>
+          {!verifiedLocalModels.length && <p className="mt-2 text-xs text-amber-200">{label('No SHA-256 verified GGUF model is installed yet. Download a model in Offline AI Hub first; JARVIS will reuse that file and will not download it again.', 'هنوز مدل GGUF تأییدشده با SHA-256 نصب نشده است. ابتدا در مرکز هوش آفلاین یک مدل دانلود کنید؛ جارویس از همان فایل استفاده می‌کند و دوباره آن را دانلود نمی‌کند.')}</p>}
+          {localRuntime && !localRuntime.available && <p className="mt-2 text-xs text-amber-200">{localRuntime.reason || label('This APK does not contain the native llama.cpp runtime.', 'این APK موتور بومی llama.cpp را ندارد.')}</p>}
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button type="button" className={button} disabled={localAiBusy || !localRuntime?.available || !selectedLocalModel} onClick={() => void loadJarvisLocalModel()}>{label('Load local model', 'بارگذاری مدل محلی')}</button>
+            <button type="button" className={button} disabled={localAiBusy || !loadedLocalModelId} onClick={() => void unloadJarvisLocalModel()}>{label('Unload model', 'تخلیه مدل')}</button>
+          </div>
+          {loadedLocalModelId && <p className="mt-2 text-xs text-emerald-300">{label('Loaded and ready: ', 'بارگذاری و آماده: ')}{loadedLocalModelId}</p>}
+          <label className="mt-4 block text-xs text-slate-400">{label('Ask JARVIS in Dari, Pashto or English', 'به دری، پشتو یا انگلیسی به جارویس فرمان بدهید')}</label>
+          <textarea value={localAiPrompt} onChange={event => setLocalAiPrompt(event.target.value)} maxLength={300} rows={2} disabled={!loadedLocalModelId || localAiBusy} placeholder={label('e.g. Please open Telegram', 'مثلاً لطفاً تلگرام را باز کن')} className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white disabled:opacity-50" />
+          <button type="button" className={button + ' mt-2 w-full'} disabled={!loadedLocalModelId || !localAiPrompt.trim() || localAiBusy} onClick={() => void interpretWithLocalAi()}>{localAiBusy ? label('Processing on device…', 'پردازش روی گوشی…') : label('Understand command offline', 'درک فرمان به‌صورت آفلاین')}</button>
+          {localAiReply && <p role="status" className="mt-3 rounded-xl bg-violet-400/10 p-3 text-sm text-violet-100">{localAiReply}</p>}
+          {pendingAiCommand && <button type="button" className={button + ' mt-2 w-full'} onClick={() => { const command = pendingAiCommand; setPendingAiCommand(''); confirmLocalCommand(command); }}>{label('Review & confirm device action', 'بررسی و تأیید عملیات دستگاه')}</button>}
+          {localAiError && <p role="alert" className="mt-2 text-sm text-rose-300">{localAiError}</p>}
+          <p className="mt-3 text-xs leading-5 text-slate-400">{label('For older phones, JARVIS loads with a conservative 1,024-token context and two CPU threads. Model loading and response speed depend on RAM, GGUF architecture and quantization. Close other heavy apps first. The model is not downloaded automatically and no mobile data is used by this panel.', 'برای گوشی‌های قدیمی، جارویس با زمینه ۱۰۲۴ توکنی و دو رشته پردازشی بارگذاری می‌شود. سرعت و امکان اجرا به RAM، معماری GGUF و کوانتایز مدل بستگی دارد. پیش از اجرا برنامه‌های سنگین دیگر را ببندید. مدل خودکار دانلود نمی‌شود و این بخش از اینترنت موبایل استفاده نمی‌کند.')}</p>
+        </>}
       </section>
       <section className={card}>
         <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-bold text-white">{label('Permission status', 'وضعیت دسترسی')}</h2><button className={button} onClick={() => void refresh()}>{label('Refresh', 'تازه‌سازی')}</button></div>
