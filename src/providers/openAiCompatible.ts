@@ -116,12 +116,30 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
           const completionPrice = Number(model.pricing?.completion);
           const beatApiInputPrice = Number(model.input_usd_per_million);
           const beatApiOutputPrice = Number(model.output_usd_per_million);
-          // 9Router model metadata is not fully OpenRouter-shaped: capabilities may
-          // be an object or omitted. Normalize defensively instead of calling .some()
-          // on an arbitrary upstream value.
-          const labels = Array.isArray(model.capabilities) ? model.capabilities : [];
-          const inputHasImage = inputModalities.includes('image') || labels.some((value) => /vision|image/i.test(value));
-          const outputHasImage = outputModalities.includes('image') || labels.some((value) => /image.?generation/i.test(value));
+          // Gateways expose capabilities in several shapes: OpenRouter-style
+          // supported_parameters arrays, string labels, or boolean capability maps.
+          // Normalize all known tool-calling signals so eligible models are not
+          // incorrectly hidden from integration requests.
+          const rawCapabilities = model.capabilities as unknown;
+          const labels = Array.isArray(rawCapabilities)
+            ? rawCapabilities.filter((value): value is string => typeof value === 'string')
+            : [];
+          const capabilityMap = rawCapabilities && typeof rawCapabilities === 'object' && !Array.isArray(rawCapabilities)
+            ? rawCapabilities as Record<string, unknown>
+            : {};
+          const featureValues = (model as any).features;
+          const featureLabels = Array.isArray(featureValues)
+            ? featureValues.map((value: any) => typeof value === 'string' ? value : String(value?.id || value?.name || value?.key || '')).filter(Boolean)
+            : [];
+          const allLabels = [...labels, ...featureLabels, ...parameters];
+          const hasCapability = (...names: string[]) => names.some((name) =>
+            capabilityMap[name] === true || capabilityMap[name.toLowerCase()] === true ||
+            allLabels.some((value) => value.toLowerCase().replace(/[\\s-]+/g, '_') === name.toLowerCase()),
+          );
+          const inputHasImage = inputModalities.includes('image') || hasCapability('vision', 'image', 'image_input');
+          const outputHasImage = outputModalities.includes('image') || hasCapability('image_generation', 'image_gen');
+          const supportsTools = hasCapability('tools', 'tool_calling', 'function_calling', 'tool_use') ||
+            parameters.some((value) => /^(tools|tool_choice|function_calling)$/i.test(value));
           return {
             id: model.id as string,
             providerId: current.id,
@@ -139,7 +157,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
               vision: inputHasImage,
               imageGen: outputHasImage,
               imageEdit: false, ocr: false, tts: outputModalities.includes('audio'),
-              stt: inputModalities.includes('audio'), tools: parameters.includes('tools'),
+              stt: inputModalities.includes('audio'), tools: supportsTools,
               jsonMode: parameters.includes('response_format') || parameters.includes('structured_outputs'),
             },
             enabled: true, verifiedAt: null,
