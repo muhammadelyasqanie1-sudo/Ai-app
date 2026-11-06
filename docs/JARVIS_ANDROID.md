@@ -35,7 +35,7 @@ When the app language is Dari, JARVIS requests the Afghan Dari locale `fa-AF`; P
 - It does not auto-like posts, subscribe, send messages, make purchases, install packages, unlock the device, or bypass app security.
 - Some apps expose incomplete accessibility trees, so text-based clicks and focused-field typing may not work everywhere.
 - Android and individual apps can block or constrain automation. The service cannot grant itself accessibility permission.
-- The current implementation intentionally does not request overlay permission, microphone access, camera access, notification access, location, or device-admin privileges.
+- The current implementation requests microphone permission only when the user taps Start listening. It does not request overlay, camera, notification-listener, location, or device-admin privileges.
 - Fully offline speech-to-text is not implemented: Android SpeechRecognizer may still require network access. The local command parser includes Afghan Dari wording (including common `را`/`ره` command forms) and works offline only after speech has been transcribed; it is not a replacement speech model.
 - A bundled local generative model (including Needle), a persistent floating bubble, hand-gesture recognition, flight radar, and anti-theft/lockout features are not implemented in this increment. Do not present them as available.
 - The Android app must be rebuilt for the native plugin to be packaged. A web-only deployment cannot control the phone.
