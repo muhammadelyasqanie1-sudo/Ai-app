@@ -72,8 +72,36 @@ export function AfgJarvisView({ language }: { language: Language }) {
       if (window.confirm(label('Run ' + parsed.action + '?', 'فرمان ' + parsed.action + ' اجرا شود؟'))) {
         void run('voice-action', () => AFGJarvis.performAction({ action: parsed.action }));
       }
+    } else if (parsed.kind === 'device') {
+      const labels: Record<string,string> = {
+        battery: label('Read battery status?', 'وضعیت باتری خوانده شود؟'),
+        network: label('Read network status?', 'وضعیت شبکه خوانده شود؟'),
+        sensors: label('List available sensors?', 'حسگرهای موجود فهرست شود؟'),
+        vibrate: label('Vibrate the phone for 500 ms?', 'گوشی ۵۰۰ میلی‌ثانیه بلرزد؟'),
+        torchOn: label('Turn on the flashlight?', 'چراغ‌قوه روشن شود؟'),
+        torchOff: label('Turn off the flashlight?', 'چراغ‌قوه خاموش شود؟'),
+        location: label('Read the current location? Android permission will be requested.', 'موقعیت فعلی خوانده شود؟ مجوز اندروید درخواست می‌شود.'),
+        contacts: label('Read up to 20 contacts? Android permission will be requested.', 'تا ۲۰ مخاطب خوانده شود؟ مجوز اندروید درخواست می‌شود.'),
+        recentSms: label('Read the last 5 SMS messages? Android permission will be requested.', 'پنج پیامک اخیر خوانده شود؟ مجوز اندروید درخواست می‌شود.'),
+        camera: label('Open camera? You will take the photo yourself.', 'دوربین باز شود؟ عکس را خودتان می‌گیرید.'),
+      };
+      if (window.confirm(labels[parsed.action])) {
+        const tasks: Record<string,() => Promise<unknown>> = {
+          battery: async () => setDeviceData(v => ({...v,battery:await AFGJarvis.getBatteryStatus()})),
+          network: async () => setDeviceData(v => ({...v,network:await AFGJarvis.getNetworkStatus()})),
+          sensors: async () => setDeviceData(v => ({...v,sensors:await AFGJarvis.getSensors()})),
+          vibrate: () => AFGJarvis.vibrate({durationMs:500}),
+          torchOn: async () => { await AFGJarvis.requestCameraPermission(); await AFGJarvis.setTorch({enabled:true}); setTorchEnabled(true); },
+          torchOff: async () => { await AFGJarvis.requestCameraPermission(); await AFGJarvis.setTorch({enabled:false}); setTorchEnabled(false); },
+          location: async () => { await AFGJarvis.requestLocationPermission(); setDeviceData(v => ({...v,location:await AFGJarvis.getLocation()})); },
+          contacts: async () => { await AFGJarvis.requestContactsPermission(); setDeviceData(v => ({...v,contacts:await AFGJarvis.getContacts({limit:20})})); },
+          recentSms: async () => { await AFGJarvis.requestSmsReadPermission(); setDeviceData(v => ({...v,sms:await AFGJarvis.getRecentSms({limit:5})})); },
+          camera: async () => setDeviceData(v => ({...v,photo:await AFGJarvis.takePhoto()})),
+        };
+        void run('voice-device', tasks[parsed.action]);
+      }
     } else {
-      setSpeechError(label('No safe local command matched. Try open Telegram, back, home, or a Dari/Pashto/Arabic phrase.', 'فرمان امن محلی شناخته نشد. نام تلگرام، بازگشت، خانه یا فرمان دری/پشتو/عربی را وارد کنید.'));
+      setSpeechError(label('No safe local command matched. Try open Telegram, battery status, flashlight, location, or a Dari/Pashto phrase.', 'فرمان امن محلی شناخته نشد. تلگرام، وضعیت باتری، چراغ‌قوه، موقعیت یا عبارت دری/پشتو را امتحان کنید.'));
     }
   }
   return <main className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6" dir={dari ? 'rtl' : 'ltr'}>
