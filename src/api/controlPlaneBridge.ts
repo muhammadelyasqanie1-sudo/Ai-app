@@ -2,10 +2,13 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { pool } from './database.ts';
 import { readJsonBody } from './auth.ts';
+import { getProviderAdapter, getVerifiedModelDescriptors } from '../services/providerGateway.ts';
 
 const BRIDGE_PATH = '/api/internal/9router/overview';
 const USERS_PATH = '/api/internal/9router/users';
 const SUBSCRIPTIONS_PATH = '/api/internal/9router/subscriptions';
+const FLAGS_PATH = '/api/internal/9router/feature-flags';
+const ANNOUNCEMENTS_PATH = '/api/internal/9router/announcements';
 
 function matchesSecret(candidate: string, expected: string): boolean {
   const candidateDigest = createHash('sha256').update(candidate).digest();
@@ -226,6 +229,147 @@ async function handleSubscriptionAssign(req: IncomingMessage, res: ServerRespons
   return true;
 }
 
+
+async function handleFeatureFlagsRead(req: IncomingMessage, res: ServerResponse) {
+  const actor = readBridgeActor(req);
+  if (!bridgeActorHas(actor, 'afg-ai:settings:read')) {
+    reply(res, actor ? 403 : 401, { error: actor ? 'AFG AI settings read permission required.' : 'A valid control-plane actor is required.' });
+    return true;
+  }
+  if (!pool) { reply(res, 503, { error: 'AFG AI database is unavailable.' }); return true; }
+  const result = await pool.query('SELECT flag_key,enabled,description,updated_at FROM feature_flags ORDER BY flag_key');
+  reply(res, 200, { flags: result.rows });
+  return true;
+}
+
+async function handleFeatureFlagUpdate(req: IncomingMessage, res: ServerResponse) {
+  const actor = readBridgeActor(req);
+  if (!bridgeActorHas(actor, 'afg-ai:settings:manage')) {
+    reply(res, actor ? 403 : 401, { error: actor ? 'AFG AI settings management permission required.' : 'A valid control-plane actor is required.' });
+    return true;
+  }
+  if (!pool) { reply(res, 503, { error: 'AFG AI database is unavailable.' }); return true; }
+  let body: Record<string, unknown>;
+  try { body = await readJsonBody(req, 8000); }
+  catch { reply(res, 400, { error: 'Invalid JSON request body.' }); return true; }
+  if (typeof body.key !== 'string' || !/^[a-z][a-z0-9_.-]{1,79}$/.test(body.key) || typeof body.enabled !== 'boolean') {
+    reply(res, 400, { error: 'A valid feature flag key and boolean enabled value are required.' });
+    return true;
+  }
+  const description = typeof body.description === 'string' ? body.description.trim().slice(0, 300) : '';
+  const requestedKey = body.key;
+  const aliases: Record<string, string[]> = {
+    research: ['research', 'web_research_enabled'],
+    web_research_enabled: ['research', 'web_research_enabled'],
+    voice: ['voice', 'voice_enabled'],
+    voice_enabled: ['voice', 'voice_enabled'],
+  };
+  const keysToUpdate = aliases[requestedKey] || [requestedKey];
+  if (body.enabled === true) {
+    if (['terminal_exec_enabled', 'offline_sync_enabled'].includes(requestedKey)) {
+      reply(res, 409, { error: requestedKey === 'terminal_exec_enabled'
+        ? 'Shell execution cannot be enabled until a real isolated command sandbox is deployed and verified.'
+        : 'Offline synchronization cannot be enabled until signed pack synchronization is implemented and configured.' });
+      return true;
+    }
+    if (requestedKey === 'research' || requestedKey === 'web_research_enabled') {
+      if (!process.env.TAVILY_API_KEY) { reply(res, 409, { error: 'Configure TAVILY_API_KEY on the server before enabling web research.' }); return true; }
+    }
+    if (requestedKey === 'voice' || requestedKey === 'voice_enabled') {
+      const descriptors = await getVerifiedModelDescriptors();
+      const ready = descriptors.some((model) => model.enabled && model.verifiedAt && (
+        (model.capabilities.stt && Boolean(getProviderAdapter(model.providerId)?.transcribe)) ||
+        (model.capabilities.tts && Boolean(getProviderAdapter(model.providerId)?.synthesize))
+      ));
+      if (!ready) { reply(res, 409, { error: 'Voice cannot be enabled until a model with a verified transcription or synthesis endpoint is available.' }); return true; }
+    }
+    if (requestedKey === 'image_generation_enabled') {
+      const descriptors = await getVerifiedModelDescriptors();
+      const ready = descriptors.some((model) => model.enabled && model.verifiedAt && model.capabilities.imageGen &&
+        Boolean(getProviderAdapter(model.providerId)?.generateImage) && Boolean(getProviderAdapter(model.providerId)?.imageGenerationOptions?.(model.id)));
+      if (!ready) { reply(res, 409, { error: 'Image generation cannot be enabled until a verified image-generation model and generation adapter are available.' }); return true; }
+    }
+    if (requestedKey === 'chat') {
+      const descriptors = await getVerifiedModelDescriptors();
+      if (!descriptors.some((model) => model.enabled && model.verifiedAt && model.capabilities.text && model.capabilities.streaming)) {
+        reply(res, 409, { error: 'Chat cannot be enabled until at least one verified streaming text model is available.' });
+        return true;
+      }
+    }
+  }
+
+  const previous = await pool.query('SELECT flag_key,enabled,description FROM feature_flags WHERE flag_key=ANY($1::text[])', [keysToUpdate]);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const updatedRows = [];
+    for (const flagKey of keysToUpdate) {
+      const updated = await client.query(`INSERT INTO feature_flags(flag_key,enabled,description,updated_by)
+        VALUES($1,$2,$3,NULL) ON CONFLICT(flag_key) DO UPDATE SET enabled=EXCLUDED.enabled,
+        description=EXCLUDED.description,updated_by=NULL,updated_at=now()
+        RETURNING flag_key,enabled,description`, [flagKey, body.enabled, description]);
+      updatedRows.push(updated.rows[0]);
+    }
+    await client.query(
+      'INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES(NULL,$1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb)',
+      ['9router:' + actor.role, 'feature_flag.update', 'feature_flag', requestedKey,
+        previous.rows.length ? JSON.stringify(previous.rows) : null, JSON.stringify(updatedRows),
+        JSON.stringify({ source: '9router-control-plane', actorId: actor.id, actorEmail: actor.email, enabled: body.enabled, aliases: keysToUpdate })],
+    );
+    await client.query('COMMIT');
+    reply(res, 200, { key: requestedKey, enabled: body.enabled, flags: updatedRows });
+  } catch {
+    await client.query('ROLLBACK');
+    reply(res, 503, { error: 'AFG AI feature flag update failed.' });
+  } finally { client.release(); }
+  return true;
+}
+
+async function handleAnnouncementsRead(req: IncomingMessage, res: ServerResponse) {
+  const actor = readBridgeActor(req);
+  if (!bridgeActorHas(actor, 'afg-ai:announcements:read')) {
+    reply(res, actor ? 403 : 401, { error: actor ? 'AFG AI announcement read permission required.' : 'A valid control-plane actor is required.' });
+    return true;
+  }
+  if (!pool) { reply(res, 503, { error: 'AFG AI database is unavailable.' }); return true; }
+  const result = await pool.query('SELECT id,title,body,enabled,starts_at,expires_at,created_at,updated_at FROM announcements ORDER BY created_at DESC LIMIT 200');
+  reply(res, 200, { announcements: result.rows });
+  return true;
+}
+
+async function handleAnnouncementCreate(req: IncomingMessage, res: ServerResponse) {
+  const actor = readBridgeActor(req);
+  if (!bridgeActorHas(actor, 'afg-ai:announcements:manage')) {
+    reply(res, actor ? 403 : 401, { error: actor ? 'AFG AI announcement management permission required.' : 'A valid control-plane actor is required.' });
+    return true;
+  }
+  if (!pool) { reply(res, 503, { error: 'AFG AI database is unavailable.' }); return true; }
+  let body: Record<string, unknown>;
+  try { body = await readJsonBody(req, 12000); }
+  catch { reply(res, 400, { error: 'Invalid JSON request body.' }); return true; }
+  const title = typeof body.title === 'string' ? body.title.trim().slice(0, 120) : '';
+  const message = typeof body.body === 'string' ? body.body.trim().slice(0, 2000) : '';
+  if (!title || !message) { reply(res, 400, { error: 'Announcement title and body are required.' }); return true; }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const created = await client.query(`INSERT INTO announcements(title,body,created_by)
+      VALUES($1,$2,NULL)
+      RETURNING id,title,body,enabled,starts_at,expires_at,created_at`, [title, message]);
+    await client.query(
+      'INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES(NULL,$1,$2,$3,$4,NULL,$5::jsonb,$6::jsonb)',
+      ['9router:' + actor.role, 'announcement.create', 'announcement', created.rows[0].id,
+        JSON.stringify(created.rows[0]), JSON.stringify({ source: '9router-control-plane', actorId: actor.id, actorEmail: actor.email })],
+    );
+    await client.query('COMMIT');
+    reply(res, 201, { announcement: created.rows[0] });
+  } catch {
+    await client.query('ROLLBACK');
+    reply(res, 503, { error: 'AFG AI announcement creation failed.' });
+  } finally { client.release(); }
+  return true;
+}
+
 /**
  * Read-only service bridge for the 9Router management portal.
  * The shared credential must remain server-side in both applications.
@@ -236,6 +380,20 @@ export async function handleControlPlaneBridgeApi(
   res: ServerResponse,
   pathname: string,
 ): Promise<boolean> {
+  if (pathname === FLAGS_PATH) {
+    if (req.method === 'GET') return await handleFeatureFlagsRead(req, res);
+    if (req.method === 'PATCH') return await handleFeatureFlagUpdate(req, res);
+    res.setHeader('Allow', 'GET, PATCH');
+    reply(res, 405, { error: 'Method not allowed.' });
+    return true;
+  }
+  if (pathname === ANNOUNCEMENTS_PATH) {
+    if (req.method === 'GET') return await handleAnnouncementsRead(req, res);
+    if (req.method === 'POST') return await handleAnnouncementCreate(req, res);
+    res.setHeader('Allow', 'GET, POST');
+    reply(res, 405, { error: 'Method not allowed.' });
+    return true;
+  }
   if (pathname === SUBSCRIPTIONS_PATH) {
     if (req.method === 'GET') return await handleSubscriptionsRead(req, res);
     if (req.method === 'PATCH') return await handleSubscriptionAssign(req, res);
