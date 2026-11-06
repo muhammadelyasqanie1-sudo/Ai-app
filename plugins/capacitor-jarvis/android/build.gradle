@@ -9,6 +9,13 @@ android {
     }
 }
 
+def androidxActivityVersion = rootProject.ext.has('androidxActivityVersion')
+    ? rootProject.ext.androidxActivityVersion
+    : '1.11.0'
+
 dependencies {
     implementation project(':capacitor-android')
+    // Capacitor's ActivityResult callback type is AndroidX; expose it on this
+    // plugin module's compile classpath instead of relying on transitive internals.
+    implementation "androidx.activity:activity:$androidxActivityVersion"
 }
