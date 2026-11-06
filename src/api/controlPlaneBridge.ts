@@ -43,8 +43,12 @@ function bridgeActorHas(actor: ReturnType<typeof readBridgeActor>, permission: s
 
 async function handleUserList(req: IncomingMessage, res: ServerResponse) {
   const actor = readBridgeActor(req);
+  if (!actor) {
+    reply(res, 401, { error: 'A valid control-plane actor is required.' });
+    return true;
+  }
   if (!bridgeActorHas(actor, 'afg-ai:users:read')) {
-    reply(res, actor ? 403 : 401, { error: actor ? 'AFG AI user read permission required.' : 'A valid control-plane actor is required.' });
+    reply(res, 403, { error: 'AFG AI user read permission required.' });
     return true;
   }
   if (!pool) { reply(res, 503, { error: 'AFG AI database is unavailable.' }); return true; }
@@ -58,8 +62,12 @@ async function handleUserList(req: IncomingMessage, res: ServerResponse) {
 
 async function handleUserStatusUpdate(req: IncomingMessage, res: ServerResponse) {
   const actor = readBridgeActor(req);
+  if (!actor) {
+    reply(res, 401, { error: 'A valid control-plane actor is required.' });
+    return true;
+  }
   if (!bridgeActorHas(actor, 'afg-ai:users:manage')) {
-    reply(res, actor ? 403 : 401, { error: actor ? 'AFG AI user management permission required.' : 'A valid control-plane actor is required.' });
+    reply(res, 403, { error: 'AFG AI user management permission required.' });
     return true;
   }
   if (!pool) { reply(res, 503, { error: 'AFG AI database is unavailable.' }); return true; }
@@ -147,8 +155,12 @@ async function handleUserStatusUpdate(req: IncomingMessage, res: ServerResponse)
 
 async function handleSubscriptionsRead(req: IncomingMessage, res: ServerResponse) {
   const actor = readBridgeActor(req);
+  if (!actor) {
+    reply(res, 401, { error: 'A valid control-plane actor is required.' });
+    return true;
+  }
   if (!bridgeActorHas(actor, 'afg-ai:subscriptions:read')) {
-    reply(res, actor ? 403 : 401, { error: actor ? 'AFG AI subscription read permission required.' : 'A valid control-plane actor is required.' });
+    reply(res, 403, { error: 'AFG AI subscription read permission required.' });
     return true;
   }
   if (!pool) { reply(res, 503, { error: 'AFG AI database is unavailable.' }); return true; }
@@ -171,8 +183,12 @@ async function handleSubscriptionsRead(req: IncomingMessage, res: ServerResponse
 
 async function handleSubscriptionAssign(req: IncomingMessage, res: ServerResponse) {
   const actor = readBridgeActor(req);
+  if (!actor) {
+    reply(res, 401, { error: 'A valid control-plane actor is required.' });
+    return true;
+  }
   if (!bridgeActorHas(actor, 'afg-ai:subscriptions:manage')) {
-    reply(res, actor ? 403 : 401, { error: actor ? 'AFG AI subscription management permission required.' : 'A valid control-plane actor is required.' });
+    reply(res, 403, { error: 'AFG AI subscription management permission required.' });
     return true;
   }
   if (!pool) { reply(res, 503, { error: 'AFG AI database is unavailable.' }); return true; }
