@@ -1,4 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
+import { apiUrl } from '../../lib/apiClient';
 import { Mail, Chrome, ArrowLeft, Sparkles, UserRound, Eye, EyeOff } from 'lucide-react';
 import type { Language } from '../../types/afg';
 
@@ -42,6 +46,38 @@ export const AfgAuthGate: React.FC<Props> = ({ language, onContinueGuest, onAuth
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState('');
   const [showPassword,setShowPassword] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const completeMobileSignIn = async (rawUrl: string) => {
+      let deepLink: URL;
+      try { deepLink = new URL(rawUrl); } catch { return; }
+      if (deepLink.protocol !== 'afgai:' || deepLink.hostname !== 'auth' || deepLink.pathname !== '/callback') return;
+      const ticket = deepLink.searchParams.get('ticket');
+      if (!ticket) { if (active) setError(t.error); return; }
+      try {
+        await Browser.close().catch(() => undefined);
+        const response = await fetch(apiUrl('/api/auth/google/mobile-exchange'), {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticket }),
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(typeof payload.error === 'string' ? payload.error : t.error);
+        }
+        if (active) onAuthenticated();
+      } catch (e) { if (active) setError(e instanceof Error ? e.message : t.error); }
+    };
+    const listener = CapacitorApp.addListener('appUrlOpen', ({ url }) => { void completeMobileSignIn(url); });
+    void CapacitorApp.getLaunchUrl().then((launch) => { if (launch?.url) void completeMobileSignIn(launch.url); }).catch(() => undefined);
+    return () => { active = false; void listener.then((handle) => handle.remove()); };
+  }, [onAuthenticated, t.error]);
+  const beginGoogleSignIn = async (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    const url = apiUrl('/api/auth/google/start' + (Capacitor.isNativePlatform() ? '?client=android' : ''));
+    try { if (Capacitor.isNativePlatform()) await Browser.open({ url }); else window.location.assign(url); }
+    catch { setError(t.error); }
+  };
   const csrf = () => decodeURIComponent(document.cookie.split('; ').find(v=>v.startsWith('afg_csrf='))?.slice(9) || '');
   const post = async (path:string, body:Record<string,string>) => {
     await fetch('/api/auth/providers',{credentials:'include'});
@@ -77,7 +113,7 @@ export const AfgAuthGate: React.FC<Props> = ({ language, onContinueGuest, onAuth
       <p className="afg-auth-tagline">{t.brand}</p>
       {mode==='welcome' ? <>
         <h1>{t.title}</h1><p className="afg-auth-subtitle">{t.subtitle}</p>
-        <a className="afg-auth-action primary" href="/api/auth/google/start"><Chrome size={19}/>{t.google}</a>
+        <a className="afg-auth-action primary" href={apiUrl('/api/auth/google/start')} onClick={beginGoogleSignIn}><Chrome size={19}/>{t.google}</a>
         <button className="afg-auth-action secondary" onClick={()=>setMode('login')}><Mail size={19}/>{t.email}</button>
         <div className="afg-auth-divider"><span>OR</span></div>
         <button className="afg-auth-guest" onClick={onContinueGuest}><UserRound size={18}/>{t.guest}</button>
