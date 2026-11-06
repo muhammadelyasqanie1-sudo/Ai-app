@@ -18,6 +18,7 @@ const apps = [
 
 export function AfgJarvisView({ language }: { language: Language }) {
   const dari = language === 'dari';
+  const rtl = ['dari', 'persian', 'pashto', 'arabic', 'urdu'].includes(language);
   const native = Capacitor.isNativePlatform();
   const [status, setStatus] = useState<JarvisStatus | null>(null);
   const [busy, setBusy] = useState('');
@@ -47,6 +48,14 @@ export function AfgJarvisView({ language }: { language: Language }) {
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
     if (!native) return;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [native, refresh]);
+  useEffect(() => {
+    if (!native) return;
     let active = true;
     let handle: { remove: () => Promise<void> } | undefined;
     void AFGJarvis.addListener('speechEvent', (event: JarvisSpeechEvent) => {
@@ -55,13 +64,29 @@ export function AfgJarvisView({ language }: { language: Language }) {
       if (event.text) setTranscript(event.text);
       setSpeechError(event.state === 'error' ? event.error : '');
     }).then(value => { handle = value; if (!active) void value.remove(); });
-    return () => { active = false; if (handle) void handle.remove(); };
+    return () => {
+      active = false;
+      if (handle) void handle.remove();
+      void AFGJarvis.stopListening().catch(() => undefined);
+    };
   }, [native]);
   async function run(key: string, task: () => Promise<unknown>) {
     setBusy(key); setError(''); setNotice('');
-    try { await task(); setNotice(label('Command sent to Android.', 'فرمان به اندروید فرستاده شد.')); await refresh(); }
-    catch (e: any) { setError(e?.message || label('Command failed.', 'اجرای فرمان ناموفق بود.')); }
-    finally { setBusy(''); }
+    try {
+      const result = await task();
+      if (result && typeof result === 'object') {
+        const outcome = result as Record<string, unknown>;
+        const failed = ['performed', 'clicked', 'typed', 'opened', 'started', 'copied', 'stopped']
+          .find(field => outcome[field] === false);
+        if (failed) throw new Error(label('Android reported that this action was not completed.', 'اندروید گزارش داد که این عملیات انجام نشد.'));
+      }
+      setNotice(label('Operation completed on this device.', 'عملیات در همین دستگاه انجام شد.'));
+      await refresh();
+    } catch (e: any) {
+      setError(e?.message || label('Command failed.', 'اجرای فرمان ناموفق بود.'));
+    } finally {
+      setBusy('');
+    }
   }
   function confirmLocalCommand(raw: string) {
     const parsed = parseJarvisCommand(raw);
@@ -105,7 +130,7 @@ export function AfgJarvisView({ language }: { language: Language }) {
       setSpeechError(label('No safe local command matched. Try open Telegram, battery status, flashlight, location, or a Dari/Pashto phrase.', 'فرمان امن محلی شناخته نشد. تلگرام، وضعیت باتری، چراغ‌قوه، موقعیت یا عبارت دری/پشتو را امتحان کنید.'));
     }
   }
-  return <main className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6" dir={dari ? 'rtl' : 'ltr'}>
+  return <main className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6" dir={rtl ? 'rtl' : 'ltr'}>
     <header className="relative overflow-hidden rounded-3xl border border-cyan-400/25 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-5 sm:p-7">
       <div className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full bg-cyan-400/10 blur-3xl" />
       <div className="relative flex items-center gap-4"><div className="grid h-16 w-16 place-items-center rounded-2xl border border-cyan-300/40 bg-cyan-300/10 text-3xl text-cyan-200">◉</div>
@@ -124,7 +149,7 @@ export function AfgJarvisView({ language }: { language: Language }) {
         {speechError && <p role="alert" className="mt-2 text-sm text-rose-300">{speechError}</p>}
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button className={button} disabled={!transcript.trim() || !!busy} onClick={() => confirmLocalCommand(transcript)}>{label('Confirm voice command', 'تأیید فرمان صوتی')}</button>
-          <button className={button} disabled={!transcript.trim() || !!busy} onClick={() => void run('speak', () => AFGJarvis.speak({ text: transcript, language: speechLanguage }))}>{label('Speak transcript', 'خواندن متن با صدا')}</button>
+          <button className={button} disabled={!transcript.trim() || !!busy || !status?.ttsAvailable} onClick={() => void run('speak', () => AFGJarvis.speak({ text: transcript, language: speechLanguage }))}>{label('Speak transcript', 'خواندن متن با صدا')}</button>
         </div>
         <p className="mt-3 text-xs text-slate-400">{label('Only listed app-launch and navigation phrases are mapped to actions, and every action requires your confirmation. Unknown speech is never executed as a command.', 'فقط عبارت‌های مشخص‌شده برای بازکردن برنامه و پیمایش به فرمان تبدیل می‌شوند و هر فرمان نیازمند تأیید شماست. گفتار ناشناخته هرگز خودکار اجرا نمی‌شود.')}</p>
         <div className="mt-4 rounded-xl border border-violet-400/20 bg-violet-400/5 p-3">
@@ -141,6 +166,10 @@ export function AfgJarvisView({ language }: { language: Language }) {
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <p className="rounded-xl bg-white/5 p-3 text-sm">{label('Accessibility service', 'سرویس دسترس‌پذیری')}: <strong className={status?.accessibilityEnabled ? 'text-emerald-300' : 'text-amber-300'}>{status?.accessibilityEnabled ? label('Enabled','فعال') : label('Not enabled','فعال نیست')}</strong></p>
           <p className="rounded-xl bg-white/5 p-3 text-sm">{label('Service connection', 'اتصال سرویس')}: <strong className={status?.serviceConnected ? 'text-emerald-300' : 'text-amber-300'}>{status?.serviceConnected ? label('Connected','متصل') : label('Disconnected','قطع')}</strong></p>
+        </div>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <p className="rounded-xl bg-white/5 p-3 text-sm">{label('Speech recognition', 'تشخیص گفتار')}: <strong className={status?.speechRecognizerAvailable ? 'text-emerald-300' : 'text-amber-300'}>{status?.speechRecognizerAvailable ? label('Available','موجود') : label('Not installed','نصب نیست')}</strong></p>
+          <p className="rounded-xl bg-white/5 p-3 text-sm">{label('Text-to-speech voice', 'صدای خواندن متن')}: <strong className={status?.ttsAvailable ? 'text-emerald-300' : 'text-amber-300'}>{status?.ttsAvailable ? label('Ready','آماده') : label('Not ready','آماده نیست')}</strong></p>
         </div>
         <button className={button + ' mt-3 w-full'} onClick={() => void run('settings', () => AFGJarvis.openAccessibilitySettings())}>{label('Open Accessibility settings', 'باز کردن تنظیمات دسترس‌پذیری')}</button>
         <p className="mt-3 text-xs leading-5 text-slate-400">{label('Enable “AFG AI Jarvis device controls” yourself. Android displays the system consent screen. The service does not record or upload screen events.', 'گزینه «کنترل دستگاه AFG AI Jarvis» را خودتان فعال کنید. اندروید صفحه تأیید سیستمی را نشان می‌دهد. این سرویس رویدادهای صفحه را ضبط یا ارسال نمی‌کند.')}</p>
