@@ -91,3 +91,30 @@ No staff role receives these permissions by default. Root admin can grant/revoke
 - No direct deployment, migration, destructive change, provider-key rotation or production password change during the read-only phase.
 - No builds/tests/deployments until separately authorized.
 - Never claim the deployment is private until direct-origin and edge-bypass tests prove it.
+
+
+## Implementation progress (2026-11-06)
+
+### Completed on `feat/9router-admin-control-plane`
+
+- Added the authenticated account role to the client profile type and populated it from `/api/auth/me`.
+- Replaced the old in-app Admin panel navigation item with a **9Router Admin portal** link shown only for `admin` and `superadmin` profiles.
+- The link opens a new browser tab, then asks AFG AI's existing authenticated `GET /api/9router/status` route for the configured dashboard URL. That route already enforces administrator-only access on the server. The browser never receives the 9Router service API key.
+- Removed the legacy in-app `AfgAdminPanel` renderer from the main application route.
+- Added dedicated 9Router staff permission identifiers to the permission type and role editor allowlist. Existing 9Router metrics/gateway routes now use dedicated read/security scopes rather than generic settings/usage scopes.
+
+### Not yet completed — do not treat as production-secure or fully migrated
+
+- The Railway 9Router dashboard origin is still publicly addressable unless separately protected. Hiding the link in AFG AI is not an edge/network access control.
+- The new link currently relies on 9Router's own browser login/password after redirect. No password is embedded in the URL or sent by AFG AI.
+- The AFG AI BFF for remote 9Router management operations is not implemented yet. The existing status route only discovers the dashboard URL and health; it does not migrate users, billing, model catalog, provider management, routing, audit, or security administration.
+- No Cloudflare Access/edge policy, private-origin restriction, password rotation, Railway variable changes, build, test, or deployment was performed in this change set.
+- The old server-side AFG AI admin APIs have not all been removed or migrated; removing their UI renderer does not remove those APIs.
+
+### Required next steps before claiming completion
+
+1. Lock the 9Router dashboard and management routes at the edge and verify direct Railway-origin bypass is denied.
+2. Implement scoped AFG AI BFF routes for every supported management domain, with server-only credentials, response validation, CSRF, rate limits and audit logging.
+3. Move each supported AFG AI management domain to 9Router-backed data and actions, keeping Resend in AFG AI and preserving the existing APInex/Tavily connections until verified.
+4. Add a root-admin-only onboarding/configuration path for the dashboard password and staff access grants; never put credentials in a URL.
+5. Run the full role, bypass, session-revocation and provider-cutover validation matrix after explicit approval.
