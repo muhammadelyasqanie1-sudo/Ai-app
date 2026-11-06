@@ -85,7 +85,7 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
           <div><h2 className="text-base font-semibold">{dari ? 'انتخاب مدل' : 'Select model'}</h2><p className="mt-1 text-xs opacity-60">{selectedProvider ? providerLabel(selectedProvider) + ' · ' + models.filter((model) => model.providerId === selectedProvider).length : providerEntries.length + ' providers'}</p></div>
           <button className="rounded-full p-2 hover:bg-black/5" onClick={()=>setOpen(false)} aria-label="Close"><X size={19}/></button>
         </header>
-        <div className="px-4 pt-3"><label className="afg-model-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={dari?'جستجوی مدل یا ارائه‌دهنده':'Search models or providers'}/></label></div>
+        {selectedProvider && <div className="px-4 pt-3"><label className="afg-model-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={dari?'جستجوی مدل یا ارائه‌دهنده':'Search models or providers'}/></label></div>}
         {!selectedProvider ? <div className="afg-provider-list">
           {providerEntries.map((provider) => <button key={provider.id} type="button" className="afg-provider-card" onClick={() => { setSelectedProvider(provider.id); setQuery(''); }}>
             <ProviderIcon provider={provider.id} />
