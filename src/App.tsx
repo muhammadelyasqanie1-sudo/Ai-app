@@ -17,6 +17,7 @@ import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { ErrorBoundary } from './components/afg/AfgDesignSystem';
 import { applyDocumentLocale } from './utils/i18n';
 import { apiFetch, getCsrfToken } from './lib/apiClient';
+import { AfgAuthWebView } from '@afg-ai/capacitor-auth-deeplink';
 import { useAlwaysLiveConnection } from './hooks/useAlwaysLiveConnection';
 
 import type { 
@@ -77,7 +78,8 @@ export default function App() {
   useAlwaysLiveConnection();
   useEffect(() => {
     let active = true;
-    fetch(API_BASE_URL + '/api/auth/providers', { credentials: 'include', cache: 'no-store' })
+    Promise.resolve(AfgAuthWebView.enableThirdPartyCookies()).catch(() => undefined)
+      .then(() => fetch(API_BASE_URL + '/api/auth/providers', { credentials: 'include', cache: 'no-store' }))
       .then((response) => response.ok ? response.json() : null)
       .then((data) => { if (active && typeof data?.csrfToken === 'string') sessionStorage.setItem('afg_csrf_token', data.csrfToken); })
       .catch(() => undefined);
