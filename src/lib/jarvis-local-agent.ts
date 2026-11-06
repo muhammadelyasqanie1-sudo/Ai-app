@@ -53,3 +53,60 @@ export function extractJarvisLocalCommand(raw: string): string | null {
     return null;
   }
 }
+
+export type JarvisNeedleConfig = { systemPrompt: string; toolsJson: string };
+
+export function buildJarvisNeedleCommandConfig(language: string): JarvisNeedleConfig {
+  const languageName = language === 'pashto' ? 'Afghan Pashto' : language === 'dari' || language === 'persian' ? 'Afghan Dari/Persian' : 'English, Dari and Pashto';
+  const systemPrompt = [
+    'You are JARVIS, a cautious offline Android command-intent classifier.',
+    'Understand short user requests in English, Afghan Dari/Persian, and Pashto (' + languageName + ').',
+    'Use the jarvis_command function only when one exact supported command clearly matches the request.',
+    'Never execute anything. You only propose one command for the app to validate and ask the user to confirm.',
+    'For unclear, unsupported, conversational, or multi-step requests, do not call a function.',
+    'Never invent app names, package names, phone numbers, message contents, arguments, or permissions.',
+    'Choose exactly one enum value from the tool schema. No other action is permitted.',
+  ].join(' ');
+  const toolsJson = JSON.stringify([{
+    name: 'jarvis_command',
+    description: 'Propose one safe, allowlisted Android command. This function is never executed by the model.',
+    parameters: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', enum: [...JARVIS_ALLOWED_COMMANDS], description: 'One exact command copied from the allowed values.' },
+      },
+      required: ['command'],
+    },
+  }]);
+  return { systemPrompt, toolsJson };
+}
+
+/** Extract one high-confidence proposal from Needle's structured function-call response. */
+export function extractJarvisNeedleCommand(raw: string, minimumConfidence = 0.65): string | null {
+  if (typeof raw !== 'string' || raw.length > 16000) return null;
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  try {
+    const parsed = JSON.parse(raw.slice(start, end + 1)) as {
+      confidence?: unknown;
+      function_calls?: unknown;
+    };
+    const confidence = typeof parsed.confidence === 'number' ? parsed.confidence : Number(parsed.confidence);
+    if (!Number.isFinite(confidence) || confidence < minimumConfidence || confidence > 1) return null;
+    if (!Array.isArray(parsed.function_calls) || parsed.function_calls.length !== 1) return null;
+    const call = parsed.function_calls[0] as { name?: unknown; arguments?: unknown; args?: unknown };
+    if (!call || call.name !== 'jarvis_command') return null;
+    let args: unknown = call.arguments ?? call.args;
+    if (typeof args === 'string') {
+      try { args = JSON.parse(args); } catch { return null; }
+    }
+    if (!args || typeof args !== 'object' || Array.isArray(args)) return null;
+    const command = (args as { command?: unknown }).command;
+    if (typeof command !== 'string' || command.length > 120) return null;
+    const candidate = command.trim();
+    return (JARVIS_ALLOWED_COMMANDS as readonly string[]).includes(candidate) ? candidate : null;
+  } catch {
+    return null;
+  }
+}

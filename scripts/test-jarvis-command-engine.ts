@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { parseJarvisCommand } from '../src/lib/jarvis-command-engine';
-import { buildJarvisLocalCommandPrompt, extractJarvisLocalCommand } from '../src/lib/jarvis-local-agent';
+import { buildJarvisLocalCommandPrompt, extractJarvisLocalCommand, buildJarvisNeedleCommandConfig, extractJarvisNeedleCommand } from '../src/lib/jarvis-local-agent';
 
 const cases: Array<{ input: string; expected: ReturnType<typeof parseJarvisCommand> }> = [
   { input: 'open Telegram', expected: { kind: 'app', packageName: 'org.telegram.messenger', label: 'Telegram' } },
@@ -32,4 +32,16 @@ assert.equal(extractJarvisLocalCommand('{"command":"' + 'x'.repeat(121) + '"}'),
 assert.equal(extractJarvisLocalCommand('x'.repeat(4001)), null);
 assert.match(buildJarvisLocalCommandPrompt('dari'), /Afghan Dari\/Persian/);
 assert.deepEqual(parseJarvisCommand(extractJarvisLocalCommand('{"command":"install another app"}') || ''), { kind: 'unknown' });
-process.stdout.write(`JARVIS parser and local intent guard: ${cases.length + 9} cases passed.\n`);
+const needleConfig = buildJarvisNeedleCommandConfig('dari');
+assert.match(needleConfig.systemPrompt, /Afghan Dari\/Persian/);
+assert.match(needleConfig.toolsJson, /jarvis_command/);
+assert.match(needleConfig.toolsJson, /open Telegram/);
+const needleResult = JSON.stringify({ confidence: 0.93, function_calls: [{ name: 'jarvis_command', arguments: { command: 'open Telegram' } }] });
+assert.equal(extractJarvisNeedleCommand(needleResult), 'open Telegram');
+assert.deepEqual(parseJarvisCommand(extractJarvisNeedleCommand(needleResult) || ''), { kind: 'app', packageName: 'org.telegram.messenger', label: 'Telegram' });
+assert.equal(extractJarvisNeedleCommand(JSON.stringify({ confidence: 0.2, function_calls: [{ name: 'jarvis_command', arguments: { command: 'open Telegram' } }] })), null);
+assert.equal(extractJarvisNeedleCommand(JSON.stringify({ confidence: 0.99, function_calls: [{ name: 'jarvis_command', arguments: { command: 'install app' } }] })), null);
+assert.equal(extractJarvisNeedleCommand(JSON.stringify({ confidence: 0.99, function_calls: [{ name: 'other_tool', arguments: { command: 'open Telegram' } }] })), null);
+assert.equal(extractJarvisNeedleCommand(JSON.stringify({ confidence: 0.99, function_calls: [{ name: 'jarvis_command', arguments: { command: 'open Telegram' } }, { name: 'jarvis_command', arguments: { command: 'back' } }] })), null);
+assert.equal(extractJarvisNeedleCommand('{not json'), null);
+process.stdout.write(`JARVIS parser and local model guards passed.\n`);

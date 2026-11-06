@@ -358,6 +358,36 @@ export async function downloadGGUF(options: {
   }
 }
 
+export const NEEDLE3_DOWNLOAD = {
+  repoId: 'Cactus-Compute/needle3',
+  fileName: 'needle3.cact',
+  revision: 'd6c7d6a2e9655505e0f8e23339356dd1705900eb',
+  expectedSha256: 'c9d915eca282ed42d1a09b143b592adb4cc6744ffe2d294adf5cfc5548170c38',
+} as const;
+
+/** Downloads the pinned official Needle 3 weights through Android DownloadManager and verifies SHA-256. */
+export async function downloadNeedle3Model(options: {
+  onProgress?: DownloadListener;
+  signal?: AbortSignal;
+} = {}): Promise<OfflineDownloadState> {
+  if (!isAndroidNative()) throw new Error('Needle 3 model downloads are currently supported only in the Android app.');
+  const id = NEEDLE3_DOWNLOAD.repoId + '/' + NEEDLE3_DOWNLOAD.fileName;
+  if (activeTasks.has(id)) throw new Error('Needle 3 is already downloading.');
+  activeTasks.set(id, { controller: new AbortController(), paused: false });
+  try {
+    const existing = (await AFGOfflineModels.listDownloads()).downloads.find(item => item.id === id);
+    const stalePin = existing && (existing.revision !== NEEDLE3_DOWNLOAD.revision ||
+      existing.expectedSha256?.toLowerCase() !== NEEDLE3_DOWNLOAD.expectedSha256.toLowerCase());
+    const unverifiedInstall = existing?.status === 'installed' && existing.hashVerified !== true;
+    if (existing && (stalePin || unverifiedInstall)) {
+      await AFGOfflineModels.deleteModel({ downloadId: existing.downloadId });
+    }
+    return await downloadGGUFAndroid({ ...NEEDLE3_DOWNLOAD, onProgress: options.onProgress, signal: options.signal });
+  } finally {
+    activeTasks.delete(id);
+  }
+}
+
 export function pauseGGUFDownload(id: string): void {
   if (isAndroidNative()) return; // Android DownloadManager retries/resumes interrupted transfers in the background.
   const task = activeTasks.get(id);

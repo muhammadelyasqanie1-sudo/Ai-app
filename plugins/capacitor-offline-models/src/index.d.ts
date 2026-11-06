@@ -28,6 +28,10 @@ export interface AFGOfflineModelsPlugin {
   cancelDownload(options: { downloadId: number }): Promise<{ removed: boolean }>;
   deleteModel(options: { downloadId: number }): Promise<{ deleted: boolean }>;
   getRuntimeInfo(): Promise<{ available: boolean; engine: string; abi: string; backend: string; reason?: string }>;
+  getNeedleRuntimeInfo(): Promise<{ available: boolean; engine: string; abi: string; backend: string; modelFormat: string; modelSha256: string; modelLoaded: boolean; modelReady: boolean; reason?: string }>;
+  loadNeedleModel(options: { path: string; systemPrompt: string; toolsJson: string }): Promise<{ loaded: boolean; engine: string; path: string; sizeBytes: number; sha256Verified: boolean }>;
+  completeNeedle(options: { input: string; maxTokens?: number }): Promise<{ text: string }>;
+  resetNeedle(): Promise<{ reset: boolean; modelMemoryReleased: boolean }>;
   loadModel(options: { path: string; contextSize?: number; threads?: number }): Promise<{ loaded: boolean; path: string; sizeBytes: number }>;
   generate(options: { messages: string; maxTokens?: number }): Promise<{ text: string }>;
   unloadModel(): Promise<{ unloaded: boolean }>;

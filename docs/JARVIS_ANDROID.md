@@ -54,13 +54,22 @@ The Android bridge now exposes additional explicit, pull-based tools:
 
 The JARVIS screen offers direct controls and the local command parser recognizes a small allowlist of English, Afghan Dari, Persian, Pashto and Arabic phrases for battery, network, sensors, vibration, torch, location, contacts, recent SMS and camera. Each parsed device action requires a confirmation dialog. Location, contacts, SMS and camera-related permissions are requested only when the user invokes the relevant feature. Results remain in the current screen's memory and are not uploaded by this plugin.
 
-### Generative offline model status
+### On-device model engines
 
-JARVIS currently has a small deterministic offline command parser only. It does not contain a general-purpose local LLM, Needle weights, a Cactus native runtime, or fully offline speech recognition. The official Cactus Android guide describes an Android native integration that needs an ARM64 `libcactus.so` engine and Kotlin bindings; those native artifacts are not currently packaged in this repository. Do not enable a model-download or AI-agent control button until the engine/model versions, checksums, licensing, memory footprint and Android 10 runtime have been verified on-device. See the [official Cactus Android integration guide](https://docs.cactuscompute.com/v1.12/android/).
+The Android offline-models plugin now packages two CPU runtimes for **arm64-v8a**:
 
-### Offline model boundary
+- **llama.cpp** for user-selected GGUF files. It is built from the pinned llama.cpp source revision already configured in CMake.
+- **Cactus Needle 3** for constrained command understanding and structured function-call proposals. Its official Android ARM64 static library is fetched at build time from the official Hugging Face artifact URL and checked against a pinned SHA-256 before linking.
 
-The current command parser is deterministic phrase matching and works offline; it is not Needle. The upstream Cactus project now hosts Needle 3 and the legacy 14 MB Needle 2 runtime separately. A production Android integration must bundle or provision a verified Android ABI engine and model asset, verify its Apache-2.0 licensing/redistribution terms and memory use on the target phone, and expose only the same permission-gated tools through a constrained function-call schema. This PR does not claim that a generative Needle model is bundled or that Telegram remote control works without internet.
+The Needle 3 weights are not embedded in the APK. JARVIS offers a one-time download of the official `needle3.cact` file (about 35 MB), uses the official model repository at a fixed revision, verifies its pinned SHA-256 both after download and again before loading, and stores it in AFG AI's private app-specific download directory. Inference is local after the model is downloaded. No provider API key is used.
+
+Needle receives one narrowly scoped `jarvis_command` tool schema whose command value is an enum of the existing JARVIS allowlist. The native runtime only proposes a function call; JavaScript extracts exactly one call, requires a confidence score of at least 0.65, then the deterministic parser validates it again. The model cannot invoke Android APIs. The user must still review and confirm each action, and Android permissions remain required.
+
+The upstream Needle C API owns a process-global model and exposes no model-free operation. Its weights therefore remain resident until the AFG AI process is fully closed. The UI warns that restarting the app is required before switching from Needle back to a GGUF model. Calls are serialized because the upstream C API is not thread-safe.
+
+The Android JNI layer disables upstream anonymous telemetry using `NEEDLE_TELEMETRY=0` and `DO_NOT_TRACK=1` before loading the model. The runtime and model are Apache-2.0 licensed; the upstream license and NOTICE are retained under `third_party/licenses` and bundled into the APK's public assets under `/licenses/`.
+
+This integration does **not** add Whistle speech weights or guarantee offline speech recognition. Android SpeechRecognizer remains a separate OS/provider feature and may require network access. Needle 3 is a small intent/tool-calling model, not a replacement for a general-purpose chat LLM.
 
 ## Local GGUF command understanding
 
@@ -71,11 +80,11 @@ JARVIS can reuse a GGUF file that the user has already downloaded in the **Offli
 3. Load the selected model. JARVIS uses a conservative 1,024-token context and two CPU threads, then translates a Dari/Pashto/English request into one exact command from the existing allowlist.
 4. The deterministic command parser validates the proposed command. The user must review and confirm it before any Android action runs. Unknown, malformed or unsupported model output is rejected.
 
-The existing Capacitor offline-model plugin builds a CPU llama.cpp JNI runtime for Android **arm64-v8a**. The Android offline build workflow installs the configured Android NDK/CMake toolchain and builds the native library from its pinned llama.cpp source revision. No separate runtime dependency or provider key is required. The model weights remain a separate user-selected download and are not included in the APK.
+The existing Capacitor offline-model plugin builds a CPU llama.cpp JNI runtime and links the pinned, SHA-256-verified Cactus Needle 3 Android ARM64 static runtime. The Android offline build workflow installs the configured Android NDK/CMake toolchain, downloads the official Needle archive with `scripts/download-needle-android.sh`, and checks the archive and header SHA-256 both before and during CMake configuration. Local Android builds must run that script before Gradle. No provider key is required. GGUF and `.cact` model weights remain separate downloads and are not included in the APK.
 
-This is a constrained intent router, not unrestricted autonomous phone control and not a general JARVIS conversation model. Inference runs locally after the model is loaded. Model loading and speed depend on free RAM, model architecture and quantization; low-memory phones may fail to load larger models. Only one native GGUF model can be loaded by this shared plugin at a time.
+This is a constrained intent router, not unrestricted autonomous phone control and not a general JARVIS conversation model. Inference runs locally after the selected model is loaded. Model loading and speed depend on free RAM, model architecture and quantization; low-memory phones may fail to load larger models. Needle 3's C API is process-global and has no model-free function, so fully close and restart AFG AI before switching from Needle 3 to a GGUF model.
 
-Needle 3 is **not** installed by this integration. Its `.cact` weights and Cactus engine are separate from llama.cpp/GGUF and require a distinct Android native runtime package.
+Needle 3 is integrated as a second Android native runtime; its `.cact` model weights are downloaded separately and verified before use.
 
 ## Security and platform boundaries
 
@@ -85,7 +94,7 @@ Needle 3 is **not** installed by this integration. Its `.cact` weights and Cactu
 - Android and individual apps can block or constrain automation. The service cannot grant itself accessibility permission.
 - The app requests microphone, camera (torch only), location, contacts and SMS permissions only when the user invokes the related feature. It does not request overlay, notification-listener or device-admin privileges.
 - Fully offline speech-to-text is not implemented: Android SpeechRecognizer may still require network access. The local command parser includes Afghan Dari wording (including common `را`/`ره` command forms) and works offline only after speech has been transcribed; it is not a replacement speech model.
-- JARVIS can optionally use the existing Android llama.cpp runtime with a locally downloaded, SHA-256-verified GGUF model for constrained multilingual command understanding. It does not bundle model weights or download them automatically. Needle 3/Cactus uses a different `.cact` format/runtime and is not integrated. A persistent floating bubble, hand-gesture recognition, flight radar, and anti-theft/lockout features are not implemented.
+- JARVIS supports the Android llama.cpp/GGUF runtime and the Cactus Needle 3/`.cact` runtime. GGUF weights are selected from Offline AI Hub; Needle 3 weights can be downloaded from the JARVIS panel and SHA-256 verified. Both models are separate downloads and are not embedded in the APK. A persistent floating bubble, hand-gesture recognition, flight radar, and anti-theft/lockout features are not implemented.
 - The Android app must be rebuilt for the native plugin to be packaged. A web-only deployment cannot control the phone.
 - Google Play distribution of accessibility-based automation is subject to Play policy and review; sideloading does not remove Android's own permission and security boundaries.
 
@@ -112,7 +121,7 @@ The deterministic parser regression suite is available as `npm run test:jarvis-c
 
 ## Verification status
 
-Source files and manifest wiring were inspected. Per repository policy, no tests, type-check, lint, Android sync, build, APK workflow, or deployment was run. Native runtime behavior, camera result handling, permission behavior across Android vendors, and Google Play eligibility still require device verification. Install dependencies and run Capacitor Android sync/build only after the project owner authorizes those operations.
+Source changes are prepared for CI validation. The Android workflow must successfully download and verify the pinned Cactus archive, link both native engines, and assemble the APK before this integration is considered build-verified. Native Needle inference, model download on the target network, memory use, and Android device-control behavior still require testing on the physical phone. No deployment or database migration is performed.
 
 
 The local device toolkit does not require root access. Android runtime permissions are requested only when the user invokes the corresponding feature; the operating system remains responsible for granting or denying each permission.

@@ -28,19 +28,31 @@ import java.util.UUID;
 public class AFGOfflineModelsPlugin extends Plugin {
     private static final String PREFS = "afg_ai_offline_downloads";
     private static final String PREFIX = "download_";
+    private static final String NEEDLE_MODEL_SHA256 = "c9d915eca282ed42d1a09b143b592adb4cc6744ffe2d294adf5cfc5548170c38";
     private static final boolean NATIVE_RUNTIME_AVAILABLE;
+    private static final boolean NEEDLE_RUNTIME_AVAILABLE;
 
     static {
-        boolean loaded;
-        try { System.loadLibrary("afg_llama_jni"); loaded = true; }
-        catch (UnsatisfiedLinkError error) { loaded = false; android.util.Log.e("AFGOfflineModels", "llama.cpp native library unavailable", error); }
-        NATIVE_RUNTIME_AVAILABLE = loaded;
+        boolean llamaLoaded;
+        try { System.loadLibrary("afg_llama_jni"); llamaLoaded = true; }
+        catch (UnsatisfiedLinkError error) { llamaLoaded = false; android.util.Log.e("AFGOfflineModels", "llama.cpp native library unavailable", error); }
+        NATIVE_RUNTIME_AVAILABLE = llamaLoaded;
+        boolean needleLoaded;
+        try { System.loadLibrary("afg_needle_jni"); needleLoaded = true; }
+        catch (UnsatisfiedLinkError error) { needleLoaded = false; android.util.Log.e("AFGOfflineModels", "Cactus Needle 3 native library unavailable", error); }
+        NEEDLE_RUNTIME_AVAILABLE = needleLoaded;
     }
 
     private native boolean nativeLoadModel(String path, String nativeLibraryDirectory, int contextSize, int threads);
     private native String nativeGenerate(String messagesJson, int maxTokens);
     private native void nativeUnloadModel();
     private native String nativeGetLastError();
+    private native boolean nativeLoadNeedleModel(String path, String systemPrompt, String toolsJson);
+    private native String nativeCompleteNeedle(String input, int maxTokens);
+    private native void nativeResetNeedle();
+    private native String nativeGetNeedleError();
+    private native boolean nativeIsNeedleModelLoaded();
+    private native boolean nativeIsNeedleModelReady();
 
     private DownloadManager manager() {
         return (DownloadManager) getContext().getSystemService(Context.DOWNLOAD_SERVICE);
@@ -177,6 +189,91 @@ public class AFGOfflineModelsPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void getNeedleRuntimeInfo(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("available", NEEDLE_RUNTIME_AVAILABLE);
+        result.put("engine", NEEDLE_RUNTIME_AVAILABLE ? "Cactus Needle 3" : "unavailable");
+        result.put("abi", Build.SUPPORTED_ABIS != null && Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "unknown");
+        result.put("backend", "CPU");
+        result.put("modelFormat", ".cact");
+        result.put("modelLoaded", NEEDLE_RUNTIME_AVAILABLE && nativeIsNeedleModelLoaded());
+        result.put("modelReady", NEEDLE_RUNTIME_AVAILABLE && nativeIsNeedleModelReady());
+        result.put("modelSha256", NEEDLE_MODEL_SHA256);
+        if (!NEEDLE_RUNTIME_AVAILABLE) result.put("reason", "The verified Cactus Needle 3 Android ARM64 runtime is not included in this APK.");
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void loadNeedleModel(PluginCall call) {
+        if (!NEEDLE_RUNTIME_AVAILABLE) { call.reject("The Cactus Needle 3 Android runtime is not available in this APK."); return; }
+        String path = call.getString("path", "");
+        String systemPrompt = call.getString("systemPrompt", "");
+        String toolsJson = call.getString("toolsJson", "");
+        try {
+            File model = new File(path);
+            File modelRoot = modelDirectory();
+            String rootPath = modelRoot.getCanonicalPath() + File.separator;
+            String modelPath = model.getCanonicalPath();
+            if (!modelPath.startsWith(rootPath) || !model.isFile() || model.length() <= 0 ||
+                model.length() > 64L * 1024L * 1024L || !model.getName().endsWith("-needle3.cact")) {
+                call.reject("A valid Needle 3 .cact file inside AFG AI's private model directory is required.");
+                return;
+            }
+            String actualSha = sha256(model);
+            if (!NEEDLE_MODEL_SHA256.equalsIgnoreCase(actualSha)) {
+                call.reject("Needle 3 model SHA-256 verification failed. The model will not be loaded.");
+                return;
+            }
+            if (systemPrompt.length() > 8000 || toolsJson.length() > 12000 || systemPrompt.isEmpty() || toolsJson.isEmpty()) {
+                call.reject("The Needle system prompt or tool schema is invalid or too large.");
+                return;
+            }
+            if (!nativeLoadNeedleModel(modelPath, systemPrompt, toolsJson)) {
+                call.reject(nativeGetNeedleError());
+                return;
+            }
+            JSObject result = new JSObject();
+            result.put("loaded", true);
+            result.put("engine", "Cactus Needle 3");
+            result.put("path", model.getAbsolutePath());
+            result.put("sizeBytes", model.length());
+            result.put("sha256Verified", true);
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("Unable to load the verified Needle 3 model.", error);
+        }
+    }
+
+    @PluginMethod
+    public void completeNeedle(PluginCall call) {
+        if (!NEEDLE_RUNTIME_AVAILABLE) { call.reject("The Cactus Needle 3 Android runtime is not available in this APK."); return; }
+        String input = call.getString("input", "");
+        Integer maxTokens = call.getInt("maxTokens");
+        if (input == null || input.trim().isEmpty() || input.length() > 1200) {
+            call.reject("A JARVIS command between 1 and 1,200 characters is required.");
+            return;
+        }
+        try {
+            String response = nativeCompleteNeedle(input, maxTokens == null ? 128 : maxTokens);
+            if (response == null) { call.reject(nativeGetNeedleError()); return; }
+            JSObject result = new JSObject();
+            result.put("text", response);
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("Needle 3 local inference failed.", error);
+        }
+    }
+
+    @PluginMethod
+    public void resetNeedle(PluginCall call) {
+        if (NEEDLE_RUNTIME_AVAILABLE) nativeResetNeedle();
+        JSObject result = new JSObject();
+        result.put("reset", true);
+        result.put("modelMemoryReleased", false);
+        call.resolve(result);
+    }
+
+    @PluginMethod
     public void loadModel(PluginCall call) {
         if (!NATIVE_RUNTIME_AVAILABLE) { call.reject("The Android llama.cpp runtime is not available in this APK."); return; }
         String path = call.getString("path", "");
@@ -233,9 +330,13 @@ public class AFGOfflineModelsPlugin extends Plugin {
             if (!"https".equalsIgnoreCase(uri.getScheme()) || !"huggingface.co".equalsIgnoreCase(uri.getHost())) {
                 call.reject("Only HTTPS Hugging Face model downloads are allowed."); return;
             }
-            if (!repoId.matches("[^/]+/[^/]+") || fileName.isEmpty() || !fileName.toLowerCase(Locale.ROOT).endsWith(".gguf") ||
+            boolean gguf = fileName.toLowerCase(Locale.ROOT).endsWith(".gguf");
+            String pinnedNeedleUrl = "https://huggingface.co/Cactus-Compute/needle3/resolve/d6c7d6a2e9655505e0f8e23339356dd1705900eb/needle3.cact";
+            boolean needle3 = "Cactus-Compute/needle3".equals(repoId) && "d6c7d6a2e9655505e0f8e23339356dd1705900eb".equals(revision) && "needle3.cact".equals(fileName) &&
+                    NEEDLE_MODEL_SHA256.equalsIgnoreCase(expectedSha) && pinnedNeedleUrl.equals(url);
+            if (!repoId.matches("[^/]+/[^/]+") || fileName.isEmpty() || (!gguf && !needle3) ||
                     fileName.contains("..") || fileName.startsWith("/")) {
-                call.reject("Invalid GGUF model selection."); return;
+                call.reject("Only GGUF files or the pinned, SHA-256 verified official Needle 3 model are allowed."); return;
             }
             File directory = modelDirectory();
             String safeName = UUID.randomUUID().toString() + "-" + new File(fileName).getName().replaceAll("[^a-zA-Z0-9._-]", "_");

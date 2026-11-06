@@ -1,0 +1,15 @@
+Cactus Compute / Needle 3
+
+The Cactus Needle 3 Android ARM64 engine and the Needle 3 model weights
+are provided by Cactus Compute, Inc. under the Apache License, Version 2.0.
+
+Upstream engine and model:
+https://github.com/cactus-compute/cactus
+https://huggingface.co/Cactus-Compute/needle3
+
+The Android engine archive is fetched at build time from a pinned upstream
+revision and SHA-256 verified by CMake. The Needle 3 model weights are
+downloaded by the Android app and SHA-256 verified before loading.
+
+Needle 3 is a third-party component; AFG AI is not affiliated with Cactus
+Compute, Inc.
