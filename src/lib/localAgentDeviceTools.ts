@@ -7,18 +7,20 @@ export type DeviceToolResult = { handled: true; text: string } | { handled: fals
  * Deterministic, allowlisted device commands. The language model never gets
  * arbitrary shell access. Calling and SMS open Android's own confirmation UI.
  */
-export async function runExplicitDeviceCommand(input: string): Promise<DeviceToolResult> {
+export async function runExplicitDeviceCommand(input: string, language = 'english'): Promise<DeviceToolResult> {
   if (Capacitor.getPlatform() !== 'android') return { handled: false };
   const text = input.trim();
   const lower = text.toLowerCase();
+  const isDari = language === 'dari' || language === 'persian';
 
   const wantsBattery = /\b(battery|charge level|charging status)\b/.test(lower) ||
     /(باتری|شارژ گوشی|میزان شارژ)/.test(text);
   if (wantsBattery) {
     const battery = await AFGOfflineModels.getBatteryStatus();
     const level = battery.level >= 0 ? battery.level + '%' : 'unknown';
-    return { handled: true, text: 'Battery: ' + level + '. Charging: ' + (battery.charging ? 'yes' : 'no') +
-      (battery.temperatureC >= 0 ? '. Temperature: ' + battery.temperatureC.toFixed(1) + '°C.' : '.') };
+    return { handled: true, text: isDari
+      ? 'میزان باتری: ' + level + '. وضعیت شارژ: ' + (battery.charging ? 'در حال شارژ' : 'در حال شارژ نیست') + (battery.temperatureC >= 0 ? '. دمای باتری: ' + battery.temperatureC.toFixed(1) + '°C.' : '.')
+      : 'Battery: ' + level + '. Charging: ' + (battery.charging ? 'yes' : 'no') + (battery.temperatureC >= 0 ? '. Temperature: ' + battery.temperatureC.toFixed(1) + '°C.' : '.') };
   }
 
   const appMatch = lower.match(/\b(open|launch|start)\s+(youtube|maps|chrome|settings|camera|telegram|whatsapp)\b/) ||
@@ -33,12 +35,12 @@ export async function runExplicitDeviceCommand(input: string): Promise<DeviceToo
     const app = appMap[raw];
     if (!app) return { handled: false };
     await AFGOfflineModels.openApp({ app });
-    return { handled: true, text: 'Opened ' + app + ' using Android.' };
+    return { handled: true, text: isDari ? 'برنامه ' + app + ' در اندروید باز شد.' : 'Opened ' + app + ' using Android.' };
   }
 
   if (/\b(vibrate|vibration|buzz)\b/.test(lower) || /(لرزش|ویبره)/.test(text)) {
     await AFGOfflineModels.vibrate({ durationMs: 180 });
-    return { handled: true, text: 'Vibration activated.' };
+    return { handled: true, text: isDari ? 'لرزش گوشی فعال شد.' : 'Vibration activated.' };
   }
 
   const callMatch = lower.match(/\b(?:call|dial)\s+(\+?[0-9][0-9\s().-]{4,24})/) ||
@@ -46,7 +48,7 @@ export async function runExplicitDeviceCommand(input: string): Promise<DeviceToo
   if (callMatch) {
     const phone = normalizePhone(callMatch[1]);
     await AFGOfflineModels.requestCallConfirmation({ phoneNumber: phone });
-    return { handled: true, text: 'Android dialer opened. Review the number and tap Call yourself to confirm.' };
+    return { handled: true, text: isDari ? 'صفحه تماس باز شد. شماره را بررسی کنید و برای تأیید خودتان دکمه تماس را بزنید.' : 'Android dialer opened. Review the number and tap Call yourself to confirm.' };
   }
 
   const smsMatch = text.match(/(?:send sms|text)\s+(\+?[0-9][0-9\s().-]{4,24})\s*[:,-]\s*([\s\S]{1,5000})/i) ||
@@ -54,7 +56,7 @@ export async function runExplicitDeviceCommand(input: string): Promise<DeviceToo
   if (smsMatch) {
     const phone = normalizePhone(smsMatch[1]);
     await AFGOfflineModels.requestSmsConfirmation({ phoneNumber: phone, message: smsMatch[2].trim() });
-    return { handled: true, text: 'Android SMS composer opened. Review the recipient and message, then tap Send yourself.' };
+    return { handled: true, text: isDari ? 'صفحه پیامک باز شد. گیرنده و متن پیام را بررسی کنید و برای ارسال خودتان دکمه ارسال را بزنید.' : 'Android SMS composer opened. Review the recipient and message, then tap Send yourself.' };
   }
 
   return { handled: false };
