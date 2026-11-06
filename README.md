@@ -149,3 +149,16 @@ See [ANDROID_BUILD.md](ANDROID_BUILD.md). Building an APK does not deploy the ba
 The Android JARVIS bridge provides user-confirmed, on-device controls for battery status, vibration, flashlight, network status, last-known location, camera preview, contacts, recent SMS, sensor inventory, phone dialer and SMS composer. Sensitive data access is permission-gated and is not uploaded by the native plugin. Calls and SMS are handed to Android's system UI for the user to complete; they are never sent automatically. See [JARVIS Android documentation](docs/JARVIS_ANDROID.md) for platform and Google Play permission limitations.
 
 The current multilingual offline command parser is deterministic phrase matching, not a bundled Needle model. The Cactus Needle runtime is a separate integration task requiring a verified Android engine/ABI and model asset.
+
+
+## Recent integration status — 2026-11-06
+
+The following implementation changes have been merged into `main`:
+
+- **JARVIS Android device toolkit:** native Capacitor methods for battery, network transport, sensors, vibration, flashlight, cached location, contacts, recent SMS, camera capture, clipboard, dialer and SMS composer. Sensitive actions require Android permissions or explicit user interaction. Calling and sending SMS are completed by the user in Android system UI.
+- **JARVIS language commands:** deterministic offline phrase matching includes English, Dari/Persian, Pashto and Arabic aliases. This is not a bundled generative Needle model, and speech recognition availability remains dependent on the Android device's speech service.
+- **API key lifecycle:** migration `0034_api_key_lifecycle_usage_ledger.sql` adds active/waiting/expired/revoked state and owner-supplied expiry/renewal dates. Apply the migration explicitly before using the new fields; it has not been applied to a hosted database as part of this source change.
+- **API usage view:** authenticated connector-run summaries report actual request totals, successes, failures and latency. Provider costs are not estimated when trustworthy provider cost data is unavailable.
+- **Administration:** the legacy in-app admin UI has been removed; user and subscription administration is handled by the separate authenticated 9Router control plane.
+
+**Release status:** these are merged source implementations, not a production-readiness claim. The web pull-request checks cover TypeScript, database configuration, admin RBAC, offline SHA-256 and the production web build. Native Android APK compilation and device permission/behavior checks require the separate manual Android workflow and a real Android device. Database migration 0034 must be reviewed and applied separately with a backup/recovery plan.
