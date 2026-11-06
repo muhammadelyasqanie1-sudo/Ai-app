@@ -501,9 +501,14 @@ export async function getVerifiedModelDescriptors(): Promise<ModelDescriptor[]> 
       const enabledModels = await syncDiscoveredModels(provider, models);
       const withOverrides = await applyCapabilityOverrides(provider.id, models);
       const liveIds = new Set(models.map((model) => model.id));
-      // Keep administrator-registered catalogue entries alongside the live upstream
-      // catalogue. They remain non-selectable until their own health probe succeeds.
-      const storedOnly = (await getStoredModels(provider.id)).filter((model) => !liveIds.has(model.id));
+      // Retain administrator-registered entries for visibility, but never treat a
+      // stale 9Router model as healthy: its catalogue-only verification would
+      // otherwise mark it selectable even after its upstream provider was removed.
+      const storedOnly = (await getStoredModels(provider.id))
+        .filter((model) => !liveIds.has(model.id))
+        .map((model) => provider.id === '9router'
+          ? { ...model, enabled: false, verifiedAt: null }
+          : model);
       const configuredModels = [
         ...withOverrides.map((model) => ({
           ...model,
