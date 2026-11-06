@@ -6,6 +6,7 @@ import { handleApiRequest } from './src/api/http.ts';
 import { installConsoleSecretRedaction } from './src/security/redaction.ts';
 import { pool } from './src/api/database.ts';
 import { syncPublicApiCatalog } from './src/services/publicApiCatalog.ts';
+import { getVerifiedModelDescriptors } from './src/services/providerGateway.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -72,6 +73,29 @@ app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
+async function bootstrapProviderCatalog() {
+  try {
+    const models = await getVerifiedModelDescriptors();
+    const chatModels = models.filter((model) =>
+      model.enabled && model.verifiedAt !== null && model.capabilities.text && model.capabilities.streaming
+    );
+    const providerCounts = Object.fromEntries(
+      [...new Set(models.map((model) => model.providerId))].map((providerId) => [
+        providerId, models.filter((model) => model.providerId === providerId).length,
+      ])
+    );
+    console.info('AFG_PROVIDER_CATALOG_BOOTSTRAP_COMPLETED', JSON.stringify({
+      discovered: models.length,
+      verifiedChatModels: chatModels.length,
+      providerCounts,
+    }));
+  } catch (error) {
+    console.warn('AFG_PROVIDER_CATALOG_BOOTSTRAP_FAILED', JSON.stringify({
+      error: error instanceof Error ? error.message.slice(0, 240) : 'unknown_error',
+    }));
+  }
+}
+
 async function bootstrapPublicApiCatalog() {
   if (!pool) {
     console.warn('AFG_PUBLIC_API_CATALOG_BOOTSTRAP_SKIPPED', JSON.stringify({ reason: 'database_unavailable' }));
@@ -96,4 +120,5 @@ async function bootstrapPublicApiCatalog() {
 app.listen(PORT, () => {
   console.info('SERVER_LISTENING', JSON.stringify({ port: PORT, service: 'afg-ai-api' }));
   void bootstrapPublicApiCatalog();
+  void bootstrapProviderCatalog();
 });
