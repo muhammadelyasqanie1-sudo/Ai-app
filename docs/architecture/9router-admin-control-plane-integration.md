@@ -170,3 +170,12 @@ This contract was checked against the upstream source tree; before implementatio
 - The 9Router control-plane security work through PR #15 is merged: dedicated browser entry, permission-aware management center, audit events for provider/routing/settings/API-key/OAuth/usage-reset operations, persistent login lockouts, owner-only database export/import, `usage:manage` for credit-consuming resets, `providers:manage` for all OAuth actions, and local-only restrictions for host package installers.
 - The 9Router repository's PRs #1–#15 are all merged. This confirms source integration only; it does not confirm that the Railway Docker-image deployment is running this source.
 - This code change only updates the AFG AI portal destination. It does not deploy the AFG AI repository or change the live Railway Docker-image service. Production behavior remains unverified until both applications are deployed and the login/role matrix is tested.
+
+### Read-only AFG AI platform bridge (source implementation)
+
+- Added `GET /api/internal/9router/overview` as a server-to-server endpoint protected by `AFG_AI_9ROUTER_BRIDGE_TOKEN` (minimum 32 characters, constant-time digest comparison).
+- The endpoint returns aggregate-only user, usage, latency, request, provider, model, integration, and feature-flag counts. It does not return user records, email addresses, provider keys, or secret values.
+- The endpoint is not a browser API. 9Router calls it from its server route using a server-only bearer credential.
+- Configure the same high-entropy `AFG_AI_9ROUTER_BRIDGE_TOKEN` in AFG AI and 9Router, and set `AFG_AI_ADMIN_API_URL` on 9Router to the exact HTTPS endpoint URL.
+- The existing AFG AI admin API/database remains intact. This is read-only visibility only; subscription/user mutations, feature-flag changes, announcements, rate limits, sessions, security events, audit details, error export, and other app-specific controls are not migrated yet.
+- No build, tests, environment changes, or deployment were run. Live behavior remains unavailable until both services receive the server-side settings and are deployed.
