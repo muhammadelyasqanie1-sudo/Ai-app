@@ -67,7 +67,7 @@ Needle receives one narrowly scoped `jarvis_command` tool schema whose command v
 
 The upstream Needle C API owns a process-global model and exposes no model-free operation. Its weights therefore remain resident until the AFG AI process is fully closed. The UI warns that restarting the app is required before switching from Needle back to a GGUF model. Calls are serialized because the upstream C API is not thread-safe.
 
-The Android JNI layer disables upstream anonymous telemetry using `NEEDLE_TELEMETRY=0` and `DO_NOT_TRACK=1` before loading the model. The runtime and model are Apache-2.0 licensed; the upstream license is retained under `third_party/licenses`.
+The Android JNI layer disables upstream anonymous telemetry using `NEEDLE_TELEMETRY=0` and `DO_NOT_TRACK=1` before loading the model. The runtime and model are Apache-2.0 licensed; the upstream license and NOTICE are retained under `third_party/licenses` and bundled into the APK's public assets under `/licenses/`.
 
 This integration does **not** add Whistle speech weights or guarantee offline speech recognition. Android SpeechRecognizer remains a separate OS/provider feature and may require network access. Needle 3 is a small intent/tool-calling model, not a replacement for a general-purpose chat LLM.
 
