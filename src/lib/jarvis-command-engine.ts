@@ -14,16 +14,16 @@ const appAliases: Array<{ packageName: string; label: string; aliases: string[] 
 ];
 
 const deviceAliases: Array<{ action: Extract<JarvisCommand, {kind:'device'}>['action']; aliases: string[] }> = [
-  { action: 'battery', aliases: ['battery', 'battery status', 'battery level', 'what is my battery level', 'check battery', 'وضعیت باتری', 'سطح باتری', 'باتری چقدر است', 'بیټرۍ', 'د بیټرۍ حالت', 'حالة البطارية'] },
-  { action: 'network', aliases: ['network status', 'check network', 'internet status', 'wifi status', 'وضعیت شبکه', 'وضعیت اینترنت', 'حالت وای فای', 'د شبکې حالت', 'حالة الشبكة'] },
+  { action: 'battery', aliases: ['battery', 'battery status', 'battery level', 'what is my battery level', 'check battery', 'وضعیت باتری', 'سطح باتری', 'باتری چقدر است', 'باتری چند فیصد است', 'چند فیصد چارج دارم', 'چقدر شارژ دارم', 'شارژ باتری', 'بیټرۍ', 'د بیټرۍ حالت', 'د بیټرۍ چارج څو دی', 'حالة البطارية'] },
+  { action: 'network', aliases: ['network status', 'check network', 'internet status', 'wifi status', 'وضعیت شبکه', 'وضعیت اینترنت', 'حالت وای فای', 'اینترنت وصل است', 'اینترنت کار می‌کند', 'اینترنت فعال است', 'وای فای وصل است', 'د شبکې حالت', 'د انټرنېټ حالت', 'انټرنېټ وصل دی', 'حالة الشبكة'] },
   { action: 'sensors', aliases: ['list sensors', 'check sensors', 'phone sensors', 'hardware sensors', 'حسگرها', 'سنسورها', 'حسگرهای گوشی', 'سنسورونه', 'المستشعرات'] },
-  { action: 'vibrate', aliases: ['vibrate', 'vibrate phone', 'buzz phone', 'لرزش', 'گوشی را بلرزان', 'موبایل ره بلرزان', 'وړاندې ولړزوه'] },
-  { action: 'torchOn', aliases: ['turn on flashlight', 'flashlight on', 'torch on', 'چراغ قوه را روشن کن', 'چراغ‌قوه ره روشن کو', 'فلش روشن', 'فلش ره روشن کو', 'څراغ بل کړه'] },
-  { action: 'torchOff', aliases: ['turn off flashlight', 'flashlight off', 'torch off', 'چراغ قوه را خاموش کن', 'چراغ‌قوه ره خاموش کو', 'فلش خاموش', 'فلش ره بند کو', 'څراغ مړ کړه'] },
-  { action: 'location', aliases: ['where am i', 'get my location', 'current location', 'موقعیت من کجاست', 'موقعیت فعلی', 'لوکیشن', 'زه چېرته یم', 'موقعي الحالي'] },
-  { action: 'contacts', aliases: ['list contacts', 'show contacts', 'my contacts', 'مخاطبین', 'لیست مخاطبین', 'شماره هایم', 'اړیکې', 'جهات الاتصال'] },
-  { action: 'recentSms', aliases: ['read recent sms', 'last five messages', 'read last 5 sms', 'پیامک های اخیر', 'پیامک‌های اخیر', 'پنج پیامک اخیر', 'وروستي پیغامونه', 'الرسائل الأخيرة'] },
-  { action: 'camera', aliases: ['take a photo', 'open camera', 'take photo', 'عکس بگیر', 'دوربین را باز کن', 'دوربین ره باز کو', 'عکس واخله', 'افتح الكاميرا'] },
+  { action: 'vibrate', aliases: ['vibrate', 'vibrate phone', 'buzz phone', 'لرزش', 'گوشی را بلرزان', 'گوشی ره بلرزان', 'گوشی بلرزان', 'موبایل ره بلرزان', 'موبایل را بلرزان', 'موبایل بلرزان', 'وړاندې ولړزوه', 'موبایل ولړزوه'] },
+  { action: 'torchOn', aliases: ['turn on flashlight', 'flashlight on', 'torch on', 'چراغ قوه را روشن کن', 'چراغ‌قوه ره روشن کو', 'چراغ قوه روشن کن', 'چراغ‌قوه روشن', 'چراغ را روشن کن', 'فلش روشن', 'فلش را روشن کن', 'فلش ره روشن کو', 'څراغ بل کړه', 'فلش بل کړه'] },
+  { action: 'torchOff', aliases: ['turn off flashlight', 'flashlight off', 'torch off', 'چراغ قوه را خاموش کن', 'چراغ‌قوه ره خاموش کو', 'چراغ قوه خاموش کن', 'چراغ‌قوه خاموش', 'چراغ را خاموش کن', 'فلش خاموش', 'فلش را خاموش کن', 'فلش ره بند کو', 'څراغ مړ کړه', 'فلش بند کړه'] },
+  { action: 'location', aliases: ['where am i', 'get my location', 'current location', 'موقعیت من کجاست', 'موقعیت فعلی', 'موقعیت مرا نشان بده', 'موقعیت مرا بگو', 'لوکیشن', 'لوکیشن من', 'زه چېرته یم', 'زما ځای وښایه', 'موقعي الحالي'] },
+  { action: 'contacts', aliases: ['list contacts', 'show contacts', 'my contacts', 'مخاطبین', 'لیست مخاطبین', 'شماره هایم', 'شماره‌های تماس', 'اړیکې', 'اړیکې وښایه', 'جهات الاتصال'] },
+  { action: 'recentSms', aliases: ['read recent sms', 'last five messages', 'read last 5 sms', 'پیامک های اخیر', 'پیامک‌های اخیر', 'پنج پیامک اخیر', 'پیامک های آخر', 'وروستي پیغامونه', 'وروستي پنځه پیغامونه', 'الرسائل الأخيرة'] },
+  { action: 'camera', aliases: ['take a photo', 'open camera', 'take photo', 'عکس بگیر', 'یک عکس بگیر', 'عکس بگیر لطفاً', 'دوربین را باز کن', 'دوربین ره باز کو', 'عکس واخله', 'انځور واخله', 'افتح الكاميرا'] },
 ];
 
 const actionAliases: Array<{ action: JarvisAction; aliases: string[] }> = [
@@ -48,9 +48,11 @@ function normalize(value: string): string {
 function appPhraseMatches(command: string, alias: string): boolean {
   const name = normalize(alias);
   const exactPhrases = [
-    name, 'open ' + name, 'باز کن ' + name, 'برو به ' + name,
+    name, 'open ' + name, 'open the ' + name, 'please open ' + name,
+    'launch ' + name, 'start ' + name, 'باز کن ' + name, 'بازکردن ' + name,
+    'برو به ' + name, 'لطفا باز کن ' + name, 'لطفا ' + name + ' را باز کن',
     name + ' را باز کن', name + ' ره باز کن', name + ' ره باز کو',
-    name + ' را باز کو', 'خلاص کړه ' + name, 'افتح ' + name,
+    name + ' را باز کو', name + ' باز کن', 'خلاص کړه ' + name, 'افتح ' + name,
   ];
   return exactPhrases.some(phrase => command === normalize(phrase));
 }
@@ -60,12 +62,20 @@ export function parseJarvisCommand(input: string): JarvisCommand {
   const command = normalize(input);
   if (!command || command.length > 120) return { kind: 'unknown' };
 
-  const app = appAliases.find(item => item.aliases.some(alias => appPhraseMatches(command, alias)));
+  const politeCommand = command
+    .replace(/^(please|kindly|لطفا|لطفاً|مهرباني وکړئ)\\s+/, '')
+    .replace(/\\s+(please|لطفا|لطفاً)$/, '')
+    .trim();
+
+  const app = appAliases.find(item => item.aliases.some(alias =>
+    appPhraseMatches(command, alias) || appPhraseMatches(politeCommand, alias)));
   if (app) return { kind: 'app', packageName: app.packageName, label: app.label };
 
-  const device = deviceAliases.find(item => item.aliases.some(alias => command === normalize(alias)));
+  const device = deviceAliases.find(item => item.aliases.some(alias =>
+    command === normalize(alias) || politeCommand === normalize(alias)));
   if (device) return { kind: 'device', action: device.action };
 
-  const action = actionAliases.find(item => item.aliases.some(alias => command === normalize(alias)));
+  const action = actionAliases.find(item => item.aliases.some(alias =>
+    command === normalize(alias) || politeCommand === normalize(alias)));
   return action ? { kind: 'action', action: action.action } : { kind: 'unknown' };
 }
