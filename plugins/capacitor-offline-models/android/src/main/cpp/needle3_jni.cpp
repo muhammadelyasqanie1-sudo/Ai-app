@@ -1,6 +1,6 @@
 #include <jni.h>
 #include <android/log.h>
-#include "needle_api.h"
+#include "prebuilt/needle.h"
 
 #include <algorithm>
 #include <cstdlib>
