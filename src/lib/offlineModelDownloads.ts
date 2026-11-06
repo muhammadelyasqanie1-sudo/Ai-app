@@ -376,7 +376,10 @@ export async function downloadNeedle3Model(options: {
   activeTasks.set(id, { controller: new AbortController(), paused: false });
   try {
     const existing = (await AFGOfflineModels.listDownloads()).downloads.find(item => item.id === id);
-    if (existing?.status === 'installed' && existing.hashVerified !== true) {
+    const stalePin = existing && (existing.revision !== NEEDLE3_DOWNLOAD.revision ||
+      existing.expectedSha256?.toLowerCase() !== NEEDLE3_DOWNLOAD.expectedSha256.toLowerCase());
+    const unverifiedInstall = existing?.status === 'installed' && existing.hashVerified !== true;
+    if (existing && (stalePin || unverifiedInstall)) {
       await AFGOfflineModels.deleteModel({ downloadId: existing.downloadId });
     }
     return await downloadGGUFAndroid({ ...NEEDLE3_DOWNLOAD, onProgress: options.onProgress, signal: options.signal });
