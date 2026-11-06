@@ -93,6 +93,8 @@ The native bridge exports `getStatus()`, `getBatteryStatus()`, `vibrate()`, `req
 | SMS or contacts access is denied | Check Android app permissions. READ_SMS is subject to Google Play policy and may be unavailable to distributed builds. |
 | An app cannot be opened | Confirm that it is installed and has a launcher activity; Android package visibility and OEM restrictions can affect discovery. |
 
+The deterministic parser regression suite is available as `npm run test:jarvis-command`; it covers app launch, Afghan Dari/Pashto phrases, device commands, polite prefixes, unknown-command rejection and input-length bounds.
+
 ## Verification status
 
 Source files and manifest wiring were inspected. Per repository policy, no tests, type-check, lint, Android sync, build, APK workflow, or deployment was run. Native runtime behavior, camera result handling, permission behavior across Android vendors, and Google Play eligibility still require device verification. Install dependencies and run Capacitor Android sync/build only after the project owner authorizes those operations.
