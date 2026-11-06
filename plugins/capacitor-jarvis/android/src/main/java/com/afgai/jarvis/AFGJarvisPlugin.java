@@ -2,6 +2,8 @@ package com.afgai.jarvis;
 
 import android.Manifest;
 import android.content.Intent;
+import android.content.ClipboardManager;
+import android.content.ClipData;
 import android.app.Activity;
 import android.content.ContentResolver;
 import android.database.Cursor;
@@ -214,6 +216,24 @@ public class AFGJarvisPlugin extends Plugin {
 
 
     // Device tools below are deliberately pull-based: they run only after a direct app action.
+
+    @PluginMethod public void setClipboard(PluginCall call) {
+        String text = call.getString("text", "");
+        if (text.length() > 4000) { call.reject("Clipboard text must not exceed 4,000 characters."); return; }
+        ClipboardManager manager = (ClipboardManager) getContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+        if (manager == null) { call.reject("Clipboard service is unavailable."); return; }
+        manager.setPrimaryClip(ClipData.newPlainText("AFG AI", text));
+        JSObject out = new JSObject(); out.put("copied", true); call.resolve(out);
+    }
+    @PluginMethod public void getClipboard(PluginCall call) {
+        ClipboardManager manager = (ClipboardManager) getContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+        if (manager == null || !manager.hasPrimaryClip() || manager.getPrimaryClip() == null || manager.getPrimaryClip().getItemCount() == 0) {
+            JSObject out = new JSObject(); out.put("text", ""); call.resolve(out); return;
+        }
+        CharSequence value = manager.getPrimaryClip().getItemAt(0).coerceToText(getContext());
+        JSObject out = new JSObject(); out.put("text", value == null ? "" : value.toString()); call.resolve(out);
+    }
+
     @PluginMethod public void getBatteryStatus(PluginCall call) {
         Intent battery = getContext().registerReceiver(null, new android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED));
         if (battery == null) { call.reject("Battery status is unavailable."); return; }
