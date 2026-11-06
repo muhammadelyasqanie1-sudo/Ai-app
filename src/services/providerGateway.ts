@@ -252,7 +252,25 @@ async function verifyModel(provider: ChatProviderAdapter, model: ModelDescriptor
   // 9Router uses catalogue-only verification (no paid inference probe). The model
   // was just returned by the live catalogue request, so repeating /models once per
   // model is redundant and can issue thousands of identical upstream requests.
-  if (provider.id === '9router') return { ...model, verifiedAt: new Date().toISOString() };
+  if (provider.id === '9router') {
+    // 9Router verification is based on authenticated live catalogue visibility,
+    // not a paid inference probe. Persist that verified state just like other providers.
+    const checkedAt = new Date().toISOString();
+    if (pool) {
+      await pool.query(
+        `UPDATE model_catalog
+            SET verified_at = $3::timestamptz,
+                last_health_ok = true,
+                health_checked_at = $3::timestamptz,
+                updated_at = now()
+          WHERE provider_key = $1 AND model_key = $2`,
+        [provider.id, model.id, checkedAt],
+      ).catch(() => {
+        console.warn('AI_PROVIDER_HEALTH_DB_UNAVAILABLE', JSON.stringify({ provider: provider.id, model: model.id }));
+      });
+    }
+    return { ...model, verifiedAt: checkedAt };
+  }
   const cacheKey = `${provider.id}:${model.id}`;
   const cached = healthCache.get(cacheKey);
   const isRecent = cached && Date.now() - Date.parse(cached.checkedAt) <= HEALTH_TTL_MS;
