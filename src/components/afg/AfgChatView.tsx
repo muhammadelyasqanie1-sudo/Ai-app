@@ -32,6 +32,7 @@ import { getIntlLocale } from '../../utils/i18n';
 
 interface AfgChatViewProps {
   messages: AfgMessage[];
+  agentActivities?: Array<{id:string;name:string;label:string;detail?:string;url?:string;status:'running'|'completed'|'failed';timestamp:number}>;
   onSendMessage: (text: string, attachments: ChatAttachment[]) => void;
   onStop: () => void;
   onRetryMessage: (messageId: string) => void;
@@ -58,6 +59,7 @@ interface AfgChatViewProps {
 
 export const AfgChatView: React.FC<AfgChatViewProps> = ({
   messages,
+  agentActivities = [],
   onSendMessage,
   onStop,
   onRetryMessage,
@@ -199,6 +201,29 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
 
       {/* Messages Scroll Area */}
       <div className="flex-1 overflow-y-auto px-1 sm:px-3 py-4 space-y-5">
+        {agentActivities.length > 0 && (
+          <section className="mx-auto w-full max-w-3xl rounded-2xl border border-cyan-800/40 bg-slate-950/70 p-3 shadow-lg" aria-live="polite" aria-label={language === 'dari' ? 'فعالیت زنده هوش مصنوعی' : 'Live AI activity'}>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-cyan-200"><Globe className="h-4 w-4" />{language === 'dari' ? 'فعالیت زنده هوش مصنوعی' : 'Live AI activity'}</div>
+              <span className="text-[10px] text-slate-400">{agentActivities.some(item => item.status === 'running') ? (language === 'dari' ? 'در حال اجرا' : 'Working') : (language === 'dari' ? 'گزارش فعالیت' : 'Activity log')}</span>
+            </div>
+            <ol className="space-y-2">
+              {agentActivities.map((item) => (
+                <li key={item.id} className="flex items-start gap-2 text-xs">
+                  <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${item.status === 'completed' ? 'bg-emerald-400' : item.status === 'failed' ? 'bg-rose-400' : 'bg-cyan-300 animate-pulse'}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="font-semibold text-slate-200">{item.label}</span>
+                      <span className="text-[10px] text-slate-500">{item.status === 'completed' ? (language === 'dari' ? 'انجام شد' : 'Completed') : item.status === 'failed' ? (language === 'dari' ? 'ناموفق' : 'Failed') : (language === 'dari' ? 'در حال انجام' : 'In progress')}</span>
+                    </div>
+                    {item.detail && <div className="mt-0.5 break-all text-[11px] text-slate-400">{item.detail}</div>}
+                    {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-block break-all text-[11px] text-cyan-400 underline underline-offset-2">{item.url}</a>}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
         
         {isInitialLoading && <div className="mx-auto w-full max-w-2xl space-y-5 py-8" aria-label={language === 'dari' ? 'در حال بارگذاری گفتگو' : 'Loading conversation'} role="status"><div className="h-7 w-2/3 rounded-lg afg-skeleton-line"/><div className="h-24 w-full rounded-2xl afg-skeleton-line"/><div className="ms-auto h-20 w-4/5 rounded-2xl afg-skeleton-line"/><div className="h-28 w-full rounded-2xl afg-skeleton-line"/></div>}
         {/* If no messages yet, show welcome prompt cards. */}
