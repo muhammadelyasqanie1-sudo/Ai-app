@@ -21,11 +21,25 @@ const priceLabel = (model: AfgModelOption) => {
 export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSelect, language, loading = false }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [showUpgrade, setShowUpgrade] = useState<AfgModelOption | null>(null);
   const dari = language !== 'english';
   const selected = models.find(m => selectedModel === m.providerId + '::' + m.id);
+  const providerEntries = useMemo(() => {
+    const ids = Array.from(new Set(models.map((model) => model.providerId)));
+    const preferred = ['public-apis', 'public_apis', 'publicapis', '9router', 'apinex'];
+    const known = preferred.filter((id) => ids.includes(id));
+    return [...known, ...ids.filter((id) => !known.includes(id)).sort()].map((id) => ({ id, count: models.filter((model) => model.providerId === id).length }));
+  }, [models]);
+  const providerLabel = (id: string) => {
+    const key = id.toLowerCase().replace(/[_\\s]/g, '-');
+    if (key === 'public-apis' || key === 'publicapis') return 'Public APIs';
+    if (key === '9router') return '9Router';
+    if (key === 'apinex') return 'APInex';
+    return id;
+  };
   const groups = useMemo(() => {
-    const filtered = models.filter(m => (m.displayName + ' ' + m.providerId + ' ' + m.id).toLowerCase().includes(query.toLowerCase()));
+    const filtered = models.filter(m => (!selectedProvider || m.providerId === selectedProvider) && (m.displayName + ' ' + m.providerId + ' ' + m.id).toLowerCase().includes(query.toLowerCase()));
     const categoryOf = (model: AfgModelOption) => {
       const id = (model.id + ' ' + model.displayName).toLowerCase();
       const kind = String(model.catalogKind || '').toLowerCase();
@@ -48,7 +62,7 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
       label: labels[category],
       items: filtered.filter(model => categoryOf(model) === category),
     })).filter(group => group.items.length);
-  }, [models, query, dari]);
+  }, [models, query, dari, selectedProvider]);
   const choose = (model: AfgModelOption) => {
     const supportedInChat = Boolean(model.capabilities?.imageGen || (model.capabilities?.text && model.capabilities?.streaming));
     if (!model.selectable || !supportedInChat) {
@@ -59,7 +73,7 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
     setOpen(false);
   };
   return <>
-    <button type="button" disabled={loading} onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}
+    <button type="button" disabled={loading} onClick={() => { setSelectedProvider(null); setQuery(''); setOpen(true); }} aria-haspopup="dialog" aria-expanded={open}
       className="afg-model-trigger flex min-w-0 items-center gap-2 rounded-full border px-3 py-2 text-sm">
       {selected ? <ProviderIcon provider={selected.providerId} model={selected.id} /> : <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-200 text-slate-700">✦</span>}
       <span className="min-w-0 truncate font-semibold">{selected?.displayName || (dari ? 'انتخاب خودکار مدل' : 'Auto model')}</span>
@@ -68,7 +82,7 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
     {open && <div className="afg-model-sheet-root" role="presentation" onMouseDown={e => { if(e.target===e.currentTarget)setOpen(false); }}>
       <section className="afg-model-sheet" role="dialog" aria-modal="true" aria-label={dari ? 'انتخاب مدل' : 'Select model'}>
         <header className="flex items-center justify-between border-b px-4 py-4">
-          <div><h2 className="text-base font-semibold">{dari ? 'انتخاب مدل' : 'Select model'}</h2><p className="mt-1 text-xs opacity-60">{models.length} {dari ? 'مدل شناسایی‌شده' : 'discovered models'}</p></div>
+          <div><h2 className="text-base font-semibold">{dari ? 'انتخاب مدل' : 'Select model'}</h2><p className="mt-1 text-xs opacity-60">{selectedProvider ? providerLabel(selectedProvider) + ' · ' + models.filter((model) => model.providerId === selectedProvider).length : providerEntries.length + ' providers'}</p></div>
           <button className="rounded-full p-2 hover:bg-black/5" onClick={()=>setOpen(false)} aria-label="Close"><X size={19}/></button>
         </header>
         <div className="px-4 pt-3"><label className="afg-model-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={dari?'جستجوی مدل یا ارائه‌دهنده':'Search models or providers'}/></label></div>
