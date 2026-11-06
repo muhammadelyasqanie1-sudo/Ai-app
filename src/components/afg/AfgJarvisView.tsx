@@ -4,7 +4,7 @@ import { AFGJarvis, type JarvisStatus, type JarvisAction, type JarvisSpeechEvent
 import type { Language } from '../../types/afg';
 import { parseJarvisCommand } from '../../lib/jarvis-command-engine';
 import { buildJarvisLocalCommandPrompt, extractJarvisLocalCommand, buildJarvisNeedleCommandConfig, extractJarvisNeedleCommand } from '../../lib/jarvis-local-agent';
-import { downloadNeedle3Model, listOfflineDownloads, NEEDLE3_DOWNLOAD, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
+import { downloadNeedle3Model, listOfflineDownloads, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
 import { generateNativeLlamaResponse, getNativeLlamaRuntimeInfo, loadNativeLlamaModel, unloadNativeLlamaModel, type NativeLlamaRuntimeInfo } from '../../lib/offlineLlamaRuntime';
 import { generateNativeNeedleResponse, getNativeNeedleRuntimeInfo, loadNativeNeedleModel, NEEDLE3_MODEL_ID, type NativeNeedleRuntimeInfo } from '../../lib/offlineNeedleRuntime';
 
@@ -71,7 +71,7 @@ export function AfgJarvisView({ language }: { language: Language }) {
       const [runtimeInfo, needleInfo, downloads] = await Promise.all([getNativeLlamaRuntimeInfo(), getNativeNeedleRuntimeInfo(), listOfflineDownloads()]);
       setLocalRuntime(runtimeInfo);
       setNeedleRuntime(needleInfo);
-      setNeedleLoaded(needleInfo.modelLoaded);
+      setNeedleLoaded(needleInfo.modelReady);
       setNeedleModel(downloads.find(item => item.id === NEEDLE3_MODEL_ID) || null);
       setLocalModels(downloads.filter(item => item.fileName.toLowerCase().endsWith('.gguf')));
       setSelectedLocalModelId(current => current || downloads.find(item => item.fileName.toLowerCase().endsWith('.gguf') && item.status === 'installed' && item.localPath && item.expectedSha256 && item.hashVerified === true)?.id || '');
@@ -218,7 +218,7 @@ export function AfgJarvisView({ language }: { language: Language }) {
       const config = buildJarvisNeedleCommandConfig(language);
       await loadNativeNeedleModel(needleModel.localPath, config.systemPrompt, config.toolsJson);
       setNeedleLoaded(true);
-      setNeedleRuntime(current => current ? { ...current, modelLoaded: true } : current);
+      setNeedleRuntime(current => current ? { ...current, modelLoaded: true, modelReady: true } : current);
     } catch (e: any) {
       setLocalAiError(e?.message || label('Needle 3 could not load. Check the model file and available RAM.', 'Needle 3 بارگذاری نشد. فایل مدل و حافظه آزاد را بررسی کنید.'));
     } finally { setLocalAiBusy(false); }
