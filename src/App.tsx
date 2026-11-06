@@ -16,7 +16,7 @@ import { AfgAuthGate } from './components/afg/AfgAuthGate';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { ErrorBoundary } from './components/afg/AfgDesignSystem';
 import { applyDocumentLocale } from './utils/i18n';
-import { apiFetch } from './lib/apiClient';
+import { apiFetch, getCsrfToken } from './lib/apiClient';
 import { useAlwaysLiveConnection } from './hooks/useAlwaysLiveConnection';
 
 import type { 
@@ -75,6 +75,14 @@ const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL || ((import.me
 
 export default function App() {
   useAlwaysLiveConnection();
+  useEffect(() => {
+    let active = true;
+    fetch(API_BASE_URL + '/api/auth/providers', { credentials: 'include', cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => { if (active && typeof data?.csrfToken === 'string') sessionStorage.setItem('afg_csrf_token', data.csrfToken); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
   // App State
   const [language, setLanguage] = useState<Language>(() => { const saved = localStorage.getItem('afg_language'); const supported: Language[] = ['dari','english','pashto','persian','arabic','urdu','turkish','russian','french','spanish','german','chinese','hindi','bengali','indonesian','portuguese','japanese','korean']; return supported.includes(saved as Language) ? saved as Language : detectDeviceLanguage(); });
   // Language is detected from the device/browser; no manual language gate on startup.
@@ -308,7 +316,7 @@ export default function App() {
   const handleSelectModel = (model: string) => {
     setSelectedModel(model);
     const selectedOption = modelOptions.find((item) => model === item.providerId + '::' + item.id);
-    const csrf = document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '';
+    const csrf = getCsrfToken();
     fetch(API_BASE_URL + '/api/auth/preferences', {
       method: 'PATCH', credentials: 'include',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': decodeURIComponent(csrf) },
@@ -335,7 +343,7 @@ export default function App() {
             setHasEnteredApp(true);
             localStorage.setItem('afg_entry_mode', 'account');
             setUser({ name: data.user.displayName || 'User', nameEn: data.user.displayName || 'User', email: data.user.email || '', avatar: '', isPremium: false, tier: 'Free', role: data.user.role || 'user' });
-            fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const saved=prefs?.preferences; if(saved?.appearance&&['light','dark','neon','system'].includes(saved.appearance))setTheme(saved.appearance); if(localeChangedThisSession.current){const chosen=localStorage.getItem('afg_language')||'dari';const csrf=document.cookie.split('; ').find((item)=>item.startsWith('afg_csrf='))?.slice('afg_csrf='.length)||'';void fetch(API_BASE_URL+'/api/account/locale',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(csrf)},body:JSON.stringify({locale:chosen})}).catch(()=>console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));} document.documentElement.style.fontSize=String(saved?.font_size||14)+'px'; const accentMap:Record<string,string>={cyan:'#00e5ff',blue:'#3b82f6',violet:'#8b5cf6',emerald:'#10b981',rose:'#f43f5e'}; document.documentElement.style.setProperty('--accent-cyan',accentMap[saved?.accent_color]||accentMap.cyan); document.documentElement.dataset.afgDensity=saved?.density||'comfortable'; document.documentElement.dataset.afgChatWidth=saved?.chat_width||'comfortable'; document.documentElement.classList.toggle('afg-reduce-motion',saved?.animations_enabled===false); localStorage.setItem('afg_voice_enabled',String(saved?.voice_enabled!==false)); window.dispatchEvent(new Event('afg-voice-preference-change')); if(saved?.auto_select_model===false){setSelectedModel('auto');return;} const model=saved?.default_model; if(typeof model==='string'&&model)setSelectedModel(model); }).catch(() => {});
+            fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const saved=prefs?.preferences; if(saved?.appearance&&['light','dark','neon','system'].includes(saved.appearance))setTheme(saved.appearance); if(localeChangedThisSession.current){const chosen=localStorage.getItem('afg_language')||'dari';const csrf=getCsrfToken();void fetch(API_BASE_URL+'/api/account/locale',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(csrf)},body:JSON.stringify({locale:chosen})}).catch(()=>console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));} document.documentElement.style.fontSize=String(saved?.font_size||14)+'px'; const accentMap:Record<string,string>={cyan:'#00e5ff',blue:'#3b82f6',violet:'#8b5cf6',emerald:'#10b981',rose:'#f43f5e'}; document.documentElement.style.setProperty('--accent-cyan',accentMap[saved?.accent_color]||accentMap.cyan); document.documentElement.dataset.afgDensity=saved?.density||'comfortable'; document.documentElement.dataset.afgChatWidth=saved?.chat_width||'comfortable'; document.documentElement.classList.toggle('afg-reduce-motion',saved?.animations_enabled===false); localStorage.setItem('afg_voice_enabled',String(saved?.voice_enabled!==false)); window.dispatchEvent(new Event('afg-voice-preference-change')); if(saved?.auto_select_model===false){setSelectedModel('auto');return;} const model=saved?.default_model; if(typeof model==='string'&&model)setSelectedModel(model); }).catch(() => {});
           } else {
             if (wasAuthenticatedRef.current) {
               wasAuthenticatedRef.current = false;
@@ -416,7 +424,7 @@ export default function App() {
   }, [user.email]);
 
   const getCsrfHeaders = (): Record<string, string> => {
-    const token = document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '';
+    const token = getCsrfToken();
     return token ? { 'X-CSRF-Token': decodeURIComponent(token) } : {};
   };
 
@@ -487,7 +495,7 @@ export default function App() {
     applyDocumentLocale(nextLanguage);
     fetch(API_BASE_URL + '/api/auth/me', { credentials: 'include' }).then((response) => response.ok ? response.json() : null).then((authData) => {
       if (!authData?.authenticated) return;
-      const csrf = document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '';
+      const csrf = getCsrfToken();
       return fetch(API_BASE_URL + '/api/account/locale', {
         method: 'PATCH', credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': decodeURIComponent(csrf) },
@@ -522,7 +530,7 @@ export default function App() {
       setIsLoading(true);
       try {
         if (chosenModel.providerId !== '9router') throw new Error(language === 'dari' ? 'مسیر تولید تصویر این ارائه‌دهنده هنوز وصل نشده است.' : 'Image generation for this provider is not integrated yet.');
-        const csrf = decodeURIComponent(document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '');
+        const csrf = getCsrfToken();
         const response = await fetch(API_BASE_URL + '/api/9router/images/generations', {
           method: 'POST', credentials: 'include',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
@@ -604,7 +612,7 @@ export default function App() {
             headers: {
               'Content-Type': 'application/json',
               // Cookie-authenticated POST requests must include the matching double-submit CSRF token.
-              'X-CSRF-Token': decodeURIComponent(document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || ''),
+              'X-CSRF-Token': getCsrfToken(),
             },
             body: JSON.stringify({
               messages: [...baseMessages, userMessage].map((m) => ({ role: m.role, content: m.content })),
@@ -670,7 +678,7 @@ export default function App() {
       }
       if (!streamCompleted) throw new Error('The AI response could not be completed.');
       if (typeof toolOptions.productivityType === 'string' && fullContent.trim()) {
-        const csrfToken = document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length) || '';
+        const csrfToken = getCsrfToken();
         void fetch(API_BASE_URL + '/api/productivity/items', {
           method: 'POST', credentials: 'include',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': decodeURIComponent(csrfToken) },
