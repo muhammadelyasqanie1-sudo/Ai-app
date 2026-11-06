@@ -33,6 +33,7 @@ export function AfgJarvisView({ language }: { language: Language }) {
   const [deviceData, setDeviceData] = useState<Record<string, any>>({});
   const [deviceNumber, setDeviceNumber] = useState('');
   const [deviceMessage, setDeviceMessage] = useState('');
+  const [clipboardInput, setClipboardInput] = useState('');
   const [torchEnabled, setTorchEnabled] = useState(false);
   const label = (en: string, fa: string) => dari ? fa : en;
   const speechLanguage: JarvisSpeechLanguage = language === 'dari' ? 'fa-AF' : language === 'persian' ? 'fa-IR' : language === 'pashto' ? 'ps-AF' : language === 'arabic' ? 'ar' : 'en-US';
@@ -174,6 +175,15 @@ export function AfgJarvisView({ language }: { language: Language }) {
           <div className="mt-2 grid grid-cols-2 gap-2">
             <button className={button} disabled={!!busy} onClick={() => { if (window.confirm(label('Read up to 20 contacts?', 'تا ۲۰ مخاطب خوانده شود؟'))) void run('contacts', async () => { await AFGJarvis.requestContactsPermission(); setDeviceData(v => ({...v,contacts:await AFGJarvis.getContacts({limit:20})})); }); }}>{label('Read contacts', 'خواندن مخاطبین')}</button>
             <button className={button} disabled={!!busy} onClick={() => { if (window.confirm(label('Read your 5 most recent SMS messages?', 'پنج پیامک اخیر شما خوانده شود؟'))) void run('sms', async () => { await AFGJarvis.requestSmsReadPermission(); setDeviceData(v => ({...v,sms:await AFGJarvis.getRecentSms({limit:5})})); }); }}>{label('Read last 5 SMS', 'خواندن ۵ پیامک اخیر')}</button>
+          </div>
+        </div>
+
+        <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+          <h3 className="text-sm font-semibold text-white">{label('Clipboard', 'کلیپ‌بورد')}</h3>
+          <textarea value={clipboardInput} onChange={e => setClipboardInput(e.target.value)} maxLength={4000} rows={2} placeholder={label('Text to copy', 'متن برای کاپی')} className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white" />
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button className={button} disabled={!!busy} onClick={() => void run('clipboard-set', () => AFGJarvis.setClipboard({text:clipboardInput}))}>{label('Copy text', 'کاپی متن')}</button>
+            <button className={button} disabled={!!busy} onClick={() => void run('clipboard-get', async () => { const value=await AFGJarvis.getClipboard(); setClipboardInput(value.text); })}>{label('Read clipboard', 'خواندن کلیپ‌بورد')}</button>
           </div>
         </div>
         <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
