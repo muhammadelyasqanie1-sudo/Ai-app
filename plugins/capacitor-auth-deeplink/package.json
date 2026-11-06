@@ -1,8 +1,10 @@
 {
   "name": "@afg-ai/capacitor-auth-deeplink",
   "version": "1.0.0",
-  "description": "Android intent filter for AFG AI Google OAuth return links",
-  "files": ["android"],
+  "description": "Android deep-link and credentialed WebView support for AFG AI OAuth",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "files": ["src", "android"],
   "peerDependencies": { "@capacitor/core": "^8.0.0" },
   "capacitor": { "android": { "src": "android" } },
   "type": "module"
