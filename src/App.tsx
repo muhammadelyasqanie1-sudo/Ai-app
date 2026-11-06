@@ -566,9 +566,20 @@ export default function App() {
 
     setMessages(baseMessages.concat(userMessage));
     setIsLoading(true);
+    // Resolve explicit Android tools / local inference before any cloud conversation persistence.
+    let precomputedLocalResult: { text: string; modelLabel: string } | null = null;
+    let localPreflightError = false;
+    try {
+      precomputedLocalResult = await tryLocalFirstResponse(
+        [...baseMessages, userMessage].map((message) => ({ role: message.role, content: message.content })),
+        language,
+      );
+    } catch {
+      localPreflightError = true;
+    }
     let persistedConversationId: string | null = null;
     let userMessagePersisted = false;
-    if (user.email) {
+    if (user.email && !precomputedLocalResult) {
       try {
         persistedConversationId = await ensureServerConversation(text, baseMessages);
         await persistServerMessage(persistedConversationId, 'user', text, 'complete', userMessage.id);
@@ -596,15 +607,9 @@ export default function App() {
     let requestId = '';
     let localOfflineHint = '';
     try {
-      // Local-first policy: on Android, use a verified on-device GGUF model before any cloud request.
-      // If no compatible local model is installed, preserve the existing server-side chat path.
-      try {
-        const localResult = await tryLocalFirstResponse(
-          [...baseMessages, userMessage].map((message) => ({ role: message.role, content: message.content })),
-          language,
-        );
-        if (localResult?.text?.trim()) {
-          fullContent = localResult.text.trim();
+      // Local-first policy: the preflight above runs before cloud persistence or requests.
+      if (precomputedLocalResult?.text?.trim()) {
+          fullContent = precomputedLocalResult.text.trim();
           setAgentActivities([{
             id: crypto.randomUUID(),
             name: 'local-inference',
@@ -621,22 +626,22 @@ export default function App() {
             catch { console.warn('AFG_CONVERSATION_ASSISTANT_MESSAGE_SAVE_FAILED'); }
           }
           return;
-        }
-        if (!navigator.onLine) localOfflineHint = language === 'dari'
-          ? 'برای گفت‌وگوی کاملاً آفلاین، ابتدا یک مدل GGUF سازگار و تأییدشده را در مرکز هوش مصنوعی آفلاین نصب کنید.'
-          : 'To chat fully offline, first install a compatible, integrity-verified GGUF model in the Offline AI Hub.';
-      } catch {
+      }
+      if (localPreflightError) {
         if (!navigator.onLine) localOfflineHint = language === 'dari'
           ? 'موتور یا مدل محلی آماده نیست. مرکز هوش مصنوعی آفلاین را باز کرده و مدل سازگار را بررسی کنید.'
           : 'The local runtime or model is not ready. Open Offline AI Hub and check the installed compatible model.';
-        // A local runtime failure is not treated as a successful answer; try the configured cloud path.
         setAgentActivities([{
           id: crypto.randomUUID(),
           name: 'local-inference',
-          label: language === 'dari' ? 'مدل محلی آماده نبود؛ بررسی اتصال ابری' : 'Local model unavailable; checking cloud connection',
+          label: language === 'dari' ? 'مدل محلی آماده نبود؛ بررسی اتصال ابری' : 'Local runtime unavailable; checking cloud connection',
           status: 'failed',
           timestamp: Date.now(),
         }]);
+      } else if (!navigator.onLine && !precomputedLocalResult) {
+        localOfflineHint = language === 'dari'
+          ? 'برای گفت‌وگوی کاملاً آفلاین، ابتدا یک مدل GGUF سازگار و تأییدشده را در مرکز هوش مصنوعی آفلاین نصب کنید.'
+          : 'To chat fully offline, first install a compatible, integrity-verified GGUF model in the Offline AI Hub.';
       }
       let streamCompleted = false;
       for (let attempt = 0; attempt < 3 && !streamCompleted; attempt++) {
