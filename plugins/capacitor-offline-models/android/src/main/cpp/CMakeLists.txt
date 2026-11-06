@@ -35,6 +35,9 @@ set(NEEDLE_ARCHIVE_SHA256 "7aa6de6132a22bf45f5e903425feb66f159ad46f47fa558921bc4
 if(NOT EXISTS "${NEEDLE_ARCHIVE}")
   message(FATAL_ERROR "Missing Needle 3 Android ARM64 engine. Run scripts/download-needle-android.sh first.")
 endif()
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/prebuilt/needle.h")
+  message(FATAL_ERROR "Missing official Needle C API header. Run scripts/download-needle-android.sh first.")
+endif()
 file(SHA256 "${NEEDLE_ARCHIVE}" ACTUAL_NEEDLE_SHA256)
 if(NOT ACTUAL_NEEDLE_SHA256 STREQUAL NEEDLE_ARCHIVE_SHA256)
   message(FATAL_ERROR "Needle 3 Android engine SHA-256 mismatch; refusing to link.")
@@ -52,5 +55,5 @@ target_include_directories(afg_llama_jni PRIVATE
 target_link_libraries(afg_llama_jni PRIVATE llama ggml android log)
 
 add_library(afg_needle_jni SHARED needle3_jni.cpp)
-target_include_directories(afg_needle_jni PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(afg_needle_jni PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/prebuilt)
 target_link_libraries(afg_needle_jni PRIVATE needle3_engine c++_shared android log m dl)
