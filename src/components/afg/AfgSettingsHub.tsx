@@ -6,10 +6,8 @@ import {
 } from 'lucide-react';
 import type { Language, Theme, UserProfile } from '../../types/afg';
 import { AfgAccountSettings } from './AfgAccountSettings';
-import { AfgAdminPanel } from './AfgAdminPanel';
 import { AfgFileLibrary } from './AfgFileLibrary';
-import { AfgApiHubPanel } from './AfgApiHubPanel';
-import { AfgNineRouterPanel } from './AfgNineRouterPanel';
+import { AfgApiConnectorPanel } from './AfgApiConnectorPanel';
 import { getHubUi } from '../../utils/localeUi';
 
 type Context = 'user' | 'admin';
@@ -221,7 +219,7 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
   if(context==='admin') return <section className="mx-auto w-full max-w-[1500px] px-3 py-4 sm:px-6">
     <button onClick={()=>setContext('user')} className="mb-3 inline-flex items-center gap-2 text-sm text-cyan-300"><ArrowLeft className="h-4 w-4"/>{t.back}</button>
     <p className="mb-3 text-xs text-slate-400">{t.adminIntro}</p>
-    <AfgAdminPanel language={language}/>
+    <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4"><h2 className="font-bold text-white">{t.admin}</h2><p className="mt-2 text-sm leading-6 text-slate-300">{fa?'پنل قدیمی مدیریت داخل برنامه حذف شده است. مدیریت زیرساخت و کاربران از درگاه امن و جداگانه 9Router انجام می‌شود.':'The legacy in-app admin panel has been removed. Infrastructure and user administration are handled by the separate authenticated 9Router control plane.'}</p></div>
   </section>;
 
   return <section className="mx-auto w-full max-w-3xl space-y-4 px-3 py-4 sm:px-6" dir={fa?'rtl':'ltr'}>
@@ -240,8 +238,8 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
         <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><selected.icon className="h-5 w-5"/></span><div className="min-w-0 flex-1"><h2 className="font-black text-white">{selected.id==='api-hub'&&fa?'فهرست APIها و کلیدها':selected.id==='9router'&&fa?'درگاه هوش مصنوعی 9Router':selected.title}</h2><p className="text-xs text-slate-400">{selected.subtitle}</p></div>{['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(page)&&statusBadge(page)}</div>
       </div>
       {page==='files' && <AfgFileLibrary language={language}/>}
-      {page==='api-hub'&&<AfgApiHubPanel language={language}/>}
-      {page==='9router'&&<AfgNineRouterPanel language={language}/>}
+      {page==='api-hub'&&<AfgApiConnectorPanel language={language}/>}
+      {page==='9router'&&<div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4"><h3 className="font-semibold text-white">9Router AI Gateway</h3><p className="mt-2 text-sm leading-6 text-slate-300">{fa?'وضعیت و مدیریت درگاه 9Router از بخش مدیریت امن و جداگانه انجام می‌شود. این صفحه هیچ لینک یا وضعیت ساختگی نشان نمی‌دهد.':'9Router gateway administration is handled through the separate authenticated control plane. This page does not display a fabricated link or status.'}</p></div>}
       {(['appearance','language','chat','memory','coding','privacy'] as SettingId[]).includes(page) && <>
         <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-3">
           <p className="text-sm font-semibold text-cyan-100">{page==='language'?t.language:page==='appearance'?'Appearance':page==='chat'?'Chat preferences':page==='memory'?'Personal memory':page==='coding'?'Coding workspace':'Privacy & security'}</p>
