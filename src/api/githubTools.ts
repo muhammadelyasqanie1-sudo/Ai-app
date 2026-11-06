@@ -1,0 +1,337 @@
+import { getLinkedGitHubToken } from './connections.ts';
+import { pool } from './database.ts';
+
+type Json = Record<string, any>;
+const API = 'https://api.github.com';
+const API_VERSION = '2022-11-28';
+
+const definitions = [
+  {
+    type: 'function',
+    function: {
+      name: 'github_list_repositories',
+      description: 'Capability category: coding. List repositories accessible to the signed-in user, including private repositories granted by their GitHub connection.',
+      parameters: { type: 'object', properties: {
+        visibility: { type: 'string', enum: ['all', 'public', 'private'], description: 'Repository visibility filter.' },
+        sort: { type: 'string', enum: ['updated', 'pushed', 'created', 'full_name'], description: 'Sort order.' },
+        page: { type: 'integer', minimum: 1, maximum: 100 },
+        per_page: { type: 'integer', minimum: 1, maximum: 50 },
+      }, additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'github_get_repository',
+      description: 'Capability category: coding. Read metadata and default branch for one repository the user can access.',
+      parameters: { type: 'object', properties: {
+        owner: { type: 'string' }, repo: { type: 'string' },
+      }, required: ['owner', 'repo'], additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'github_list_branches',
+      description: 'Capability category: coding. List branches in an accessible repository.',
+      parameters: { type: 'object', properties: {
+        owner: { type: 'string' }, repo: { type: 'string' },
+        per_page: { type: 'integer', minimum: 1, maximum: 50 },
+      }, required: ['owner', 'repo'], additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'github_get_file',
+      description: 'Capability category: coding. Read a text file or list a directory in an accessible GitHub repository. Do not request secrets, environment files, private keys, or credential files.',
+      parameters: { type: 'object', properties: {
+        owner: { type: 'string' }, repo: { type: 'string' }, path: { type: 'string' },
+        ref: { type: 'string', description: 'Optional branch, tag, or commit.' },
+      }, required: ['owner', 'repo', 'path'], additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'github_search_code',
+      description: 'Capability category: coding. Search code within a specific accessible repository. Returns matching file paths and links; fetch a file separately to inspect its contents.',
+      parameters: { type: 'object', properties: {
+        owner: { type: 'string' }, repo: { type: 'string' }, query: { type: 'string' },
+        per_page: { type: 'integer', minimum: 1, maximum: 30 },
+      }, required: ['owner', 'repo', 'query'], additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'github_create_branch',
+      description: 'Capability category: coding. Create a new branch from the repository default branch or a supplied base branch. Use this before changing files; never create the working branch directly on the default branch.',
+      parameters: { type: 'object', properties: {
+        owner: { type: 'string' }, repo: { type: 'string' }, branch: { type: 'string' },
+        base: { type: 'string', description: 'Optional base branch; defaults to the repository default branch.' },
+      }, required: ['owner', 'repo', 'branch'], additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'github_update_file',
+      description: 'Capability category: coding. Create or update one text file with a Git commit on an existing non-default branch. This changes the repository; only call when the user explicitly asked to edit or create the file. The branch must first be created with github_create_branch. Never edit secrets or environment files.',
+      parameters: { type: 'object', properties: {
+        owner: { type: 'string' }, repo: { type: 'string' }, path: { type: 'string' },
+        branch: { type: 'string' }, content: { type: 'string' }, message: { type: 'string' },
+      }, required: ['owner', 'repo', 'path', 'branch', 'content', 'message'], additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'github_create_pull_request',
+      description: 'Capability category: coding. Open a pull request from a completed working branch into a base branch. This is an external state change; only call when the user explicitly asked to submit the changes for review.',
+      parameters: { type: 'object', properties: {
+        owner: { type: 'string' }, repo: { type: 'string' }, title: { type: 'string' },
+        head: { type: 'string' }, base: { type: 'string' }, body: { type: 'string' },
+        draft: { type: 'boolean' },
+      }, required: ['owner', 'repo', 'title', 'head', 'base'], additionalProperties: false },
+    },
+  },
+] as const;
+
+function objectArgs(value: unknown): Json {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || JSON.stringify(value).length > 140_000) {
+    throw new Error('GitHub tool arguments are invalid or too large.');
+  }
+  return value as Json;
+}
+function requiredText(args: Json, key: string, max = 200): string {
+  const value = typeof args[key] === 'string' ? args[key].trim() : '';
+  if (!value || value.length > max) throw new Error('A valid ' + key + ' value is required.');
+  return value;
+}
+function optionalText(args: Json, key: string, max = 200): string | undefined {
+  if (args[key] === undefined || args[key] === null || args[key] === '') return undefined;
+  return requiredText(args, key, max);
+}
+function safeRepoPart(value: string, label: string): string {
+  if (!/^[A-Za-z0-9_.-]{1,100}$/.test(value) || value === '.' || value === '..') {
+    throw new Error('Invalid GitHub ' + label + '.');
+  }
+  return value;
+}
+function repoPath(owner: string, repo: string): string {
+  return '/repos/' + encodeURIComponent(safeRepoPart(owner, 'owner')) + '/' + encodeURIComponent(safeRepoPart(repo, 'repository'));
+}
+function safeFilePath(value: string): string {
+  const path = value.trim();
+  if (!path || path.length > 500 || path.startsWith('/') || path.includes('\\') ||
+      path.split('/').some((part) => !part || part === '.' || part === '..')) {
+    throw new Error('Invalid repository file path.');
+  }
+  const lower = path.toLowerCase();
+  const allowedExample = lower === '.env.example';
+  if (!allowedExample && (/(^|\/)\.env($|\.)/.test(lower) || /(^|\/)(secrets?|credentials?)(\/|$)/.test(lower) ||
+      /\.(pem|key|p12|pfx|keystore)$/i.test(lower) || /(id_rsa|id_ed25519|service[-_]?account)/i.test(lower))) {
+    throw new Error('Reading or changing secret and credential files is blocked.');
+  }
+  return path;
+}
+function safeBranch(value: string): string {
+  if (!value || value.length > 120 || value.startsWith('/') || value.endsWith('/') ||
+      value.includes('..') || value.includes('//') || value.includes('@{') ||
+      !/^[A-Za-z0-9._/-]+$/.test(value)) throw new Error('Invalid Git branch name.');
+  return value;
+}
+function boundedNumber(value: unknown, fallback: number, min: number, max: number): number {
+  const number = Number(value);
+  return Number.isInteger(number) ? Math.min(max, Math.max(min, number)) : fallback;
+}
+async function request(token: string, path: string, init: RequestInit = {}): Promise<{ status: number; data: any; headers: Headers }> {
+  const response = await fetch(API + path, {
+    ...init,
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: 'Bearer ' + token,
+      'X-GitHub-Api-Version': API_VERSION,
+      'Content-Type': 'application/json',
+      ...(init.headers || {}),
+    },
+    signal: init.signal || AbortSignal.timeout(12_000),
+    redirect: 'error',
+  });
+  const text = await response.text();
+  let data: any = null;
+  if (text) {
+    try { data = JSON.parse(text); }
+    catch { throw new Error('GitHub returned an unsupported response format.'); }
+  }
+  if (!response.ok) {
+    if (response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0') {
+      throw new Error('GitHub API rate limit reached. Wait for the reset window and retry.');
+    }
+    const message = response.status === 401 ? 'GitHub authorization expired or was revoked; reconnect GitHub.' :
+      response.status === 403 ? 'GitHub denied this operation. Check repository permissions and OAuth scopes.' :
+      response.status === 404 ? 'GitHub repository, branch, or file was not found or is not accessible.' :
+      response.status === 409 ? 'GitHub rejected the operation because the repository state conflicts.' :
+      'GitHub API request failed (HTTP ' + response.status + ').';
+    throw new Error(message);
+  }
+  return { status: response.status, data, headers: response.headers };
+}
+async function audit(userId: string, action: string, owner: string, repo: string, metadata: Json = {}) {
+  if (!pool) return;
+  await pool.query(
+    'INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',
+    [userId, 'github.' + action, 'github_repository', owner + '/' + repo, JSON.stringify(metadata)],
+  ).catch(() => {});
+}
+function repoSummary(row: any) {
+  return {
+    full_name: row.full_name,
+    description: row.description || null,
+    private: Boolean(row.private),
+    default_branch: row.default_branch,
+    html_url: row.html_url,
+    updated_at: row.updated_at || null,
+    permissions: row.permissions ? {
+      pull: Boolean(row.permissions.pull),
+      push: Boolean(row.permissions.push),
+      admin: Boolean(row.permissions.admin),
+    } : undefined,
+  };
+}
+
+export async function getEnabledGitHubToolDefinitions(userId: string) {
+  if (!userId) return [];
+  const token = await getLinkedGitHubToken(userId);
+  return token ? [...definitions] : [];
+}
+
+export async function executeGitHubTool(userId: string, toolName: string, rawArgs: unknown) {
+  if (!userId) throw new Error('Sign in and connect GitHub to use repository tools.');
+  const token = await getLinkedGitHubToken(userId);
+  if (!token) throw new Error('GitHub is not linked to this account. Open Settings → Integrations and connect GitHub.');
+  const args = objectArgs(rawArgs);
+
+  if (toolName === 'github_list_repositories') {
+    const visibility = optionalText(args, 'visibility', 10) || 'all';
+    const sort = optionalText(args, 'sort', 20) || 'updated';
+    if (!['all', 'public', 'private'].includes(visibility) || !['updated', 'pushed', 'created', 'full_name'].includes(sort)) {
+      throw new Error('Unsupported repository filter.');
+    }
+    const page = boundedNumber(args.page, 1, 1, 100);
+    const perPage = boundedNumber(args.per_page, 30, 1, 50);
+    const result = await request(token, '/user/repos?visibility=' + visibility + '&sort=' + sort + '&direction=desc&page=' + page + '&per_page=' + perPage);
+    return { repositories: (Array.isArray(result.data) ? result.data : []).map(repoSummary), page, perPage };
+  }
+
+  if (toolName === 'github_get_repository') {
+    const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
+    const result = await request(token, repoPath(owner, repo));
+    await audit(userId, 'repository.read', owner, repo);
+    return repoSummary(result.data);
+  }
+
+  if (toolName === 'github_list_branches') {
+    const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
+    const perPage = boundedNumber(args.per_page, 30, 1, 50);
+    const result = await request(token, repoPath(owner, repo) + '/branches?per_page=' + perPage);
+    await audit(userId, 'branches.list', owner, repo);
+    return { branches: (Array.isArray(result.data) ? result.data : []).map((branch: any) => ({
+      name: branch.name, protected: Boolean(branch.protected), commit: branch.commit?.sha,
+    })) };
+  }
+
+  if (toolName === 'github_get_file') {
+    const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
+    const path = safeFilePath(requiredText(args, 'path', 500));
+    const ref = optionalText(args, 'ref', 200);
+    const endpoint = repoPath(owner, repo) + '/contents/' + path.split('/').map(encodeURIComponent).join('/') + (ref ? '?ref=' + encodeURIComponent(ref) : '');
+    const result = await request(token, endpoint);
+    await audit(userId, 'file.read', owner, repo, { path, ref: ref || null });
+    if (Array.isArray(result.data)) {
+      return { type: 'directory', path, entries: result.data.slice(0, 60).map((item: any) => ({
+        name: item.name, path: item.path, type: item.type, size: Number(item.size || 0), html_url: item.html_url,
+      })) };
+    }
+    if (result.data?.type !== 'file' || result.data?.encoding !== 'base64' || typeof result.data?.content !== 'string') {
+      throw new Error('GitHub did not return a supported text file.');
+    }
+    if (Number(result.data.size || 0) > 100_000) throw new Error('This file is larger than the 100 KB chat inspection limit.');
+    const content = Buffer.from(result.data.content.replace(/\s/g, ''), 'base64').toString('utf8');
+    if (content.includes('\u0000')) throw new Error('Binary files cannot be inserted into chat context.');
+    return { type: 'file', path, size: content.length, content };
+  }
+
+  if (toolName === 'github_search_code') {
+    const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
+    const query = requiredText(args, 'query', 200);
+    const perPage = boundedNumber(args.per_page, 20, 1, 30);
+    const result = await request(token, '/search/code?q=' + encodeURIComponent(query + ' repo:' + owner + '/' + repo) + '&per_page=' + perPage);
+    await audit(userId, 'code.search', owner, repo, { queryLength: query.length });
+    return { total_count: Number(result.data.total_count || 0), matches: (Array.isArray(result.data.items) ? result.data.items : []).map((item: any) => ({
+      path: item.path, html_url: item.html_url, sha: item.sha, repository: item.repository?.full_name,
+    })) };
+  }
+
+  if (toolName === 'github_create_branch') {
+    const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
+    const branch = safeBranch(requiredText(args, 'branch', 120));
+    const repository = await request(token, repoPath(owner, repo));
+    const defaultBranch = String(repository.data.default_branch || 'main');
+    if (branch === defaultBranch) throw new Error('A working branch cannot be the repository default branch.');
+    const base = safeBranch(optionalText(args, 'base', 120) || defaultBranch);
+    const baseRef = await request(token, repoPath(owner, repo) + '/git/ref/heads/' + encodeURIComponent(base));
+    const created = await request(token, repoPath(owner, repo) + '/git/refs', {
+      method: 'POST',
+      body: JSON.stringify({ ref: 'refs/heads/' + branch, sha: baseRef.data.object.sha }),
+    });
+    await audit(userId, 'branch.create', owner, repo, { branch, base });
+    return { created: true, branch, base, sha: created.data.object?.sha || baseRef.data.object.sha };
+  }
+
+  if (toolName === 'github_update_file') {
+    const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
+    const path = safeFilePath(requiredText(args, 'path', 500));
+    const branch = safeBranch(requiredText(args, 'branch', 120));
+    const content = requiredText(args, 'content', 100_000);
+    const message = requiredText(args, 'message', 200);
+    const repository = await request(token, repoPath(owner, repo));
+    if (branch === String(repository.data.default_branch || 'main')) {
+      throw new Error('Direct commits to the default branch are blocked. Create and use a working branch.');
+    }
+    await request(token, repoPath(owner, repo) + '/git/ref/heads/' + encodeURIComponent(branch));
+    const fileEndpoint = repoPath(owner, repo) + '/contents/' + path.split('/').map(encodeURIComponent).join('/') + '?ref=' + encodeURIComponent(branch);
+    let existingSha: string | undefined;
+    try {
+      const existing = await request(token, fileEndpoint);
+      if (existing.data?.type !== 'file') throw new Error('The target path is not a file.');
+      existingSha = typeof existing.data.sha === 'string' ? existing.data.sha : undefined;
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.startsWith('GitHub repository, branch, or file was not found')) throw error;
+    }
+    const body: Json = { message, content: Buffer.from(content, 'utf8').toString('base64'), branch };
+    if (existingSha) body.sha = existingSha;
+    const updated = await request(token, fileEndpoint.split('?')[0], { method: 'PUT', body: JSON.stringify(body) });
+    await audit(userId, 'file.write', owner, repo, { path, branch, commit: updated.data.commit?.sha || null });
+    return { committed: true, path, branch, commit: updated.data.commit?.sha || null, html_url: updated.data.content?.html_url || null };
+  }
+
+  if (toolName === 'github_create_pull_request') {
+    const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
+    const title = requiredText(args, 'title', 200);
+    const head = safeBranch(requiredText(args, 'head', 120));
+    const base = safeBranch(requiredText(args, 'base', 120));
+    const body = optionalText(args, 'body', 10_000) || '';
+    const draft = args.draft === true;
+    if (head === base) throw new Error('Pull request head and base branches must be different.');
+    const result = await request(token, repoPath(owner, repo) + '/pulls', {
+      method: 'POST',
+      body: JSON.stringify({ title, head, base, body, draft }),
+    });
+    await audit(userId, 'pull_request.create', owner, repo, { number: result.data.number, head, base });
+    return { created: true, number: result.data.number, title: result.data.title, state: result.data.state, html_url: result.data.html_url, head, base };
+  }
+
+  throw new Error('Unknown GitHub tool.');
+}
