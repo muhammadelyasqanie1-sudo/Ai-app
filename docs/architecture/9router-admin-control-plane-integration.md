@@ -133,3 +133,18 @@ This contract was checked against the upstream source tree; before implementatio
 3. Move each supported AFG AI management domain to 9Router-backed data and actions, keeping Resend in AFG AI and preserving the existing APInex/Tavily connections until verified.
 4. Add a root-admin-only onboarding/configuration path for the dashboard password and staff access grants; never put credentials in a URL.
 5. Run the full role, bypass, session-revocation and provider-cutover validation matrix after explicit approval.
+
+
+## Architecture decision confirmed by project owner
+
+The AFG AI in-app administration panel is to be **deleted**, not kept as a second admin console and not merely hidden. 9Router becomes the single browser-based administration console for AFG AI and 9Router.
+
+- Deleted `src/components/afg/AfgAdminPanel.tsx` from the integration branch.
+- Removed the legacy `admin` tab type and old panel navigation translation labels.
+- AFG AI retains only the root-admin-only **Admin access** handoff link to the 9Router browser dashboard.
+- All administration domains formerly exposed by the AFG AI panel must be reimplemented in 9Router or its authenticated server-side integration: overview, users, staff/roles, providers, models, routing/fallbacks, usage, errors, quotas/rate limits, system health, configuration, feature flags, audit, security, subscriptions, notifications, integrations, MCP, API hub and terminal controls.
+- AFG AI's user-facing product functions remain in AFG AI; only administrative control is centralized in 9Router.
+- The existing AFG AI admin API implementation is transitional backend code. Do not delete it until each domain has a verified 9Router-backed replacement and data ownership/cutover is complete. Then remove legacy admin routes, tables and UI dependencies safely.
+- Resend remains an AFG AI transactional-email integration, not an AI inference provider. APInex and Tavily connections must be preserved during cutover; no secret migration through browser code or chat.
+
+This branch contains the initial deletion and handoff only. It is not yet the complete migration; no production deployment or access-lockdown verification has occurred.
