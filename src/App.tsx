@@ -614,7 +614,7 @@ export default function App() {
             id: crypto.randomUUID(),
             name: 'local-inference',
             label: language === 'dari' ? 'پاسخ با مدل محلی روی دستگاه' : 'Answered with on-device model',
-            detail: localResult.modelLabel,
+            detail: precomputedLocalResult.modelLabel,
             status: 'completed',
             timestamp: Date.now(),
           }]);
