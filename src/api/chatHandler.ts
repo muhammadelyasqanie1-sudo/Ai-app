@@ -222,7 +222,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
   const persistError = async (error:unknown) => {
     if(!pool)return;
     const classified=classifyError(error);
-    const errorClass=['network','auth','rate_limit','provider_5xx','invalid_request','content_policy','timeout'].includes(classified)
+    const errorClass=['network','auth','rate_limit','quota_exhausted','provider_5xx','invalid_request','content_policy','timeout'].includes(classified)
       ? classified : classified==='unavailable_model'?'unavailable':'unknown';
     const code=error instanceof ProviderAdapterError?redactSecret(error.code).slice(0,64):'request_failed';
     try{
