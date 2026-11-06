@@ -20,4 +20,4 @@ for (const testCase of cases) {
 }
 
 assert.deepEqual(parseJarvisCommand('x'.repeat(121)), { kind: 'unknown' });
-process.stdout.write(`JARVIS parser: ${cases.length + 1} cases passed.\\n`);
+process.stdout.write(`JARVIS parser: ${cases.length + 1} cases passed.\n`);
