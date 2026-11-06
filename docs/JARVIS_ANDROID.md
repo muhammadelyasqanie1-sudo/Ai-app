@@ -10,6 +10,8 @@ The optional `@afg-ai/capacitor-jarvis` Capacitor plugin adds an Android-only, u
 - Perform explicit Back, Home, Notifications, Quick Settings and scroll actions.
 - Click a visible control by its displayed text.
 - Insert user-provided text into the currently focused editable field.
+- Capture speech through Android SpeechRecognizer, request offline recognition preference, emit live transcript events, and speak text through the installed Android TextToSpeech engine.
+- Map a small allowlist of recognized phrases to app launching and navigation, with a separate confirmation before each action.
 
 The React screen is available from the navigation drawer as **JARVIS device assistant**. It reports unsupported browser use instead of simulating device actions.
 
@@ -22,6 +24,10 @@ The React screen is available from the navigation drawer as **JARVIS device assi
 5. Return to AFG AI and refresh the permission status.
 
 No root permission is required. The service uses Android's official AccessibilityService APIs. It only receives window/focus callbacks and does not persist, log, or upload screen contents. Actions are invoked only after a direct user interaction in the app; click and text-entry actions show an additional confirmation.
+
+## Voice setup and offline limitations
+
+The JARVIS screen requests microphone permission at the moment the user taps Start listening. Android speech recognition receives `EXTRA_PREFER_OFFLINE=true`; this is only a preference. The installed recognition provider can ignore it or require network access, so offline recognition is not guaranteed. Install offline language packs in Android voice-input settings and test with connectivity disabled before relying on offline use. Text-to-speech uses the installed Android TTS engine and selected voice data; voice data may need to be installed separately. Speech result events are kept in app memory for the current screen and are not sent to AFG AI servers by this plugin. The allowlisted voice commands (app launch, Back, Home, Notifications, Quick Settings) require a separate confirmation. Unknown phrases are never executed.
 
 ## Security and platform boundaries
 
@@ -36,7 +42,7 @@ No root permission is required. The service uses Android's official Accessibilit
 
 ## API surface
 
-The native bridge exports `AFGJarvis.getStatus()`, `openAccessibilitySettings()`, `openApp({ packageName })`, `performAction({ action })`, `clickText({ text })`, and `typeText({ text })`. It is registered through the local Capacitor package in `package.json`.
+The native bridge exports `AFGJarvis.getStatus()`, `openAccessibilitySettings()`, `openApp({ packageName })`, `performAction({ action })`, `clickText({ text })`, and `typeText({ text })`, `requestMicrophonePermission()`, `startListening({ language })`, `stopListening()`, `speak({ text, language })`, and the `speechEvent` listener. It is registered through the local Capacitor package in `package.json`.
 
 ## Verification status
 
