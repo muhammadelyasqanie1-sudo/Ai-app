@@ -12,6 +12,7 @@ export type LocalAgentMessage = { role: 'system' | 'user' | 'assistant'; content
 export type LocalAgentResult = {
   text: string;
   modelLabel: string;
+  kind: 'local-model' | 'device-tool';
 };
 
 /**
@@ -27,8 +28,15 @@ export async function tryLocalFirstResponse(
 
   const latestUserMessage = [...messages].reverse().find((item) => item.role === 'user');
   if (latestUserMessage) {
-    const deviceResult = await runExplicitDeviceCommand(latestUserMessage.content);
-    if (deviceResult.handled) return { text: deviceResult.text, modelLabel: 'AFG AI Android device tools' };
+    try {
+      const deviceResult = await runExplicitDeviceCommand(latestUserMessage.content);
+      if (deviceResult.handled) return { text: deviceResult.text, modelLabel: 'AFG AI Android device tools', kind: 'device-tool' };
+    } catch (error) {
+      // Never forward a failed explicit device action to a cloud model: that could
+      // produce a misleading claim that the phone action succeeded.
+      const detail = error instanceof Error ? error.message : 'Android rejected the requested action.';
+      return { text: 'The phone action was not completed. ' + detail, modelLabel: 'AFG AI Android device tools', kind: 'device-tool' };
+    }
   }
 
   const runtime = await getNativeLlamaRuntimeInfo();
@@ -69,5 +77,6 @@ export async function tryLocalFirstResponse(
   return {
     text,
     modelLabel: installed.repoId + ' / ' + installed.fileName,
+    kind: 'local-model',
   };
 }
