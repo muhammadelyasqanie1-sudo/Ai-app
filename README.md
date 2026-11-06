@@ -119,6 +119,10 @@ New installations should run `npm run db:migrate`. The migration runner applies 
 
 For existing installations that were bootstrapped with `database/schema.sql`, follow [database/MIGRATIONS.md](database/MIGRATIONS.md) and back up the database first.
 
+## JARVIS Android device controls
+
+The optional JARVIS screen provides user-confirmed Android app launching, navigation, visible-text clicking and focused-field text entry through the native Capacitor bridge. It requires the installed Android APK and the user to enable the AFG AI Jarvis Accessibility Service in Android Settings. It is not available in a browser. Offline voice, floating overlays, hand gestures and autonomous social actions are not implemented. Read [JARVIS Android setup and limitations](docs/JARVIS_ANDROID.md).
+
 ## Android APK
 
 The Android wrapper uses Capacitor with app ID `com.afgai.app`. To build a debug APK using GitHub Actions:

@@ -8,6 +8,7 @@ export type TabType =
   | 'video-gen' 
   | 'tools' 
   | 'terminal'
+  | 'jarvis'
   | 'offline-learning'
   | 'offline-ai-hub'
   | 'offline-chat'
