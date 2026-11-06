@@ -4,6 +4,7 @@ export { shouldUseDatabaseTls } from './databaseTls.ts';
 
 const connectionString = process.env.DATABASE_URL?.trim();
 const useDatabaseTls = shouldUseDatabaseTls(connectionString, process.env.DATABASE_SSL);
+const databaseSslCa = process.env.DATABASE_SSL_CA?.replace(/\\n/g, '\n').trim();
 
 export const databaseConfigured = Boolean(connectionString);
 
@@ -15,7 +16,14 @@ export const pool = connectionString
       max: Number(process.env.DATABASE_POOL_MAX || 5),
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
-      ...(useDatabaseTls ? { ssl: { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false' } } : {}),
+      ...(useDatabaseTls
+        ? {
+            ssl: {
+              rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false',
+              ...(databaseSslCa ? { ca: databaseSslCa } : {}),
+            },
+          }
+        : {}),
     })
   : null;
 
