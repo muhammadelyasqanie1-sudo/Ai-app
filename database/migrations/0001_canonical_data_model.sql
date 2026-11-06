@@ -43,7 +43,17 @@ UPDATE messages SET tokens_in=token_input WHERE tokens_in IS NULL;
 UPDATE messages SET tokens_out=token_output WHERE tokens_out IS NULL;
 
 CREATE TABLE IF NOT EXISTS providers(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),kind text NOT NULL UNIQUE,display_name text NOT NULL,config_encrypted text,enabled boolean NOT NULL DEFAULT false,last_health_at timestamptz,last_health_ok boolean,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now());
-INSERT INTO providers(kind,display_name,enabled) SELECT provider_key,display_name,enabled FROM provider_configs ON CONFLICT(kind) DO UPDATE SET display_name=EXCLUDED.display_name,enabled=EXCLUDED.enabled;
+UPDATE providers p
+SET display_name=pc.display_name, enabled=pc.enabled
+FROM provider_configs pc
+WHERE p.kind=pc.provider_key;
+
+INSERT INTO providers(kind,display_name,enabled)
+SELECT pc.provider_key,pc.display_name,pc.enabled
+FROM provider_configs pc
+WHERE NOT EXISTS (
+  SELECT 1 FROM providers p WHERE p.kind=pc.provider_key
+);
 CREATE TABLE IF NOT EXISTS models(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),provider_id uuid NOT NULL REFERENCES providers(id) ON DELETE CASCADE,display_name text NOT NULL,description text,context_window integer NOT NULL DEFAULT 0,capabilities_json jsonb NOT NULL DEFAULT '{}'::jsonb,enabled boolean NOT NULL DEFAULT true,verified_at timestamptz,provider_model_key text,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now(),UNIQUE(provider_id,provider_model_key));
 INSERT INTO models(provider_id,display_name,description,context_window,capabilities_json,enabled,verified_at,provider_model_key)
 SELECT p.id,m.display_name,m.model_key,m.context_window,COALESCE(to_jsonb(m.capabilities),'{}'::jsonb),m.enabled,m.verified_at,m.model_key FROM model_catalog m JOIN providers p ON p.kind=m.provider_key
