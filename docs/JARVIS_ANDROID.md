@@ -54,6 +54,10 @@ The Android bridge now exposes additional explicit, pull-based tools:
 
 The JARVIS screen offers direct controls and the local command parser recognizes a small allowlist of English, Afghan Dari, Persian, Pashto and Arabic phrases for battery, network, sensors, vibration, torch, location, contacts, recent SMS and camera. Each parsed device action requires a confirmation dialog. Location, contacts, SMS and camera-related permissions are requested only when the user invokes the relevant feature. Results remain in the current screen's memory and are not uploaded by this plugin.
 
+### Generative offline model status
+
+JARVIS currently has a small deterministic offline command parser only. It does not contain a general-purpose local LLM, Needle weights, a Cactus native runtime, or fully offline speech recognition. The official Cactus Android guide describes an Android native integration that needs an ARM64 `libcactus.so` engine and Kotlin bindings; those native artifacts are not currently packaged in this repository. Do not enable a model-download or AI-agent control button until the engine/model versions, checksums, licensing, memory footprint and Android 10 runtime have been verified on-device. See the [official Cactus Android integration guide](https://docs.cactuscompute.com/v1.12/android/).
+
 ### Offline model boundary
 
 The current command parser is deterministic phrase matching and works offline; it is not Needle. The upstream Cactus project now hosts Needle 3 and the legacy 14 MB Needle 2 runtime separately. A production Android integration must bundle or provision a verified Android ABI engine and model asset, verify its Apache-2.0 licensing/redistribution terms and memory use on the target phone, and expose only the same permission-gated tools through a constrained function-call schema. This PR does not claim that a generative Needle model is bundled or that Telegram remote control works without internet.
