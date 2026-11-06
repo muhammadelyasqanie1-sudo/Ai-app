@@ -109,6 +109,11 @@ function requiredText(args: Json, key: string, max = 200): string {
   if (!value || value.length > max) throw new Error('A valid ' + key + ' value is required.');
   return value;
 }
+function requiredContent(args: Json, key: string, max: number): string {
+  const value = args[key];
+  if (typeof value !== 'string' || value.length > max) throw new Error('A valid ' + key + ' value is required.');
+  return value;
+}
 function optionalText(args: Json, key: string, max = 200): string | undefined {
   if (args[key] === undefined || args[key] === null || args[key] === '') return undefined;
   return requiredText(args, key, max);
@@ -303,7 +308,7 @@ export async function executeGitHubTool(userId: string, toolName: string, rawArg
     const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
     const path = safeFilePath(requiredText(args, 'path', 500));
     const branch = safeBranch(requiredText(args, 'branch', 120));
-    const content = requiredText(args, 'content', 100_000);
+    const content = requiredContent(args, 'content', 100_000);
     if (/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)/.test(content)) {
       throw new Error('The proposed file content appears to contain a credential or private key and was not committed.');
     }
