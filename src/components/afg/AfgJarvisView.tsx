@@ -31,6 +31,7 @@ export function AfgJarvisView({ language }: { language: Language }) {
   const [localCommand, setLocalCommand] = useState('');
   const [speechError, setSpeechError] = useState('');
   const label = (en: string, fa: string) => dari ? fa : en;
+  const speechLanguage: JarvisSpeechLanguage = language === 'dari' ? 'fa-AF' : language === 'persian' ? 'fa-IR' : language === 'pashto' ? 'ps-AF' : language === 'arabic' ? 'ar' : 'en-US';
   const card = 'rounded-2xl border border-cyan-400/20 bg-slate-950/50 p-4 shadow-[0_0_28px_rgba(6,182,212,.06)]';
   const button = 'rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-3 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/20 disabled:opacity-40';
   const refresh = useCallback(async () => {
@@ -81,9 +82,9 @@ export function AfgJarvisView({ language }: { language: Language }) {
     {native && <>
       <section className={card}>
         <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-bold text-white">{label('Voice control', 'کنترل صوتی')}</h2><span className="rounded-full border border-cyan-400/20 px-3 py-1 text-xs text-cyan-200">{speechState}</span></div>
-        <p className="mt-2 text-xs leading-5 text-slate-400">{label('Android speech recognition is requested with its offline preference. The recognition provider may ignore it or require network access; offline operation is not guaranteed. Install the required language pack in Android voice settings.', 'تشخیص گفتار اندروید با درخواست اولویت آفلاین اجرا می‌شود؛ اما سرویس تشخیص ممکن است این درخواست را نادیده بگیرد یا به اینترنت نیاز داشته باشد. آفلاین بودن تضمین‌شده نیست. بسته زبان را در تنظیمات صوتی اندروید نصب کنید.')}</p>
+        <p className="mt-2 text-xs leading-5 text-slate-400">{label('Android speech recognition is requested with its offline preference. The recognition provider may ignore it or require network access; offline operation is not guaranteed. For Afghan Dari, the app requests the fa-AF locale; actual recognition depends on the speech service and its installed language packs.', 'تشخیص گفتار اندروید با درخواست اولویت آفلاین اجرا می‌شود؛ اما سرویس تشخیص ممکن است این درخواست را نادیده بگیرد یا به اینترنت نیاز داشته باشد. آفلاین بودن تضمین‌شده نیست. برای دری افغانستان، برنامه زبان fa-AF را درخواست می‌کند؛ تشخیص واقعی به پشتیبانی سرویس گفتار و بسته زبان نصب‌شده بستگی دارد.')}</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <button className={button} disabled={!!busy || !status?.speechRecognizerAvailable} onClick={() => void run('listen', async () => { await AFGJarvis.requestMicrophonePermission(); setSpeechError(''); setTranscript(''); await AFGJarvis.startListening({ language: (dari ? 'fa-IR' : language === 'pashto' ? 'ps-AF' : language === 'arabic' ? 'ar' : 'en-US') as JarvisSpeechLanguage }); })}>{label('Start listening', 'شروع شنیدن')}</button>
+          <button className={button} disabled={!!busy || !status?.speechRecognizerAvailable} onClick={() => void run('listen', async () => { await AFGJarvis.requestMicrophonePermission(); setSpeechError(''); setTranscript(''); await AFGJarvis.startListening({ language: speechLanguage }); })}>{label('Start listening', 'شروع شنیدن')}</button>
           <button className={button} disabled={!!busy} onClick={() => void run('stop', () => AFGJarvis.stopListening())}>{label('Stop', 'توقف')}</button>
         </div>
         {transcript && <p className="mt-3 rounded-xl bg-black/30 p-3 text-sm text-white">{transcript}</p>}
