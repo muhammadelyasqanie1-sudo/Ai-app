@@ -215,8 +215,9 @@ const apinexAdapter: ChatProviderAdapter | null = apinexPrimary ? {
     };
   },
   async *streamChat(input) {
+    const startIndex = apinexKeyIndex;
     for (let attempt = 0; attempt < apinexAdapters.length; attempt++) {
-      const index = (apinexKeyIndex + attempt) % apinexAdapters.length;
+      const index = (startIndex + attempt) % apinexAdapters.length;
       let emitted = false;
       try {
         for await (const chunk of apinexAdapters[index].streamChat(input)) {
@@ -227,6 +228,7 @@ const apinexAdapter: ChatProviderAdapter | null = apinexPrimary ? {
         return;
       } catch (error) {
         const quotaOrRateLimited = error instanceof Error && [402, 429].includes((error as any).status);
+        if (quotaOrRateLimited && !emitted) apinexKeyIndex = (index + 1) % apinexAdapters.length;
         if (!quotaOrRateLimited || emitted || attempt === apinexAdapters.length - 1) throw error;
       }
     }
