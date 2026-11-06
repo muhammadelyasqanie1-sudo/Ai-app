@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { parseJarvisCommand } from '../src/lib/jarvis-command-engine';
+import { buildJarvisLocalCommandPrompt, extractJarvisLocalCommand } from '../src/lib/jarvis-local-agent';
 
 const cases: Array<{ input: string; expected: ReturnType<typeof parseJarvisCommand> }> = [
   { input: 'open Telegram', expected: { kind: 'app', packageName: 'org.telegram.messenger', label: 'Telegram' } },
@@ -22,4 +23,13 @@ for (const testCase of cases) {
 }
 
 assert.deepEqual(parseJarvisCommand('x'.repeat(121)), { kind: 'unknown' });
-process.stdout.write(`JARVIS parser: ${cases.length + 1} cases passed.\n`);
+const localCandidate = extractJarvisLocalCommand('```json\n{"command":"open Telegram"}\n```');
+assert.equal(localCandidate, 'open Telegram');
+assert.deepEqual(parseJarvisCommand(localCandidate || ''), { kind: 'app', packageName: 'org.telegram.messenger', label: 'Telegram' });
+assert.equal(extractJarvisLocalCommand('I will open Telegram.'), null);
+assert.equal(extractJarvisLocalCommand('{"command":""}'), null);
+assert.equal(extractJarvisLocalCommand('{"command":"' + 'x'.repeat(121) + '"}'), null);
+assert.equal(extractJarvisLocalCommand('x'.repeat(4001)), null);
+assert.match(buildJarvisLocalCommandPrompt('dari'), /Afghan Dari\/Persian/);
+assert.deepEqual(parseJarvisCommand(extractJarvisLocalCommand('{"command":"install another app"}') || ''), { kind: 'unknown' });
+process.stdout.write(`JARVIS parser and local intent guard: ${cases.length + 9} cases passed.\n`);
