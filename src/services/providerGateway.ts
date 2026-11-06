@@ -287,6 +287,7 @@ async function syncDiscoveredModels(provider: ChatProviderAdapter, models: Model
         capabilities: Object.entries(model.capabilities).filter(([, enabled]) => enabled).map(([key]) => key),
         enabled: provider.id === '9router' ||
           model.id.toLowerCase().endsWith('-free') ||
+          (provider.id === 'apinex' && model.id.toLowerCase().startsWith('free/')) ||
           (model.pricing?.inputPerMillion === 0 && model.pricing?.outputPerMillion === 0),
         context_window: model.contextWindow,
       }));
