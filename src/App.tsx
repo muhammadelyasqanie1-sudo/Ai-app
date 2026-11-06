@@ -567,7 +567,7 @@ export default function App() {
     setMessages(baseMessages.concat(userMessage));
     setIsLoading(true);
     // Resolve explicit Android tools / local inference before any cloud conversation persistence.
-    let precomputedLocalResult: { text: string; modelLabel: string } | null = null;
+    let precomputedLocalResult: { text: string; modelLabel: string; kind: 'local-model' | 'device-tool' } | null = null;
     let localPreflightError = false;
     try {
       precomputedLocalResult = await tryLocalFirstResponse(
@@ -612,8 +612,10 @@ export default function App() {
           fullContent = precomputedLocalResult.text.trim();
           setAgentActivities([{
             id: crypto.randomUUID(),
-            name: 'local-inference',
-            label: language === 'dari' ? 'پاسخ با مدل محلی روی دستگاه' : 'Answered with on-device model',
+            name: precomputedLocalResult.kind === 'device-tool' ? 'android-device-tool' : 'local-inference',
+            label: precomputedLocalResult.kind === 'device-tool'
+              ? (language === 'dari' ? 'اجرای ابزار دستگاه اندروید' : 'Android device action')
+              : (language === 'dari' ? 'پاسخ با مدل محلی روی دستگاه' : 'Answered with on-device model'),
             detail: precomputedLocalResult.modelLabel,
             status: 'completed',
             timestamp: Date.now(),
