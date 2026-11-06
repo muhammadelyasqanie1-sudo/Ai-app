@@ -13,8 +13,7 @@ export type TabType =
   | 'offline-chat'
   | 'offline-models'
   | 'history'
-  | 'settings' 
-  | 'admin';
+  | 'settings';
 
 export type ToolSubTab = 
   | 'overview'
