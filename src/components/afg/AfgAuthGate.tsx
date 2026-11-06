@@ -53,7 +53,7 @@ export const AfgAuthGate: React.FC<Props> = ({ language, onContinueGuest, onAuth
       try { deepLink = new URL(rawUrl); } catch { return; }
       if (deepLink.protocol !== 'afgai:' || deepLink.hostname !== 'auth' || deepLink.pathname !== '/callback') return;
       const ticket = deepLink.searchParams.get('ticket');
-      if (!ticket) { if (active) setError(t.error); return; }
+      if (!ticket) { await Browser.close().catch(() => undefined); if (active) setError(t.error); return; }
       try {
         await Browser.close().catch(() => undefined);
         const response = await fetch(apiUrl('/api/auth/google/mobile-exchange'), {
