@@ -30,6 +30,11 @@ export function AfgJarvisView({ language }: { language: Language }) {
   const [transcript, setTranscript] = useState('');
   const [localCommand, setLocalCommand] = useState('');
   const [speechError, setSpeechError] = useState('');
+  const [deviceData, setDeviceData] = useState<Record<string, any>>({});
+  const [deviceNumber, setDeviceNumber] = useState('');
+  const [deviceMessage, setDeviceMessage] = useState('');
+  const [clipboardInput, setClipboardInput] = useState('');
+  const [torchEnabled, setTorchEnabled] = useState(false);
   const label = (en: string, fa: string) => dari ? fa : en;
   const speechLanguage: JarvisSpeechLanguage = language === 'dari' ? 'fa-AF' : language === 'persian' ? 'fa-IR' : language === 'pashto' ? 'ps-AF' : language === 'arabic' ? 'ar' : 'en-US';
   const card = 'rounded-2xl border border-cyan-400/20 bg-slate-950/50 p-4 shadow-[0_0_28px_rgba(6,182,212,.06)]';
@@ -68,8 +73,36 @@ export function AfgJarvisView({ language }: { language: Language }) {
       if (window.confirm(label('Run ' + parsed.action + '?', 'فرمان ' + parsed.action + ' اجرا شود؟'))) {
         void run('voice-action', () => AFGJarvis.performAction({ action: parsed.action }));
       }
+    } else if (parsed.kind === 'device') {
+      const labels: Record<string,string> = {
+        battery: label('Read battery status?', 'وضعیت باتری خوانده شود؟'),
+        network: label('Read network status?', 'وضعیت شبکه خوانده شود؟'),
+        sensors: label('List available sensors?', 'حسگرهای موجود فهرست شود؟'),
+        vibrate: label('Vibrate the phone for 500 ms?', 'گوشی ۵۰۰ میلی‌ثانیه بلرزد؟'),
+        torchOn: label('Turn on the flashlight?', 'چراغ‌قوه روشن شود؟'),
+        torchOff: label('Turn off the flashlight?', 'چراغ‌قوه خاموش شود؟'),
+        location: label('Read the current location? Android permission will be requested.', 'موقعیت فعلی خوانده شود؟ مجوز اندروید درخواست می‌شود.'),
+        contacts: label('Read up to 20 contacts? Android permission will be requested.', 'تا ۲۰ مخاطب خوانده شود؟ مجوز اندروید درخواست می‌شود.'),
+        recentSms: label('Read the last 5 SMS messages? Android permission will be requested.', 'پنج پیامک اخیر خوانده شود؟ مجوز اندروید درخواست می‌شود.'),
+        camera: label('Open camera? You will take the photo yourself.', 'دوربین باز شود؟ عکس را خودتان می‌گیرید.'),
+      };
+      if (window.confirm(labels[parsed.action])) {
+        const tasks: Record<string,() => Promise<unknown>> = {
+          battery: async () => { const battery = await AFGJarvis.getBatteryStatus(); setDeviceData(v => ({...v,battery})); },
+          network: async () => { const network = await AFGJarvis.getNetworkStatus(); setDeviceData(v => ({...v,network})); },
+          sensors: async () => { const sensors = await AFGJarvis.getSensors(); setDeviceData(v => ({...v,sensors})); },
+          vibrate: () => AFGJarvis.vibrate({durationMs:500}),
+          torchOn: async () => { await AFGJarvis.requestCameraPermission(); await AFGJarvis.setTorch({enabled:true}); setTorchEnabled(true); },
+          torchOff: async () => { await AFGJarvis.requestCameraPermission(); await AFGJarvis.setTorch({enabled:false}); setTorchEnabled(false); },
+          location: async () => { await AFGJarvis.requestLocationPermission(); const location = await AFGJarvis.getLocation(); setDeviceData(v => ({...v,location})); },
+          contacts: async () => { await AFGJarvis.requestContactsPermission(); const contacts = await AFGJarvis.getContacts({limit:20}); setDeviceData(v => ({...v,contacts})); },
+          recentSms: async () => { await AFGJarvis.requestSmsReadPermission(); const sms = await AFGJarvis.getRecentSms({limit:5}); setDeviceData(v => ({...v,sms})); },
+          camera: async () => { const photo = await AFGJarvis.takePhoto(); setDeviceData(v => ({...v,photo})); },
+        };
+        void run('voice-device', tasks[parsed.action]);
+      }
     } else {
-      setSpeechError(label('No safe local command matched. Try open Telegram, back, home, or a Dari/Pashto/Arabic phrase.', 'فرمان امن محلی شناخته نشد. نام تلگرام، بازگشت، خانه یا فرمان دری/پشتو/عربی را وارد کنید.'));
+      setSpeechError(label('No safe local command matched. Try open Telegram, battery status, flashlight, location, or a Dari/Pashto phrase.', 'فرمان امن محلی شناخته نشد. تلگرام، وضعیت باتری، چراغ‌قوه، موقعیت یا عبارت دری/پشتو را امتحان کنید.'));
     }
   }
   return <main className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6" dir={dari ? 'rtl' : 'ltr'}>
@@ -91,7 +124,7 @@ export function AfgJarvisView({ language }: { language: Language }) {
         {speechError && <p role="alert" className="mt-2 text-sm text-rose-300">{speechError}</p>}
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button className={button} disabled={!transcript.trim() || !!busy} onClick={() => confirmLocalCommand(transcript)}>{label('Confirm voice command', 'تأیید فرمان صوتی')}</button>
-          <button className={button} disabled={!transcript.trim() || !!busy} onClick={() => void run('speak', () => AFGJarvis.speak({ text: transcript, language: (dari ? 'fa-IR' : language === 'pashto' ? 'ps-AF' : language === 'arabic' ? 'ar' : 'en-US') as JarvisSpeechLanguage }))}>{label('Speak transcript', 'خواندن متن با صدا')}</button>
+          <button className={button} disabled={!transcript.trim() || !!busy} onClick={() => void run('speak', () => AFGJarvis.speak({ text: transcript, language: speechLanguage }))}>{label('Speak transcript', 'خواندن متن با صدا')}</button>
         </div>
         <p className="mt-3 text-xs text-slate-400">{label('Only listed app-launch and navigation phrases are mapped to actions, and every action requires your confirmation. Unknown speech is never executed as a command.', 'فقط عبارت‌های مشخص‌شده برای بازکردن برنامه و پیمایش به فرمان تبدیل می‌شوند و هر فرمان نیازمند تأیید شماست. گفتار ناشناخته هرگز خودکار اجرا نمی‌شود.')}</p>
         <div className="mt-4 rounded-xl border border-violet-400/20 bg-violet-400/5 p-3">
@@ -119,6 +152,57 @@ export function AfgJarvisView({ language }: { language: Language }) {
           <input value={packageName} onChange={e => setPackageName(e.target.value)} placeholder="com.example.app" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-sm text-white" />
           <button className={button} disabled={!!busy || !packageName.trim()}>{label('Open', 'باز کن')}</button>
         </form>
+      </section>
+
+      <section className={card}>
+        <div className="flex items-center justify-between gap-3"><h2 className="font-bold text-white">{label('Local device toolkit', 'ابزارهای محلی دستگاه')}</h2><span className="rounded-full border border-emerald-400/20 px-2 py-1 text-xs text-emerald-200">On-device</span></div>
+        <p className="mt-2 text-xs leading-5 text-slate-400">{label('These tools run locally. Sensitive information is shown only after you tap the relevant action and grant Android permission.', 'این ابزارها محلی اجرا می‌شوند. معلومات حساس فقط پس از لمس دکمه مربوط و دادن مجوز اندروید نمایش داده می‌شود.')}</p>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <button className={button} disabled={!!busy} onClick={() => void run('battery', async () => { const battery = await AFGJarvis.getBatteryStatus(); setDeviceData(v => ({...v,battery})); })}>{label('Battery status', 'وضعیت باتری')}</button>
+          <button className={button} disabled={!!busy} onClick={() => void run('network', async () => { const network = await AFGJarvis.getNetworkStatus(); setDeviceData(v => ({...v,network})); })}>{label('Network status', 'وضعیت شبکه')}</button>
+          <button className={button} disabled={!!busy} onClick={() => void run('sensors', async () => { const sensors = await AFGJarvis.getSensors(); setDeviceData(v => ({...v,sensors})); })}>{label('Sensors & biometrics', 'حسگرها و بایومتریک')}</button>
+          <button className={button} disabled={!!busy} onClick={() => void run('vibrate', () => AFGJarvis.vibrate({durationMs:500}))}>{label('Vibrate 0.5 sec', 'لرزش نیم ثانیه')}</button>
+          <button className={button} disabled={!!busy} onClick={() => { if (window.confirm(label('Toggle the camera flashlight?', 'چراغ‌قوه دوربین تغییر کند؟'))) void run('torch', async () => { await AFGJarvis.requestCameraPermission(); const next=!torchEnabled; await AFGJarvis.setTorch({enabled:next}); setTorchEnabled(next); }); }}>{torchEnabled ? label('Turn flashlight off','خاموش کردن چراغ‌قوه') : label('Turn flashlight on','روشن کردن چراغ‌قوه')}</button>
+          <button className={button} disabled={!!busy} onClick={() => { if (window.confirm(label('Open the camera? You will take the photo yourself.', 'دوربین باز شود؟ عکس را خودتان می‌گیرید.'))) void run('camera', async () => { const photo = await AFGJarvis.takePhoto(); setDeviceData(v => ({...v,photo})); }); }}>{label('Take a photo', 'گرفتن عکس')}</button>
+        </div>
+        <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+          <h3 className="text-sm font-semibold text-white">{label('Location', 'موقعیت مکانی')}</h3>
+          <button className={button + ' mt-2 w-full'} disabled={!!busy} onClick={() => { if (window.confirm(label('Allow AFG AI to read your current cached location?', 'اجازه می‌دهید AFG AI موقعیت ذخیره‌شده فعلی را بخواند؟'))) void run('location', async () => { await AFGJarvis.requestLocationPermission(); const location = await AFGJarvis.getLocation(); setDeviceData(v => ({...v,location})); }); }}>{label('Read current location', 'خواندن موقعیت فعلی')}</button>
+        </div>
+        <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+          <h3 className="text-sm font-semibold text-white">{label('Contacts & recent SMS', 'مخاطبین و پیامک‌های اخیر')}</h3>
+          <p className="mt-1 text-xs text-slate-400">{label('Android will ask for permission. Data stays in this screen and is not uploaded by this plugin.', 'اندروید مجوز می‌خواهد. معلومات در همین صفحه می‌ماند و توسط این افزونه آپلود نمی‌شود.')}</p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button className={button} disabled={!!busy} onClick={() => { if (window.confirm(label('Read up to 20 contacts?', 'تا ۲۰ مخاطب خوانده شود؟'))) void run('contacts', async () => { await AFGJarvis.requestContactsPermission(); const contacts = await AFGJarvis.getContacts({limit:20}); setDeviceData(v => ({...v,contacts})); }); }}>{label('Read contacts', 'خواندن مخاطبین')}</button>
+            <button className={button} disabled={!!busy} onClick={() => { if (window.confirm(label('Read your 5 most recent SMS messages?', 'پنج پیامک اخیر شما خوانده شود؟'))) void run('sms', async () => { await AFGJarvis.requestSmsReadPermission(); const sms = await AFGJarvis.getRecentSms({limit:5}); setDeviceData(v => ({...v,sms})); }); }}>{label('Read last 5 SMS', 'خواندن ۵ پیامک اخیر')}</button>
+          </div>
+        </div>
+
+        <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+          <h3 className="text-sm font-semibold text-white">{label('Clipboard', 'کلیپ‌بورد')}</h3>
+          <textarea value={clipboardInput} onChange={e => setClipboardInput(e.target.value)} maxLength={4000} rows={2} placeholder={label('Text to copy', 'متن برای کاپی')} className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white" />
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button className={button} disabled={!!busy} onClick={() => void run('clipboard-set', () => AFGJarvis.setClipboard({text:clipboardInput}))}>{label('Copy text', 'کاپی متن')}</button>
+            <button className={button} disabled={!!busy} onClick={() => void run('clipboard-get', async () => { const value=await AFGJarvis.getClipboard(); setClipboardInput(value.text); })}>{label('Read clipboard', 'خواندن کلیپ‌بورد')}</button>
+          </div>
+        </div>
+        <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+          <h3 className="text-sm font-semibold text-white">{label('Phone actions', 'عملیات تلفن')}</h3>
+          <input value={deviceNumber} onChange={e => setDeviceNumber(e.target.value)} maxLength={40} placeholder={label('Phone number', 'شماره تلفن')} className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-sm text-white" />
+          <textarea value={deviceMessage} onChange={e => setDeviceMessage(e.target.value)} maxLength={1000} rows={2} placeholder={label('SMS message (optional)', 'متن پیامک (اختیاری)')} className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white" />
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button className={button} disabled={!!busy || !deviceNumber.trim()} onClick={() => { if (window.confirm(label('Open the dialer with this number? No call will be placed automatically.', 'شماره در شماره‌گیر باز شود؟ تماس خودکار برقرار نمی‌شود.'))) void run('dial', () => AFGJarvis.openDialer({number:deviceNumber.trim()})); }}>{label('Open dialer', 'باز کردن شماره‌گیر')}</button>
+            <button className={button} disabled={!!busy || !deviceNumber.trim()} onClick={() => { if (window.confirm(label('Open the SMS composer? You must press Send yourself.', 'برنامه پیامک باز شود؟ ارسال را خودتان باید بزنید.'))) void run('sms-compose', () => AFGJarvis.openSmsComposer({number:deviceNumber.trim(),body:deviceMessage})); }}>{label('Compose SMS', 'نوشتن پیامک')}</button>
+          </div>
+        </div>
+        {deviceData.battery && <p className="mt-3 rounded-xl bg-white/5 p-3 text-sm text-slate-200">{label('Battery','باتری')}: {deviceData.battery.levelPercent}% · {deviceData.battery.charging ? label('Charging','در حال شارژ') : label('Not charging','بدون شارژ')} · {deviceData.battery.temperatureC ?? '—'}°C</p>}
+        {deviceData.network && <p className="mt-2 rounded-xl bg-white/5 p-3 text-sm text-slate-200">{label('Network','شبکه')}: {deviceData.network.transport} · {deviceData.network.connected ? label('Connected','متصل') : label('Offline','آفلاین')}</p>}
+        {deviceData.location && <p className="mt-2 break-all rounded-xl bg-white/5 p-3 text-sm text-slate-200">{label('Location','موقعیت')}: {deviceData.location.latitude}, {deviceData.location.longitude} (±{Math.round(deviceData.location.accuracyMeters || 0)}m)</p>}
+        {deviceData.sensors && <div className="mt-2 rounded-xl bg-white/5 p-3 text-xs text-slate-200"><p>{label('Sensors detected','حسگرهای شناسایی‌شده')}: {deviceData.sensors.sensors.length} · {label('Fingerprint hardware','سخت‌افزار اثر انگشت')}: {deviceData.sensors.fingerprintOrBiometricAvailable ? label('Available','موجود') : label('Not detected','شناسایی نشد')} · {label('Fingerprint data is never accessible','داده اثر انگشت قابل دسترسی نیست')}</p><p className="mt-2">{deviceData.sensors.sensors.slice(0,12).map((x:any)=>x.name).join(' · ')}</p></div>}
+        {deviceData.contacts && <div className="mt-2 max-h-48 overflow-auto rounded-xl bg-white/5 p-3 text-xs text-slate-200">{deviceData.contacts.contacts.map((x:any,i:number)=><p key={i}>{x.name || '—'} · {x.phone || '—'}</p>)}</div>}
+        {deviceData.sms && <div className="mt-2 max-h-60 overflow-auto rounded-xl bg-white/5 p-3 text-xs text-slate-200">{deviceData.sms.messages.map((x:any,i:number)=><div key={i} className="border-b border-white/10 py-2"><p className="font-semibold">{x.address} · {x.type}</p><p className="mt-1 whitespace-pre-wrap">{x.body}</p><p className="mt-1 text-slate-500">{new Date(x.date).toLocaleString()}</p></div>)}</div>}
+        {deviceData.photo && <img alt="Camera preview" className="mt-3 max-h-72 w-full rounded-xl object-contain" src={'data:image/jpeg;base64,' + deviceData.photo.dataBase64} />}
+        <p className="mt-3 text-xs leading-5 text-amber-200/80">{label('Privacy limits: SMS and contacts permissions may be restricted by Google Play policy. Camera capture opens the system camera and returns only its preview. Calls and SMS are never sent automatically. Fingerprint templates are inaccessible to apps.', 'محدودیت حریم خصوصی: مجوز پیامک و مخاطبین ممکن است طبق پالیسی Google Play محدود باشد. دوربین سیستمی باز می‌شود و فقط پیش‌نمایش را برمی‌گرداند. تماس و پیامک خودکار ارسال نمی‌شود. قالب اثر انگشت برای برنامه‌ها قابل دسترسی نیست.')}</p>
       </section>
       <section className={card}>
         <h2 className="font-bold text-white">{label('Device navigation', 'پیمایش دستگاه')}</h2>

@@ -3,6 +3,7 @@ import type { JarvisAction } from '@afg-ai/capacitor-jarvis';
 export type JarvisCommand =
   | { kind: 'app'; packageName: string; label: string }
   | { kind: 'action'; action: JarvisAction }
+  | { kind: 'device'; action: 'battery' | 'network' | 'sensors' | 'vibrate' | 'torchOn' | 'torchOff' | 'location' | 'contacts' | 'recentSms' | 'camera' }
   | { kind: 'unknown' };
 
 const appAliases: Array<{ packageName: string; label: string; aliases: string[] }> = [
@@ -10,6 +11,19 @@ const appAliases: Array<{ packageName: string; label: string; aliases: string[] 
   { packageName: 'com.google.android.youtube', label: 'YouTube', aliases: ['youtube', 'يوتيوب', 'یوتیوب', 'یوټیوب', 'یوتوب'] },
   { packageName: 'org.telegram.messenger', label: 'Telegram', aliases: ['telegram', 'تلگرام', 'ټیلیګرام', 'تيليجرام'] },
   { packageName: 'com.whatsapp', label: 'WhatsApp', aliases: ['whatsapp', 'واتساپ', 'واتس اپ', 'واټساپ'] },
+];
+
+const deviceAliases: Array<{ action: Extract<JarvisCommand, {kind:'device'}>['action']; aliases: string[] }> = [
+  { action: 'battery', aliases: ['battery', 'battery status', 'battery level', 'what is my battery level', 'check battery', 'وضعیت باتری', 'سطح باتری', 'باتری چقدر است', 'بیټرۍ', 'د بیټرۍ حالت', 'حالة البطارية'] },
+  { action: 'network', aliases: ['network status', 'check network', 'internet status', 'wifi status', 'وضعیت شبکه', 'وضعیت اینترنت', 'حالت وای فای', 'د شبکې حالت', 'حالة الشبكة'] },
+  { action: 'sensors', aliases: ['list sensors', 'check sensors', 'phone sensors', 'hardware sensors', 'حسگرها', 'سنسورها', 'حسگرهای گوشی', 'سنسورونه', 'المستشعرات'] },
+  { action: 'vibrate', aliases: ['vibrate', 'vibrate phone', 'buzz phone', 'لرزش', 'گوشی را بلرزان', 'موبایل ره بلرزان', 'وړاندې ولړزوه'] },
+  { action: 'torchOn', aliases: ['turn on flashlight', 'flashlight on', 'torch on', 'چراغ قوه را روشن کن', 'چراغ‌قوه ره روشن کو', 'فلش روشن', 'فلش ره روشن کو', 'څراغ بل کړه'] },
+  { action: 'torchOff', aliases: ['turn off flashlight', 'flashlight off', 'torch off', 'چراغ قوه را خاموش کن', 'چراغ‌قوه ره خاموش کو', 'فلش خاموش', 'فلش ره بند کو', 'څراغ مړ کړه'] },
+  { action: 'location', aliases: ['where am i', 'get my location', 'current location', 'موقعیت من کجاست', 'موقعیت فعلی', 'لوکیشن', 'زه چېرته یم', 'موقعي الحالي'] },
+  { action: 'contacts', aliases: ['list contacts', 'show contacts', 'my contacts', 'مخاطبین', 'لیست مخاطبین', 'شماره هایم', 'اړیکې', 'جهات الاتصال'] },
+  { action: 'recentSms', aliases: ['read recent sms', 'last five messages', 'read last 5 sms', 'پیامک های اخیر', 'پیامک‌های اخیر', 'پنج پیامک اخیر', 'وروستي پیغامونه', 'الرسائل الأخيرة'] },
+  { action: 'camera', aliases: ['take a photo', 'open camera', 'take photo', 'عکس بگیر', 'دوربین را باز کن', 'دوربین ره باز کو', 'عکس واخله', 'افتح الكاميرا'] },
 ];
 
 const actionAliases: Array<{ action: JarvisAction; aliases: string[] }> = [
@@ -48,6 +62,9 @@ export function parseJarvisCommand(input: string): JarvisCommand {
 
   const app = appAliases.find(item => item.aliases.some(alias => appPhraseMatches(command, alias)));
   if (app) return { kind: 'app', packageName: app.packageName, label: app.label };
+
+  const device = deviceAliases.find(item => item.aliases.some(alias => command === normalize(alias)));
+  if (device) return { kind: 'device', action: device.action };
 
   const action = actionAliases.find(item => item.aliases.some(alias => command === normalize(alias)));
   return action ? { kind: 'action', action: action.action } : { kind: 'unknown' };

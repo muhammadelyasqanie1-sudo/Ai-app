@@ -29,13 +29,36 @@ No root permission is required. The service uses Android's official Accessibilit
 
 When the app language is Dari, JARVIS requests the Afghan Dari locale `fa-AF`; Persian uses `fa-IR`. The recognition and TTS engines must actually provide those locale voices/language packs. If `fa-AF` is not supported by the installed Android speech provider, Dari voice recognition may fail or fall back according to that provider; the app does not claim guaranteed Dari recognition. The JARVIS screen requests microphone permission at the moment the user taps Start listening. Android speech recognition receives `EXTRA_PREFER_OFFLINE=true`; this is only a preference. The installed recognition provider can ignore it or require network access, so offline recognition is not guaranteed. Afghan Dari (`fa-AF`) availability is device/provider-dependent. Install offline language packs in Android voice-input settings and test with connectivity disabled before relying on offline use. Text-to-speech uses the installed Android TTS engine and selected voice data; voice data may need to be installed separately. Speech result events are kept in app memory for the current screen and are not sent to AFG AI servers by this plugin. The allowlisted voice commands (app launch, Back, Home, Notifications, Quick Settings and scrolling) are parsed locally by `src/lib/jarvis-command-engine.ts` and require a separate confirmation. Phrase matching is deterministic, not a generative local LLM; unknown phrases are never executed.
 
+
+## Local device toolkit
+
+The Android bridge now exposes additional explicit, pull-based tools:
+
+- Battery percentage, charging state and temperature.
+- Vibration with a bounded 50–2,000 ms duration.
+- Camera flash/torch control after runtime camera permission.
+- Network transport and validated-connectivity state. SSID, BSSID and IP are intentionally not collected.
+- Last-known GPS/network location after runtime location permission. This is a cached location read, not continuous/live tracking.
+- Up to 20 contacts after runtime contacts permission.
+- Up to five recent SMS messages after runtime SMS permission. This permission is sensitive and may make the app ineligible for Google Play distribution unless it qualifies under Google's SMS/Call Log policy.
+- Explicitly invoked clipboard read/write (up to 4,000 characters). Clipboard reads may be restricted by Android while the app is in the background; this plugin reads only after a foreground user action.
+- Camera capture through the Android camera app. The user must frame and press the shutter; AFG AI receives only the returned preview bitmap.
+- Phone dialer and SMS composer intents. The user must press Call or Send in the system app; the plugin never places a call or sends an SMS directly.
+- A list of available sensor names/types and whether fingerprint hardware is advertised by Android. Fingerprint templates and sensor-private biometric data are never accessible to this app; no fingerprint bypass or raw sensor capture is implemented.
+
+The JARVIS screen offers direct controls and the local command parser recognizes a small allowlist of English, Afghan Dari, Persian, Pashto and Arabic phrases for battery, network, sensors, vibration, torch, location, contacts, recent SMS and camera. Each parsed device action requires a confirmation dialog. Location, contacts, SMS and camera-related permissions are requested only when the user invokes the relevant feature. Results remain in the current screen's memory and are not uploaded by this plugin.
+
+### Offline model boundary
+
+The current command parser is deterministic phrase matching and works offline; it is not Needle. The upstream Cactus project now hosts Needle 3 and the legacy 14 MB Needle 2 runtime separately. A production Android integration must bundle or provision a verified Android ABI engine and model asset, verify its Apache-2.0 licensing/redistribution terms and memory use on the target phone, and expose only the same permission-gated tools through a constrained function-call schema. This PR does not claim that a generative Needle model is bundled or that Telegram remote control works without internet.
+
 ## Security and platform boundaries
 
 - This is a guided control bridge, not an autonomous agent. It does not independently decide what to click or type.
 - It does not auto-like posts, subscribe, send messages, make purchases, install packages, unlock the device, or bypass app security.
 - Some apps expose incomplete accessibility trees, so text-based clicks and focused-field typing may not work everywhere.
 - Android and individual apps can block or constrain automation. The service cannot grant itself accessibility permission.
-- The current implementation requests microphone permission only when the user taps Start listening. It does not request overlay, camera, notification-listener, location, or device-admin privileges.
+- The app requests microphone, camera (torch only), location, contacts and SMS permissions only when the user invokes the related feature. It does not request overlay, notification-listener or device-admin privileges.
 - Fully offline speech-to-text is not implemented: Android SpeechRecognizer may still require network access. The local command parser includes Afghan Dari wording (including common `را`/`ره` command forms) and works offline only after speech has been transcribed; it is not a replacement speech model.
 - A bundled local generative model (including Needle), a persistent floating bubble, hand-gesture recognition, flight radar, and anti-theft/lockout features are not implemented in this increment. Do not present them as available.
 - The Android app must be rebuilt for the native plugin to be packaged. A web-only deployment cannot control the phone.
@@ -43,8 +66,11 @@ When the app language is Dari, JARVIS requests the Afghan Dari locale `fa-AF`; P
 
 ## API surface
 
-The native bridge exports `AFGJarvis.getStatus()`, `openAccessibilitySettings()`, `openApp({ packageName })`, `performAction({ action })`, `clickText({ text })`, and `typeText({ text })`, `requestMicrophonePermission()`, `startListening({ language })`, `stopListening()`, `speak({ text, language })`, and the `speechEvent` listener. It is registered through the local Capacitor package in `package.json`.
+The native bridge exports `getStatus()`, `getBatteryStatus()`, `vibrate()`, `requestCameraPermission()`, `setTorch()`, `getNetworkStatus()`, `requestLocationPermission()`, `getLocation()`, `requestContactsPermission()`, `getContacts()`, `requestSmsReadPermission()`, `getRecentSms()`, `setClipboard()`, `getClipboard()`, `openSmsComposer()`, `openDialer()`, `takePhoto()`, `getSensors()`, `openAccessibilitySettings()`, `openApp()`, `performAction()`, `clickText()`, `typeText()`, microphone permission and speech methods, and the `speechEvent` listener. It is registered through the local Capacitor package in `package.json`.
 
 ## Verification status
 
-Source files and manifest wiring were inspected. Per repository policy, no tests, type-check, lint, Android sync, build, APK workflow, or deployment was run. Install dependencies and run Capacitor Android sync/build only after the project owner authorizes those operations.
+Source files and manifest wiring were inspected. Per repository policy, no tests, type-check, lint, Android sync, build, APK workflow, or deployment was run. Native runtime behavior, camera result handling, permission behavior across Android vendors, and Google Play eligibility still require device verification. Install dependencies and run Capacitor Android sync/build only after the project owner authorizes those operations.
+
+
+The local device toolkit does not require root access. Android runtime permissions are requested only when the user invokes the corresponding feature; the operating system remains responsible for granting or denying each permission.

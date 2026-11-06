@@ -142,3 +142,10 @@ See [ANDROID_BUILD.md](ANDROID_BUILD.md). Building an APK does not deploy the ba
 - A feature is complete only if it satisfies all ten checks in [docs/ACCEPTANCE_CRITERIA.md](docs/ACCEPTANCE_CRITERIA.md).
 - Every implementation task ends with [docs/FINAL_REPORT_FORMAT.md](docs/FINAL_REPORT_FORMAT.md).
 - See [docs/GAP_ANALYSIS_PHASE1.md](docs/GAP_ANALYSIS_PHASE1.md) for current known gaps.
+
+
+## JARVIS Android local device toolkit
+
+The Android JARVIS bridge provides user-confirmed, on-device controls for battery status, vibration, flashlight, network status, last-known location, camera preview, contacts, recent SMS, sensor inventory, phone dialer and SMS composer. Sensitive data access is permission-gated and is not uploaded by the native plugin. Calls and SMS are handed to Android's system UI for the user to complete; they are never sent automatically. See [JARVIS Android documentation](docs/JARVIS_ANDROID.md) for platform and Google Play permission limitations.
+
+The current multilingual offline command parser is deterministic phrase matching, not a bundled Needle model. The Cactus Needle runtime is a separate integration task requiring a verified Android engine/ABI and model asset.
