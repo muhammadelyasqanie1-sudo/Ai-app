@@ -238,6 +238,18 @@ public class AFGJarvisPlugin extends Plugin {
         JSObject out = new JSObject(); out.put("performed", true); out.put("durationMs", duration); call.resolve(out);
     }
 
+
+    @PluginMethod public void requestCameraPermission(PluginCall call) {
+        if (getContext().checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            JSObject out = new JSObject(); out.put("granted", true); call.resolve(out); return;
+        }
+        requestPermissionForAlias("camera", call, "cameraPermissionCallback");
+    }
+    @PermissionCallback private void cameraPermissionCallback(PluginCall call) {
+        if (getContext().checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) { call.reject("Camera permission was not granted."); return; }
+        JSObject out = new JSObject(); out.put("granted", true); call.resolve(out);
+    }
+
     @PluginMethod public void setTorch(PluginCall call) {
         boolean enabled = call.getBoolean("enabled", false);
         if (getContext().checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) { call.reject("Camera permission is required. Grant it in Android app settings, then retry."); return; }
