@@ -32,7 +32,7 @@ When local inference succeeds, the conversation prompt is passed to the native m
 The Android plugin now exposes a small allowlisted tool set:
 - Read battery percentage, charging state and temperature.
 - Trigger a short vibration.
-- Open YouTube, Maps, Chrome, Android Settings or the camera app.
+- Open YouTube, Maps, Chrome, Android Settings, the camera app, Telegram or WhatsApp (when installed).
 - Open the system dialer with a requested number; the user must tap Call.
 - Open the system SMS composer with a recipient and draft; the user must tap Send.
 
