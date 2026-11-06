@@ -117,7 +117,8 @@ const nineRouterAdapter: ChatProviderAdapter | null = nineRouterBaseAdapter
   : null;
 
 // APInex account-key pool. Keys stay server-side in Railway Secrets.
-// Rotate to the next key only when the current key is rate-limited (HTTP 429).
+// APInex shares RPM and balance across keys on one account, so key rotation only
+// helps with key-specific authentication failures, never 402 quota or 429 RPM limits.
 const apinexKeys = (() => {
   try {
     const value = JSON.parse(process.env.APINEX_API_KEYS || '[]');
@@ -162,7 +163,7 @@ async function loadApinexCatalog(): Promise<ModelDescriptor[]> {
         lastError = error;
         const status = error instanceof Error ? Number((error as any).status) : 0;
         // A different account key can have independent quota; try each key at most once.
-        if (![401, 402, 403, 429].includes(status)) break;
+        if (![401, 403].includes(status)) break;
       }
     }
 
@@ -227,9 +228,11 @@ const apinexAdapter: ChatProviderAdapter | null = apinexPrimary ? {
         apinexKeyIndex = index;
         return;
       } catch (error) {
-        const quotaOrRateLimited = error instanceof Error && [402, 429].includes((error as any).status);
-        if (quotaOrRateLimited && !emitted) apinexKeyIndex = (index + 1) % apinexAdapters.length;
-        if (!quotaOrRateLimited || emitted || attempt === apinexAdapters.length - 1) throw error;
+        const keySpecificAuthFailure = error instanceof Error && [401, 403].includes((error as any).status);
+        if (keySpecificAuthFailure && !emitted) apinexKeyIndex = (index + 1) % apinexAdapters.length;
+        // 402 (account balance) and 429 (account-wide RPM) cannot be fixed by
+        // trying another key belonging to the same APInex account.
+        if (!keySpecificAuthFailure || emitted || attempt === apinexAdapters.length - 1) throw error;
       }
     }
   },
