@@ -331,8 +331,8 @@ public class AFGOfflineModelsPlugin extends Plugin {
                 call.reject("Only HTTPS Hugging Face model downloads are allowed."); return;
             }
             boolean gguf = fileName.toLowerCase(Locale.ROOT).endsWith(".gguf");
-            String pinnedNeedleUrl = "https://huggingface.co/Cactus-Compute/needle3/resolve/3e8e2a66057a29694052d915128b91b53e7e5ead/needle3.cact";
-            boolean needle3 = "Cactus-Compute/needle3".equals(repoId) && "3e8e2a66057a29694052d915128b91b53e7e5ead".equals(revision) && "needle3.cact".equals(fileName) &&
+            String pinnedNeedleUrl = "https://huggingface.co/Cactus-Compute/needle3/resolve/main/needle3.cact";
+            boolean needle3 = "Cactus-Compute/needle3".equals(repoId) && "main".equals(revision) && "needle3.cact".equals(fileName) &&
                     NEEDLE_MODEL_SHA256.equalsIgnoreCase(expectedSha) && pinnedNeedleUrl.equals(url);
             if (!repoId.matches("[^/]+/[^/]+") || fileName.isEmpty() || (!gguf && !needle3) ||
                     fileName.contains("..") || fileName.startsWith("/")) {
