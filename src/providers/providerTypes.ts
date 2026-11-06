@@ -74,6 +74,8 @@ export interface ChatMessage {
 export interface ChatRequest {
   model: string;
   messages: ChatMessage[];
+  /** Optional provider-side output cap used to bound prepaid/free-quota reservations. */
+  maxOutputTokens?: number;
   tools?: ChatToolDefinition[];
   userId?: string | null;
   signal?: AbortSignal;

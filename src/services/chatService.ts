@@ -1,4 +1,4 @@
-import { getConfiguredFallbackModelIds, getProviderAdapter, getVerifiedModelDescriptors, selectCheapestModel } from './providerGateway.ts';
+import { getConfiguredFallbackModelIds, getProviderAdapter, getVerifiedModelDescriptors, recordModelHealthResult, selectCheapestModel } from './providerGateway.ts';
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
 import type { ChatInput, ChatChunk, ModelDescriptor } from '../providers/providerTypes.ts';
 import { matchComboModels, resolveRoutingCombo } from './routingCombos.ts';
@@ -178,8 +178,22 @@ async function* reliableStream(candidates: ModelDescriptor[], input: ChatInput):
         return;
       } catch (error) {
         lastError = error;
+        // APInex can list a model while rejecting inference because the account
+        // has no usable quota or the model is rate-limited. Cool it down so it
+        // is not immediately re-selected and does not trigger more catalog probes.
+        if (candidate.providerId === 'apinex' && error instanceof ProviderAdapterError &&
+            [402, 429, 404, 410].includes(error.status)) {
+          await recordModelHealthResult(candidate.providerId, candidate.id, false).catch(() => {});
+          console.warn('AI_PROVIDER_MODEL_COOLDOWN', JSON.stringify({
+            provider: candidate.providerId, model: candidate.id, status: error.status, code: error.code,
+          }));
+        }
         // Never replay a partially delivered answer: it would duplicate text in the UI.
         if (emitted || input.signal?.aborted) throw error;
+        // APInex shares balance and RPM across keys on one account. Retrying
+        // the adapter after 402/429 only repeats the same account-level failure.
+        if (candidate.providerId === 'apinex' && error instanceof ProviderAdapterError &&
+            [402, 429].includes(error.status)) break;
         const retryable = !(error instanceof ProviderAdapterError) ||
           error.status === 429 || error.status >= 500 ||
           /unreachable|timeout|network|temporar|stream_interrupted/i.test(error.code);

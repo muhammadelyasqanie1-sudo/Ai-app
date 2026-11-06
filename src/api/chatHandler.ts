@@ -222,7 +222,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
   const persistError = async (error:unknown) => {
     if(!pool)return;
     const classified=classifyError(error);
-    const errorClass=['network','auth','rate_limit','provider_5xx','invalid_request','content_policy','timeout'].includes(classified)
+    const errorClass=['network','auth','rate_limit','quota_exhausted','provider_5xx','invalid_request','content_policy','timeout'].includes(classified)
       ? classified : classified==='unavailable_model'?'unavailable':'unknown';
     const code=error instanceof ProviderAdapterError?redactSecret(error.code).slice(0,64):'request_failed';
     try{
@@ -572,7 +572,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         res.write(`data: ${JSON.stringify({
           type: 'error',
           error: streamErrorCode === 'quota_exhausted'
-            ? 'The selected provider has exhausted its monthly token allowance and account balance. Switch to another provider or wait for the allowance to reset.'
+            ? "The selected provider rejected this model because its available quota or account balance is exhausted. Choose another available model or check the provider's balance and usage limits."
             : 'The AI response stream was interrupted. Your prompt is still available to retry.',
           errorCode: streamErrorCode,
           retryable: streamRetryable,

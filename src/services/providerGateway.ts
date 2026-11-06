@@ -117,7 +117,8 @@ const nineRouterAdapter: ChatProviderAdapter | null = nineRouterBaseAdapter
   : null;
 
 // APInex account-key pool. Keys stay server-side in Railway Secrets.
-// Rotate to the next key only when the current key is rate-limited (HTTP 429).
+// APInex shares RPM and balance across keys on one account, so key rotation only
+// helps with key-specific authentication failures, never 402 quota or 429 RPM limits.
 const apinexKeys = (() => {
   try {
     const value = JSON.parse(process.env.APINEX_API_KEYS || '[]');
@@ -125,6 +126,10 @@ const apinexKeys = (() => {
   } catch { return []; }
 })();
 const apinexBase = (process.env.APINEX_BASE_URL?.trim() || 'https://api.apinex.bond/v1').replace(/\/+$/, '');
+const configuredApinexMaxOutput = Number(process.env.APINEX_MAX_OUTPUT_TOKENS || 4096);
+const apinexMaxOutputTokens = Number.isInteger(configuredApinexMaxOutput)
+  ? Math.min(8192, Math.max(512, configuredApinexMaxOutput))
+  : 4096;
 let apinexKeyIndex = 0;
 const apinexAdapters = apinexKeys.map((apiKey) => createOpenAICompatibleAdapter({
   id: 'apinex',
@@ -134,6 +139,58 @@ const apinexAdapters = apinexKeys.map((apiKey) => createOpenAICompatibleAdapter(
   catalogOnlyHealthCheck: true,
 }));
 const apinexPrimary = apinexAdapters[0] || null;
+
+// APInex's /models endpoint is account/rate limited. Cache one provider-wide
+// catalogue instead of probing /models once per model and once per API request.
+const APINEX_CATALOG_TTL_MS = 60_000;
+const APINEX_STALE_CATALOG_MAX_MS = 10 * 60_000;
+let apinexCatalogCache: { models: ModelDescriptor[]; fetchedAt: number } | null = null;
+let apinexCatalogInFlight: Promise<ModelDescriptor[]> | null = null;
+
+async function loadApinexCatalog(): Promise<ModelDescriptor[]> {
+  const now = Date.now();
+  if (apinexCatalogCache && now - apinexCatalogCache.fetchedAt < APINEX_CATALOG_TTL_MS) {
+    return apinexCatalogCache.models;
+  }
+  if (apinexCatalogInFlight) return apinexCatalogInFlight;
+
+  const pending = (async () => {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < apinexAdapters.length; attempt++) {
+      const index = (apinexKeyIndex + attempt) % apinexAdapters.length;
+      try {
+        const models = await apinexAdapters[index].listModels();
+        apinexKeyIndex = index;
+        apinexCatalogCache = { models, fetchedAt: Date.now() };
+        return models;
+      } catch (error) {
+        lastError = error;
+        const status = error instanceof Error ? Number((error as any).status) : 0;
+        // A different account key can have independent quota; try each key at most once.
+        if (![401, 403].includes(status)) break;
+      }
+    }
+
+    if (apinexCatalogCache && Date.now() - apinexCatalogCache.fetchedAt <= APINEX_STALE_CATALOG_MAX_MS) {
+      console.warn('AI_PROVIDER_CATALOG_STALE_FALLBACK', JSON.stringify({
+        provider: 'apinex',
+        ageMs: Date.now() - apinexCatalogCache.fetchedAt,
+        reason: lastError instanceof Error ? Number((lastError as any).status) || 'upstream_error' : 'upstream_error',
+      }));
+      return apinexCatalogCache.models;
+    }
+    if (lastError instanceof Error) throw lastError;
+    throw new Error('APInex model catalogue is temporarily unavailable.');
+  })();
+
+  apinexCatalogInFlight = pending;
+  try {
+    return await pending;
+  } finally {
+    if (apinexCatalogInFlight === pending) apinexCatalogInFlight = null;
+  }
+}
+
 const apinexAdapter: ChatProviderAdapter | null = apinexPrimary ? {
   ...apinexPrimary,
   async validateConfig() {
@@ -142,41 +199,44 @@ const apinexAdapter: ChatProviderAdapter | null = apinexPrimary ? {
       : { valid: false, message: 'Configure APINEX_API_KEYS with one or more server-side keys.' };
   },
   async listModels() {
-    for (let attempt = 0; attempt < apinexAdapters.length; attempt++) {
-      const index = (apinexKeyIndex + attempt) % apinexAdapters.length;
-      try {
-        const models = await apinexAdapters[index].listModels();
-        apinexKeyIndex = index;
-        return models;
-      } catch (error) {
-        if (!(error instanceof Error) || ![402, 429].includes((error as any).status) || attempt === apinexAdapters.length - 1) throw error;
-      }
-    }
-    return [];
+    return loadApinexCatalog();
   },
   async healthCheck(modelId: string) {
-    for (let attempt = 0; attempt < apinexAdapters.length; attempt++) {
-      const index = (apinexKeyIndex + attempt) % apinexAdapters.length;
-      const health = await apinexAdapters[index].healthCheck(modelId);
-      if (health.healthy) { apinexKeyIndex = index; return health; }
-      if (attempt === apinexAdapters.length - 1) return health;
+    // Catalogue visibility is not proof of available quota. Actual 402/429 chat
+    // failures are recorded as a model cooldown by chatService; do not probe each
+    // model through /models and amplify APInex rate limits.
+    let models: ModelDescriptor[] = [];
+    try { models = await loadApinexCatalog(); } catch {
+      models = apinexCatalogCache?.models || [];
     }
-    return { healthy: false, checkedAt: new Date().toISOString(), message: 'No APInex key is available.' };
+    const checkedAt = apinexCatalogCache
+      ? new Date(apinexCatalogCache.fetchedAt).toISOString()
+      : new Date().toISOString();
+    const present = models.some((model) => model.id === modelId);
+    return {
+      healthy: present,
+      checkedAt,
+      ...(present ? {} : { message: 'Model is not present in the latest available APInex catalogue.' }),
+    };
   },
   async *streamChat(input) {
+    const startIndex = apinexKeyIndex;
     for (let attempt = 0; attempt < apinexAdapters.length; attempt++) {
-      const index = (apinexKeyIndex + attempt) % apinexAdapters.length;
+      const index = (startIndex + attempt) % apinexAdapters.length;
       let emitted = false;
       try {
-        for await (const chunk of apinexAdapters[index].streamChat(input)) {
+        for await (const chunk of apinexAdapters[index].streamChat({ ...input, maxOutputTokens: apinexMaxOutputTokens })) {
           emitted = true;
           yield chunk;
         }
         apinexKeyIndex = index;
         return;
       } catch (error) {
-        const quotaOrRateLimited = error instanceof Error && [402, 429].includes((error as any).status);
-        if (!quotaOrRateLimited || emitted || attempt === apinexAdapters.length - 1) throw error;
+        const keySpecificAuthFailure = error instanceof Error && [401, 403].includes((error as any).status);
+        if (keySpecificAuthFailure && !emitted) apinexKeyIndex = (index + 1) % apinexAdapters.length;
+        // 402 (account balance) and 429 (account-wide RPM) cannot be fixed by
+        // trying another key belonging to the same APInex account.
+        if (!keySpecificAuthFailure || emitted || attempt === apinexAdapters.length - 1) throw error;
       }
     }
   },

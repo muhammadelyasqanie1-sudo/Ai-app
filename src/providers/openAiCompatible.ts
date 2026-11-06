@@ -233,7 +233,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
         response = await fetch(current.baseUrl + '/chat/completions', {
           method: 'POST',
           headers: { ...(current.apiKey ? { Authorization: 'Bearer ' + current.apiKey } : {}), 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-          body: JSON.stringify({ model: input.model, messages: input.messages, stream: true, ...(input.tools?.length ? { tools: input.tools, tool_choice: 'auto' } : {}) }),
+          body: JSON.stringify({ model: input.model, messages: input.messages, stream: true, ...(Number.isInteger(input.maxOutputTokens) && Number(input.maxOutputTokens) > 0 ? { max_tokens: input.maxOutputTokens } : {}), ...(input.tools?.length ? { tools: input.tools, tool_choice: 'auto' } : {}) }),
           signal: input.signal ? AbortSignal.any([AbortSignal.timeout(90_000), input.signal]) : AbortSignal.timeout(90_000), redirect: 'error',
         });
       } catch (error) {
