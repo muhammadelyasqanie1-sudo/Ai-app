@@ -19,7 +19,8 @@ AFG AI is an Android-friendly and web-based AI assistant. The current repository
 - [Terminal status and command reference](docs/TERMINAL.md) — Phase 1 read-only browser workspace.
 - [Online Admin Terminal Gateway](docs/ONLINE_ADMIN_TERMINAL.md) — server-side durable AI job queue and worker setup.
 - [AFG CLI guide](apps/cli/README.md) — supported Node.js CLI commands and secure token setup.
-- [Offline Learning status](docs/OFFLINE.md) — current disabled state and implementation prerequisites.
+- [Offline AI runtime status](docs/OFFLINE.md) — Android GGUF inference and Offline Learning boundaries.
+- [AFG AI Local Agent](docs/LOCAL_AGENT.md) — default local-first chat behavior, runtime requirements, privacy and device-control boundaries.
 - [Terminal + Offline gap analysis](docs/TERMINAL_OFFLINE_GAP_ANALYSIS.md) — what exists and what remains.
 - `.github/workflows/android-apk.yml` — manually triggered debug APK build.
 
