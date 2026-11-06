@@ -7,8 +7,30 @@ export interface JarvisStatus {
   offlineRecognitionGuaranteed: false; ttsAvailable: boolean;
 }
 export interface JarvisSpeechEvent { state: 'listening' | 'processing' | 'partial' | 'result' | 'error'; text: string; error: string; }
+export interface JarvisBatteryStatus { levelPercent: number; charging: boolean; temperatureC: number | null; }
+export interface JarvisNetworkStatus { connected: boolean; validated: boolean; transport: 'wifi' | 'cellular' | 'ethernet' | 'bluetooth' | 'other' | 'none'; }
+export interface JarvisLocation { latitude: number; longitude: number; accuracyMeters: number | null; timestamp: number; source: 'fine' | 'coarse'; }
+export interface JarvisContact { name: string | null; phone: string | null; }
+export interface JarvisSms { address: string | null; body: string; date: number; type: 'inbox' | 'sent'; }
+export interface JarvisSensor { name: string; vendor: string; type: number; powerMa: number; wakeUp: boolean; }
+export interface JarvisCameraPreview { mimeType: 'image/jpeg'; dataBase64: string; width: number; height: number; }
 export interface AFGJarvisPlugin {
   getStatus(): Promise<JarvisStatus>;
+  getBatteryStatus(): Promise<JarvisBatteryStatus>;
+  vibrate(options?: { durationMs?: number }): Promise<{ performed: boolean; durationMs: number }>;
+  requestCameraPermission(): Promise<{ granted: boolean }>;
+  setTorch(options: { enabled: boolean }): Promise<{ enabled: boolean }>;
+  getNetworkStatus(): Promise<JarvisNetworkStatus>;
+  requestLocationPermission(): Promise<{ granted: boolean }>;
+  getLocation(): Promise<JarvisLocation>;
+  requestContactsPermission(): Promise<{ granted: boolean }>;
+  getContacts(options?: { limit?: number }): Promise<{ contacts: JarvisContact[]; count: number }>;
+  requestSmsReadPermission(): Promise<{ granted: boolean }>;
+  getRecentSms(options?: { limit?: number }): Promise<{ messages: JarvisSms[]; count: number }>;
+  openSmsComposer(options: { number: string; body: string }): Promise<{ opened: boolean }>;
+  openDialer(options: { number: string }): Promise<{ opened: boolean }>;
+  takePhoto(): Promise<JarvisCameraPreview>;
+  getSensors(): Promise<{ sensors: JarvisSensor[]; fingerprintOrBiometricAvailable: boolean; fingerprintDataAccessible: false }>;
   requestMicrophonePermission(): Promise<{ granted: boolean }>;
   startListening(options?: { language?: JarvisSpeechLanguage }): Promise<{ started: boolean; offlinePreferred: boolean }>;
   stopListening(): Promise<{ stopped: boolean }>;
