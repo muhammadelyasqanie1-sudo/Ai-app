@@ -572,7 +572,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         res.write(`data: ${JSON.stringify({
           type: 'error',
           error: streamErrorCode === 'quota_exhausted'
-            ? 'The selected provider rejected this model because its available quota or account balance is exhausted. Choose another available model or check the provider's balance and usage limits.'
+            ? "The selected provider rejected this model because its available quota or account balance is exhausted. Choose another available model or check the provider's balance and usage limits."
             : 'The AI response stream was interrupted. Your prompt is still available to retry.',
           errorCode: streamErrorCode,
           retryable: streamRetryable,
