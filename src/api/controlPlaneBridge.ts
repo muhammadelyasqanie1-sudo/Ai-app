@@ -1,8 +1,10 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { pool } from './database.ts';
+import { readJsonBody } from './auth.ts';
 
 const BRIDGE_PATH = '/api/internal/9router/overview';
+const USERS_PATH = '/api/internal/9router/users';
 
 function matchesSecret(candidate: string, expected: string): boolean {
   const candidateDigest = createHash('sha256').update(candidate).digest();
@@ -19,6 +21,128 @@ function reply(res: ServerResponse, status: number, body: Record<string, unknown
   res.end(JSON.stringify({ ...body, ...(typeof requestId === 'string' ? { requestId } : {}) }));
 }
 
+
+function readBridgeActor(req: IncomingMessage) {
+  const id = String(req.headers['x-9router-actor-id'] || '').trim();
+  const email = String(req.headers['x-9router-actor-email'] || '').trim().toLowerCase();
+  const role = String(req.headers['x-9router-actor-role'] || '').trim();
+  const rawPermissions = String(req.headers['x-9router-actor-permissions'] || '[]');
+  if (!id || id.length > 128 || !/^[^\s@]+@[^\s@]+$/.test(email) || email.length > 254) return null;
+  if (!['superadmin', 'admin', 'staff'].includes(role) || rawPermissions.length > 4096) return null;
+  try {
+    const permissions = JSON.parse(rawPermissions);
+    if (!Array.isArray(permissions) || permissions.length > 100 || permissions.some((value) => typeof value !== 'string' || value.length > 80)) return null;
+    return { id, email, role, permissions };
+  } catch { return null; }
+}
+
+function bridgeActorHas(actor: ReturnType<typeof readBridgeActor>, permission: string) {
+  return Boolean(actor && (actor.role === 'superadmin' || actor.permissions.includes('*') || actor.permissions.includes(permission)));
+}
+
+async function handleUserList(req: IncomingMessage, res: ServerResponse) {
+  const actor = readBridgeActor(req);
+  if (!bridgeActorHas(actor, 'afg-ai:users:read')) {
+    reply(res, actor ? 403 : 401, { error: actor ? 'AFG AI user read permission required.' : 'A valid control-plane actor is required.' });
+    return true;
+  }
+  if (!pool) { reply(res, 503, { error: 'AFG AI database is unavailable.' }); return true; }
+  const result = await pool.query(`SELECT u.id,u.email,u.display_name,u.role,u.status,u.created_at,
+      (SELECT max(s.last_seen_at) FROM sessions s WHERE s.user_id=u.id) AS last_seen_at,
+      (SELECT count(*)::int FROM usage_events e WHERE e.user_id=u.id AND e.created_at>now()-interval '30 days') AS requests_30d
+    FROM users u WHERE u.status <> 'deleted' ORDER BY u.created_at DESC LIMIT 250`);
+  reply(res, 200, { users: result.rows });
+  return true;
+}
+
+async function handleUserStatusUpdate(req: IncomingMessage, res: ServerResponse) {
+  const actor = readBridgeActor(req);
+  if (!bridgeActorHas(actor, 'afg-ai:users:manage')) {
+    reply(res, actor ? 403 : 401, { error: actor ? 'AFG AI user management permission required.' : 'A valid control-plane actor is required.' });
+    return true;
+  }
+  if (!pool) { reply(res, 503, { error: 'AFG AI database is unavailable.' }); return true; }
+  let body: Record<string, unknown>;
+  try { body = await readJsonBody(req, 8000); }
+  catch { reply(res, 400, { error: 'Invalid JSON request body.' }); return true; }
+  const targetId = typeof body.userId === 'string' ? body.userId : '';
+  const status = typeof body.status === 'string' ? body.status : '';
+  if (!/^[0-9a-f-]{36}$/i.test(targetId) || !['active', 'suspended'].includes(status)) {
+    reply(res, 400, { error: 'Provide a valid user ID and status (active or suspended).' });
+    return true;
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('afg-ai:admin-bootstrap'))");
+    const target = await client.query("SELECT id,email,role,status FROM users WHERE id=$1 AND status <> 'deleted' FOR UPDATE", [targetId]);
+    if (!target.rows[0]) {
+      await client.query('ROLLBACK');
+      reply(res, 404, { error: 'User not found.' });
+      return true;
+    }
+    const previous = target.rows[0];
+    if (String(previous.email || '').toLowerCase() === actor.email && status === 'suspended') {
+      await client.query('ROLLBACK');
+      reply(res, 403, { error: 'You cannot suspend your own AFG AI account from the control plane.' });
+      return true;
+    }
+    if (['admin', 'superadmin'].includes(previous.role) && actor.role !== 'superadmin') {
+      await client.query('ROLLBACK');
+      reply(res, 403, { error: 'Only the control-plane superadmin may change an AFG AI administrator account.' });
+      return true;
+    }
+    if (previous.role === 'superadmin' && actor.role !== 'superadmin') {
+      await client.query('ROLLBACK');
+      reply(res, 403, { error: 'Only the control-plane superadmin may change a superadmin account.' });
+      return true;
+    }
+    if (actor.id === 'bootstrap' && previous.role === 'superadmin' && status === 'suspended') {
+      await client.query('ROLLBACK');
+      reply(res, 403, { error: 'Use a named superadmin control-plane account to manage AFG AI superadmin access.' });
+      return true;
+    }
+    if (previous.status === 'active' && status === 'suspended' && ['admin', 'superadmin'].includes(previous.role)) {
+      const admins = await client.query("SELECT count(*)::int AS total FROM users WHERE role IN ('admin','superadmin') AND status='active'");
+      if (Number(admins.rows[0]?.total || 0) <= 1) {
+        await client.query('ROLLBACK');
+        reply(res, 409, { error: 'At least one active AFG AI administrator must remain.' });
+        return true;
+      }
+    }
+    if (previous.status === 'active' && status === 'suspended' && previous.role === 'superadmin') {
+      const owners = await client.query("SELECT count(*)::int AS total FROM users WHERE role='superadmin' AND status='active'");
+      if (Number(owners.rows[0]?.total || 0) <= 1) {
+        await client.query('ROLLBACK');
+        reply(res, 409, { error: 'At least one active AFG AI superadmin must remain.' });
+        return true;
+      }
+    }
+    const updated = await client.query(
+      "UPDATE users SET status=$2,updated_at=now() WHERE id=$1 AND status <> 'deleted' RETURNING id,role,status",
+      [targetId, status],
+    );
+    if (status === 'suspended') {
+      await client.query('UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [targetId]);
+    }
+    await client.query(
+      'INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES(NULL,$1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb)',
+      ['9router:' + actor.role, 'user.access.update', 'user', targetId,
+        JSON.stringify({ status: previous.status, role: previous.role }),
+        JSON.stringify({ status: updated.rows[0].status, role: updated.rows[0].role }),
+        JSON.stringify({ source: '9router-control-plane', actorId: actor.id, actorEmail: actor.email })],
+    );
+    await client.query('COMMIT');
+    reply(res, 200, { user: updated.rows[0] });
+  } catch {
+    await client.query('ROLLBACK');
+    reply(res, 503, { error: 'AFG AI user status update failed.' });
+  } finally {
+    client.release();
+  }
+  return true;
+}
+
 /**
  * Read-only service bridge for the 9Router management portal.
  * The shared credential must remain server-side in both applications.
@@ -29,6 +153,13 @@ export async function handleControlPlaneBridgeApi(
   res: ServerResponse,
   pathname: string,
 ): Promise<boolean> {
+  if (pathname === USERS_PATH) {
+    if (req.method === 'GET') return await handleUserList(req, res);
+    if (req.method === 'PATCH') return await handleUserStatusUpdate(req, res);
+    res.setHeader('Allow', 'GET, PATCH');
+    reply(res, 405, { error: 'Method not allowed.' });
+    return true;
+  }
   if (pathname !== BRIDGE_PATH) return false;
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
