@@ -3,9 +3,10 @@ import { Capacitor } from '@capacitor/core';
 import { AFGJarvis, type JarvisStatus, type JarvisAction, type JarvisSpeechEvent, type JarvisSpeechLanguage } from '@afg-ai/capacitor-jarvis';
 import type { Language } from '../../types/afg';
 import { parseJarvisCommand } from '../../lib/jarvis-command-engine';
-import { buildJarvisLocalCommandPrompt, extractJarvisLocalCommand } from '../../lib/jarvis-local-agent';
-import { listOfflineDownloads, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
+import { buildJarvisLocalCommandPrompt, extractJarvisLocalCommand, buildJarvisNeedleCommandConfig, extractJarvisNeedleCommand } from '../../lib/jarvis-local-agent';
+import { downloadNeedle3Model, listOfflineDownloads, NEEDLE3_DOWNLOAD, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
 import { generateNativeLlamaResponse, getNativeLlamaRuntimeInfo, loadNativeLlamaModel, unloadNativeLlamaModel, type NativeLlamaRuntimeInfo } from '../../lib/offlineLlamaRuntime';
+import { generateNativeNeedleResponse, getNativeNeedleRuntimeInfo, loadNativeNeedleModel, NEEDLE3_MODEL_ID, type NativeNeedleRuntimeInfo } from '../../lib/offlineNeedleRuntime';
 
 const actions: Array<{ id: JarvisAction; en: string; fa: string }> = [
   { id: 'back', en: 'Back', fa: 'بازگشت' }, { id: 'home', en: 'Home', fa: 'صفحه اصلی' },
@@ -41,6 +42,11 @@ export function AfgJarvisView({ language }: { language: Language }) {
   const [clipboardInput, setClipboardInput] = useState('');
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [localRuntime, setLocalRuntime] = useState<NativeLlamaRuntimeInfo | null>(null);
+  const [needleRuntime, setNeedleRuntime] = useState<NativeNeedleRuntimeInfo | null>(null);
+  const [needleModel, setNeedleModel] = useState<OfflineDownloadState | null>(null);
+  const [needleLoaded, setNeedleLoaded] = useState(false);
+  const [needleDownloadBusy, setNeedleDownloadBusy] = useState(false);
+  const [needleDownloadPercent, setNeedleDownloadPercent] = useState<number | null>(null);
   const [localModels, setLocalModels] = useState<OfflineDownloadState[]>([]);
   const [selectedLocalModelId, setSelectedLocalModelId] = useState('');
   const [loadedLocalModelId, setLoadedLocalModelId] = useState('');
@@ -62,10 +68,13 @@ export function AfgJarvisView({ language }: { language: Language }) {
   const refreshLocalAi = useCallback(async () => {
     if (!androidNative) return;
     try {
-      const [runtimeInfo, downloads] = await Promise.all([getNativeLlamaRuntimeInfo(), listOfflineDownloads()]);
+      const [runtimeInfo, needleInfo, downloads] = await Promise.all([getNativeLlamaRuntimeInfo(), getNativeNeedleRuntimeInfo(), listOfflineDownloads()]);
       setLocalRuntime(runtimeInfo);
-      setLocalModels(downloads);
-      setSelectedLocalModelId(current => current || downloads.find(item => item.status === 'installed' && item.localPath && item.expectedSha256 && item.hashVerified === true)?.id || '');
+      setNeedleRuntime(needleInfo);
+      setNeedleLoaded(needleInfo.modelLoaded);
+      setNeedleModel(downloads.find(item => item.id === NEEDLE3_MODEL_ID) || null);
+      setLocalModels(downloads.filter(item => item.fileName.toLowerCase().endsWith('.gguf')));
+      setSelectedLocalModelId(current => current || downloads.find(item => item.fileName.toLowerCase().endsWith('.gguf') && item.status === 'installed' && item.localPath && item.expectedSha256 && item.hashVerified === true)?.id || '');
       setLocalAiError('');
     } catch (e: any) {
       setLocalAiError(e?.message || 'Unable to inspect the local Android model runtime.');
@@ -161,6 +170,7 @@ export function AfgJarvisView({ language }: { language: Language }) {
     }
   }
   async function loadJarvisLocalModel() {
+    if (needleRuntime?.modelLoaded || needleLoaded) { setLocalAiError(label('Needle 3 is resident in memory. Restart AFG AI before switching back to GGUF.', 'مدل Needle 3 هنوز در حافظه است. برای برگشت به GGUF برنامه AFG AI را دوباره راه‌اندازی کنید.')); return; }
     if (!selectedLocalModel?.localPath) { setLocalAiError(label('Choose a downloaded, SHA-256 verified GGUF model first.', 'ابتدا یک مدل GGUF دانلودشده و تأییدشده با SHA-256 انتخاب کنید.')); return; }
     setLocalAiBusy(true); setLocalAiError(''); setLocalAiReply(''); setPendingAiCommand('');
     try {
@@ -174,6 +184,46 @@ export function AfgJarvisView({ language }: { language: Language }) {
     } finally { setLocalAiBusy(false); }
   }
 
+  async function downloadJarvisNeedleModel() {
+    if (needleDownloadBusy) return;
+    setNeedleDownloadBusy(true); setNeedleDownloadPercent(0); setLocalAiError('');
+    try {
+      const downloaded = await downloadNeedle3Model({
+        onProgress: progress => setNeedleDownloadPercent(progress.percent),
+      });
+      setNeedleModel(downloaded);
+      await refreshLocalAi();
+      if (downloaded.hashVerified !== true) throw new Error('Needle 3 download completed without a verified SHA-256 digest.');
+    } catch (e: any) {
+      setLocalAiError(e?.message || label('Needle 3 download failed.', 'دانلود Needle 3 ناموفق بود.'));
+    } finally {
+      setNeedleDownloadBusy(false);
+      setNeedleDownloadPercent(null);
+    }
+  }
+
+  async function loadJarvisNeedleModel() {
+    if (!needleRuntime?.available) { setLocalAiError(needleRuntime?.reason || 'Needle 3 Android runtime is unavailable in this APK.'); return; }
+    if (!needleModel?.localPath || needleModel.status !== 'installed' || needleModel.hashVerified !== true) {
+      setLocalAiError(label('Download and verify the official Needle 3 model first.', 'ابتدا مدل رسمی Needle 3 را دانلود و تأیید کنید.'));
+      return;
+    }
+    setLocalAiBusy(true); setLocalAiError(''); setLocalAiReply(''); setPendingAiCommand('');
+    try {
+      if (localModelLoadedRef.current) {
+        await unloadNativeLlamaModel();
+        localModelLoadedRef.current = false;
+        setLoadedLocalModelId('');
+      }
+      const config = buildJarvisNeedleCommandConfig(language);
+      await loadNativeNeedleModel(needleModel.localPath, config.systemPrompt, config.toolsJson);
+      setNeedleLoaded(true);
+      setNeedleRuntime(current => current ? { ...current, modelLoaded: true } : current);
+    } catch (e: any) {
+      setLocalAiError(e?.message || label('Needle 3 could not load. Check the model file and available RAM.', 'Needle 3 بارگذاری نشد. فایل مدل و حافظه آزاد را بررسی کنید.'));
+    } finally { setLocalAiBusy(false); }
+  }
+
   async function unloadJarvisLocalModel() {
     setLocalAiBusy(true);
     try { await unloadNativeLlamaModel(); localModelLoadedRef.current = false; setLoadedLocalModelId(''); setPendingAiCommand(''); setLocalAiReply(''); }
@@ -183,15 +233,21 @@ export function AfgJarvisView({ language }: { language: Language }) {
 
   async function interpretWithLocalAi() {
     const request = localAiPrompt.trim();
-    if (!request || request.length > 300 || !loadedLocalModelId || localAiBusy) return;
+    if (!request || request.length > 300 || (!loadedLocalModelId && !needleLoaded) || localAiBusy) return;
     setLocalAiBusy(true); setLocalAiError(''); setLocalAiReply(''); setPendingAiCommand('');
     try {
-      const raw = await generateNativeLlamaResponse([
-        { role: 'system', content: buildJarvisLocalCommandPrompt(language) },
-        { role: 'user', content: request },
-      ], 96);
-      const candidate = extractJarvisLocalCommand(raw);
-      if (!candidate) { setLocalAiReply(label('No safe supported action was identified. Try a simple device command.', 'فرمان امن و پشتیبانی‌شده‌ای تشخیص داده نشد. یک فرمان ساده دستگاه را امتحان کنید.')); return; }
+      let candidate: string | null;
+      if (needleLoaded) {
+        const raw = await generateNativeNeedleResponse(request, 96);
+        candidate = extractJarvisNeedleCommand(raw);
+      } else {
+        const raw = await generateNativeLlamaResponse([
+          { role: 'system', content: buildJarvisLocalCommandPrompt(language) },
+          { role: 'user', content: request },
+        ], 96);
+        candidate = extractJarvisLocalCommand(raw);
+      }
+      if (!candidate) { setLocalAiReply(label('No sufficiently confident, safe command was identified. Nothing was executed.', 'فرمان امن با اطمینان کافی شناسایی نشد؛ هیچ عملی اجرا نشد.')); return; }
       const parsed = parseJarvisCommand(candidate);
       if (parsed.kind === 'unknown') { setLocalAiReply(label('The local model suggested an unsupported action, so nothing was executed.', 'مدل محلی فرمان پشتیبانی‌نشده پیشنهاد کرد؛ بنابراین هیچ عملی اجرا نشد.')); return; }
       setPendingAiCommand(candidate);
@@ -236,8 +292,27 @@ export function AfgJarvisView({ language }: { language: Language }) {
           <span className="rounded-full border border-violet-400/25 px-2 py-1 text-xs text-violet-200">{localRuntime?.available ? localRuntime.engine + ' · ' + localRuntime.abi : label('Runtime unavailable', 'موتور در دسترس نیست')}</span>
         </div>
         <p className="mt-2 text-xs leading-5 text-slate-400">{label('JARVIS can use a GGUF model already downloaded in Offline AI Hub. This local model only translates your request into a strict allowlisted device command. It never receives permission to call Android tools directly; the existing command parser and your confirmation remain mandatory. Inference stays on this phone.', 'جارویس می‌تواند از مدل GGUF که قبلاً در مرکز هوش آفلاین دانلود کرده‌اید استفاده کند. این مدل فقط درخواست شما را به یک فرمان محدود و مجاز دستگاه تبدیل می‌کند؛ مستقیماً اجازه اجرای ابزارهای اندروید را ندارد و بررسی فرمان و تأیید شما همچنان اجباری است. پردازش روی همین گوشی انجام می‌شود.')}</p>
-        {!androidNative && <p className="mt-3 text-sm text-amber-200">{label('This local native runtime is available only in the Android APK.', 'این موتور محلی فقط در نسخه APK اندروید موجود است.')}</p>}
+        {!androidNative && <p className="mt-3 text-sm text-amber-200">{label('These native runtimes are available only in the Android APK.', 'این موتورهای بومی فقط در نسخه APK اندروید موجود اند.')}</p>}
         {androidNative && <>
+          <div className="mt-3 rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="font-semibold text-cyan-100">Needle 3 / Cactus · ARM64</h3>
+              <span className="text-xs text-cyan-200">{needleRuntime?.available ? (needleRuntime.modelLoaded ? label('Model resident', 'مدل در حافظه') : label('Runtime ready', 'موتور آماده')) : label('Runtime unavailable', 'موتور موجود نیست')}</span>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-slate-400">{label('Tiny on-device intent model. The engine is packaged in the APK; its 35 MB .cact weights are downloaded once and verified before loading.', 'مدل کوچک برای فهم فرمان روی گوشی. موتور داخل APK است؛ وزن‌های مدل حدود ۳۵ مگابایت است و یک‌بار دانلود و پیش از بارگذاری بررسی می‌شود.')}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" className={button} disabled={needleDownloadBusy || needleModel?.status === 'installed' && needleModel.hashVerified === true || !needleRuntime?.available || localAiBusy} onClick={() => void downloadJarvisNeedleModel()}>
+                {needleDownloadBusy ? label('Downloading Needle 3…', 'در حال دانلود Needle 3…') : needleModel?.status === 'installed' && needleModel.hashVerified === true ? label('Needle 3 model verified', 'مدل Needle 3 تأیید شد') : label('Download Needle 3 model (~35 MB)', 'دانلود مدل Needle 3 (حدود ۳۵ مگابایت)')}
+              </button>
+              <button type="button" className={button} disabled={localAiBusy || !needleRuntime?.available || !needleModel?.localPath || needleModel.status !== 'installed' || needleModel.hashVerified !== true} onClick={() => void loadJarvisNeedleModel()}>
+                {needleLoaded ? label('Reload Needle 3', 'بارگذاری دوباره Needle 3') : label('Load Needle 3', 'بارگذاری Needle 3')}
+              </button>
+            </div>
+            {needleDownloadBusy && <p className="mt-2 text-xs text-cyan-200">{needleDownloadPercent === null ? label('Download in progress…', 'دانلود در جریان است…') : needleDownloadPercent + '%'} </p>}
+            {needleModel?.status === 'installed' && needleModel.hashVerified && <p className="mt-2 text-xs text-emerald-300">{label('SHA-256 verified: ', 'SHA-256 تأیید شد: ')}{needleModel.computedSha256}</p>}
+            {needleRuntime?.modelLoaded && <p className="mt-2 text-xs text-amber-200">{label('Needle keeps its model memory until AFG AI is fully closed. Restart the app before switching back to GGUF.', 'Needle حافظه مدل را تا بسته‌شدن کامل AFG AI نگه می‌دارد. پیش از برگشت به GGUF برنامه را کامل ببندید و دوباره باز کنید.')}</p>}
+            {needleRuntime && !needleRuntime.available && <p className="mt-2 text-xs text-amber-200">{needleRuntime.reason}</p>}
+          </div>
           <p className="mt-3 text-sm text-slate-300">{label('Native runtime', 'موتور بومی')}: <strong className={localRuntime?.available ? 'text-emerald-300' : 'text-amber-300'}>{localRuntime?.available ? label('Ready', 'آماده') : localRuntime?.reason || label('Checking…', 'در حال بررسی…')}</strong></p>
           <div className="mt-3 flex flex-wrap gap-2">
             <select value={selectedLocalModelId} onChange={event => setSelectedLocalModelId(event.target.value)} disabled={localAiBusy || verifiedLocalModels.length === 0} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-sm text-white">
@@ -249,17 +324,17 @@ export function AfgJarvisView({ language }: { language: Language }) {
           {!verifiedLocalModels.length && <p className="mt-2 text-xs text-amber-200">{label('No SHA-256 verified GGUF model is installed yet. Download a model in Offline AI Hub first; JARVIS will reuse that file and will not download it again.', 'هنوز مدل GGUF تأییدشده با SHA-256 نصب نشده است. ابتدا در مرکز هوش آفلاین یک مدل دانلود کنید؛ جارویس از همان فایل استفاده می‌کند و دوباره آن را دانلود نمی‌کند.')}</p>}
           {localRuntime && !localRuntime.available && <p className="mt-2 text-xs text-amber-200">{localRuntime.reason || label('This APK does not contain the native llama.cpp runtime.', 'این APK موتور بومی llama.cpp را ندارد.')}</p>}
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <button type="button" className={button} disabled={localAiBusy || !localRuntime?.available || !selectedLocalModel} onClick={() => void loadJarvisLocalModel()}>{label('Load local model', 'بارگذاری مدل محلی')}</button>
+            <button type="button" className={button} disabled={localAiBusy || !localRuntime?.available || !selectedLocalModel || needleRuntime?.modelLoaded} onClick={() => void loadJarvisLocalModel()}>{label('Load local model', 'بارگذاری مدل محلی')}</button>
             <button type="button" className={button} disabled={localAiBusy || !loadedLocalModelId} onClick={() => void unloadJarvisLocalModel()}>{label('Unload model', 'تخلیه مدل')}</button>
           </div>
           {loadedLocalModelId && <p className="mt-2 text-xs text-emerald-300">{label('Loaded and ready: ', 'بارگذاری و آماده: ')}{loadedLocalModelId}</p>}
           <label className="mt-4 block text-xs text-slate-400">{label('Ask JARVIS in Dari, Pashto or English', 'به دری، پشتو یا انگلیسی به جارویس فرمان بدهید')}</label>
-          <textarea value={localAiPrompt} onChange={event => setLocalAiPrompt(event.target.value)} maxLength={300} rows={2} disabled={!loadedLocalModelId || localAiBusy} placeholder={label('e.g. Please open Telegram', 'مثلاً لطفاً تلگرام را باز کن')} className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white disabled:opacity-50" />
-          <button type="button" className={button + ' mt-2 w-full'} disabled={!loadedLocalModelId || !localAiPrompt.trim() || localAiBusy} onClick={() => void interpretWithLocalAi()}>{localAiBusy ? label('Processing on device…', 'پردازش روی گوشی…') : label('Understand command offline', 'درک فرمان به‌صورت آفلاین')}</button>
+          <textarea value={localAiPrompt} onChange={event => setLocalAiPrompt(event.target.value)} maxLength={300} rows={2} disabled={(!loadedLocalModelId && !needleLoaded) || localAiBusy} placeholder={label('e.g. Please open Telegram', 'مثلاً لطفاً تلگرام را باز کن')} className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white disabled:opacity-50" />
+          <button type="button" className={button + ' mt-2 w-full'} disabled={(!loadedLocalModelId && !needleLoaded) || !localAiPrompt.trim() || localAiBusy} onClick={() => void interpretWithLocalAi()}>{localAiBusy ? label('Processing on device…', 'پردازش روی گوشی…') : label('Understand command offline', 'درک فرمان به‌صورت آفلاین')}</button>
           {localAiReply && <p role="status" className="mt-3 rounded-xl bg-violet-400/10 p-3 text-sm text-violet-100">{localAiReply}</p>}
           {pendingAiCommand && <button type="button" className={button + ' mt-2 w-full'} onClick={() => { const command = pendingAiCommand; setPendingAiCommand(''); confirmLocalCommand(command); }}>{label('Review & confirm device action', 'بررسی و تأیید عملیات دستگاه')}</button>}
           {localAiError && <p role="alert" className="mt-2 text-sm text-rose-300">{localAiError}</p>}
-          <p className="mt-3 text-xs leading-5 text-slate-400">{label('For older phones, JARVIS loads with a conservative 1,024-token context and two CPU threads. Model loading and response speed depend on RAM, GGUF architecture and quantization. Close other heavy apps first. The model is not downloaded automatically and no mobile data is used by this panel.', 'برای گوشی‌های قدیمی، جارویس با زمینه ۱۰۲۴ توکنی و دو رشته پردازشی بارگذاری می‌شود. سرعت و امکان اجرا به RAM، معماری GGUF و کوانتایز مدل بستگی دارد. پیش از اجرا برنامه‌های سنگین دیگر را ببندید. مدل خودکار دانلود نمی‌شود و این بخش از اینترنت موبایل استفاده نمی‌کند.')}</p>
+          <p className="mt-3 text-xs leading-5 text-slate-400">{label('For older phones, JARVIS loads with a conservative 1,024-token context and two CPU threads. Model loading and response speed depend on RAM, GGUF architecture and quantization. Close other heavy apps first. GGUF models are reused from Offline AI Hub. Needle 3 is an optional one-time ~35 MB download; after that inference is local and uses no mobile data.', 'برای گوشی‌های قدیمی، جارویس با زمینه ۱۰۲۴ توکنی و دو رشته پردازشی بارگذاری می‌شود. سرعت و امکان اجرا به RAM، معماری GGUF و کوانتایز مدل بستگی دارد. پیش از اجرا برنامه‌های سنگین دیگر را ببندید. مدل GGUF از مرکز هوش آفلاین استفاده می‌شود. Needle 3 یک‌بار حدود ۳۵ مگابایت دانلود می‌شود؛ پس از آن پردازش محلی است و اینترنت موبایل مصرف نمی‌کند.')}</p>
         </>}
       </section>
       <section className={card}>
