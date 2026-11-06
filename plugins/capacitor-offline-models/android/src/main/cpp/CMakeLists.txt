@@ -29,20 +29,15 @@ FetchContent_Declare(llama_cpp
 )
 FetchContent_MakeAvailable(llama_cpp)
 
-# Pinned, SHA-256 verified official Cactus Needle 3 Android ARM64 engine.
-set(NEEDLE_REVISION "main")
-set(NEEDLE_ARCHIVE "${CMAKE_CURRENT_BINARY_DIR}/libneedle.a")
-file(DOWNLOAD
-  "https://huggingface.co/Cactus-Compute/needle3/resolve/${NEEDLE_REVISION}/android-arm64/libneedle.a"
-  "${NEEDLE_ARCHIVE}"
-  EXPECTED_HASH SHA256=7aa6de6132a22bf45f5e903425feb66f159ad46f47fa558921bc4fd02c3a2fa0
-  TLS_VERIFY ON
-  STATUS NEEDLE_DOWNLOAD_STATUS
-)
-list(GET NEEDLE_DOWNLOAD_STATUS 0 NEEDLE_DOWNLOAD_CODE)
-if(NOT NEEDLE_DOWNLOAD_CODE EQUAL 0)
-  list(GET NEEDLE_DOWNLOAD_STATUS 1 NEEDLE_DOWNLOAD_MESSAGE)
-  message(FATAL_ERROR "Unable to download verified Cactus Needle Android runtime: ${NEEDLE_DOWNLOAD_MESSAGE}")
+# The CI/local helper downloads the official ARM64 archive. Verify it again at configure time.
+set(NEEDLE_ARCHIVE "${CMAKE_CURRENT_SOURCE_DIR}/prebuilt/libneedle.a")
+set(NEEDLE_ARCHIVE_SHA256 "7aa6de6132a22bf45f5e903425feb66f159ad46f47fa558921bc4fd02c3a2fa0")
+if(NOT EXISTS "${NEEDLE_ARCHIVE}")
+  message(FATAL_ERROR "Missing Needle 3 Android ARM64 engine. Run scripts/download-needle-android.sh first.")
+endif()
+file(SHA256 "${NEEDLE_ARCHIVE}" ACTUAL_NEEDLE_SHA256)
+if(NOT ACTUAL_NEEDLE_SHA256 STREQUAL NEEDLE_ARCHIVE_SHA256)
+  message(FATAL_ERROR "Needle 3 Android engine SHA-256 mismatch; refusing to link.")
 endif()
 
 add_library(needle3_engine STATIC IMPORTED GLOBAL)
