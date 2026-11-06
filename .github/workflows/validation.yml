@@ -37,3 +37,5 @@ jobs:
         run: npm run test:database-config
       - name: Admin RBAC regression
         run: npm run test:admin-rbac
+      - name: JARVIS offline command regression
+        run: npm run test:jarvis-command

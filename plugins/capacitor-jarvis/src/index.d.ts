@@ -9,7 +9,7 @@ export interface JarvisStatus {
 export interface JarvisSpeechEvent { state: 'listening' | 'processing' | 'partial' | 'result' | 'error'; text: string; error: string; }
 export interface JarvisBatteryStatus { levelPercent: number; charging: boolean; temperatureC: number | null; }
 export interface JarvisNetworkStatus { connected: boolean; validated: boolean; transport: 'wifi' | 'cellular' | 'ethernet' | 'bluetooth' | 'other' | 'none'; }
-export interface JarvisLocation { latitude: number; longitude: number; accuracyMeters: number | null; timestamp: number; source: 'fine' | 'coarse'; }
+export interface JarvisLocation { latitude: number; longitude: number; accuracyMeters: number | null; timestamp: number; source: 'gps' | 'network' | 'passive' | 'unknown'; }
 export interface JarvisContact { name: string | null; phone: string | null; }
 export interface JarvisSms { address: string | null; body: string; date: number; type: 'inbox' | 'sent'; }
 export interface JarvisSensor { name: string; vendor: string; type: number; powerMa: number; wakeUp: boolean; }

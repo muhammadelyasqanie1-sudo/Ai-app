@@ -74,11 +74,26 @@ public class AFGJarvisAccessibilityService extends AccessibilityService {
         } finally { root.recycle(); }
     }
 
+    private boolean scrollNode(AccessibilityNodeInfo node, int direction, int depth) {
+        if (node == null || depth > 12) return false;
+        if (node.isScrollable() && node.performAction(direction)) return true;
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child == null) continue;
+            try {
+                if (scrollNode(child, direction, depth + 1)) return true;
+            } finally {
+                child.recycle();
+            }
+        }
+        return false;
+    }
+
     private boolean scroll(int direction) {
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) return false;
         try {
-            return root.performAction(direction);
+            return scrollNode(root, direction, 0);
         } finally { root.recycle(); }
     }
 
