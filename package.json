@@ -18,7 +18,8 @@
     "test:offline-sha": "tsx scripts/test-offline-sha.ts",
     "test:database-config": "tsx scripts/test-database-config.ts",
     "test:admin-rbac": "tsx scripts/test-admin-rbac.ts",
-    "terminal:worker": "tsx apps/admin-terminal/worker.ts"
+    "terminal:worker": "tsx apps/admin-terminal/worker.ts",
+    "test:jarvis-command": "tsx scripts/test-jarvis-command-engine.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
