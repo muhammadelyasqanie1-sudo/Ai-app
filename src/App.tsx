@@ -290,8 +290,9 @@ export default function App() {
 
   const handleOpenAdminPortal = () => {
     if (!['admin','superadmin'].includes(user.role || '')) return;
-    const portal = window.open('about:blank', '_blank', 'noopener,noreferrer');
+    const portal = window.open('about:blank', '_blank');
     if (!portal) return;
+    portal.opener = null;
     portal.document.title = 'AFG AI Admin';
     portal.document.body.textContent = language === 'dari' ? 'در حال بررسی دسترسی مدیریت…' : 'Verifying administrator access…';
     fetch(API_BASE_URL + '/api/9router/status', { credentials: 'include', cache: 'no-store' })
