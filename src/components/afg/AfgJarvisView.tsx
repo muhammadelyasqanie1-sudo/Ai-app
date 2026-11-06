@@ -171,6 +171,7 @@ export function AfgJarvisView({ language }: { language: Language }) {
           <p className="rounded-xl bg-white/5 p-3 text-sm">{label('Speech recognition', 'تشخیص گفتار')}: <strong className={status?.speechRecognizerAvailable ? 'text-emerald-300' : 'text-amber-300'}>{status?.speechRecognizerAvailable ? label('Available','موجود') : label('Not installed','نصب نیست')}</strong></p>
           <p className="rounded-xl bg-white/5 p-3 text-sm">{label('Text-to-speech voice', 'صدای خواندن متن')}: <strong className={status?.ttsAvailable ? 'text-emerald-300' : 'text-amber-300'}>{status?.ttsAvailable ? label('Ready','آماده') : label('Not ready','آماده نیست')}</strong></p>
         </div>
+        <p className="mt-2 rounded-xl bg-white/5 p-3 text-sm">{label('Microphone permission', 'دسترسی میکروفون')}: <strong className={status?.microphonePermission ? 'text-emerald-300' : 'text-amber-300'}>{status?.microphonePermission ? label('Granted','داده شده') : label('Requested only when listening starts','فقط هنگام شروع شنیدن درخواست می‌شود')}</strong></p>
         <button className={button + ' mt-3 w-full'} onClick={() => void run('settings', () => AFGJarvis.openAccessibilitySettings())}>{label('Open Accessibility settings', 'باز کردن تنظیمات دسترس‌پذیری')}</button>
         <p className="mt-3 text-xs leading-5 text-slate-400">{label('Enable “AFG AI Jarvis device controls” yourself. Android displays the system consent screen. The service does not record or upload screen events.', 'گزینه «کنترل دستگاه AFG AI Jarvis» را خودتان فعال کنید. اندروید صفحه تأیید سیستمی را نشان می‌دهد. این سرویس رویدادهای صفحه را ضبط یا ارسال نمی‌کند.')}</p>
       </section>
@@ -184,7 +185,13 @@ export function AfgJarvisView({ language }: { language: Language }) {
       </section>
 
       <section className={card}>
-        <div className="flex items-center justify-between gap-3"><h2 className="font-bold text-white">{label('Local device toolkit', 'ابزارهای محلی دستگاه')}</h2><span className="rounded-full border border-emerald-400/20 px-2 py-1 text-xs text-emerald-200">On-device</span></div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-bold text-white">{label('Local device toolkit', 'ابزارهای محلی دستگاه')}</h2>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full border border-emerald-400/20 px-2 py-1 text-xs text-emerald-200">On-device</span>
+            <button type="button" className="rounded-lg border border-white/15 px-2 py-1 text-xs text-slate-300" onClick={() => { setDeviceData({}); setClipboardInput(''); setDeviceNumber(''); setDeviceMessage(''); }}>{label('Clear results', 'پاک‌کردن نتایج')}</button>
+          </div>
+        </div>
         <p className="mt-2 text-xs leading-5 text-slate-400">{label('These tools run locally. Sensitive information is shown only after you tap the relevant action and grant Android permission.', 'این ابزارها محلی اجرا می‌شوند. معلومات حساس فقط پس از لمس دکمه مربوط و دادن مجوز اندروید نمایش داده می‌شود.')}</p>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
           <button className={button} disabled={!!busy} onClick={() => void run('battery', async () => { const battery = await AFGJarvis.getBatteryStatus(); setDeviceData(v => ({...v,battery})); })}>{label('Battery status', 'وضعیت باتری')}</button>
@@ -224,9 +231,9 @@ export function AfgJarvisView({ language }: { language: Language }) {
             <button className={button} disabled={!!busy || !deviceNumber.trim()} onClick={() => { if (window.confirm(label('Open the SMS composer? You must press Send yourself.', 'برنامه پیامک باز شود؟ ارسال را خودتان باید بزنید.'))) void run('sms-compose', () => AFGJarvis.openSmsComposer({number:deviceNumber.trim(),body:deviceMessage})); }}>{label('Compose SMS', 'نوشتن پیامک')}</button>
           </div>
         </div>
-        {deviceData.battery && <p className="mt-3 rounded-xl bg-white/5 p-3 text-sm text-slate-200">{label('Battery','باتری')}: {deviceData.battery.levelPercent}% · {deviceData.battery.charging ? label('Charging','در حال شارژ') : label('Not charging','بدون شارژ')} · {deviceData.battery.temperatureC ?? '—'}°C</p>}
-        {deviceData.network && <p className="mt-2 rounded-xl bg-white/5 p-3 text-sm text-slate-200">{label('Network','شبکه')}: {deviceData.network.transport} · {deviceData.network.connected ? label('Connected','متصل') : label('Offline','آفلاین')}</p>}
-        {deviceData.location && <p className="mt-2 break-all rounded-xl bg-white/5 p-3 text-sm text-slate-200">{label('Location','موقعیت')}: {deviceData.location.latitude}, {deviceData.location.longitude} (±{Math.round(deviceData.location.accuracyMeters || 0)}m)</p>}
+        {deviceData.battery && <p className="mt-3 rounded-xl bg-white/5 p-3 text-sm text-slate-200">{label('Battery','باتری')}: {deviceData.battery.levelPercent >= 0 ? deviceData.battery.levelPercent + '%' : label('Unknown','نامشخص')} · {deviceData.battery.charging ? label('Charging','در حال شارژ') : label('Not charging','بدون شارژ')} · {deviceData.battery.temperatureC ?? '—'}°C</p>}
+        {deviceData.network && <p className="mt-2 rounded-xl bg-white/5 p-3 text-sm text-slate-200">{label('Network','شبکه')}: {deviceData.network.transport} · {deviceData.network.connected ? label('Internet available','اینترنت شناسایی شد') : label('No internet capability','اینترنت موجود نیست')} · {deviceData.network.validated ? label('Validated','تأییدشده') : label('Not validated','تأیید نشده')}</p>}
+        {deviceData.location && <p className="mt-2 break-all rounded-xl bg-white/5 p-3 text-sm text-slate-200">{label('Cached location','موقعیت ذخیره‌شده')}: {deviceData.location.latitude}, {deviceData.location.longitude} (±{Math.round(deviceData.location.accuracyMeters || 0)}m) · {deviceData.location.source} · {new Date(deviceData.location.timestamp).toLocaleString()}</p>}
         {deviceData.sensors && <div className="mt-2 rounded-xl bg-white/5 p-3 text-xs text-slate-200"><p>{label('Sensors detected','حسگرهای شناسایی‌شده')}: {deviceData.sensors.sensors.length} · {label('Fingerprint hardware','سخت‌افزار اثر انگشت')}: {deviceData.sensors.fingerprintOrBiometricAvailable ? label('Available','موجود') : label('Not detected','شناسایی نشد')} · {label('Fingerprint data is never accessible','داده اثر انگشت قابل دسترسی نیست')}</p><p className="mt-2">{deviceData.sensors.sensors.slice(0,12).map((x:any)=>x.name).join(' · ')}</p></div>}
         {deviceData.contacts && <div className="mt-2 max-h-48 overflow-auto rounded-xl bg-white/5 p-3 text-xs text-slate-200">{deviceData.contacts.contacts.map((x:any,i:number)=><p key={i}>{x.name || '—'} · {x.phone || '—'}</p>)}</div>}
         {deviceData.sms && <div className="mt-2 max-h-60 overflow-auto rounded-xl bg-white/5 p-3 text-xs text-slate-200">{deviceData.sms.messages.map((x:any,i:number)=><div key={i} className="border-b border-white/10 py-2"><p className="font-semibold">{x.address} · {x.type}</p><p className="mt-1 whitespace-pre-wrap">{x.body}</p><p className="mt-1 text-slate-500">{new Date(x.date).toLocaleString()}</p></div>)}</div>}
