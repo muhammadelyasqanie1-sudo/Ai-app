@@ -51,6 +51,7 @@ public class AFGOfflineModelsPlugin extends Plugin {
     private native String nativeCompleteNeedle(String input, int maxTokens);
     private native void nativeResetNeedle();
     private native String nativeGetNeedleError();
+    private native boolean nativeIsNeedleModelLoaded();
 
     private DownloadManager manager() {
         return (DownloadManager) getContext().getSystemService(Context.DOWNLOAD_SERVICE);
@@ -194,6 +195,7 @@ public class AFGOfflineModelsPlugin extends Plugin {
         result.put("abi", Build.SUPPORTED_ABIS != null && Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "unknown");
         result.put("backend", "CPU");
         result.put("modelFormat", ".cact");
+        result.put("modelLoaded", NEEDLE_RUNTIME_AVAILABLE && nativeIsNeedleModelLoaded());
         result.put("modelSha256", NEEDLE_MODEL_SHA256);
         if (!NEEDLE_RUNTIME_AVAILABLE) result.put("reason", "The verified Cactus Needle 3 Android ARM64 runtime is not included in this APK.");
         call.resolve(result);
