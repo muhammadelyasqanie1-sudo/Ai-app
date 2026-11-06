@@ -120,7 +120,7 @@ public class AFGJarvisPlugin extends Plugin {
         if (getContext().checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { call.reject("Grant microphone permission first."); return; }
         if (speechRecognizer == null) { call.reject("No Android speech recognition service is installed."); return; }
         String language = call.getString("language", "en-US");
-        if (!Arrays.asList("en-US","fa-IR","ps-AF","ar").contains(language)) language = "en-US";
+        if (!Arrays.asList("en-US","fa-AF","fa-IR","ps-AF","ar").contains(language)) language = "en-US";
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, language);
@@ -141,7 +141,7 @@ public class AFGJarvisPlugin extends Plugin {
         String language = call.getString("language", "en-US");
         if (text == null || text.trim().isEmpty() || text.length() > 3000) { call.reject("Speech text must be 1 to 3,000 characters."); return; }
         if (textToSpeech == null || !ttsReady) { call.reject("Android text-to-speech engine is not ready."); return; }
-        Locale locale = "fa-IR".equals(language) ? new Locale("fa", "IR") : "ps-AF".equals(language) ? new Locale("ps", "AF") : "ar".equals(language) ? new Locale("ar") : Locale.US;
+        Locale locale = "fa-AF".equals(language) ? new Locale("fa", "AF") : "fa-IR".equals(language) ? new Locale("fa", "IR") : "ps-AF".equals(language) ? new Locale("ps", "AF") : "ar".equals(language) ? new Locale("ar") : Locale.US;
         int availability = textToSpeech.setLanguage(locale);
         if (availability == TextToSpeech.LANG_MISSING_DATA || availability == TextToSpeech.LANG_NOT_SUPPORTED) { call.reject("The selected voice is not installed on this device."); return; }
         int resultCode = textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, "afg-jarvis-utterance");
