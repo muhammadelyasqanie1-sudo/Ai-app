@@ -25,7 +25,6 @@ const baseTranslations = {
     navVideo: 'ساخت ویدیو',
     navHistory: 'تاریخچه',
     navSettings: 'تنظیمات',
-    navAdmin: 'مدیریت',
     navInvite: 'دعوت دوستان',
     navProfile: 'پروفایل',
     
@@ -130,16 +129,6 @@ const baseTranslations = {
     madeWithLove: 'ساخته شده با ❤️ برای افغانستان',
     allRightsReserved: 'تمامی حقوق متعلق به AFG AI است © 2026',
 
-    // Admin Panel
-    adminTitle: 'پنل مدیریت سیستم',
-    usersManage: 'مدیریت کاربران',
-    servicesControl: 'کنترل سرویس‌ها',
-    providersModels: 'مدل‌های هوش مصنوعی',
-    reportsAnalytics: 'گزارش‌ها و آمار',
-    userAccessRestrictions: 'محدودیت دسترسی کاربران',
-    dailyLimits: 'سقف درخواست روزانه',
-    autoModeration: 'پایش و فیلترینگ هوشمند',
-    viewDashboard: 'مشاهده داشبورد کامل',
   },
 
   english: {
@@ -165,7 +154,6 @@ const baseTranslations = {
     navVideo: 'Video Gen',
     navHistory: 'History',
     navSettings: 'Settings',
-    navAdmin: 'Admin',
     navInvite: 'Invite',
     navProfile: 'Profile',
     
@@ -270,16 +258,6 @@ const baseTranslations = {
     madeWithLove: 'Made with ❤️ for Afghanistan',
     allRightsReserved: 'All rights reserved © 2026 AFG AI',
 
-    // Admin Panel
-    adminTitle: 'System Admin Panel',
-    usersManage: 'User Management',
-    servicesControl: 'Services Control',
-    providersModels: 'AI Models & Providers',
-    reportsAnalytics: 'Reports & Analytics',
-    userAccessRestrictions: 'User Access Restrictions',
-    dailyLimits: 'Daily Quota Limits',
-    autoModeration: 'Intelligent Auto Moderation',
-    viewDashboard: 'View Full Dashboard',
   }
 };
 
