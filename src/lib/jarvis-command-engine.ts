@@ -62,9 +62,16 @@ export function parseJarvisCommand(input: string): JarvisCommand {
   const command = normalize(input);
   if (!command || command.length > 120) return { kind: 'unknown' };
 
-  const politeCommand = command
-    .replace(/^(please|kindly|لطفا|لطفاً|مهرباني وکړئ)\s+/, '')
-    .replace(/\s+(please|لطفا|لطفاً)$/, '')
+  // Normalize polite prefixes before matching: normalize() converts Arabic ي to Persian ی,
+  // so raw-script regex alternatives can otherwise fail for Pashto speech transcripts.
+  const politePrefixes = ['please', 'kindly', 'لطفا', 'مهربانی بخښنه', 'مهربانی وکړئ'];
+  const politeCommand = politePrefixes.reduce((value, prefix) => {
+    const normalizedPrefix = normalize(prefix);
+    return value.startsWith(normalizedPrefix + ' ')
+      ? value.slice(normalizedPrefix.length).trim()
+      : value;
+  }, command)
+    .replace(/\s+(please|لطفا)$/, '')
     .trim();
 
   const app = appAliases.find(item => item.aliases.some(alias =>
