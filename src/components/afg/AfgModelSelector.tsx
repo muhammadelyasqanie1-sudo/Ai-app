@@ -72,6 +72,15 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
           <button className="rounded-full p-2 hover:bg-black/5" onClick={()=>setOpen(false)} aria-label="Close"><X size={19}/></button>
         </header>
         <div className="px-4 pt-3"><label className="afg-model-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={dari?'جستجوی مدل یا ارائه‌دهنده':'Search models or providers'}/></label></div>
+        {!selectedProvider ? <div className="afg-provider-list">
+          {providerEntries.map((provider) => <button key={provider.id} type="button" className="afg-provider-card" onClick={() => { setSelectedProvider(provider.id); setQuery(''); }}>
+            <ProviderIcon provider={provider.id} />
+            <span className="min-w-0 flex-1 text-start"><strong>{providerLabel(provider.id)}</strong><small>{provider.count} {dari ? 'مدل موجود' : 'available models'}</small></span>
+            <ChevronDown className="afg-provider-next" size={18} />
+          </button>)}
+          {!providerEntries.length && <p className="p-6 text-center text-sm opacity-60">{dari ? 'هیچ ارائه‌دهنده فعالی موجود نیست' : 'No active providers available'}</p>}
+        </div> : <>
+        <div className="afg-provider-back"><button type="button" onClick={() => { setSelectedProvider(null); setQuery(''); }}>← {dari ? 'همه ارائه‌دهندگان' : 'All providers'}</button><strong>{providerLabel(selectedProvider)}</strong></div>
         <div className="afg-model-list">
           <button className={'afg-model-row '+(!selected?'is-selected':'')} onClick={()=>{onSelect('auto');setOpen(false);}}>
             <span className="afg-brand-mark bg-slate-800 text-white">✦</span><span className="min-w-0 flex-1"><strong>Auto</strong><small>{dari?'انتخاب خودکار مدل سالم':'Choose the healthiest eligible model'}</small></span><span className="text-xs opacity-60">AUTO</span>{!selected&&<Check size={18}/>}
@@ -81,7 +90,7 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
             <span className="afg-model-cost">{model.requiresSubscription ? <span className="afg-premium-badge">Premium</span> : priceLabel(model)}</span>{disabled?<Lock size={16}/>:active?<Check size={18}/>:null}
           </button>;})}</div>)}
           {!groups.length&&<p className="p-6 text-center text-sm opacity-60">{dari?'مدلی پیدا نشد':'No models found'}</p>}
-        </div>
+        </div></>}
         <footer className="border-t px-4 py-3 text-xs opacity-60">{dari?'هزینه‌ها و دسترسی بر اساس اطلاعات تأییدشده ارائه‌دهنده نمایش داده می‌شود.':'Pricing and access are shown only when confirmed by the provider.'}</footer>
       </section>
     </div>}
