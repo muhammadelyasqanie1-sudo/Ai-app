@@ -1,8 +1,19 @@
 ALTER TABLE terminal_audit
   ADD COLUMN IF NOT EXISTS output_text text NOT NULL DEFAULT '';
-ALTER TABLE terminal_audit
-  ADD CONSTRAINT terminal_audit_output_size_check
-  CHECK (octet_length(output_text) <= 262144);
+DO $migration$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'terminal_audit_output_size_check'
+      AND conrelid = 'terminal_audit'::regclass
+  ) THEN
+    ALTER TABLE terminal_audit
+      ADD CONSTRAINT terminal_audit_output_size_check
+      CHECK (octet_length(output_text) <= 262144);
+  END IF;
+END;
+$migration$;
 
 CREATE OR REPLACE FUNCTION afg_terminal_audit_no_mutation() RETURNS trigger AS $afg$
 BEGIN
