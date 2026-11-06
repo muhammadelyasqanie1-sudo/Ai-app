@@ -64,7 +64,7 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeLoadNeedleModel(
         g_needle_loaded = true;
     }
 
-    needle_reset();
+    if (g_needle_initialized) needle_reset();
     const int initialized = needle_init(system_prompt.c_str(), tools_json.c_str(), nullptr);
     if (initialized < 0) {
         g_needle_error = "Cactus Needle could not initialize the command schema (code " + std::to_string(initialized) + ").";
@@ -109,7 +109,7 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeCompleteNeedle(
 extern "C" JNIEXPORT void JNICALL
 Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeResetNeedle(JNIEnv*, jobject) {
     std::lock_guard<std::mutex> lock(g_needle_mutex);
-    if (g_needle_loaded) needle_reset();
+    if (g_needle_initialized) needle_reset();
     g_needle_initialized = false;
 }
 
