@@ -41,6 +41,7 @@ const LazyAfgHistoryView = React.lazy(() => import('./components/afg/AfgHistoryV
 const LazyAfgSettingsView = React.lazy(() => import('./components/afg/AfgSettingsView').then((module) => ({ default: module.AfgSettingsView })));
 const LazyAfgTerminalView = React.lazy(() => import('./components/afg/AfgTerminalView').then((module) => ({ default: module.AfgTerminalView })));
 const LazyAfgOfflineView = React.lazy(() => import('./components/afg/AfgOfflineView').then((module) => ({ default: module.AfgOfflineView })));
+const LazyAfgJarvisView = React.lazy(() => import('./components/afg/AfgJarvisView').then((module) => ({ default: module.AfgJarvisView })));
 
 
 const DEFAULT_USER: UserProfile = {
@@ -881,6 +882,7 @@ export default function App() {
         )}
 
         {currentTab === 'terminal' && <LazyAfgTerminalView language={language} />}
+        {currentTab === 'jarvis' && <LazyAfgJarvisView language={language} />}
 
         {currentTab === 'offline-learning' && <LazyAfgOfflineView language={language} />}
 
