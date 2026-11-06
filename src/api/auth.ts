@@ -101,7 +101,7 @@ export async function recordSecurityNotification(userId: string, eventType: stri
 
 function cookieOptions() {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-  return `Path=/; HttpOnly; SameSite=Lax${secure}`;
+  return `Path=/; HttpOnly; SameSite=${secure ? 'None' : 'Lax'}${secure}`;
 }
 
 export function ensureCsrfCookie(req: IncomingMessage, res: ServerResponse): void {
@@ -111,7 +111,7 @@ export function ensureCsrfCookie(req: IncomingMessage, res: ServerResponse): voi
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   const existing = res.getHeader('Set-Cookie');
   const values = Array.isArray(existing) ? existing.map(String) : (existing ? [String(existing)] : []);
-  values.push(`afg_csrf=${encodeURIComponent(token)}; Path=/; SameSite=Lax${secure}; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`);
+  values.push(`afg_csrf=${encodeURIComponent(token)}; Path=/; SameSite=${secure ? 'None' : 'Lax'}${secure}; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`);
   res.setHeader('Set-Cookie', values);
 }
 
@@ -119,15 +119,15 @@ export function setSessionCookies(res: ServerResponse, sessionToken: string, csr
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   res.setHeader('Set-Cookie', [
     `afg_session=${encodeURIComponent(sessionToken)}; ${cookieOptions()}; Max-Age=${maxAgeSeconds}`,
-    `afg_csrf=${encodeURIComponent(csrfToken)}; Path=/; SameSite=Lax${secure}; Max-Age=${maxAgeSeconds}`,
+    `afg_csrf=${encodeURIComponent(csrfToken)}; Path=/; SameSite=${secure ? 'None' : 'Lax'}${secure}; Max-Age=${maxAgeSeconds}`,
   ]);
 }
 
 export function clearSessionCookies(res: ServerResponse) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   res.setHeader('Set-Cookie', [
-    `afg_session=; Path=/; HttpOnly; SameSite=Lax${secure}; Max-Age=0`,
-    `afg_csrf=; Path=/; SameSite=Lax${secure}; Max-Age=0`,
+    `afg_session=; Path=/; HttpOnly; SameSite=${secure ? 'None' : 'Lax'}${secure}; Max-Age=0`,
+    `afg_csrf=; Path=/; SameSite=${secure ? 'None' : 'Lax'}${secure}; Max-Age=0`,
   ]);
 }
 
