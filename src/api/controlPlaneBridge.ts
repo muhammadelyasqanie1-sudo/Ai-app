@@ -153,11 +153,15 @@ async function handleSubscriptionsRead(req: IncomingMessage, res: ServerResponse
   }
   if (!pool) { reply(res, 503, { error: 'AFG AI database is unavailable.' }); return true; }
   const [subscriptions, plans] = await Promise.all([
-    pool.query(`SELECT s.id,s.user_id,u.email,p.plan_key,p.display_name AS plan_name,
-        s.status,s.starts_at,s.ends_at,s.provider,s.created_at
-      FROM user_subscriptions s JOIN users u ON u.id=s.user_id
-      JOIN subscription_plans p ON p.id=s.plan_id
-      ORDER BY s.created_at DESC LIMIT 300`),
+    pool.query(`SELECT u.id AS user_id,u.email,p.plan_key,p.display_name AS plan_name,
+        s.id AS subscription_id,s.status,s.starts_at,s.ends_at,s.provider,s.created_at
+      FROM users u
+      LEFT JOIN LATERAL (
+        SELECT * FROM user_subscriptions WHERE user_id=u.id ORDER BY starts_at DESC LIMIT 1
+      ) s ON true
+      LEFT JOIN subscription_plans p ON p.id=s.plan_id
+      WHERE u.status='active'
+      ORDER BY u.created_at DESC LIMIT 300`),
     pool.query(`SELECT plan_key,display_name,monthly_price_usd,limits_json,features_json,enabled
       FROM subscription_plans ORDER BY monthly_price_usd,plan_key`),
   ]);
