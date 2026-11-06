@@ -131,6 +131,7 @@ const apinexAdapters = apinexKeys.map((apiKey) => createOpenAICompatibleAdapter(
   displayName: 'APInex',
   baseUrl: apinexBase,
   apiKey,
+  catalogOnlyHealthCheck: true,
 }));
 const apinexPrimary = apinexAdapters[0] || null;
 const apinexAdapter: ChatProviderAdapter | null = apinexPrimary ? {
@@ -148,7 +149,7 @@ const apinexAdapter: ChatProviderAdapter | null = apinexPrimary ? {
         apinexKeyIndex = index;
         return models;
       } catch (error) {
-        if (!(error instanceof Error) || (error as any).status !== 429 || attempt === apinexAdapters.length - 1) throw error;
+        if (!(error instanceof Error) || ![402, 429].includes((error as any).status) || attempt === apinexAdapters.length - 1) throw error;
       }
     }
     return [];
@@ -174,8 +175,8 @@ const apinexAdapter: ChatProviderAdapter | null = apinexPrimary ? {
         apinexKeyIndex = index;
         return;
       } catch (error) {
-        const rateLimited = error instanceof Error && (error as any).status === 429;
-        if (!rateLimited || emitted || attempt === apinexAdapters.length - 1) throw error;
+        const quotaOrRateLimited = error instanceof Error && [402, 429].includes((error as any).status);
+        if (!quotaOrRateLimited || emitted || attempt === apinexAdapters.length - 1) throw error;
       }
     }
   },
