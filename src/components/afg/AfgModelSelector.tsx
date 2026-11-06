@@ -32,8 +32,8 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
     return [...known, ...ids.filter((id) => !known.includes(id)).sort()].map((id) => ({ id, count: models.filter((model) => model.providerId === id).length }));
   }, [models]);
   const providerLabel = (id: string) => {
-    const key = id.toLowerCase().replace(/[_\\s]/g, '-');
-    if (key === 'public-apis' || key === 'publicapis') return 'Public APIs';
+    const key = id.toLowerCase().replace(/[_\s]/g, '-');
+    if (key.startsWith('public')) return 'Public APIs';
     if (key === '9router') return '9Router';
     if (key === 'apinex') return 'APInex';
     return id;
