@@ -12,6 +12,7 @@ export type NativeNeedleRuntimeInfo = {
   modelFormat: string;
   modelSha256: string;
   modelLoaded: boolean;
+  modelReady: boolean;
   reason?: string;
 };
 
@@ -21,7 +22,7 @@ function requireAndroid(): void {
 
 export async function getNativeNeedleRuntimeInfo(): Promise<NativeNeedleRuntimeInfo> {
   if (Capacitor.getPlatform() !== 'android') {
-    return { available: false, engine: 'unavailable', abi: 'web', backend: 'none', modelFormat: '.cact', modelSha256: NEEDLE3_MODEL_SHA256, modelLoaded: false, reason: 'Cactus Needle 3 is Android-only.' };
+    return { available: false, engine: 'unavailable', abi: 'web', backend: 'none', modelFormat: '.cact', modelSha256: NEEDLE3_MODEL_SHA256, modelLoaded: false, modelReady: false, reason: 'Cactus Needle 3 is Android-only.' };
   }
   return AFGOfflineModels.getNeedleRuntimeInfo();
 }
