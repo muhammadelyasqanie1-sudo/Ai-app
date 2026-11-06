@@ -65,8 +65,8 @@ The current command parser is deterministic phrase matching and works offline; i
 
 ## API surface
 
-The native bridge exports `AFGJarvis.getStatus()`, `openAccessibilitySettings()`, `openApp({ packageName })`, `performAction({ action })`, `clickText({ text })`, and `typeText({ text })`, `requestMicrophonePermission()`, `startListening({ language })`, `stopListening()`, `speak({ text, language })`, and the `speechEvent` listener. It is registered through the local Capacitor package in `package.json`.
+The native bridge exports `getStatus()`, `getBatteryStatus()`, `vibrate()`, `requestCameraPermission()`, `setTorch()`, `getNetworkStatus()`, `requestLocationPermission()`, `getLocation()`, `requestContactsPermission()`, `getContacts()`, `requestSmsReadPermission()`, `getRecentSms()`, `openSmsComposer()`, `openDialer()`, `takePhoto()`, `getSensors()`, `openAccessibilitySettings()`, `openApp()`, `performAction()`, `clickText()`, `typeText()`, microphone permission and speech methods, and the `speechEvent` listener. It is registered through the local Capacitor package in `package.json`.
 
 ## Verification status
 
-Source files and manifest wiring were inspected. Per repository policy, no tests, type-check, lint, Android sync, build, APK workflow, or deployment was run. Install dependencies and run Capacitor Android sync/build only after the project owner authorizes those operations.
+Source files and manifest wiring were inspected. Per repository policy, no tests, type-check, lint, Android sync, build, APK workflow, or deployment was run. Native runtime behavior, camera result handling, permission behavior across Android vendors, and Google Play eligibility still require device verification. Install dependencies and run Capacitor Android sync/build only after the project owner authorizes those operations.
