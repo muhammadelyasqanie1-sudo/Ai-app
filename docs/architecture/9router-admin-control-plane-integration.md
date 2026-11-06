@@ -187,3 +187,10 @@ This contract was checked against the upstream source tree; before implementatio
 - The mutation endpoint currently supports only `active` and `suspended` status changes. It uses a transaction and the existing AFG AI admin advisory lock, refuses self-suspension, protects the last active administrator/superadmin, prevents non-superadmins from changing administrator accounts, revokes active sessions on suspension, and writes an AFG AI audit event with external actor metadata.
 - 9Router supplies actor identity and scope headers only from its server-side authenticated session. The shared bridge bearer credential is never sent to browser code.
 - Account role changes, account deletion, password resets, subscription management, and other AFG AI-specific controls remain out of scope until separately implemented and reviewed.
+
+### AFG AI subscription bridge
+
+- Added `GET /api/internal/9router/subscriptions` for active AFG AI accounts and their latest plan state, plus enabled Free/Pro plan metadata. Requires `afg-ai:subscriptions:read`.
+- Added `PATCH /api/internal/9router/subscriptions` to assign only the existing `free` or `pro` plan to an active account. Requires `afg-ai:subscriptions:manage`.
+- The assignment runs in a PostgreSQL transaction, cancels the previous active/trialing subscription, creates the new `admin_manual` subscription, and writes an AFG AI audit record with the external 9Router actor identity.
+- This is manual plan assignment only. It does not charge a payment method, process a payment, alter plan pricing/limits, or delete subscription history.

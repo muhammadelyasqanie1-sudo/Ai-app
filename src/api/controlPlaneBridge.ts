@@ -5,6 +5,7 @@ import { readJsonBody } from './auth.ts';
 
 const BRIDGE_PATH = '/api/internal/9router/overview';
 const USERS_PATH = '/api/internal/9router/users';
+const SUBSCRIPTIONS_PATH = '/api/internal/9router/subscriptions';
 
 function matchesSecret(candidate: string, expected: string): boolean {
   const candidateDigest = createHash('sha256').update(candidate).digest();
@@ -143,6 +144,88 @@ async function handleUserStatusUpdate(req: IncomingMessage, res: ServerResponse)
   return true;
 }
 
+
+async function handleSubscriptionsRead(req: IncomingMessage, res: ServerResponse) {
+  const actor = readBridgeActor(req);
+  if (!bridgeActorHas(actor, 'afg-ai:subscriptions:read')) {
+    reply(res, actor ? 403 : 401, { error: actor ? 'AFG AI subscription read permission required.' : 'A valid control-plane actor is required.' });
+    return true;
+  }
+  if (!pool) { reply(res, 503, { error: 'AFG AI database is unavailable.' }); return true; }
+  const [subscriptions, plans] = await Promise.all([
+    pool.query(`SELECT u.id AS user_id,u.email,p.plan_key,p.display_name AS plan_name,
+        s.id AS subscription_id,s.status,s.starts_at,s.ends_at,s.provider,s.created_at
+      FROM users u
+      LEFT JOIN LATERAL (
+        SELECT * FROM user_subscriptions WHERE user_id=u.id ORDER BY starts_at DESC LIMIT 1
+      ) s ON true
+      LEFT JOIN subscription_plans p ON p.id=s.plan_id
+      WHERE u.status='active'
+      ORDER BY u.created_at DESC LIMIT 300`),
+    pool.query(`SELECT plan_key,display_name,monthly_price_usd,limits_json,features_json,enabled
+      FROM subscription_plans ORDER BY monthly_price_usd,plan_key`),
+  ]);
+  reply(res, 200, { subscriptions: subscriptions.rows, plans: plans.rows });
+  return true;
+}
+
+async function handleSubscriptionAssign(req: IncomingMessage, res: ServerResponse) {
+  const actor = readBridgeActor(req);
+  if (!bridgeActorHas(actor, 'afg-ai:subscriptions:manage')) {
+    reply(res, actor ? 403 : 401, { error: actor ? 'AFG AI subscription management permission required.' : 'A valid control-plane actor is required.' });
+    return true;
+  }
+  if (!pool) { reply(res, 503, { error: 'AFG AI database is unavailable.' }); return true; }
+  let body: Record<string, unknown>;
+  try { body = await readJsonBody(req, 8000); }
+  catch { reply(res, 400, { error: 'Invalid JSON request body.' }); return true; }
+  const targetId = typeof body.userId === 'string' ? body.userId : '';
+  const planKey = typeof body.planKey === 'string' ? body.planKey : '';
+  if (!/^[0-9a-f-]{36}$/i.test(targetId) || !['free', 'pro'].includes(planKey)) {
+    reply(res, 400, { error: 'Provide a valid user ID and an enabled free or pro plan.' });
+    return true;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const plan = await client.query('SELECT id,plan_key FROM subscription_plans WHERE plan_key=$1 AND enabled=true FOR SHARE', [planKey]);
+    const target = await client.query("SELECT id FROM users WHERE id=$1 AND status='active' FOR UPDATE", [targetId]);
+    if (!plan.rows[0] || !target.rows[0]) {
+      await client.query('ROLLBACK');
+      reply(res, 404, { error: 'Active user or enabled plan not found.' });
+      return true;
+    }
+    const previous = await client.query(`SELECT s.id,p.plan_key,s.status,s.starts_at,s.ends_at
+      FROM user_subscriptions s JOIN subscription_plans p ON p.id=s.plan_id
+      WHERE s.user_id=$1 AND s.status IN ('active','trialing')
+      ORDER BY s.starts_at DESC LIMIT 1 FOR UPDATE OF s`, [targetId]);
+    if (previous.rows[0]?.plan_key === planKey && previous.rows[0]?.status === 'active') {
+      await client.query('COMMIT');
+      reply(res, 200, { subscription: { id: previous.rows[0].id, status: 'active', planKey, unchanged: true } });
+      return true;
+    }
+    await client.query("UPDATE user_subscriptions SET status='cancelled',ends_at=now(),updated_at=now() WHERE user_id=$1 AND status IN ('active','trialing')", [targetId]);
+    const created = await client.query(`INSERT INTO user_subscriptions(user_id,plan_id,status,provider)
+      VALUES($1,$2,'active','admin_manual') RETURNING id,status,starts_at`, [targetId, plan.rows[0].id]);
+    await client.query(
+      'INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES(NULL,$1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb)',
+      ['9router:' + actor.role, 'subscription.plan.assign', 'user', targetId,
+        JSON.stringify({ planKey: previous.rows[0]?.plan_key || null, status: previous.rows[0]?.status || null }),
+        JSON.stringify({ planKey, status: created.rows[0].status, subscriptionId: created.rows[0].id }),
+        JSON.stringify({ source: '9router-control-plane', actorId: actor.id, actorEmail: actor.email })],
+    );
+    await client.query('COMMIT');
+    reply(res, 200, { subscription: { ...created.rows[0], planKey } });
+  } catch {
+    await client.query('ROLLBACK');
+    reply(res, 503, { error: 'AFG AI subscription update failed.' });
+  } finally {
+    client.release();
+  }
+  return true;
+}
+
 /**
  * Read-only service bridge for the 9Router management portal.
  * The shared credential must remain server-side in both applications.
@@ -153,6 +236,13 @@ export async function handleControlPlaneBridgeApi(
   res: ServerResponse,
   pathname: string,
 ): Promise<boolean> {
+  if (pathname === SUBSCRIPTIONS_PATH) {
+    if (req.method === 'GET') return await handleSubscriptionsRead(req, res);
+    if (req.method === 'PATCH') return await handleSubscriptionAssign(req, res);
+    res.setHeader('Allow', 'GET, PATCH');
+    reply(res, 405, { error: 'Method not allowed.' });
+    return true;
+  }
   if (pathname === USERS_PATH) {
     if (req.method === 'GET') return await handleUserList(req, res);
     if (req.method === 'PATCH') return await handleUserStatusUpdate(req, res);
