@@ -31,5 +31,10 @@ export interface AFGOfflineModelsPlugin {
   loadModel(options: { path: string; contextSize?: number; threads?: number }): Promise<{ loaded: boolean; path: string; sizeBytes: number }>;
   generate(options: { messages: string; maxTokens?: number }): Promise<{ text: string }>;
   unloadModel(): Promise<{ unloaded: boolean }>;
+  getBatteryStatus(): Promise<{ level: number; charging: boolean; plugged: boolean; technology?: string; temperatureC: number }>;
+  vibrate(options?: { durationMs?: number }): Promise<{ started: boolean; durationMs: number }>;
+  openApp(options: { app: 'youtube' | 'maps' | 'chrome' | 'settings' | 'camera' }): Promise<{ opened: boolean; app: string }>;
+  requestCallConfirmation(options: { phoneNumber: string }): Promise<{ confirmationOpened: boolean }>;
+  requestSmsConfirmation(options: { phoneNumber: string; message: string }): Promise<{ confirmationOpened: boolean }>;
 }
 export const AFGOfflineModels: AFGOfflineModelsPlugin;
