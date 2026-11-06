@@ -446,7 +446,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: prepared.modelId })}\n\n`);
 
     let emittedContent = false;
-    const emitToolActivity = (callName:string,args:unknown,status:'running'|'completed'|'failed') => {
+    const emitToolActivity = (callName:string,args:unknown,status:'running'|'completed'|'failed',observed?:unknown) => {
       const input = args && typeof args === 'object' ? args as Record<string,unknown> : {};
       const safeUrl = (value:unknown):string|undefined => {
         if (typeof value !== 'string' || value.length > 2048) return undefined;
@@ -461,10 +461,11 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       };
       const github = callName.startsWith('github_');
       const repo = github && typeof input.owner==='string' && typeof input.repo==='string' ? (input.owner+'/'+input.repo).replace(/[^a-zA-Z0-9_.\/-]/g,'').slice(0,180) : undefined;
-      const url = findUrl(input);
+      const url = findUrl(observed) || findUrl(input);
+      const targetPath = typeof input.path === 'string' ? input.path.replace(/[^a-zA-Z0-9_.@/-]/g,'').slice(0,160) : undefined;
       const labels:Record<string,string> = {github_list_repositories:'فهرست مخزن‌های GitHub',github_get_repository:'بررسی مخزن GitHub',github_list_branches:'بررسی شاخه‌های مخزن',github_get_file:'خواندن فایل مخزن',github_search_code:'جست‌وجوی کد در GitHub',github_create_branch:'ساخت شاخه کاری',github_update_file:'به‌روزرسانی فایل در GitHub',github_create_pull_request:'ایجاد درخواست ادغام'};
       const label = github ? (labels[callName] || 'فعالیت در GitHub') : callName.startsWith('mcp_') ? 'اجرای ابزار اتصال خارجی' : 'اجرای ابزار API';
-      const detail = repo || (url ? new URL(url).hostname : undefined);
+      const detail = repo ? (targetPath ? repo + '/' + targetPath : repo) : (url ? new URL(url).hostname : undefined);
       if (!res.writableEnded && !res.destroyed) res.write(`data: ${JSON.stringify({type:'activity',id:randomUUID(),name:callName,label,detail,url,status,timestamp:Date.now()})}\\n\\n`);
     };
     heartbeat = setInterval(() => {
@@ -518,7 +519,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
             const serialized=JSON.stringify(result);
             toolMessages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:serialized.slice(0,16_000)});
             estimatedInputTokens+=Math.ceil(serialized.length/4);
-            emitToolActivity(call.function.name,args,'completed');
+            emitToolActivity(call.function.name,args,'completed',result);
             res.write(`data: ${JSON.stringify({type:'tool_status',name:call.function.name,status:'completed'})}\n\n`);
           } catch(error) {
             const message=error instanceof Error?error.message.slice(0,300):'API tool failed.';
