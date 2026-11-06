@@ -331,7 +331,7 @@ public class AFGOfflineModelsPlugin extends Plugin {
                 call.reject("Only HTTPS Hugging Face model downloads are allowed."); return;
             }
             boolean gguf = fileName.toLowerCase(Locale.ROOT).endsWith(".gguf");
-            boolean needle3 = "Cactus-Compute/needle3".equals(repoId) && "needle3.cact".equals(fileName) &&
+            boolean needle3 = "Cactus-Compute/needle3".equals(repoId) && "3e8e2a66057a29694052d915128b91b53e7e5ead".equals(revision) && "needle3.cact".equals(fileName) &&
                     NEEDLE_MODEL_SHA256.equalsIgnoreCase(expectedSha);
             if (!repoId.matches("[^/]+/[^/]+") || fileName.isEmpty() || (!gguf && !needle3) ||
                     fileName.contains("..") || fileName.startsWith("/")) {
