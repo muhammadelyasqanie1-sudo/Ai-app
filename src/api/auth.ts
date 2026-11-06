@@ -101,33 +101,34 @@ export async function recordSecurityNotification(userId: string, eventType: stri
 
 function cookieOptions() {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-  return `Path=/; HttpOnly; SameSite=Lax${secure}`;
+  return `Path=/; HttpOnly; SameSite=${secure ? 'None' : 'Lax'}${secure}`;
 }
 
-export function ensureCsrfCookie(req: IncomingMessage, res: ServerResponse): void {
+export function ensureCsrfCookie(req: IncomingMessage, res: ServerResponse): string {
   const current = cookies(req).afg_csrf;
-  if (current && current.length >= 32) return;
+  if (current && current.length >= 32) return current;
   const token = randomBytes(32).toString('base64url');
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   const existing = res.getHeader('Set-Cookie');
   const values = Array.isArray(existing) ? existing.map(String) : (existing ? [String(existing)] : []);
-  values.push(`afg_csrf=${encodeURIComponent(token)}; Path=/; SameSite=Lax${secure}; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`);
+  values.push(`afg_csrf=${encodeURIComponent(token)}; Path=/; SameSite=${secure ? 'None' : 'Lax'}${secure}; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`);
   res.setHeader('Set-Cookie', values);
+  return token;
 }
 
 export function setSessionCookies(res: ServerResponse, sessionToken: string, csrfToken: string, maxAgeSeconds = Math.floor(SESSION_TTL_MS / 1000)) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   res.setHeader('Set-Cookie', [
     `afg_session=${encodeURIComponent(sessionToken)}; ${cookieOptions()}; Max-Age=${maxAgeSeconds}`,
-    `afg_csrf=${encodeURIComponent(csrfToken)}; Path=/; SameSite=Lax${secure}; Max-Age=${maxAgeSeconds}`,
+    `afg_csrf=${encodeURIComponent(csrfToken)}; Path=/; SameSite=${secure ? 'None' : 'Lax'}${secure}; Max-Age=${maxAgeSeconds}`,
   ]);
 }
 
 export function clearSessionCookies(res: ServerResponse) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   res.setHeader('Set-Cookie', [
-    `afg_session=; Path=/; HttpOnly; SameSite=Lax${secure}; Max-Age=0`,
-    `afg_csrf=; Path=/; SameSite=Lax${secure}; Max-Age=0`,
+    `afg_session=; Path=/; HttpOnly; SameSite=${secure ? 'None' : 'Lax'}${secure}; Max-Age=0`,
+    `afg_csrf=; Path=/; SameSite=${secure ? 'None' : 'Lax'}${secure}; Max-Age=0`,
   ]);
 }
 
@@ -207,6 +208,13 @@ export async function createSession(userId: string, res: ServerResponse): Promis
   setSessionCookies(res, sessionToken, csrfToken, isAdministrator ? 8 * 60 * 60 : Math.floor(SESSION_TTL_MS / 1000));
 }
 
+
+async function createMobileHandoff(userId: string): Promise<string> {
+  if (!pool) throw new Error('Database is not configured.');
+  const ticket = randomBytes(32).toString('base64url');
+  await pool.query("INSERT INTO sessions (user_id, token_hash, expires_at) VALUES ($1, $2, now() + interval '2 minutes')", [userId, hash(ticket)]);
+  return ticket;
+}
 export async function destroySession(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (pool) {
     const token = cookies(req).afg_session;
@@ -324,8 +332,8 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
 
 
   if (pathname === '/api/auth/providers' && req.method === 'GET') {
-    ensureCsrfCookie(req,res);
-    sendAuthJson(res, 200, { googleEnabled: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && configuredAppOrigin()), emailEnabled: Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM) });
+    const csrfToken = ensureCsrfCookie(req,res);
+    sendAuthJson(res, 200, { googleEnabled: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && configuredAppOrigin()), emailEnabled: Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM), csrfToken });
     return true;
   }
 
@@ -335,7 +343,11 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
     if (!clientId || !process.env.GOOGLE_CLIENT_SECRET || !origin) { sendAuthJson(res, 404, { error: 'Google sign-in is not configured.' }); return true; }
     const state = randomBytes(32).toString('base64url');
     const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-    res.setHeader('Set-Cookie', 'afg_oauth_state=' + state + '; Path=/; HttpOnly; SameSite=Lax' + secure + '; Max-Age=600');
+    const mobile = new URL(req.url || '/', 'http://localhost').searchParams.get('client') === 'android';
+    res.setHeader('Set-Cookie', [
+      'afg_oauth_state=' + state + '; Path=/; HttpOnly; SameSite=Lax' + secure + '; Max-Age=600',
+      'afg_oauth_mobile=' + (mobile ? '1' : '0') + '; Path=/; HttpOnly; SameSite=Lax' + secure + '; Max-Age=600',
+    ]);
     const callback = origin + '/api/auth/google/callback';
     const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     url.searchParams.set('client_id', clientId);
@@ -347,13 +359,31 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
     return true;
   }
 
+  if (pathname === '/api/auth/google/mobile-exchange' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req) as Record<string, unknown>;
+      const ticket = typeof body.ticket === 'string' ? body.ticket : '';
+      if (!/^[A-Za-z0-9_-]{40,64}$/.test(ticket)) { sendAuthJson(res, 400, { error: 'Invalid or expired Google sign-in handoff.' }); return true; }
+      const redeemed = await pool.query(
+        "UPDATE sessions SET revoked_at=now() WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>now() RETURNING user_id",
+        [hash(ticket)],
+      );
+      const userId = redeemed.rows[0]?.user_id as string | undefined;
+      if (!userId) { sendAuthJson(res, 401, { error: 'Google sign-in handoff has expired or was already used.' }); return true; }
+      await createSession(userId, res);
+      await recordAuthSecurityEvent(req, userId, 'auth.google_mobile_handoff');
+      await recordSecurityNotification(userId, 'security.sign_in', 'New sign-in', 'Your AFG AI account was signed in with Google.');
+      sendAuthJson(res, 200, { authenticated: true });
+      return true;
+    } catch { sendAuthJson(res, 400, { error: 'Could not complete Google sign-in on this device.' }); return true; }
+  }
   if (pathname === '/api/auth/google/callback' && req.method === 'GET') {
     const jar = cookies(req);
     const query = new URL(req.url || '/', 'http://localhost').searchParams;
     const state = query.get('state') || '';
     const code = query.get('code') || '';
     if (!state || !jar.afg_oauth_state || state.length !== jar.afg_oauth_state.length || !timingSafeEqual(Buffer.from(state), Buffer.from(jar.afg_oauth_state)) || !code) {
-      clearOAuthState(res); res.writeHead(302, { Location: configuredAppOrigin() + '/?auth=google_failed' }); res.end(); return true;
+      clearOAuthState(res); res.writeHead(302, { Location: jar.afg_oauth_mobile === '1' ? 'afgai://auth/callback?error=state' : configuredAppOrigin() + '/?auth=google_failed', 'Cache-Control': 'no-store' }); res.end(); return true;
     }
     try {
       const origin = configuredAppOrigin();
@@ -379,12 +409,23 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         }
         await pool.query("INSERT INTO auth_identities(user_id,provider,provider_subject,email_verified) VALUES($1,'google',$2,true) ON CONFLICT(provider,provider_subject) DO NOTHING", [userId, profile.sub]);
       }
-      await createSession(userId!, res);
-      await recordAuthSecurityEvent(req,userId!,'auth.google_login');
-      await recordSecurityNotification(userId!, 'security.sign_in', 'New sign-in', 'Your AFG AI account was signed in with Google.');
-      clearOAuthState(res); res.writeHead(302, { Location: origin + '/', 'Cache-Control': 'no-store' }); res.end();
+      if (jar.afg_oauth_mobile === '1') {
+        const ticket = await createMobileHandoff(userId!);
+        clearOAuthState(res);
+        const secureCookie = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+        const existing = res.getHeader('Set-Cookie');
+        const cookiesToSet = Array.isArray(existing) ? existing.map(String) : (existing ? [String(existing)] : []);
+        cookiesToSet.push('afg_oauth_mobile=; Path=/; HttpOnly; SameSite=Lax' + secureCookie + '; Max-Age=0');
+        res.setHeader('Set-Cookie', cookiesToSet);
+        res.writeHead(302, { Location: 'afgai://auth/callback?ticket=' + encodeURIComponent(ticket), 'Cache-Control': 'no-store' }); res.end();
+      } else {
+        await createSession(userId!, res);
+        await recordAuthSecurityEvent(req,userId!,'auth.google_login');
+        await recordSecurityNotification(userId!, 'security.sign_in', 'New sign-in', 'Your AFG AI account was signed in with Google.');
+        clearOAuthState(res); res.writeHead(302, { Location: origin + '/', 'Cache-Control': 'no-store' }); res.end();
+      }
     } catch {
-      clearOAuthState(res); res.writeHead(302, { Location: configuredAppOrigin() + '/?auth=google_failed' }); res.end();
+      clearOAuthState(res); res.writeHead(302, { Location: jar.afg_oauth_mobile === '1' ? 'afgai://auth/callback?error=google' : configuredAppOrigin() + '/?auth=google_failed', 'Cache-Control': 'no-store' }); res.end();
     }
     return true;
   }
