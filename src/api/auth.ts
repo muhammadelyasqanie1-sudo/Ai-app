@@ -371,6 +371,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       if (!userId) { sendAuthJson(res, 401, { error: 'Google sign-in handoff has expired or was already used.' }); return true; }
       await createSession(userId, res);
       await recordAuthSecurityEvent(req, userId, 'auth.google_mobile_handoff');
+      await recordSecurityNotification(userId, 'security.sign_in', 'New sign-in', 'Your AFG AI account was signed in with Google.');
       sendAuthJson(res, 200, { authenticated: true });
       return true;
     } catch { sendAuthJson(res, 400, { error: 'Could not complete Google sign-in on this device.' }); return true; }
