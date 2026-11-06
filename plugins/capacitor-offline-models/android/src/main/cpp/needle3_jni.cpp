@@ -92,7 +92,7 @@ Java_com_afgai_offlinemodels_AFGOfflineModelsPlugin_nativeCompleteNeedle(
 
     const int limit = std::max(8, std::min(192, static_cast<int>(max_tokens)));
     std::vector<char> output(16 * 1024, '\0');
-    const int result = needle_complete(input.c_str(), limit, output.data(), static_cast<int>(output.size()));
+    const int result = needle_complete(input.c_str(), nullptr, 0, limit, output.data(), static_cast<int>(output.size()));
     if (result < 0) {
         g_needle_error = "Needle 3 inference failed (code " + std::to_string(result) + ").";
         AFG_NEEDLE_LOGE("%s", g_needle_error.c_str());
