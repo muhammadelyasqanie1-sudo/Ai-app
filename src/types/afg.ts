@@ -41,6 +41,7 @@ export interface UserProfile {
   avatar: string;
   isPremium: boolean;
   tier: string;
+  role?: string;
 }
 
 export interface ChatAttachment {

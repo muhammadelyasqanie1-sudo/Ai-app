@@ -7,7 +7,9 @@ export type AdminPermission =
   | 'dashboard:read' | 'usage:read' | 'system:read'
   | 'settings:read' | 'settings:manage'
   | 'subscriptions:read' | 'subscriptions:manage'
-  | 'notifications:broadcast' | 'staff:manage';
+  | 'notifications:broadcast' | 'staff:manage'
+  | 'ninerouter:read' | 'ninerouter:providers:manage' | 'ninerouter:routing:manage'
+  | 'ninerouter:security:manage' | 'ninerouter:dashboard:access';
 
 const ROOT_ROLES = new Set(['admin', 'superadmin']);
 
@@ -28,8 +30,10 @@ export function requiredAdminPermission(method: string, pathname: string): Admin
     return verb === 'GET' ? 'subscriptions:read' : 'subscriptions:manage';
   }
   if (pathname === '/api/admin/overview') return 'dashboard:read';
-  if (['/api/admin/requests','/api/admin/usage','/api/admin/errors','/api/admin/errors/export','/api/admin/9router/metrics'].includes(pathname)) return 'usage:read';
-  if (pathname === '/api/admin/9router/gateway') return verb === 'GET' ? 'settings:read' : 'settings:manage';
+  if (['/api/admin/requests','/api/admin/usage','/api/admin/errors','/api/admin/errors/export'].includes(pathname)) return 'usage:read';
+  if (pathname === '/api/admin/9router/metrics') return 'ninerouter:read';
+  if (pathname === '/api/admin/9router/gateway') return verb === 'GET' ? 'ninerouter:read' : 'ninerouter:security:manage';
+  if (pathname.startsWith('/api/admin/9router/')) return null;
   if (pathname === '/api/admin/audit') return 'audit:read';
   if (['/api/admin/security-events','/api/admin/sessions'].includes(pathname)) return 'security:read';
   if (pathname === '/api/admin/rate-limits') return verb === 'GET' ? 'security:read' : 'security:manage';

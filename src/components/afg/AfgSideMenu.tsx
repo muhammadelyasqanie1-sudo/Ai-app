@@ -16,10 +16,11 @@ interface AfgSideMenuProps {
   onNewChat: () => void;
   language: Language;
   user: UserProfile;
+  onOpenAdminPortal: () => void;
 }
 
 export const AfgSideMenu: React.FC<AfgSideMenuProps> = ({
-  isOpen, onClose, currentTab, onChangeTab, onNewChat, language, user,
+  isOpen, onClose, currentTab, onChangeTab, onNewChat, language, user, onOpenAdminPortal,
 }) => {
   const [toolsExpanded, setToolsExpanded] = useState(true);
   const [isMounted, setIsMounted] = useState(isOpen);
@@ -138,7 +139,14 @@ export const AfgSideMenu: React.FC<AfgSideMenuProps> = ({
             <div className="mb-2 mt-6 px-3 text-[10px] font-bold uppercase tracking-[.18em] text-slate-500">{dari ? 'حساب' : 'Account'}</div>
             <div className="space-y-1">
               {renderItem({ id: 'settings', label: t.navSettings, icon: Settings })}
-              {renderItem({ id: 'admin', label: t.navAdmin, icon: ShieldAlert })}
+              {['admin','superadmin'].includes(user.role || '') && (
+                <button type="button" onClick={() => { onOpenAdminPortal(); onClose(); }}
+                  className={itemClass(false)}>
+                  <ShieldAlert aria-hidden="true" size={18} className="text-cyan-300" />
+                  <span className="min-w-0 flex-1 truncate">{dari ? 'پنل مدیریت' : 'Admin portal'}</span>
+                  <span className="text-[9px] text-slate-500">9Router</span>
+                </button>
+              )}
             </div>
           </nav>
 

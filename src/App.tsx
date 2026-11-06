@@ -39,7 +39,6 @@ const LazyAfgVideoGenView = React.lazy(() => import('./components/afg/AfgVideoGe
 const LazyAfgToolsCenter = React.lazy(() => import('./components/afg/AfgToolsCenter').then((module) => ({ default: module.AfgToolsCenter })));
 const LazyAfgHistoryView = React.lazy(() => import('./components/afg/AfgHistoryView').then((module) => ({ default: module.AfgHistoryView })));
 const LazyAfgSettingsView = React.lazy(() => import('./components/afg/AfgSettingsView').then((module) => ({ default: module.AfgSettingsView })));
-const LazyAfgAdminPanel = React.lazy(() => import('./components/afg/AfgAdminPanel').then((module) => ({ default: module.AfgAdminPanel })));
 const LazyAfgTerminalView = React.lazy(() => import('./components/afg/AfgTerminalView').then((module) => ({ default: module.AfgTerminalView })));
 const LazyAfgOfflineView = React.lazy(() => import('./components/afg/AfgOfflineView').then((module) => ({ default: module.AfgOfflineView })));
 
@@ -288,6 +287,23 @@ export default function App() {
     } catch { console.error('AFG_AI_LOCAL_HISTORY_SAVE_FAILED'); }
   }, [messages, currentSessionId, user.email]);
 
+  const handleOpenAdminPortal = () => {
+    if (!['admin','superadmin'].includes(user.role || '')) return;
+    const portal = window.open('about:blank', '_blank');
+    if (!portal) return;
+    portal.opener = null;
+    portal.document.title = 'AFG AI Admin';
+    portal.document.body.textContent = language === 'dari' ? 'در حال بررسی دسترسی مدیریت…' : 'Verifying administrator access…';
+    fetch(API_BASE_URL + '/api/9router/status', { credentials: 'include', cache: 'no-store' })
+      .then(async (response) => {
+        const data = response.ok ? await response.json() : null;
+        const target = typeof data?.dashboardUrl === 'string' ? new URL(data.dashboardUrl) : null;
+        if (!target || target.protocol !== 'https:' || !data?.configured || !data?.reachable) throw new Error('9Router admin portal is unavailable.');
+        portal.location.replace(target.toString());
+      })
+      .catch(() => { try { portal.close(); } catch {} window.alert(language === 'dari' ? 'دسترسی به پنل مدیریت تأیید نشد.' : 'Administrator portal access could not be verified.'); });
+  };
+
   const handleSelectModel = (model: string) => {
     setSelectedModel(model);
     const selectedOption = modelOptions.find((item) => model === item.providerId + '::' + item.id);
@@ -317,7 +333,7 @@ export default function App() {
             wasAuthenticatedRef.current = true;
             setHasEnteredApp(true);
             localStorage.setItem('afg_entry_mode', 'account');
-            setUser({ name: data.user.displayName || 'User', nameEn: data.user.displayName || 'User', email: data.user.email || '', avatar: '', isPremium: false, tier: 'Free' });
+            setUser({ name: data.user.displayName || 'User', nameEn: data.user.displayName || 'User', email: data.user.email || '', avatar: '', isPremium: false, tier: 'Free', role: data.user.role || 'user' });
             fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const saved=prefs?.preferences; if(saved?.appearance&&['light','dark','neon','system'].includes(saved.appearance))setTheme(saved.appearance); if(localeChangedThisSession.current){const chosen=localStorage.getItem('afg_language')||'dari';const csrf=document.cookie.split('; ').find((item)=>item.startsWith('afg_csrf='))?.slice('afg_csrf='.length)||'';void fetch(API_BASE_URL+'/api/account/locale',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(csrf)},body:JSON.stringify({locale:chosen})}).catch(()=>console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));} document.documentElement.style.fontSize=String(saved?.font_size||14)+'px'; const accentMap:Record<string,string>={cyan:'#00e5ff',blue:'#3b82f6',violet:'#8b5cf6',emerald:'#10b981',rose:'#f43f5e'}; document.documentElement.style.setProperty('--accent-cyan',accentMap[saved?.accent_color]||accentMap.cyan); document.documentElement.dataset.afgDensity=saved?.density||'comfortable'; document.documentElement.dataset.afgChatWidth=saved?.chat_width||'comfortable'; document.documentElement.classList.toggle('afg-reduce-motion',saved?.animations_enabled===false); localStorage.setItem('afg_voice_enabled',String(saved?.voice_enabled!==false)); window.dispatchEvent(new Event('afg-voice-preference-change')); if(saved?.auto_select_model===false){setSelectedModel('auto');return;} const model=saved?.default_model; if(typeof model==='string'&&model)setSelectedModel(model); }).catch(() => {});
           } else {
             if (wasAuthenticatedRef.current) {
@@ -897,10 +913,6 @@ export default function App() {
             onOpenShortcuts={() => setIsShortcutsOpen(true)}
           />
         )}
-
-        {currentTab === 'admin' && (
-          <LazyAfgAdminPanel language={language} />
-        )}
         </React.Suspense>
         </ErrorBoundary>
       </main>
@@ -951,6 +963,7 @@ export default function App() {
         language={language}
         user={user}
         onNewChat={handleNewChat}
+        onOpenAdminPortal={handleOpenAdminPortal}
       />
 
       {/* Keyboard Shortcuts Modal */}
