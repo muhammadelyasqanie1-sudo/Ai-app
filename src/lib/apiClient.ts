@@ -7,6 +7,12 @@ export function apiUrl(path: string): string {
   return API_BASE_URL + (path.startsWith('/') ? path : '/' + path);
 }
 
+
+export function getCsrfToken(): string {
+  const cookie = document.cookie.split('; ').find((item) => item.startsWith('afg_csrf='))?.slice('afg_csrf='.length);
+  if (cookie) { try { return decodeURIComponent(cookie); } catch { return cookie; } }
+  return sessionStorage.getItem('afg_csrf_token') || '';
+}
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   if (init.body && !headers.has('Content-Type') && typeof init.body === 'string') {
