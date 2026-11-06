@@ -261,7 +261,7 @@ public class AFGOfflineModelsPlugin extends Plugin {
         String number = call.getString("phoneNumber", "").trim();
         if (number.isEmpty() || number.length() > 40) { call.reject("A valid phone number is required."); return; }
         try {
-            Intent dial = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number)));
+            Intent dial = new Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", number, null));
             dial.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             getContext().startActivity(dial);
             JSObject result = new JSObject(); result.put("confirmationOpened", true); call.resolve(result);
@@ -274,7 +274,7 @@ public class AFGOfflineModelsPlugin extends Plugin {
         String body = call.getString("message", "");
         if (number.isEmpty() || number.length() > 40 || body.length() > 5000) { call.reject("A valid phone number and message are required."); return; }
         try {
-            Intent sms = new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(number)));
+            Intent sms = new Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", number, null));
             sms.putExtra("sms_body", body);
             sms.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             getContext().startActivity(sms);
