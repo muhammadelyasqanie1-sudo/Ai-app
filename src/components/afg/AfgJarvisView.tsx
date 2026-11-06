@@ -28,6 +28,7 @@ export function AfgJarvisView({ language }: { language: Language }) {
   const [typedText, setTypedText] = useState('');
   const [speechState, setSpeechState] = useState('idle');
   const [transcript, setTranscript] = useState('');
+  const [localCommand, setLocalCommand] = useState('');
   const [speechError, setSpeechError] = useState('');
   const label = (en: string, fa: string) => dari ? fa : en;
   const card = 'rounded-2xl border border-cyan-400/20 bg-slate-950/50 p-4 shadow-[0_0_28px_rgba(6,182,212,.06)]';
@@ -56,6 +57,20 @@ export function AfgJarvisView({ language }: { language: Language }) {
     catch (e: any) { setError(e?.message || label('Command failed.', 'اجرای فرمان ناموفق بود.')); }
     finally { setBusy(''); }
   }
+  function confirmLocalCommand(raw: string) {
+    const parsed = parseJarvisCommand(raw);
+    if (parsed.kind === 'app') {
+      if (window.confirm(label('Open ' + parsed.label + '?', 'برنامه ' + parsed.label + ' باز شود؟'))) {
+        void run('voice-app', () => AFGJarvis.openApp({ packageName: parsed.packageName }));
+      }
+    } else if (parsed.kind === 'action') {
+      if (window.confirm(label('Run ' + parsed.action + '?', 'فرمان ' + parsed.action + ' اجرا شود؟'))) {
+        void run('voice-action', () => AFGJarvis.performAction({ action: parsed.action }));
+      }
+    } else {
+      setSpeechError(label('No safe local command matched. Try open Telegram, back, home, or a Dari/Pashto/Arabic phrase.', 'فرمان امن محلی شناخته نشد. نام تلگرام، بازگشت، خانه یا فرمان دری/پشتو/عربی را وارد کنید.'));
+    }
+  }
   return <main className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6" dir={dari ? 'rtl' : 'ltr'}>
     <header className="relative overflow-hidden rounded-3xl border border-cyan-400/25 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-5 sm:p-7">
       <div className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full bg-cyan-400/10 blur-3xl" />
@@ -74,23 +89,18 @@ export function AfgJarvisView({ language }: { language: Language }) {
         {transcript && <p className="mt-3 rounded-xl bg-black/30 p-3 text-sm text-white">{transcript}</p>}
         {speechError && <p role="alert" className="mt-2 text-sm text-rose-300">{speechError}</p>}
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <button className={button} disabled={!transcript.trim() || !!busy} onClick={() => {
-            const parsed = parseJarvisCommand(transcript);
-            if (parsed.kind === 'app') {
-              if (window.confirm(label('Open ' + parsed.label + '?', 'برنامه ' + parsed.label + ' باز شود؟'))) {
-                void run('voice-app', () => AFGJarvis.openApp({ packageName: parsed.packageName }));
-              }
-            } else if (parsed.kind === 'action') {
-              if (window.confirm(label('Run ' + parsed.action + '?', 'فرمان ' + parsed.action + ' اجرا شود؟'))) {
-                void run('voice-action', () => AFGJarvis.performAction({ action: parsed.action }));
-              }
-            } else {
-              setSpeechError(label('No safe local command matched. Try “open Telegram”, “back”, “home”, or a Dari/Pashto/Arabic phrase.', 'فرمان امن محلی شناخته نشد. نام تلگرام، بازگشت، خانه یا فرمان دری/پشتو/عربی را بگویید.'));
-            }
-          }}>{label('Confirm voice command', 'تأیید فرمان صوتی')}</button>
+          <button className={button} disabled={!transcript.trim() || !!busy} onClick={() => confirmLocalCommand(transcript)}>{label('Confirm voice command', 'تأیید فرمان صوتی')}</button>
           <button className={button} disabled={!transcript.trim() || !!busy} onClick={() => void run('speak', () => AFGJarvis.speak({ text: transcript, language: (dari ? 'fa-IR' : language === 'pashto' ? 'ps-AF' : language === 'arabic' ? 'ar' : 'en-US') as JarvisSpeechLanguage }))}>{label('Speak transcript', 'خواندن متن با صدا')}</button>
         </div>
         <p className="mt-3 text-xs text-slate-400">{label('Only listed app-launch and navigation phrases are mapped to actions, and every action requires your confirmation. Unknown speech is never executed as a command.', 'فقط عبارت‌های مشخص‌شده برای بازکردن برنامه و پیمایش به فرمان تبدیل می‌شوند و هر فرمان نیازمند تأیید شماست. گفتار ناشناخته هرگز خودکار اجرا نمی‌شود.')}</p>
+        <div className="mt-4 rounded-xl border border-violet-400/20 bg-violet-400/5 p-3">
+          <p className="text-sm font-semibold text-violet-200">{label('Offline text command', 'فرمان متنی آفلاین')}</p>
+          <p className="mt-1 text-xs text-slate-400">{label('Type a supported phrase. Matching runs on this device without an AI or network request.', 'یک عبارت پشتیبانی‌شده بنویسید. تشخیص فرمان روی همین دستگاه و بدون درخواست هوش مصنوعی یا اینترنت انجام می‌شود.')}</p>
+          <form className="mt-3 flex gap-2" onSubmit={event => { event.preventDefault(); if (localCommand.trim()) confirmLocalCommand(localCommand); }}>
+            <input value={localCommand} onChange={event => setLocalCommand(event.target.value)} maxLength={120} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-sm text-white" placeholder={label('e.g. open Telegram / باز کن تلگرام', 'مثلاً باز کن تلگرام / کورپاڼه')} />
+            <button className={button} disabled={!localCommand.trim() || !!busy}>{label('Run', 'اجرا')}</button>
+          </form>
+        </div>
       </section>
       <section className={card}>
         <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-bold text-white">{label('Permission status', 'وضعیت دسترسی')}</h2><button className={button} onClick={() => void refresh()}>{label('Refresh', 'تازه‌سازی')}</button></div>
