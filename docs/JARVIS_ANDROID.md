@@ -62,6 +62,21 @@ JARVIS currently has a small deterministic offline command parser only. It does 
 
 The current command parser is deterministic phrase matching and works offline; it is not Needle. The upstream Cactus project now hosts Needle 3 and the legacy 14 MB Needle 2 runtime separately. A production Android integration must bundle or provision a verified Android ABI engine and model asset, verify its Apache-2.0 licensing/redistribution terms and memory use on the target phone, and expose only the same permission-gated tools through a constrained function-call schema. This PR does not claim that a generative Needle model is bundled or that Telegram remote control works without internet.
 
+## Local GGUF command understanding
+
+JARVIS can reuse a GGUF file that the user has already downloaded in the **Offline AI Hub**:
+
+1. In Offline AI Hub, choose a GGUF model that fits the phone and wait until the download is complete.
+2. The JARVIS panel lists only installed models whose SHA-256 digest was supplied and successfully verified.
+3. Load the selected model. JARVIS uses a conservative 1,024-token context and two CPU threads, then translates a Dari/Pashto/English request into one exact command from the existing allowlist.
+4. The deterministic command parser validates the proposed command. The user must review and confirm it before any Android action runs. Unknown, malformed or unsupported model output is rejected.
+
+The existing Capacitor offline-model plugin builds a CPU llama.cpp JNI runtime for Android **arm64-v8a**. The Android offline build workflow installs the configured Android NDK/CMake toolchain and builds the native library from its pinned llama.cpp source revision. No separate runtime dependency or provider key is required. The model weights remain a separate user-selected download and are not included in the APK.
+
+This is a constrained intent router, not unrestricted autonomous phone control and not a general JARVIS conversation model. Inference runs locally after the model is loaded. Model loading and speed depend on free RAM, model architecture and quantization; low-memory phones may fail to load larger models. Only one native GGUF model can be loaded by this shared plugin at a time.
+
+Needle 3 is **not** installed by this integration. Its `.cact` weights and Cactus engine are separate from llama.cpp/GGUF and require a distinct Android native runtime package.
+
 ## Security and platform boundaries
 
 - This is a guided control bridge, not an autonomous agent. It does not independently decide what to click or type.
@@ -70,7 +85,7 @@ The current command parser is deterministic phrase matching and works offline; i
 - Android and individual apps can block or constrain automation. The service cannot grant itself accessibility permission.
 - The app requests microphone, camera (torch only), location, contacts and SMS permissions only when the user invokes the related feature. It does not request overlay, notification-listener or device-admin privileges.
 - Fully offline speech-to-text is not implemented: Android SpeechRecognizer may still require network access. The local command parser includes Afghan Dari wording (including common `را`/`ره` command forms) and works offline only after speech has been transcribed; it is not a replacement speech model.
-- A bundled local generative model (including Needle), a persistent floating bubble, hand-gesture recognition, flight radar, and anti-theft/lockout features are not implemented in this increment. Do not present them as available.
+- JARVIS can optionally use the existing Android llama.cpp runtime with a locally downloaded, SHA-256-verified GGUF model for constrained multilingual command understanding. It does not bundle model weights or download them automatically. Needle 3/Cactus uses a different `.cact` format/runtime and is not integrated. A persistent floating bubble, hand-gesture recognition, flight radar, and anti-theft/lockout features are not implemented.
 - The Android app must be rebuilt for the native plugin to be packaged. A web-only deployment cannot control the phone.
 - Google Play distribution of accessibility-based automation is subject to Play policy and review; sideloading does not remove Android's own permission and security boundaries.
 
