@@ -21,14 +21,14 @@ export async function runExplicitDeviceCommand(input: string): Promise<DeviceToo
       (battery.temperatureC >= 0 ? '. Temperature: ' + battery.temperatureC.toFixed(1) + '°C.' : '.') };
   }
 
-  const appMatch = lower.match(/\b(open|launch|start)\s+(youtube|maps|chrome|settings|camera)\b/) ||
-    text.match(/(باز کن|اجرا کن|بازکردن)\s*(یوتیوب|نقشه|کروم|تنظیمات|دوربین)/i);
+  const appMatch = lower.match(/\b(open|launch|start)\s+(youtube|maps|chrome|settings|camera|telegram|whatsapp)\b/) ||
+    text.match(/(باز کن|اجرا کن|بازکردن)\s*(یوتیوب|نقشه|کروم|تنظیمات|دوربین|تلگرام|واتساپ|واتس‌اپ)/i);
   if (appMatch) {
     const raw = (appMatch[2] || '').toLowerCase();
-    const appMap: Record<string, 'youtube' | 'maps' | 'chrome' | 'settings' | 'camera'> = {
+    const appMap: Record<string, 'youtube' | 'maps' | 'chrome' | 'settings' | 'camera' | 'telegram' | 'whatsapp'> = {
       youtube: 'youtube', 'یوتیوب': 'youtube', maps: 'maps', 'نقشه': 'maps',
       chrome: 'chrome', 'کروم': 'chrome', settings: 'settings', 'تنظیمات': 'settings',
-      camera: 'camera', 'دوربین': 'camera',
+      camera: 'camera', 'دوربین': 'camera', telegram: 'telegram', 'تلگرام': 'telegram', whatsapp: 'whatsapp', 'واتساپ': 'whatsapp', 'واتس‌اپ': 'whatsapp',
     };
     const app = appMap[raw];
     if (!app) return { handled: false };
