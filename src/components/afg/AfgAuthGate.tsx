@@ -78,11 +78,13 @@ export const AfgAuthGate: React.FC<Props> = ({ language, onContinueGuest, onAuth
     try { if (Capacitor.isNativePlatform()) await Browser.open({ url }); else window.location.assign(url); }
     catch { setError(t.error); }
   };
-  const csrf = () => decodeURIComponent(document.cookie.split('; ').find(v=>v.startsWith('afg_csrf='))?.slice(9) || '');
+  const csrf = () => decodeURIComponent(document.cookie.split('; ').find(v=>v.startsWith('afg_csrf='))?.slice(9) || sessionStorage.getItem('afg_csrf_token') || '');
   const post = async (path:string, body:Record<string,string>) => {
-    await fetch('/api/auth/providers',{credentials:'include'});
+    const providerResponse=await fetch(apiUrl('/api/auth/providers'),{credentials:'include'});
+    const providerPayload=await providerResponse.json().catch(()=>({}));
+    if(typeof providerPayload.csrfToken==='string') sessionStorage.setItem('afg_csrf_token',providerPayload.csrfToken);
     const token=csrf();
-    const response=await fetch(path,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',...(token?{'X-CSRF-Token':token}:{})},body:JSON.stringify(body)});
+    const response=await fetch(apiUrl(path),{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',...(token?{'X-CSRF-Token':token}:{})},body:JSON.stringify(body)});
     const payload=await response.json().catch(()=>({}));
     if(!response.ok) throw new Error(typeof payload.error==='string'?payload.error:t.error);
     return payload;
