@@ -210,35 +210,38 @@ async function getStoredModels(providerId: string, forceDisabled = false): Promi
 async function syncDiscoveredModels(provider: ChatProviderAdapter, models: ModelDescriptor[]): Promise<Map<string, boolean>> {
   if (!pool) return new Map(models.map((model) => [model.id, model.enabled]));
   try {
-  for (const model of models) {
-    await pool.query(
-      `INSERT INTO model_catalog
-        (provider_key, model_key, display_name, capabilities, enabled, context_window)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (provider_key, model_key) DO UPDATE SET
-         display_name = EXCLUDED.display_name,
-         capabilities = COALESCE(model_catalog.capabilities_override, EXCLUDED.capabilities),
-         context_window = EXCLUDED.context_window,
-         -- Preserve an administrator's existing enabled/disabled choice on catalogue refresh.
-         -- New rows inherit the provider-specific bootstrap decision from INSERT.
-         updated_at = now()`,
-      [provider.id, model.id, model.displayName,
-        Object.entries(model.capabilities).filter(([, enabled]) => enabled).map(([key]) => key),
-        // Show every discovered 9Router model in the chat model picker by default.
-        // Existing admin choices are preserved by the UPSERT above; new rows are enabled.
-        provider.id === '9router' ||
-        // 9Router catalogue entries are selectable after the health probe; other models
-        // are enabled only when explicitly identified as free by upstream metadata.
-        model.id.toLowerCase().endsWith('-free') ||
+    // Batch catalogue upserts. 9Router can expose thousands of model IDs; one SQL
+    // round-trip per model made the first catalogue refresh unnecessarily slow.
+    for (let offset = 0; offset < models.length; offset += 200) {
+      const batch = models.slice(offset, offset + 200).map((model) => ({
+        model_key: model.id,
+        display_name: model.displayName,
+        capabilities: Object.entries(model.capabilities).filter(([, enabled]) => enabled).map(([key]) => key),
+        enabled: provider.id === '9router' ||
+          model.id.toLowerCase().endsWith('-free') ||
           (model.pricing?.inputPerMillion === 0 && model.pricing?.outputPerMillion === 0),
-        model.contextWindow],
+        context_window: model.contextWindow,
+      }));
+      await pool.query(
+        `INSERT INTO model_catalog
+          (provider_key, model_key, display_name, capabilities, enabled, context_window)
+         SELECT $1, rows.model_key, rows.display_name, rows.capabilities, rows.enabled, rows.context_window
+           FROM jsonb_to_recordset($2::jsonb) AS rows(
+             model_key text, display_name text, capabilities text[], enabled boolean, context_window integer
+           )
+         ON CONFLICT (provider_key, model_key) DO UPDATE SET
+           display_name = EXCLUDED.display_name,
+           capabilities = COALESCE(model_catalog.capabilities_override, EXCLUDED.capabilities),
+           context_window = EXCLUDED.context_window,
+           updated_at = now()`,
+        [provider.id, JSON.stringify(batch)],
+      );
+    }
+    const result = await pool.query(
+      'SELECT model_key, enabled FROM model_catalog WHERE provider_key = $1',
+      [provider.id],
     );
-  }
-  const result = await pool.query(
-    'SELECT model_key, enabled FROM model_catalog WHERE provider_key = $1',
-    [provider.id],
-  );
-  return new Map(result.rows.map((row) => [row.model_key, Boolean(row.enabled)]));
+    return new Map(result.rows.map((row) => [row.model_key, Boolean(row.enabled)]));
   } catch (error) {
     console.warn('AI_PROVIDER_MODEL_DB_UNAVAILABLE', JSON.stringify({ provider: provider.id, error: error instanceof Error ? error.message : 'unknown_error' }));
     return new Map(models.map((model) => [model.id, model.enabled]));
@@ -246,6 +249,10 @@ async function syncDiscoveredModels(provider: ChatProviderAdapter, models: Model
 }
 
 async function verifyModel(provider: ChatProviderAdapter, model: ModelDescriptor): Promise<ModelDescriptor> {
+  // 9Router uses catalogue-only verification (no paid inference probe). The model
+  // was just returned by the live catalogue request, so repeating /models once per
+  // model is redundant and can issue thousands of identical upstream requests.
+  if (provider.id === '9router') return { ...model, verifiedAt: new Date().toISOString() };
   const cacheKey = `${provider.id}:${model.id}`;
   const cached = healthCache.get(cacheKey);
   const isRecent = cached && Date.now() - Date.parse(cached.checkedAt) <= HEALTH_TTL_MS;
