@@ -4,6 +4,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { handleApiRequest } from './src/api/http.ts';
 import { installConsoleSecretRedaction } from './src/security/redaction.ts';
+import { pool } from './src/api/database.ts';
+import { syncPublicApiCatalog } from './src/services/publicApiCatalog.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -70,6 +72,28 @@ app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
+async function bootstrapPublicApiCatalog() {
+  if (!pool) {
+    console.warn('AFG_PUBLIC_API_CATALOG_BOOTSTRAP_SKIPPED', JSON.stringify({ reason: 'database_unavailable' }));
+    return;
+  }
+  try {
+    const existing = await pool.query('SELECT count(*)::int AS total FROM public_api_catalog WHERE is_active=true');
+    const total = Number(existing.rows[0]?.total || 0);
+    if (total > 0) {
+      console.info('AFG_PUBLIC_API_CATALOG_BOOTSTRAP_SKIPPED', JSON.stringify({ reason: 'catalog_already_populated', total }));
+      return;
+    }
+    const result = await syncPublicApiCatalog();
+    console.info('AFG_PUBLIC_API_CATALOG_BOOTSTRAP_COMPLETED', JSON.stringify(result));
+  } catch (error) {
+    console.warn('AFG_PUBLIC_API_CATALOG_BOOTSTRAP_FAILED', JSON.stringify({
+      error: error instanceof Error ? error.message.slice(0, 300) : 'unknown_error',
+    }));
+  }
+}
+
 app.listen(PORT, () => {
   console.info('SERVER_LISTENING', JSON.stringify({ port: PORT, service: 'afg-ai-api' }));
+  void bootstrapPublicApiCatalog();
 });
