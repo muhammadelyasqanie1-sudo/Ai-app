@@ -133,3 +133,10 @@ This contract was checked against the upstream source tree; before implementatio
 3. Move each supported AFG AI management domain to 9Router-backed data and actions, keeping Resend in AFG AI and preserving the existing APInex/Tavily connections until verified.
 4. Add a root-admin-only onboarding/configuration path for the dashboard password and staff access grants; never put credentials in a URL.
 5. Run the full role, bypass, session-revocation and provider-cutover validation matrix after explicit approval.
+
+
+### UI cleanup follow-up (2026-11-06)
+
+- Removed the unused legacy in-app admin panel and its panel-only client components from the AFG AI source tree.
+- The AFG AI account menu continues to open the separate 9Router browser dashboard only for `admin` and `superadmin` accounts, after the server-side status check confirms the configured HTTPS dashboard URL is reachable.
+- This is a UI cutover only. The AFG AI admin API, database tables, terminal worker, and management data remain in place until each corresponding capability has a verified replacement in 9Router. Do not claim full domain migration or delete those APIs yet.
