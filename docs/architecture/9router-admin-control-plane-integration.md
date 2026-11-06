@@ -140,3 +140,21 @@ This contract was checked against the upstream source tree; before implementatio
 - Removed the unused legacy in-app admin panel and its panel-only client components from the AFG AI source tree.
 - The AFG AI account menu continues to open the separate 9Router browser dashboard only for `admin` and `superadmin` accounts, after the server-side status check confirms the configured HTTPS dashboard URL is reachable.
 - This is a UI cutover only. The AFG AI admin API, database tables, terminal worker, and management data remain in place until each corresponding capability has a verified replacement in 9Router. Do not claim full domain migration or delete those APIs yet.
+
+
+### 9Router Management Center integration status (2026-11-06)
+
+- 9Router now contains a permission-aware management landing page at `/dashboard/admin`.
+- The 9Router sidebar exposes **AFG AI Control Plane** to the owner superadmin and control-plane users who have dashboard access.
+- The landing page links to provider connections, routing/model aliases, API endpoints and keys, usage analytics, quota tracking, proxy pools, system tools, PXPipe, media providers, translation, and application settings. Visible sections are filtered by the current account's effective role/scopes; server-side route authorization remains authoritative.
+- The owner-only staff and audit controls remain at `/dashboard/admin/users`.
+- 9Router audit logging now covers provider connections, provider nodes, proxy pools, API keys, global settings, routing combo/model-alias changes, Headroom lifecycle actions, and PXPipe lifecycle actions. Secret values, API keys, cookies, proxy URLs, and command output are excluded from the new audit metadata.
+- PRs 5–9 in `muhammadelyasqanie1-sudo/9router` are merged. The legacy AFG AI panel UI cleanup is merged as PR 96 in this repository.
+- The AFG AI menu still opens the separate 9Router dashboard URL after its server-side HTTPS/reachability check; users then authenticate with the 9Router browser login and open the AFG AI Control Plane section.
+
+### Remaining migration boundary
+
+- This is not yet a complete migration of AFG AI's own user/subscription database, feature flags, announcement system, error telemetry, and all AFG AI-specific configuration APIs.
+- AFG AI's server-side admin API and data tables remain intentionally intact until each domain has a verified replacement or a secure service-to-service bridge in 9Router.
+- The new 9Router management UI and audit changes have not been deployed to the live Railway Docker-image service. No live environment variables, service image, or persistent volume were changed.
+- Before claiming production cutover, enable `AFG_AI_CONTROL_PLANE=true` on the intended 9Router deployment, configure the owner login path, and verify browser login, staff scopes, direct-origin protection, and all API permissions against the actual deployed image.
