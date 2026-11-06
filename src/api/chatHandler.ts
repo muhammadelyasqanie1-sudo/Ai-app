@@ -446,6 +446,27 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: prepared.modelId })}\n\n`);
 
     let emittedContent = false;
+    const emitToolActivity = (callName:string,args:unknown,status:'running'|'completed'|'failed') => {
+      const input = args && typeof args === 'object' ? args as Record<string,unknown> : {};
+      const safeUrl = (value:unknown):string|undefined => {
+        if (typeof value !== 'string' || value.length > 2048) return undefined;
+        try { const parsed = new URL(value); if (!['http:','https:'].includes(parsed.protocol)) return undefined; return parsed.origin + parsed.pathname; } catch { return undefined; }
+      };
+      const findUrl = (value:unknown,depth=0):string|undefined => {
+        if (depth>3 || value===null || value===undefined) return undefined;
+        if (typeof value==='string') return safeUrl(value);
+        if (Array.isArray(value)) { for(const item of value.slice(0,10)){const found=findUrl(item,depth+1);if(found)return found;} }
+        else if(typeof value==='object'){for(const [key,item] of Object.entries(value as Record<string,unknown>).slice(0,20)){if(/url|uri|website|site|link/i.test(key)){const found=safeUrl(item);if(found)return found;}const found=findUrl(item,depth+1);if(found)return found;}}
+        return undefined;
+      };
+      const github = callName.startsWith('github_');
+      const repo = github && typeof input.owner==='string' && typeof input.repo==='string' ? (input.owner+'/'+input.repo).replace(/[^a-zA-Z0-9_.\/-]/g,'').slice(0,180) : undefined;
+      const url = findUrl(input);
+      const labels:Record<string,string> = {github_list_repositories:'فهرست مخزن‌های GitHub',github_get_repository:'بررسی مخزن GitHub',github_list_branches:'بررسی شاخه‌های مخزن',github_get_file:'خواندن فایل مخزن',github_search_code:'جست‌وجوی کد در GitHub',github_create_branch:'ساخت شاخه کاری',github_update_file:'به‌روزرسانی فایل در GitHub',github_create_pull_request:'ایجاد درخواست ادغام'};
+      const label = github ? (labels[callName] || 'فعالیت در GitHub') : callName.startsWith('mcp_') ? 'اجرای ابزار اتصال خارجی' : 'اجرای ابزار API';
+      const detail = repo || (url ? new URL(url).hostname : undefined);
+      if (!res.writableEnded && !res.destroyed) res.write(`data: ${JSON.stringify({type:'activity',id:randomUUID(),name:callName,label,detail,url,status,timestamp:Date.now()})}\\n\\n`);
+    };
     heartbeat = setInterval(() => {
       if (!res.writableEnded && !res.destroyed) res.write(': heartbeat\n\n');
     }, 15_000);
@@ -487,6 +508,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
           let args:unknown;
           try { args=JSON.parse(call.function.arguments||'{}'); }
           catch { toolMessages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:JSON.stringify({error:'The model supplied invalid JSON arguments.'})});continue; }
+          emitToolActivity(call.function.name,args,'running');
           try {
             const result=call.function.name.startsWith('mcp_')
               ? await executeRemoteMcpTool(requestUserId,call.function.name,args)
@@ -496,10 +518,12 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
             const serialized=JSON.stringify(result);
             toolMessages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:serialized.slice(0,16_000)});
             estimatedInputTokens+=Math.ceil(serialized.length/4);
+            emitToolActivity(call.function.name,args,'completed');
             res.write(`data: ${JSON.stringify({type:'tool_status',name:call.function.name,status:'completed'})}\n\n`);
           } catch(error) {
             const message=error instanceof Error?error.message.slice(0,300):'API tool failed.';
             toolMessages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:JSON.stringify({error:message})});
+            emitToolActivity(call.function.name,args,'failed');
             res.write(`data: ${JSON.stringify({type:'tool_status',name:call.function.name,status:'failed'})}\n\n`);
           }
         }
