@@ -1,0 +1,7 @@
+{
+  "name": "@afg-ai/capacitor-auth-deeplink",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Android intent filter for AFG AI Google OAuth return links",
+  "capacitor": { "android": { "src": "android" } }
+}
