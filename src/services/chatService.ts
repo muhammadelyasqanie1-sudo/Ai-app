@@ -190,8 +190,8 @@ async function* reliableStream(candidates: ModelDescriptor[], input: ChatInput):
         }
         // Never replay a partially delivered answer: it would duplicate text in the UI.
         if (emitted || input.signal?.aborted) throw error;
-        // APInex's adapter already tried each configured account key once. Retrying
-        // the whole adapter loop would multiply 429s and 402s without restoring quota.
+        // APInex shares balance and RPM across keys on one account. Retrying
+        // the adapter after 402/429 only repeats the same account-level failure.
         if (candidate.providerId === 'apinex' && error instanceof ProviderAdapterError &&
             [402, 429].includes(error.status)) break;
         const retryable = !(error instanceof ProviderAdapterError) ||
