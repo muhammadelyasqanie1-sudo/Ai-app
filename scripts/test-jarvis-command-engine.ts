@@ -44,4 +44,4 @@ assert.equal(extractJarvisNeedleCommand(JSON.stringify({ confidence: 0.99, funct
 assert.equal(extractJarvisNeedleCommand(JSON.stringify({ confidence: 0.99, function_calls: [{ name: 'other_tool', arguments: { command: 'open Telegram' } }] })), null);
 assert.equal(extractJarvisNeedleCommand(JSON.stringify({ confidence: 0.99, function_calls: [{ name: 'jarvis_command', arguments: { command: 'open Telegram' } }, { name: 'jarvis_command', arguments: { command: 'back' } }] })), null);
 assert.equal(extractJarvisNeedleCommand('{not json'), null);
-process.stdout.write(`JARVIS parser and local model guards: ${cases.length + 21} checks passed.\n`);
+process.stdout.write(`JARVIS parser and local model guards passed.\n`);
