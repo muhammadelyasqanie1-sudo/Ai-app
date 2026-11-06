@@ -734,12 +734,34 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    if(destination){res.writeHead(302,{Location:destination,'Cache-Control':'no-store'});res.end();}else sendAuthJson(res,400,{error:error instanceof Error?error.message:'OAuth callback failed.'});return true;
   }
  }
- if(!pathname.startsWith('/api/api-hub/connectors'))return false;
+ if(!pathname.startsWith('/api/api-hub/connectors')&&pathname!=='/api/api-hub/usage')return false;
  if(!pool){sendAuthJson(res,503,{error:'API connectors require PostgreSQL and migrations 0014, 0023 and 0027; key vault and OAuth features also require 0028 and 0029.'});return true;}
  const user=await authenticateRequest(req).catch(()=>null);
  if(!user){sendAuthJson(res,401,{error:'Sign in is required.'});return true;}
  if(req.method!=='GET'&&!verifyCsrf(req)){sendAuthJson(res,403,{error:'CSRF validation failed.'});return true;}
  try{
+  if(req.method==='GET'&&pathname==='/api/api-hub/usage'){
+   const summary=await pool.query(`SELECT count(*)::int AS total_requests,
+    count(*) FILTER(WHERE outcome='success')::int AS successful_requests,
+    count(*) FILTER(WHERE outcome<>'success')::int AS failed_requests,
+    round(avg(duration_ms))::int AS average_duration_ms,
+    count(*) FILTER(WHERE created_at>=now()-interval '24 hours')::int AS requests_24h,
+    count(*) FILTER(WHERE created_at>=now()-interval '30 days')::int AS requests_30d
+    FROM user_api_connector_runs WHERE user_id=$1 AND created_at>=now()-interval '30 days'`,[user.id]);
+   const byConnector=await pool.query(`SELECT c.id,c.name,count(r.id)::int AS requests,
+    count(r.id) FILTER(WHERE r.outcome='success')::int AS successful,
+    count(r.id) FILTER(WHERE r.outcome<>'success')::int AS failed,
+    round(avg(r.duration_ms))::int AS average_duration_ms,max(r.created_at) AS last_used_at
+    FROM user_api_connectors c LEFT JOIN user_api_connector_runs r ON r.connector_id=c.id AND r.user_id=c.user_id AND r.created_at>=now()-interval '30 days'
+    WHERE c.user_id=$1 GROUP BY c.id,c.name ORDER BY requests DESC,c.name ASC`,[user.id]);
+   const keyLifecycle=await pool.query(`SELECT count(*)::int AS total,
+    count(*) FILTER(WHERE lifecycle_state='waiting')::int AS waiting,
+    count(*) FILTER(WHERE lifecycle_state='expired')::int AS expired,
+    count(*) FILTER(WHERE lifecycle_state='revoked')::int AS revoked,
+    count(*) FILTER(WHERE renewal_due_at IS NOT NULL AND renewal_due_at<=now() AND lifecycle_state IN ('waiting','expired'))::int AS renewal_due
+    FROM user_api_connector_keys WHERE user_id=$1`,[user.id]);
+   sendAuthJson(res,200,{periodDays:30,summary:summary.rows[0],connectors:byConnector.rows,keyLifecycle:keyLifecycle.rows[0],costTracking:'not_available_without_provider_reported_costs'});return true;
+  }
   if(req.method==='GET'&&pathname==='/api/api-hub/connectors/queue'){
    await refreshDueQueueEntries(user.id);
    const result=await pool.query("SELECT id,name,status,enabled,queue_state,next_available_at,fallback_group,fallback_priority,last_quota_status,last_quota_reset_at,last_http_status,updated_at FROM user_api_connectors WHERE user_id=$1 ORDER BY CASE WHEN queue_state='ready' THEN 0 ELSE 1 END,CASE WHEN queue_state='waiting' THEN next_available_at END ASC NULLS LAST,fallback_priority ASC,updated_at ASC",[user.id]);
@@ -823,9 +845,9 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
      WHERE id=$1 AND user_id=$2 AND credential_encrypted IS NOT NULL
       AND NOT EXISTS(SELECT 1 FROM user_api_connector_keys WHERE connector_id=$1)
      ON CONFLICT(connector_id,label) DO NOTHING`,[connector.id,user.id]);
-    const result=await pool.query(`SELECT id,label,priority,is_active,queue_state,next_available_at,last_quota_status,last_quota_observed_at,last_error,created_at,updated_at
+    const result=await pool.query(`SELECT id,label,priority,is_active,queue_state,next_available_at,last_quota_status,last_quota_observed_at,lifecycle_state,expires_at,renewal_due_at,last_used_at,last_error,last_status_code,created_at,updated_at
      FROM user_api_connector_keys WHERE connector_id=$1 AND user_id=$2 ORDER BY priority ASC,created_at ASC`,[connector.id,user.id]);
-    sendAuthJson(res,200,{keys:result.rows.map((key:any)=>({id:key.id,label:key.label,priority:Number(key.priority),active:Boolean(key.is_active),queueState:key.queue_state||'ready',nextAvailableAt:key.next_available_at||null,lastQuotaStatus:key.last_quota_status||null,lastQuotaObservedAt:key.last_quota_observed_at||null,lastError:key.last_error||null,createdAt:key.created_at,updatedAt:key.updated_at}))});return true;
+    sendAuthJson(res,200,{keys:result.rows.map((key:any)=>({id:key.id,label:key.label,priority:Number(key.priority),active:Boolean(key.is_active),queueState:key.queue_state||'ready',nextAvailableAt:key.next_available_at||null,lastQuotaStatus:key.last_quota_status||null,lastQuotaObservedAt:key.last_quota_observed_at||null,lifecycleState:key.lifecycle_state||'active',expiresAt:key.expires_at||null,renewalDueAt:key.renewal_due_at||null,lastUsedAt:key.last_used_at||null,lastError:key.last_error||null,lastStatusCode:key.last_status_code||null,createdAt:key.created_at,updatedAt:key.updated_at}))});return true;
    }
    if(req.method==='POST'){
     const body=await readJsonBody(req,12_000);
@@ -842,6 +864,34 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    }
    sendAuthJson(res,405,{error:'Method not allowed.'});return true;
   }
+  const keyLifecycleMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/keys\/([0-9a-f-]{36})\/lifecycle$/i);
+  if(keyLifecycleMatch&&req.method==='POST'){
+   const connector=await ownerConnector(user.id,keyLifecycleMatch[1]);
+   if(!connector){sendAuthJson(res,404,{error:'API connector not found.'});return true;}
+   const keyResult=await pool.query('SELECT * FROM user_api_connector_keys WHERE id=$1 AND connector_id=$2 AND user_id=$3 LIMIT 1',[keyLifecycleMatch[2],connector.id,user.id]);
+   const key=keyResult.rows[0];if(!key){sendAuthJson(res,404,{error:'API key not found.'});return true;}
+   const body=await readJsonBody(req,3000),state=String(body.state||'waiting');
+   const expiresAt=body.expiresAt?new Date(String(body.expiresAt)):null;
+   const renewalDueAt=body.renewalDueAt?new Date(String(body.renewalDueAt)):null;
+   if(!['active','waiting','expired','revoked'].includes(state)||(body.expiresAt&&(!expiresAt||!Number.isFinite(expiresAt.getTime())))||(body.renewalDueAt&&(!renewalDueAt||!Number.isFinite(renewalDueAt.getTime())))){
+    sendAuthJson(res,400,{error:'Invalid key lifecycle state or date.'});return true;
+   }
+   const currentState=String(key.lifecycle_state||'active');
+   if(['waiting','expired','revoked'].includes(currentState)&&state==='active'){
+    sendAuthJson(res,409,{error:'A retained, expired or revoked key cannot be reactivated. Add a new provider-issued key, verify it, then activate it.'});return true;
+   }
+   if(state==='revoked'&&key.is_active){
+    sendAuthJson(res,409,{error:'Select and verify another key before revoking the active key.'});return true;
+   }
+   await pool.query('UPDATE user_api_connector_keys SET lifecycle_state=$4,expires_at=$5,renewal_due_at=$6,updated_at=now() WHERE id=$1 AND connector_id=$2 AND user_id=$3',[key.id,connector.id,user.id,state,expiresAt,renewalDueAt]);
+   if(['waiting','expired','revoked'].includes(state)){
+    if(key.is_active)await pool.query("UPDATE user_api_connector_keys SET is_active=false,queue_state='needs_review',updated_at=now() WHERE id=$1",[key.id]);
+    else await pool.query("UPDATE user_api_connector_keys SET queue_state='needs_review',updated_at=now() WHERE id=$1",[key.id]);
+    await pool.query("UPDATE user_api_connectors SET enabled=false,status='error',last_error='Credential is waiting for renewal or replacement; key retained.',updated_at=now() WHERE id=$1 AND user_id=$2",[connector.id,user.id]);
+   }
+   await audit(user.id,'api.connector.key_lifecycle',connector.id,{keyId:key.id,state,expiresAt:expiresAt?.toISOString()||null,renewalDueAt:renewalDueAt?.toISOString()||null});
+   sendAuthJson(res,200,{updated:true,keyId:key.id,state,expiresAt:expiresAt?.toISOString()||null,renewalDueAt:renewalDueAt?.toISOString()||null,retained:true});return true;
+  }
   const keyActionMatch=pathname.match(/^\/api\/api-hub\/connectors\/([0-9a-f-]{36})\/keys\/([0-9a-f-]{36})\/(activate|delete)$/i);
   if(keyActionMatch&&(req.method==='POST'||req.method==='DELETE')){
    const connector=await ownerConnector(user.id,keyActionMatch[1]);
@@ -850,6 +900,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
    const keyResult=await pool.query('SELECT * FROM user_api_connector_keys WHERE id=$1 AND connector_id=$2 AND user_id=$3 LIMIT 1',[keyId,connector.id,user.id]);
    const key=keyResult.rows[0];if(!key){sendAuthJson(res,404,{error:'API key not found.'});return true;}
    if(action==='activate'&&req.method==='POST'){
+    if(['waiting','expired','revoked'].includes(String(key.lifecycle_state||'active'))){sendAuthJson(res,409,{error:'This retained or expired API key cannot be reactivated. Add a renewed provider-issued key as a new entry, verify it, then activate it.'});return true;}
     if(connector.auth_type==='none'){sendAuthJson(res,409,{error:'This connector does not use API credentials.'});return true;}
     await pool.query(`UPDATE user_api_connectors SET credential_encrypted=$3,enabled=false,status='error',
      queue_state='ready',next_available_at=NULL,last_error='API key changed; verify the connector before enabling it.',updated_at=now()
@@ -860,6 +911,7 @@ export async function handleUserApiConnectorApi(req:IncomingMessage,res:ServerRe
     sendAuthJson(res,200,{activated:true,verified:false,enabled:false,requiresVerification:true});return true;
    }
    if(action==='delete'&&(req.method==='DELETE'||req.method==='POST')){
+    if(key.lifecycle_state==='waiting'||key.lifecycle_state==='expired'){sendAuthJson(res,409,{error:'Renewal-waiting and expired API keys are retained and cannot be deleted.'});return true;}
     if(key.is_active){sendAuthJson(res,409,{error:'Select another key before deleting the active key.'});return true;}
     await pool.query('DELETE FROM user_api_connector_keys WHERE id=$1 AND connector_id=$2 AND user_id=$3',[key.id,connector.id,user.id]);
     await audit(user.id,'api.connector.key_deleted',connector.id,{keyId:key.id,label:key.label});

@@ -71,3 +71,8 @@ Migration `0032_api_connector_health_monitor.sql` adds opt-in monitoring fields 
 ## Retained API credential rotation queue
 
 Migration `0033_api_connector_key_queue.sql` adds queue state, observed quota metadata, and last-use timestamps to saved connector keys. On an actual upstream HTTP 402/429 response, the current key is retained and moved to `waiting`; the next ready key is selected by priority and creation order. If no key is ready, the connector waits rather than deleting credentials or guessing a monthly reset date. When a valid upstream reset time was observed, the waiting key can become eligible at that time; unknown reset times require owner action. A newly selected key is not considered verified by virtue of selection: the connector remains disabled for an explicit health/verification step when the queue had been exhausted. Apply after migration 0032 with `npm run db:migrate`.
+
+
+## API key renewal lifecycle and usage reporting
+
+Migration `0034_api_key_lifecycle_usage_ledger.sql` adds explicit lifecycle state (`active`, `waiting`, `expired`, `revoked`) plus owner-supplied expiry and renewal dates to the encrypted API key vault. It is separate from migration 0033, which manages quota-waiting key selection. Waiting and expired credentials are retained and cannot be reactivated or deleted; add a newly issued provider key, verify it, then activate it. The authenticated `GET /api/api-hub/usage` endpoint summarizes actual connector runs for the previous 30 days. Provider costs are not estimated. Apply migration 0034 with `npm run db:migrate` after reviewing the backup and recovery plan.
