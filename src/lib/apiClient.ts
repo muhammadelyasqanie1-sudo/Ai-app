@@ -1,7 +1,7 @@
 import { ChatRequestSchema, type SharedChatRequest } from '../../packages/shared/src/schemas';
 import { toApiError } from './apiErrors';
 
-const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL || (import.meta.env?.MODE === 'production' ? 'https://afgai-production-fdfd.up.railway.app' : '')).replace(/\/$/, '');
+const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL || ((import.meta as any).env?.MODE === 'production' ? 'https://afgai-production-fdfd.up.railway.app' : '')).replace(/\/$/, '');
 
 export function apiUrl(path: string): string {
   return API_BASE_URL + (path.startsWith('/') ? path : '/' + path);
