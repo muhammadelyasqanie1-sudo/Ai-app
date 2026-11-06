@@ -1,0 +1,39 @@
+name: AFG AI validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: afg-ai-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-and-regression:
+    name: TypeScript, web build and regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: TypeScript validation
+        run: npm run lint
+      - name: Web production build
+        run: npm run build
+      - name: Offline SHA-256 regression
+        run: npm run test:offline-sha
+      - name: Database TLS regression
+        run: npm run test:database-config
+      - name: Admin RBAC regression
+        run: npm run test:admin-rbac
