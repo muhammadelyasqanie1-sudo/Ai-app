@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <application>
-    <activity android:name="com.getcapacitor.BridgeActivity" android:exported="true">
+    <activity android:name="com.afgai.app.MainActivity" android:exported="true">
       <intent-filter android:autoVerify="false">
         <action android:name="android.intent.action.VIEW" />
         <category android:name="android.intent.category.DEFAULT" />
