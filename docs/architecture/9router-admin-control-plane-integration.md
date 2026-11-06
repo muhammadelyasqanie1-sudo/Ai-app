@@ -103,6 +103,21 @@ No staff role receives these permissions by default. Root admin can grant/revoke
 - Removed the legacy in-app `AfgAdminPanel` renderer from the main application route.
 - Added dedicated 9Router staff permission identifiers to the permission type and role editor allowlist. Existing 9Router metrics/gateway routes now use dedicated read/security scopes rather than generic settings/usage scopes.
 
+
+### Upstream 9Router management API contract (source inspection)
+
+The upstream 9Router dashboard is a separate authenticated web application. Its dashboard management APIs include:
+
+- Authentication/settings: `/api/auth/login`, `/api/auth/logout`, `/api/settings`, `/api/settings/require-login`.
+- Provider connections: `/api/providers`, `/api/providers/{id}`, provider test/model endpoints, and `/api/provider-nodes*`.
+- Routing and access keys: `/api/models/alias`, `/api/combos*`, `/api/keys*`, `/api/pricing`.
+- Usage and logs: `/api/usage/history`, `/api/usage/logs`, `/api/usage/request-logs`, and connection-specific usage routes.
+- CLI integration: `/api/cli-tools/*` for supported developer tools.
+
+The upstream dashboard guard protects dashboard routes with the `auth_token` cookie when login is required, and protects management API prefixes such as providers, keys, combos, settings, and usage. The public `/v1/*` inference routes use a separate API-key check. Therefore AFG AI must not treat its existing inference key as a dashboard-management credential. The management API proxy must use an authenticated 9Router dashboard session or another upstream-supported privileged identity, never forward arbitrary browser-supplied cookies or arbitrary paths.
+
+This contract was checked against the upstream source tree; before implementation, confirm it still matches the deployed `v0.5.112` build because the public repository's moving branch may differ from the deployed image.
+
 ### Not yet completed — do not treat as production-secure or fully migrated
 
 - The Railway 9Router dashboard origin is still publicly addressable unless separately protected. Hiding the link in AFG AI is not an edge/network access control.
