@@ -185,6 +185,14 @@ async function audit(userId: string, action: string, owner: string, repo: string
     [userId, 'github.' + action, 'github_repository', owner + '/' + repo, JSON.stringify(metadata)],
   ).catch(() => {});
 }
+function redactSourceSecrets(value: string): string {
+  return value
+    .replace(/\bgh[pousr]_[A-Za-z0-9]{20,}\b/g, '[REDACTED_GITHUB_TOKEN]')
+    .replace(/\bgithub_pat_[A-Za-z0-9_]{20,}\b/g, '[REDACTED_GITHUB_TOKEN]')
+    .replace(/\bsk-[A-Za-z0-9_-]{24,}\b/g, '[REDACTED_API_KEY]')
+    .replace(/(Bearer\s+)[A-Za-z0-9._~+/-]{16,}/gi, '$1[REDACTED]')
+    .replace(/((?:api[_-]?key|access[_-]?token|client[_-]?secret|password)\s*[:=]\s*["']?)[^"'\s,;]+/gi, '$1[REDACTED]');
+}
 function repoSummary(row: any) {
   return {
     full_name: row.full_name,
@@ -222,6 +230,7 @@ export async function executeGitHubTool(userId: string, toolName: string, rawArg
     const page = boundedNumber(args.page, 1, 1, 100);
     const perPage = boundedNumber(args.per_page, 30, 1, 50);
     const result = await request(token, '/user/repos?visibility=' + visibility + '&sort=' + sort + '&direction=desc&page=' + page + '&per_page=' + perPage);
+    await audit(userId, 'repositories.list', 'user', 'repositories', { visibility, page, perPage });
     return { repositories: (Array.isArray(result.data) ? result.data : []).map(repoSummary), page, perPage };
   }
 
@@ -260,7 +269,7 @@ export async function executeGitHubTool(userId: string, toolName: string, rawArg
     if (Number(result.data.size || 0) > 100_000) throw new Error('This file is larger than the 100 KB chat inspection limit.');
     const content = Buffer.from(result.data.content.replace(/\s/g, ''), 'base64').toString('utf8');
     if (content.includes('\u0000')) throw new Error('Binary files cannot be inserted into chat context.');
-    return { type: 'file', path, size: content.length, content };
+    return { type: 'file', path, size: content.length, content: redactSourceSecrets(content) };
   }
 
   if (toolName === 'github_search_code') {
@@ -295,6 +304,9 @@ export async function executeGitHubTool(userId: string, toolName: string, rawArg
     const path = safeFilePath(requiredText(args, 'path', 500));
     const branch = safeBranch(requiredText(args, 'branch', 120));
     const content = requiredText(args, 'content', 100_000);
+    if (/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)/.test(content)) {
+      throw new Error('The proposed file content appears to contain a credential or private key and was not committed.');
+    }
     const message = requiredText(args, 'message', 200);
     const repository = await request(token, repoPath(owner, repo));
     if (branch === String(repository.data.default_branch || 'main')) {
