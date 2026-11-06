@@ -59,9 +59,9 @@ The JARVIS screen offers direct controls and the local command parser recognizes
 The Android offline-models plugin now packages two CPU runtimes for **arm64-v8a**:
 
 - **llama.cpp** for user-selected GGUF files. It is built from the pinned llama.cpp source revision already configured in CMake.
-- **Cactus Needle 3** for constrained command understanding and structured function-call proposals. Its official Android ARM64 static library is fetched at build time from a pinned Hugging Face revision and checked against SHA-256 before linking.
+- **Cactus Needle 3** for constrained command understanding and structured function-call proposals. Its official Android ARM64 static library is fetched at build time from the official Hugging Face artifact URL and checked against a pinned SHA-256 before linking.
 
-The Needle 3 weights are not embedded in the APK. JARVIS offers a one-time download of the official `needle3.cact` file (about 35 MB), pins its repository revision, verifies its SHA-256 both after download and again before loading, and stores it in AFG AI's private app-specific download directory. Inference is local after the model is downloaded. No provider API key is used.
+The Needle 3 weights are not embedded in the APK. JARVIS offers a one-time download of the official `needle3.cact` file (about 35 MB), uses the official model repository URL, verifies its pinned SHA-256 both after download and again before loading, and stores it in AFG AI's private app-specific download directory. Inference is local after the model is downloaded. No provider API key is used.
 
 Needle receives one narrowly scoped `jarvis_command` tool schema whose command value is an enum of the existing JARVIS allowlist. The native runtime only proposes a function call; JavaScript extracts exactly one call, requires a confidence score of at least 0.65, then the deterministic parser validates it again. The model cannot invoke Android APIs. The user must still review and confirm each action, and Android permissions remain required.
 
@@ -80,7 +80,7 @@ JARVIS can reuse a GGUF file that the user has already downloaded in the **Offli
 3. Load the selected model. JARVIS uses a conservative 1,024-token context and two CPU threads, then translates a Dari/Pashto/English request into one exact command from the existing allowlist.
 4. The deterministic command parser validates the proposed command. The user must review and confirm it before any Android action runs. Unknown, malformed or unsupported model output is rejected.
 
-The existing Capacitor offline-model plugin builds a CPU llama.cpp JNI runtime and links the pinned, SHA-256-verified Cactus Needle 3 Android ARM64 static runtime. The Android offline build workflow installs the configured Android NDK/CMake toolchain and fetches the official Needle library at a fixed revision. No provider key is required. GGUF and `.cact` model weights remain separate downloads and are not included in the APK.
+The existing Capacitor offline-model plugin builds a CPU llama.cpp JNI runtime and links the pinned, SHA-256-verified Cactus Needle 3 Android ARM64 static runtime. The Android offline build workflow installs the configured Android NDK/CMake toolchain and fetches the official Needle library and verifies its fixed SHA-256 content digest. No provider key is required. GGUF and `.cact` model weights remain separate downloads and are not included in the APK.
 
 This is a constrained intent router, not unrestricted autonomous phone control and not a general JARVIS conversation model. Inference runs locally after the selected model is loaded. Model loading and speed depend on free RAM, model architecture and quantization; low-memory phones may fail to load larger models. Needle 3's C API is process-global and has no model-free function, so fully close and restart AFG AI before switching from Needle 3 to a GGUF model.
 
