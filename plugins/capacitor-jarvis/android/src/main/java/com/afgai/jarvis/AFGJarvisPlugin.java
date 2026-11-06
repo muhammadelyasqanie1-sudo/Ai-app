@@ -23,7 +23,6 @@ import android.util.Base64;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import java.io.ByteArrayOutputStream;
-import com.capacitorjs.plugins?
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -405,10 +404,7 @@ public class AFGJarvisPlugin extends Plugin {
             JSObject item = new JSObject(); item.put("name", sensor.getName()); item.put("vendor", sensor.getVendor());
             item.put("type", sensor.getType()); item.put("powerMa", sensor.getPower()); item.put("wakeUp", sensor.isWakeUpSensor()); rows.put(item);
         }
-        boolean biometric = false;
-        try {
-            if (Build.VERSION.SDK_INT >= 29) biometric = new android.hardware.biometrics.BiometricManager().canAuthenticate() == android.hardware.biometrics.BiometricManager.BIOMETRIC_SUCCESS;
-        } catch (Exception ignored) { }
+        boolean biometric = getContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_FINGERPRINT);
         JSObject out = new JSObject(); out.put("sensors", rows); out.put("fingerprintOrBiometricAvailable", biometric);
         out.put("fingerprintDataAccessible", false); call.resolve(out);
     }
