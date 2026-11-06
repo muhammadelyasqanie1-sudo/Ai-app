@@ -201,3 +201,8 @@ OpenAPI 3.0/3.1 discovery accepts JSON and YAML documents (bounded response size
 ## Retained credential queue and automatic quota rotation
 
 Saved API keys are never deleted on quota exhaustion. After an observed upstream HTTP 402/429, the used key is marked `waiting` with the observed reset timestamp when one is supplied; otherwise it remains waiting without an invented monthly renewal date. The executor selects the next ready key by configured priority and keeps every credential encrypted at rest. A newly selected key is marked active in the saved-key queue but the connector is disabled and requires an owner verification before it can serve chat requests. If all keys are waiting, the connector is parked until a real reset is observed or the owner explicitly selects a renewed key. Key status, quota response and next eligible time are exposed in the owner-only connector panel. Migration `0033_api_connector_key_queue.sql` is required.
+
+
+## API key renewal lifecycle and usage reporting
+
+Migration `0034_api_key_lifecycle_usage_ledger.sql` stores an explicit lifecycle state and owner-supplied expiry/renewal dates alongside the existing quota key queue. The authenticated `GET /api/api-hub/usage` endpoint reports actual request totals, successes, failures and average latency for the last 30 days, with per-connector summaries and key lifecycle counts. Provider costs remain unavailable unless reported by the provider; no costs are fabricated. Waiting and expired keys are retained and cannot be reactivated or deleted. Add a new provider-issued key, verify it, then activate it.
