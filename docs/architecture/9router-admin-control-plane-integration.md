@@ -158,3 +158,12 @@ This contract was checked against the upstream source tree; before implementatio
 - AFG AI's server-side admin API and data tables remain intentionally intact until each domain has a verified replacement or a secure service-to-service bridge in 9Router.
 - The new 9Router management UI and audit changes have not been deployed to the live Railway Docker-image service. No live environment variables, service image, or persistent volume were changed.
 - Before claiming production cutover, enable `AFG_AI_CONTROL_PLANE=true` on the intended 9Router deployment, configure the owner login path, and verify browser login, staff scopes, direct-origin protection, and all API permissions against the actual deployed image.
+
+### Direct browser control-plane entry (2026-11-06)
+
+- The AFG AI administrator portal link now opens the dedicated 9Router URL `/control-plane`, not the general `/dashboard` landing page.
+- The AFG AI server still checks 9Router health before returning the portal URL. The browser validates HTTPS and requires the exact `/control-plane` path; it does not receive a 9Router password, cookie, or service API key.
+- 9Router's `/control-plane` route is protected by its control-plane session and the `dashboard:access` permission, then redirects to the permission-filtered `/dashboard/admin` management center. The normal sidebar no longer exposes an embedded admin link.
+- The owner/staff member must authenticate through 9Router's own browser login. This is a separate browser session; AFG AI does not silently sign the user in.
+- The 9Router control-plane route requires `AFG_AI_CONTROL_PLANE=true`. If the flag is disabled, the direct entry remains unavailable.
+- This code change only updates the AFG AI portal destination. It does not deploy the AFG AI repository or change the live Railway Docker-image service. Production behavior remains unverified until both applications are deployed and the login/role matrix is tested.
