@@ -166,4 +166,7 @@ This contract was checked against the upstream source tree; before implementatio
 - 9Router's `/control-plane` route is protected by its control-plane session and the `dashboard:access` permission, then redirects to the permission-filtered `/dashboard/admin` management center. The normal sidebar no longer exposes an embedded admin link.
 - The owner/staff member must authenticate through 9Router's own browser login. This is a separate browser session; AFG AI does not silently sign the user in.
 - The 9Router control-plane route requires `AFG_AI_CONTROL_PLANE=true`. If the flag is disabled, the direct entry remains unavailable.
+
+- The 9Router control-plane security work through PR #15 is merged: dedicated browser entry, permission-aware management center, audit events for provider/routing/settings/API-key/OAuth/usage-reset operations, persistent login lockouts, owner-only database export/import, `usage:manage` for credit-consuming resets, `providers:manage` for all OAuth actions, and local-only restrictions for host package installers.
+- The 9Router repository's PRs #1–#15 are all merged. This confirms source integration only; it does not confirm that the Railway Docker-image deployment is running this source.
 - This code change only updates the AFG AI portal destination. It does not deploy the AFG AI repository or change the live Railway Docker-image service. Production behavior remains unverified until both applications are deployed and the login/role matrix is tested.
