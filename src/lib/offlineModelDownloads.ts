@@ -375,6 +375,10 @@ export async function downloadNeedle3Model(options: {
   if (activeTasks.has(id)) throw new Error('Needle 3 is already downloading.');
   activeTasks.set(id, { controller: new AbortController(), paused: false });
   try {
+    const existing = (await AFGOfflineModels.listDownloads()).downloads.find(item => item.id === id);
+    if (existing?.status === 'installed' && existing.hashVerified !== true) {
+      await AFGOfflineModels.deleteModel({ downloadId: existing.downloadId });
+    }
     return await downloadGGUFAndroid({ ...NEEDLE3_DOWNLOAD, onProgress: options.onProgress, signal: options.signal });
   } finally {
     activeTasks.delete(id);
