@@ -39,7 +39,6 @@ const LazyAfgVideoGenView = React.lazy(() => import('./components/afg/AfgVideoGe
 const LazyAfgToolsCenter = React.lazy(() => import('./components/afg/AfgToolsCenter').then((module) => ({ default: module.AfgToolsCenter })));
 const LazyAfgHistoryView = React.lazy(() => import('./components/afg/AfgHistoryView').then((module) => ({ default: module.AfgHistoryView })));
 const LazyAfgSettingsView = React.lazy(() => import('./components/afg/AfgSettingsView').then((module) => ({ default: module.AfgSettingsView })));
-const LazyAfgAdminPanel = React.lazy(() => import('./components/afg/AfgAdminPanel').then((module) => ({ default: module.AfgAdminPanel })));
 const LazyAfgTerminalView = React.lazy(() => import('./components/afg/AfgTerminalView').then((module) => ({ default: module.AfgTerminalView })));
 const LazyAfgOfflineView = React.lazy(() => import('./components/afg/AfgOfflineView').then((module) => ({ default: module.AfgOfflineView })));
 
@@ -913,10 +912,6 @@ export default function App() {
             onSetTheme={setTheme}
             onOpenShortcuts={() => setIsShortcutsOpen(true)}
           />
-        )}
-
-        {currentTab === 'admin' && (
-          <LazyAfgAdminPanel language={language} />
         )}
         </React.Suspense>
         </ErrorBoundary>
