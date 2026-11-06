@@ -260,7 +260,22 @@ export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerI
         throw new ProviderAdapterError('No recently verified model with API tool-calling support is available. Connect or enable a tool-capable model.', 503, 'no_tool_capable_model');
       }
     } else if (!selected?.capabilities.tools) {
-      throw new ProviderAdapterError('The selected model does not support API tool calling. Choose a model marked as supporting Tools, or select Auto.', 422, 'selected_model_tools_unsupported');
+      // An explicit integration request may use a different verified model that
+      // advertises tool calling. Keep the user's chosen model for ordinary chat;
+      // route only this tool-enabled turn, preferring the same provider.
+      const selectedProviderId = selected?.providerId;
+      const candidates = toolCapable.filter((candidate) => candidate.capabilities.text && candidate.capabilities.streaming);
+      const preferred = [
+        ...candidates.filter((candidate) => candidate.providerId === selectedProviderId),
+        ...candidates.filter((candidate) => candidate.providerId !== selectedProviderId),
+      ];
+      const cost = (candidate: ModelDescriptor) =>
+        Number(candidate.pricing?.inputPerMillion ?? Number.POSITIVE_INFINITY) +
+        Number(candidate.pricing?.outputPerMillion ?? Number.POSITIVE_INFINITY);
+      selected = preferred.sort((a, b) => cost(a) - cost(b))[0];
+      if (!selected) {
+        throw new ProviderAdapterError('No verified text model with API tool-calling support is available. Choose Auto or enable a tool-capable model in the provider catalog.', 503, 'no_tool_capable_model');
+      }
     }
   }
 
