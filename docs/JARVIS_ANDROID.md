@@ -15,6 +15,12 @@ The optional `@afg-ai/capacitor-jarvis` Capacitor plugin adds an Android-only, u
 
 The React screen is available from the navigation drawer as **JARVIS device assistant**. It reports unsupported browser use instead of simulating device actions.
 
+## Supported on-device command behavior
+
+The offline parser is an exact-phrase allowlist, not a general conversational model. It recognizes supported app-launch, navigation and device-tool phrases in English, Afghan Dari, Persian, Pashto and Arabic. It accepts a small set of polite prefixes and common Dari/Pashto variants. Unknown or ambiguous phrases return `unknown` and are never executed. Sensitive actions (location, contacts, SMS, camera, flashlight and navigation) still require an explicit confirmation in the app and the relevant Android permission.
+
+The native toolkit is pull-based: it does not run background scans or continuously monitor the phone. Cached location is not live GPS; the result includes the actual Android provider and timestamp. Contact and SMS reads are capped by the native API, and camera previews are resized before being returned to the WebView. JARVIS checks native action results rather than showing a success message when Android reports that an action could not be completed.
+
 ## Android setup
 
 1. Install/update the AFG AI Android APK built from this branch.
@@ -67,6 +73,21 @@ The current command parser is deterministic phrase matching and works offline; i
 ## API surface
 
 The native bridge exports `getStatus()`, `getBatteryStatus()`, `vibrate()`, `requestCameraPermission()`, `setTorch()`, `getNetworkStatus()`, `requestLocationPermission()`, `getLocation()`, `requestContactsPermission()`, `getContacts()`, `requestSmsReadPermission()`, `getRecentSms()`, `setClipboard()`, `getClipboard()`, `openSmsComposer()`, `openDialer()`, `takePhoto()`, `getSensors()`, `openAccessibilitySettings()`, `openApp()`, `performAction()`, `clickText()`, `typeText()`, microphone permission and speech methods, and the `speechEvent` listener. It is registered through the local Capacitor package in `package.json`.
+
+## Troubleshooting
+
+| Symptom | What to check |
+|---|---|
+| JARVIS says Android app required | Open the installed Capacitor Android APK, not the website in Chrome. |
+| Back/Home/scroll does nothing | Open Accessibility settings, enable AFG AI Jarvis device controls, return to JARVIS and refresh status. Some apps do not expose scrollable/clickable accessibility nodes. |
+| Voice button is disabled | Confirm that Android has a speech recognition service installed and that microphone permission is granted. |
+| Voice recognition fails offline | Install the language's offline speech pack in Android voice-input settings. The Android recognizer can still require internet; the offline preference is not a guarantee. |
+| Dari/Pashto speech is unavailable | The installed recognizer must support the requested locale. JARVIS cannot install system voice packs itself. |
+| Text-to-speech is unavailable | Install the required voice data in Android Text-to-Speech settings, then reopen JARVIS. |
+| Location says no cached location | Turn on location services and use a map/location app first; this API reads last-known location only and does not request a live fix. |
+| Flashlight fails | Check that the phone has a rear flash, grant camera permission and close any app currently using the camera. |
+| SMS or contacts access is denied | Check Android app permissions. READ_SMS is subject to Google Play policy and may be unavailable to distributed builds. |
+| An app cannot be opened | Confirm that it is installed and has a launcher activity; Android package visibility and OEM restrictions can affect discovery. |
 
 ## Verification status
 
