@@ -179,3 +179,11 @@ This contract was checked against the upstream source tree; before implementatio
 - Configure the same high-entropy `AFG_AI_9ROUTER_BRIDGE_TOKEN` in AFG AI and 9Router, and set `AFG_AI_ADMIN_API_URL` on 9Router to the exact HTTPS endpoint URL.
 - The existing AFG AI admin API/database remains intact. This is read-only visibility only; subscription/user mutations, feature-flag changes, announcements, rate limits, sessions, security events, audit details, error export, and other app-specific controls are not migrated yet.
 - No build, tests, environment changes, or deployment were run. Live behavior remains unavailable until both services receive the server-side settings and are deployed.
+
+### AFG AI account management bridge
+
+- Extended the private 9Router bridge with `GET /api/internal/9router/users` and `PATCH /api/internal/9router/users`.
+- The user-list endpoint returns at most 250 non-deleted accounts with email, display name, role, status, last-seen timestamp, and 30-day request count; access requires a validated 9Router actor with `afg-ai:users:read` (or superadmin).
+- The mutation endpoint currently supports only `active` and `suspended` status changes. It uses a transaction and the existing AFG AI admin advisory lock, refuses self-suspension, protects the last active administrator/superadmin, prevents non-superadmins from changing administrator accounts, revokes active sessions on suspension, and writes an AFG AI audit event with external actor metadata.
+- 9Router supplies actor identity and scope headers only from its server-side authenticated session. The shared bridge bearer credential is never sent to browser code.
+- Account role changes, account deletion, password resets, subscription management, and other AFG AI-specific controls remain out of scope until separately implemented and reviewed.
