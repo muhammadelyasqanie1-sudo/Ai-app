@@ -206,3 +206,6 @@ Saved API keys are never deleted on quota exhaustion. After an observed upstream
 ## API key renewal lifecycle and usage reporting
 
 Migration `0034_api_key_lifecycle_usage_ledger.sql` stores an explicit lifecycle state and owner-supplied expiry/renewal dates alongside the existing quota key queue. The authenticated `GET /api/api-hub/usage` endpoint reports actual request totals, successes, failures and average latency for the last 30 days, with per-connector summaries and key lifecycle counts. Provider costs remain unavailable unless reported by the provider; no costs are fabricated. Waiting and expired keys are retained and cannot be reactivated or deleted. Add a new provider-issued key, verify it, then activate it.
+
+
+The quota queue and renewal lifecycle are separate controls: migration 0033 records observed quota waiting/reset evidence, while migration 0034 records explicit credential lifecycle and owner-supplied renewal dates. A quota reset never fabricates a provider renewal date, and a renewal date never proves that an API key is valid.
