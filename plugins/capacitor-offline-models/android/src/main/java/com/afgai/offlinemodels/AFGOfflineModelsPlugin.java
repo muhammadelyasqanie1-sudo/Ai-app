@@ -1,6 +1,13 @@
 package com.afgai.offlinemodels;
 
 import android.app.DownloadManager;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.BatteryManager;
+import android.os.Vibrator;
+import android.os.VibratorManager;
+import android.os.VibrationEffect;
+import android.telephony.PhoneNumberUtils;
 import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
@@ -23,6 +30,9 @@ import java.security.MessageDigest;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 
 @CapacitorPlugin(name = "AFGOfflineModels")
 public class AFGOfflineModelsPlugin extends Plugin {
@@ -163,6 +173,111 @@ public class AFGOfflineModelsPlugin extends Plugin {
         } finally {
             cursor.close();
         }
+    }
+
+
+    // Narrow, user-visible Android actions. Sensitive actions only open the
+    // system confirmation UI; this plugin never sends SMS or places calls silently.
+    @PluginMethod
+    public void getBatteryStatus(PluginCall call) {
+        try {
+            Intent battery = getContext().registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (battery == null) { call.reject("Battery status is unavailable."); return; }
+            int level = battery.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+            int scale = battery.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+            int status = battery.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+            int plugged = battery.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0);
+            int percent = level >= 0 && scale > 0 ? Math.round(level * 100f / scale) : -1;
+            JSObject result = new JSObject();
+            result.put("level", percent);
+            result.put("charging", status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL);
+            result.put("plugged", plugged != 0);
+            result.put("technology", battery.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY));
+            result.put("temperatureC", battery.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) / 10.0);
+            call.resolve(result);
+        } catch (Exception error) { call.reject("Unable to read battery status.", error); }
+    }
+
+    @PluginMethod
+    public void vibrate(PluginCall call) {
+        Integer duration = call.getInt("durationMs");
+        int ms = duration == null ? 180 : Math.max(1, Math.min(1000, duration));
+        try {
+            Vibrator vibrator;
+            if (Build.VERSION.SDK_INT >= 31) {
+                VibratorManager manager = (VibratorManager) getContext().getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
+                vibrator = manager == null ? null : manager.getDefaultVibrator();
+            } else {
+                //noinspection deprecation
+                vibrator = (Vibrator) getContext().getSystemService(Context.VIBRATOR_SERVICE);
+            }
+            if (vibrator == null || !vibrator.hasVibrator()) { call.reject("This device has no available vibrator."); return; }
+            if (Build.VERSION.SDK_INT >= 26) vibrator.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
+            else {
+                //noinspection deprecation
+                vibrator.vibrate(ms);
+            }
+            JSObject result = new JSObject(); result.put("started", true); result.put("durationMs", ms); call.resolve(result);
+        } catch (Exception error) { call.reject("Unable to activate vibration.", error); }
+    }
+
+    @PluginMethod
+    public void openApp(PluginCall call) {
+        String app = call.getString("app", "").toLowerCase(Locale.ROOT).trim();
+        String packageName = null;
+        if ("youtube".equals(app)) packageName = "com.google.android.youtube";
+        else if ("maps".equals(app)) packageName = "com.google.android.apps.maps";
+        else if ("chrome".equals(app)) packageName = "com.android.chrome";
+        else if ("settings".equals(app)) {
+            try {
+                Intent settings = new Intent(android.provider.Settings.ACTION_SETTINGS);
+                settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(settings);
+                JSObject result = new JSObject(); result.put("opened", true); result.put("app", app); call.resolve(result); return;
+            } catch (Exception error) { call.reject("Unable to open Android Settings.", error); return; }
+        } else if ("camera".equals(app)) {
+            try {
+                Intent camera = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+                camera.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                if (camera.resolveActivity(getContext().getPackageManager()) == null) { call.reject("No camera app is available."); return; }
+                getContext().startActivity(camera);
+                JSObject result = new JSObject(); result.put("opened", true); result.put("app", app); call.resolve(result); return;
+            } catch (Exception error) { call.reject("Unable to open the camera app.", error); return; }
+        } else { call.reject("This app is not in AFG AI's allowed app list."); return; }
+
+        try {
+            Intent launch = getContext().getPackageManager().getLaunchIntentForPackage(packageName);
+            if (launch == null) { call.reject("The requested app is not installed."); return; }
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(launch);
+            JSObject result = new JSObject(); result.put("opened", true); result.put("app", app); call.resolve(result);
+        } catch (Exception error) { call.reject("Unable to open the requested app.", error); }
+    }
+
+    @PluginMethod
+    public void requestCallConfirmation(PluginCall call) {
+        String number = call.getString("phoneNumber", "").trim();
+        if (number.isEmpty() || number.length() > 40) { call.reject("A valid phone number is required."); return; }
+        try {
+            Intent dial = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number)));
+            dial.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(dial);
+            JSObject result = new JSObject(); result.put("confirmationOpened", true); call.resolve(result);
+        } catch (Exception error) { call.reject("Unable to open the system dialer.", error); }
+    }
+
+    @PluginMethod
+    public void requestSmsConfirmation(PluginCall call) {
+        String number = call.getString("phoneNumber", "").trim();
+        String body = call.getString("message", "");
+        if (number.isEmpty() || number.length() > 40 || body.length() > 5000) { call.reject("A valid phone number and message are required."); return; }
+        try {
+            Intent sms = new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(number)));
+            sms.putExtra("sms_body", body);
+            sms.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(sms);
+            JSObject result = new JSObject(); result.put("confirmationOpened", true); call.resolve(result);
+        } catch (Exception error) { call.reject("Unable to open the system SMS composer.", error); }
     }
 
     @PluginMethod
