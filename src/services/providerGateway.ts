@@ -116,7 +116,75 @@ const nineRouterAdapter: ChatProviderAdapter | null = nineRouterBaseAdapter
     }
   : null;
 
-const staticProviderRegistry: ChatProviderAdapter[] = nineRouterAdapter ? [nineRouterAdapter] : [];
+// APInex account-key pool. Keys stay server-side in Railway Secrets.
+// Rotate to the next key only when the current key is rate-limited (HTTP 429).
+const apinexKeys = (() => {
+  try {
+    const value = JSON.parse(process.env.APINEX_API_KEYS || '[]');
+    return Array.isArray(value) ? [...new Set(value.filter((key): key is string => typeof key === 'string' && key.trim().length > 0).map((key) => key.trim()))] : [];
+  } catch { return []; }
+})();
+const apinexBase = (process.env.APINEX_BASE_URL?.trim() || 'https://api.apinex.bond/v1').replace(/\\/+$/, '');
+let apinexKeyIndex = 0;
+const apinexAdapters = apinexKeys.map((apiKey) => createOpenAICompatibleAdapter({
+  id: 'apinex',
+  displayName: 'APInex',
+  baseUrl: apinexBase,
+  apiKey,
+}));
+const apinexPrimary = apinexAdapters[0] || null;
+const apinexAdapter: ChatProviderAdapter | null = apinexPrimary ? {
+  ...apinexPrimary,
+  async validateConfig() {
+    return apinexBase.startsWith('https://') && apinexAdapters.length > 0
+      ? { valid: true }
+      : { valid: false, message: 'Configure APINEX_API_KEYS with one or more server-side keys.' };
+  },
+  async listModels() {
+    for (let attempt = 0; attempt < apinexAdapters.length; attempt++) {
+      const index = (apinexKeyIndex + attempt) % apinexAdapters.length;
+      try {
+        const models = await apinexAdapters[index].listModels();
+        apinexKeyIndex = index;
+        return models;
+      } catch (error) {
+        if (!(error instanceof Error) || (error as any).status !== 429 || attempt === apinexAdapters.length - 1) throw error;
+      }
+    }
+    return [];
+  },
+  async healthCheck(modelId: string) {
+    for (let attempt = 0; attempt < apinexAdapters.length; attempt++) {
+      const index = (apinexKeyIndex + attempt) % apinexAdapters.length;
+      const health = await apinexAdapters[index].healthCheck(modelId);
+      if (health.healthy) { apinexKeyIndex = index; return health; }
+      if (attempt === apinexAdapters.length - 1) return health;
+    }
+    return { healthy: false, checkedAt: new Date().toISOString(), message: 'No APInex key is available.' };
+  },
+  async *streamChat(input) {
+    for (let attempt = 0; attempt < apinexAdapters.length; attempt++) {
+      const index = (apinexKeyIndex + attempt) % apinexAdapters.length;
+      let emitted = false;
+      try {
+        for await (const chunk of apinexAdapters[index].streamChat(input)) {
+          emitted = true;
+          yield chunk;
+        }
+        apinexKeyIndex = index;
+        return;
+      } catch (error) {
+        const rateLimited = error instanceof Error && (error as any).status === 429;
+        if (!rateLimited || emitted || attempt === apinexAdapters.length - 1) throw error;
+      }
+    }
+  },
+} : null;
+
+const staticProviderRegistry: ChatProviderAdapter[] = [
+  ...(nineRouterAdapter ? [nineRouterAdapter] : []),
+  ...(apinexAdapter ? [apinexAdapter] : []),
+];
 let databaseProviderRegistry: ChatProviderAdapter[] = [];
 const DATABASE_PROVIDER_REFRESH_MS = 15_000;
 let databaseProviderRefreshAt = 0;
