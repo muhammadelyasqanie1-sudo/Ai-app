@@ -34,3 +34,8 @@ ON CONFLICT(topic_key) DO UPDATE SET
 
 CREATE INDEX IF NOT EXISTS world_knowledge_topics_enabled_priority_idx
   ON world_knowledge_topics(enabled,priority DESC);
+
+ALTER TABLE world_knowledge_research_jobs
+  ADD COLUMN IF NOT EXISTS topic_key text REFERENCES world_knowledge_topics(topic_key) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS world_knowledge_jobs_topic_idx
+  ON world_knowledge_research_jobs(topic_key,status,priority DESC);
