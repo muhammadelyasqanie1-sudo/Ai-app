@@ -13,7 +13,14 @@ AFG AI is an Android-friendly and web-based AI assistant. The current repository
 - `packages/providers/`, `packages/i18n/`, `packages/ui/` — compatibility entry points for existing implementations.
 - `database/migrations/` — ordered PostgreSQL migrations (the clean-install source of truth).
 - `database/schema.sql` — legacy bootstrap/reference schema; new installations should use migrations.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:087addacb3f2d47e54384ca29ab65dc217cd3ed25fd2cfcdb5df267549cf6405 -->
+
 - `docs/` — architecture, security, reliability, acceptance criteria and delivery/reporting rules.
+- [Multimodal setup and feature inventory](docs/MULTIMODAL-IMPLEMENTATION.md) — private media, compatible providers, scanner setup, migration0050 and verification limits.
+
+<!-- /coderabbit-ai-generated:v1 -->
 - [GitHub collaboration guide](docs/engineering/GITHUB_COLLABORATION.md) — branch isolation, parallel-agent scope ownership, PR review, and current Actions behavior.
 - [Coding-agent instructions](AGENTS.md) — repository-wide safety, implementation, and handoff rules.
 - [Terminal status and command reference](docs/TERMINAL.md) — Phase 1 read-only browser workspace.

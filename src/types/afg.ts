@@ -2,7 +2,14 @@ export type Language = 'dari' | 'english' | 'pashto' | 'persian' | 'arabic' | 'u
 export type Theme = 'dark' | 'light' | 'neon' | 'system';
 
 export type TabType = 
-  | 'home' 
+  | 'home'
+  | 'tasks'
+  | 'files'
+  | 'voice'
+  | 'automation'
+  | 'browser'
+  | 'knowledge'
+  | 'memory'
   | 'chat' 
   | 'image-gen' 
   | 'video-gen' 
@@ -36,6 +43,7 @@ export type ToolSubTab =
   | 'developer-tools';
 
 export interface UserProfile {
+  id?: string;
   name: string;
   nameEn: string;
   email: string;
@@ -62,6 +70,7 @@ export interface AfgMessage {
   isStreaming?: boolean;
   retryable?: boolean;
   isError?: boolean;
+  isCancelled?: boolean;
 }
 
 export interface AfgChatSession {

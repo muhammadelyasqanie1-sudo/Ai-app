@@ -1,3 +1,5 @@
+import { handleMediaApi } from './media.ts';
+import { handleAgentsApi } from './agents.ts';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomUUID } from 'crypto';
 import { handleChatApi } from './chatHandler.ts';
@@ -293,6 +295,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
       return;
     }
 
+    if (await handleAgentsApi(req, res, pathname)) return;
     if (await handleControlPlaneBridgeApi(req, res, pathname)) return;
     if (await handleUserApiConnectorApi(req, res, pathname)) return;
     if (await handleNineRouterApi(req, res, pathname)) return;
@@ -307,6 +310,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     if (await handleBeatApiApi(req, res)) return;
     if (await handleUserIntegrationApi(req, res, pathname)) return;
     if (await handleAccountApi(req, res, pathname)) return;
+    if (await handleMediaApi(req,res,pathname)) return;
     if (await handleFilesApi(req, res, pathname)) return;
     if (await handleConversationsApi(req, res, pathname)) return;
     if (await handleAdminTerminalGatewayApi(req, res, pathname)) return;
@@ -360,7 +364,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
 
     if (req.method === 'GET' && pathname === '/api/ready') {
       const database = await checkDatabase();
-      const ready = database.configured && database.connected;
+      const ready = database.configured && database.connected && database.schemaReady === true;
       sendJson(res, ready ? 200 : 503, {
         status: ready ? 'ready' : 'degraded',
         database,

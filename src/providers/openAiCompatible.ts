@@ -1,3 +1,4 @@
+import { compatibleMedia } from './compatibleMedia.ts';
 import type { ChatChunk, ChatRequest, ChatProviderAdapter, ConfigStatus, HealthStatus, ModelDescriptor, CapabilityFlags } from './providerTypes.ts';
 import { ProviderAdapterError } from './providerTypes.ts';
 
@@ -56,6 +57,8 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
     id: initial.id,
     key: initial.id,
     displayName: initial.displayName,
+
+    executeMedia(request, inputs, signal) { return compatibleMedia(currentConfig(), request, inputs, signal); },
 
     async validateConfig(): Promise<ConfigStatus> {
       const current = currentConfig();
@@ -142,6 +145,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
             parameters.some((value) => /^(tools|tool_choice|function_calling)$/i.test(value));
           return {
             id: model.id as string,
+            mediaEndpoints: Array.isArray(model.endpoints) ? model.endpoints.filter((v): v is string => typeof v === 'string') : [],
             providerId: current.id,
             displayName: model.name || model.family_label || model.id as string,
             description: model.description || 'Model discovered from the configured provider catalog.',
@@ -156,7 +160,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
               text: true, streaming: true,
               vision: inputHasImage,
               imageGen: outputHasImage,
-              imageEdit: false, ocr: false, tts: outputModalities.includes('audio'),
+              imageEdit: hasCapability('image_edit', 'image_editing'), ocr: false, tts: outputModalities.includes('audio'),
               stt: inputModalities.includes('audio'), tools: supportsTools,
               jsonMode: parameters.includes('response_format') || parameters.includes('structured_outputs'),
             },

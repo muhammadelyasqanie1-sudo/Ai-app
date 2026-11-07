@@ -28,6 +28,7 @@ if (!connectionString) {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const directory = path.join(here, '..', 'database', 'migrations');
   try {
+    await pool.query('SELECT pg_advisory_lock(74192381)');
     await pool.query('CREATE TABLE IF NOT EXISTS schema_migrations (version text PRIMARY KEY, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())');
     const files = (await readdir(directory)).filter((name) => /^\d+_[a-z0-9_-]+\.sql$/.test(name)).sort();
     for (const name of files) {
@@ -39,6 +40,7 @@ if (!connectionString) {
         console.info('SKIP ' + name);
         continue;
       }
+      if (process.argv.includes('--status')) { console.info('PENDING ' + name); continue; }
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
@@ -53,11 +55,12 @@ if (!connectionString) {
         client.release();
       }
     }
-    console.info('Database migrations are up to date.');
+    console.info(process.argv.includes('--status') ? 'Migration status inspection complete.' : 'Database migrations are up to date.');
   } catch (error) {
-    console.error('DATABASE_MIGRATION_FAILED', error instanceof Error ? error.message : 'Unknown error');
+    console.error('DATABASE_MIGRATION_FAILED: inspect migration checksums and database availability. No SQL or credentials are logged.');
     process.exitCode = 1;
   } finally {
+    await pool.query('SELECT pg_advisory_unlock(74192381)').catch(() => undefined);
     await pool.end();
   }
 }

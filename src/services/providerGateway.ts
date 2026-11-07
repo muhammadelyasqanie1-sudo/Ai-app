@@ -619,7 +619,7 @@ export async function getVerifiedProviderCatalog(): Promise<ProviderCatalog> {
   }
 }
 
-async function isFeatureFlagEnabled(key:string, fallback=false):Promise<boolean>{
+export async function isFeatureFlagEnabled(key:string, fallback=false):Promise<boolean>{
   if(!pool)return fallback;
   try{
     const result=await pool.query('SELECT enabled FROM feature_flags WHERE flag_key=$1 LIMIT 1',[key]);
@@ -660,7 +660,7 @@ export async function getFileAssistantSnapshot() {
     extractionReady: false,
     virusScannerReady: false,
     plannedFormats: ['PDF', 'TXT', 'DOCX', 'CSV', 'XLSX', 'JSON', 'source files', 'images'],
-    message: 'File processing is disabled until private object storage, file extraction, malware scanning and per-user quota enforcement are implemented and configured.',
+    message: 'Use Media Studio for private uploads, scanner-approved text extraction and media jobs. Automatic chat attachment processing and PDF/Office extraction are not integrated.',
   };
 }
 

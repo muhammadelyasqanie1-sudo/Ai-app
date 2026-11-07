@@ -1,3 +1,4 @@
+import { AudioWaveform } from '../jarvis/AudioWaveform';
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Plus, 
@@ -31,6 +32,7 @@ interface AfgChatInputCapsuleProps {
   speechToTextAvailable?: boolean;
   fileUploadEnabled?: boolean;
   isLoading?: boolean;
+  onRecordingChange?: (active: boolean) => void;
   onStop: () => void;
   thinkingLevel?: 'minimal' | 'standard' | 'deep';
   planMode?: boolean;
@@ -49,6 +51,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   speechToTextAvailable = false,
   fileUploadEnabled = false,
   isLoading = false,
+  onRecordingChange,
   onStop,
   thinkingLevel = 'standard',
   planMode = false,
@@ -77,6 +80,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   }, []);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  useEffect(() => { onRecordingChange?.(isRecording); return () => onRecordingChange?.(false); }, [isRecording, onRecordingChange]);
   const [voiceEnabled,setVoiceEnabled]=useState(()=>localStorage.getItem('afg_voice_enabled')!=='false');
   const voiceAvailable=voiceEnabled&&speechToTextAvailable;
   useEffect(()=>{const sync=()=>setVoiceEnabled(localStorage.getItem('afg_voice_enabled')!=='false');window.addEventListener('afg-voice-preference-change',sync);window.addEventListener('afg-preferences-change',sync);return()=>{window.removeEventListener('afg-voice-preference-change',sync);window.removeEventListener('afg-preferences-change',sync);};},[]);
@@ -120,19 +124,21 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   }, [showEmojiPicker, isMenuOpen, linkInputOpen]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingConsent = useRef<{ transcribe: boolean } | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
-  useEffect(()=>{if(!voiceEnabled&&isRecording){mediaRecorderRef.current?.stop();mediaStreamRef.current?.getTracks().forEach(track=>track.stop());mediaStreamRef.current=null;setIsRecording(false);}},[voiceEnabled,isRecording]);
+  useEffect(()=>{if(!voiceEnabled&&isRecording){if(recordingConsent.current)recordingConsent.current.transcribe=false;if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();mediaStreamRef.current?.getTracks().forEach(track=>track.stop());mediaStreamRef.current=null;setIsRecording(false);}},[voiceEnabled,isRecording]);
 
   useEffect(() => () => {
-    mediaRecorderRef.current?.stop();
+    if (recordingConsent.current) recordingConsent.current.transcribe = false;
+    if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
   }, []);
 
   const toggleRecording = async () => {
     if (!voiceAvailable) return;
     if (isRecording) {
-      mediaRecorderRef.current?.stop();
+      if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
       setIsRecording(false);
       return;
     }
@@ -147,15 +153,23 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
       mediaRecorderRef.current = recorder;
       recordedChunksRef.current = [];
       recorder.ondataavailable = (event) => { if (event.data.size > 0) recordedChunksRef.current.push(event.data); };
+      const consent = { transcribe: true };
+      recordingConsent.current = consent;
       recorder.onerror = () => {
+        consent.transcribe = false;
+        stream.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
         setVoiceRecordingError(language === 'dari' ? 'ضبط صدا ناموفق بود.' : 'Audio recording failed.');
         setIsRecording(false);
       };
       recorder.onstop = () => {
+        setIsRecording(false);
+        const permitted = consent.transcribe;
+        consent.transcribe = false;
         const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
         stream.getTracks().forEach((track) => track.stop());
         mediaStreamRef.current = null;
-        if (!blob.size) return;
+        if (!blob.size || !permitted) return;
         const reader = new FileReader();
         reader.onload = async () => {
           try {
@@ -178,12 +192,15 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
       recorder.start();
       setIsRecording(true);
     } catch {
+      mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
       setVoiceRecordingError(language === 'dari' ? 'دسترسی به میکروفون ممکن نیست.' : 'Microphone access is unavailable.');
       setIsRecording(false);
     }
   };
 
   const handleSend = () => {
+    if (disabled || isLoading) return;
     const trimmed = inputText.trim();
     if (!trimmed && attachments.length === 0) return;
     onSendMessage(trimmed, attachments);
@@ -197,7 +214,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       handleSend();
     }
@@ -407,6 +424,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
 
       </div>
 
+      {isRecording && <AudioWaveform stream={mediaStreamRef.current} language={language}/>}
       {/* Transparent Character & Token Counter (fulfills user request #8) */}
       {!fileUploadEnabled && <p className="px-4 mt-1 text-[10px] text-slate-500">{language === 'dari' ? 'بارگذاری فایل تا زمان فعال‌سازی ذخیره‌سازی سرور غیرفعال است.' : 'File uploads are unavailable until server storage is enabled.'}</p>}
       <div className="flex items-center justify-between px-4 mt-1.5 text-[11px] text-slate-400">

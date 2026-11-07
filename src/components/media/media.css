@@ -1,0 +1,201 @@
+.media-studio {
+  max-width: 1280px;
+  margin: auto;
+  padding: 24px;
+  color: var(--j-text, #eef3ff);
+  min-width: 0;
+}
+.media-studio header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.media-studio h1 {
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.media-studio h2 {
+  font-size: 1.15rem;
+  font-weight: 650;
+  margin-bottom: 12px;
+}
+.media-eyebrow {
+  letter-spacing: 0.18em;
+  color: var(--j-accent, #0df2ff);
+  font-size: 0.75rem;
+}
+.media-studio p {
+  line-height: 1.65;
+  margin: 8px 0;
+}
+.media-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.media-panel {
+  background: var(--j-panel, #0b0f17);
+  border: 1px solid var(--j-border, #303948);
+  border-radius: 20px;
+  padding: 20px;
+  margin-bottom: 18px;
+  min-width: 0;
+}
+.media-studio label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+  font-size: 0.9rem;
+}
+.media-studio input:not([type="checkbox"]),
+.media-studio textarea,
+.media-studio select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 12px;
+  background: var(--j-bg, #05060a);
+  color: inherit;
+  border: 1px solid var(--j-border, #475569);
+  border-radius: 10px;
+}
+.media-studio select {
+  white-space: normal;
+}
+.media-studio button {
+  padding: 10px 14px;
+  min-height: 44px;
+  border: 1px solid var(--j-border, #475569);
+  border-radius: 10px;
+  color: inherit;
+  background: var(--j-card, #101827);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.media-studio button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.media-studio .media-primary {
+  background: #0df2ff;
+  color: #031114;
+  border-color: transparent;
+  font-weight: 700;
+  width: 100%;
+  margin-top: 10px;
+}
+.media-studio :is(button, input, select, textarea):focus-visible {
+  outline: 2px solid #168bff;
+  outline-offset: 3px;
+}
+.media-studio .media-check {
+  flex-direction: row;
+  align-items: center;
+  line-height: 1.6;
+  margin: 4px 0;
+}
+.media-check input {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  accent-color: #168bff;
+}
+.media-note,
+.media-status {
+  font-size: 0.8rem;
+  color: var(--j-muted, #b5c0d3);
+}
+.media-studio .media-error {
+  border-inline-start: 3px solid #d99b4c;
+  padding: 10px;
+  background: color-mix(in srgb, #ffb86b 8%, transparent);
+}
+.media-notice {
+  padding: 12px;
+  border: 1px solid var(--j-border, #475569);
+  border-radius: 10px;
+}
+.media-files,
+.media-jobs {
+  list-style: none;
+  padding: 0;
+}
+.media-files li,
+.media-jobs li {
+  border-top: 1px solid var(--j-border, #303948);
+  padding: 16px 0;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.media-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.media-studio nav {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.media-jobs li > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.media-studio pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 420px;
+  overflow: auto;
+  background: var(--j-bg, #05060a);
+  padding: 14px;
+  border-radius: 12px;
+  margin: 12px 0;
+  font-size: 0.85rem;
+}
+.media-studio :is(img, video, audio) {
+  max-width: 100%;
+  display: block;
+  margin-top: 12px;
+  border-radius: 12px;
+}
+.media-studio audio {
+  width: 100%;
+}
+.media-studio strong {
+  font-weight: 650;
+}
+.jarvis-app[data-theme="light"] .media-studio {
+  --j-text: #122037;
+  --j-surface: #fff;
+  --j-bg: #f4f7fb;
+  --j-border: #c5cfdc;
+  --j-muted: #43536b;
+  --j-accent: #086080;
+}
+@media (max-width: 760px) {
+  .media-studio {
+    padding: 14px 10px;
+  }
+  .media-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .media-panel {
+    padding: 16px;
+    border-radius: 16px;
+  }
+  .media-studio header {
+    flex-wrap: wrap;
+  }
+  .media-studio header > div {
+    min-width: 0;
+  }
+}
+
+.media-studio .media-check { min-height: 44px; }
