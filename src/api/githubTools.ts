@@ -65,6 +65,29 @@ const definitions = [
   {
     type: 'function',
     function: {
+      name: 'github_get_repository_tree',
+      description: 'Capability category: coding. Inspect the tracked file and directory structure of an accessible repository before making architectural or code changes. Returns bounded paths and file sizes; it does not read file contents. Use github_get_file for selected files.',
+      parameters: { type: 'object', properties: {
+        owner: { type: 'string' }, repo: { type: 'string' },
+        ref: { type: 'string', description: 'Optional branch, tag, or commit. Defaults to the repository default branch.' },
+        limit: { type: 'integer', minimum: 20, maximum: 400 },
+      }, required: ['owner', 'repo'], additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'github_compare_branches',
+      description: 'Capability category: coding. Compare two branches, tags, or commit references in an accessible repository for code review. Returns commit summaries, ahead/behind counts, changed file statistics, and bounded patch excerpts. Read full files with github_get_file when needed.',
+      parameters: { type: 'object', properties: {
+        owner: { type: 'string' }, repo: { type: 'string' },
+        base: { type: 'string' }, head: { type: 'string' },
+      }, required: ['owner', 'repo', 'base', 'head'], additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'github_create_branch',
       description: 'Capability category: coding. Create a new branch from the repository default branch or a supplied base branch. Use this before changing files; never create the working branch directly on the default branch.',
       parameters: { type: 'object', properties: {
@@ -286,6 +309,68 @@ export async function executeGitHubTool(userId: string, toolName: string, rawArg
     return { total_count: Number(result.data.total_count || 0), matches: (Array.isArray(result.data.items) ? result.data.items : []).map((item: any) => ({
       path: item.path, html_url: item.html_url, sha: item.sha, repository: item.repository?.full_name,
     })) };
+  }
+
+  if (toolName === 'github_get_repository_tree') {
+    const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
+    const requestedRef = optionalText(args, 'ref', 200);
+    const limit = boundedNumber(args.limit, 250, 20, 400);
+    const repository = await request(token, repoPath(owner, repo));
+    const defaultBranch = String(repository.data.default_branch || 'main');
+    const ref = requestedRef || defaultBranch;
+    const commit = await request(token, repoPath(owner, repo) + '/commits/' + encodeURIComponent(ref));
+    const treeSha = String(commit.data?.commit?.tree?.sha || '');
+    if (!/^[a-f0-9]{40}$/i.test(treeSha)) throw new Error('GitHub did not return a valid repository tree reference.');
+    const tree = await request(token, repoPath(owner, repo) + '/git/trees/' + treeSha + '?recursive=1');
+    const entries = Array.isArray(tree.data?.tree) ? tree.data.tree : [];
+    const visible = entries.slice(0, limit).map((item: any) => ({
+      path: String(item.path || '').slice(0, 500),
+      type: item.type === 'tree' ? 'directory' : item.type === 'blob' ? 'file' : 'other',
+      ...(item.type === 'blob' ? { size: Number(item.size || 0) } : {}),
+    }));
+    await audit(userId, 'repository.tree.read', owner, repo, { ref, returned: visible.length, total: entries.length, truncated: Boolean(tree.data?.truncated || entries.length > limit) });
+    return {
+      repository: owner + '/' + repo,
+      ref,
+      default_branch: defaultBranch,
+      total_entries: entries.length,
+      truncated: Boolean(tree.data?.truncated || entries.length > limit),
+      entries: visible,
+    };
+  }
+
+  if (toolName === 'github_compare_branches') {
+    const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
+    const base = safeBranch(requiredText(args, 'base', 200));
+    const head = safeBranch(requiredText(args, 'head', 200));
+    if (base === head) throw new Error('Choose two different references to compare.');
+    const comparison = await request(token, repoPath(owner, repo) + '/compare/' + encodeURIComponent(base) + '...' + encodeURIComponent(head));
+    const files = Array.isArray(comparison.data?.files) ? comparison.data.files : [];
+    const commits = Array.isArray(comparison.data?.commits) ? comparison.data.commits : [];
+    await audit(userId, 'branches.compare', owner, repo, { base, head, files: files.length, commits: commits.length });
+    return {
+      repository: owner + '/' + repo,
+      base,
+      head,
+      status: comparison.data?.status || 'unknown',
+      ahead_by: Number(comparison.data?.ahead_by || 0),
+      behind_by: Number(comparison.data?.behind_by || 0),
+      total_commits: commits.length,
+      commits: commits.slice(0, 20).map((item: any) => ({
+        sha: String(item.sha || '').slice(0, 40),
+        message: String(item.commit?.message || '').split('\\n')[0].slice(0, 240),
+      })),
+      total_changed_files: files.length,
+      changed_files: files.slice(0, 20).map((item: any) => ({
+        filename: String(item.filename || '').slice(0, 500),
+        status: String(item.status || 'modified'),
+        additions: Number(item.additions || 0),
+        deletions: Number(item.deletions || 0),
+        changes: Number(item.changes || 0),
+        ...(typeof item.patch === 'string' ? { patch: redactSourceSecrets(item.patch).slice(0, 1800) } : {}),
+      })),
+      files_truncated: files.length > 20,
+    };
   }
 
   if (toolName === 'github_create_branch') {
