@@ -55,8 +55,6 @@ export const AfgIntelligencePanel: React.FC<{ language: string }> = ({ language 
     } finally { setBusy(false); }
   }, [dari]);
 
-  useEffect(() => { void load(); void loadWorld(); }, [load, loadWorld]);
-
   const loadWorld = useCallback(async () => {
     setWorldError('');
     try {
@@ -69,6 +67,8 @@ export const AfgIntelligencePanel: React.FC<{ language: string }> = ({ language 
       setWorldError(e instanceof Error ? e.message : (dari ? 'موتور دانش برنامه‌نویسی هنوز آماده نیست.' : 'Programming knowledge engine is not available yet.'));
     }
   }, [dari]);
+
+  useEffect(() => { void load(); void loadWorld(); }, [load, loadWorld]);
 
   const searchCode = async () => {
     setCodeBusy(true); setWorldError('');
