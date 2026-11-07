@@ -206,6 +206,7 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
       JSON.stringify({ description, archived: Boolean(metadata.archived), language: cleanText(metadata.language,80), topics: Array.isArray(metadata.topics) ? metadata.topics.slice(0,20) : [] })],
   );
   let count = 0;
+  let latestReleaseAt = 0;
 
   try {
     const releases = await githubApi('/repos/' + encoded(owner) + '/' + encoded(repo) + '/releases?per_page=' + MAX_RELEASES_PER_REPO);
@@ -228,7 +229,8 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
           [repoRow.rows[0].id,tag,releaseName,body,String(release.html_url).slice(0,2048),
             cleanText(release.target_commitish,120),publishedAt,Boolean(release.prerelease),releaseHash],
         );
-        if (publishedAt && (!metadata.latest_release?.published_at || Date.parse(publishedAt) >= Date.parse(metadata.latest_release.published_at))) {
+        if (publishedAt && Date.parse(publishedAt) > latestReleaseAt) {
+          latestReleaseAt = Date.parse(publishedAt);
           await pool.query(
             'UPDATE world_knowledge_repositories SET latest_release_tag=$1,latest_release_published_at=$2,updated_at=now() WHERE id=$3',
             [tag,publishedAt,repoRow.rows[0].id],
@@ -238,7 +240,7 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
           count += Number(await storeDocument({
             title: fullName + ' — Release ' + tag + ': ' + releaseName,
             url: String(release.html_url), domain: 'github.com',
-            content: 'Repository: ' + fullName + '\\nRelease tag: ' + tag + '\\nPrerelease: ' + Boolean(release.prerelease) + '\\nLicense declared by GitHub: ' + license + '\\n\\n' + body,
+            content: 'Repository: ' + fullName + '\nRelease tag: ' + tag + '\nPrerelease: ' + Boolean(release.prerelease) + '\nLicense declared by GitHub: ' + license + '\n\n' + body,
             topic: topicKey || 'open-source', evidence: 'reference', confidence: 0.7,
             sourceType: 'documentation', trust: 'community', query, licenseLabel: license, publishedAt,
           }));
@@ -334,10 +336,11 @@ async function main() {
     if (!job) break;
     try {
       const results = await search(job.query);
-      let excerpts = 0, repoDocs = 0;
+      let excerpts = 0, repoDocs = 0, reposVisited = 0;
       for (const item of results) {
         if (await storeSearchExcerpt(item, job.query, job.topic_key)) excerpts++;
-        if (parseGitHubRepo(item.url || '')) {
+        if (parseGitHubRepo(item.url || '') && reposVisited < MAX_REPOS_PER_JOB && repositoryDocsIndexed + repoDocs < MAX_REPO_DOCS_PER_RUN) {
+          reposVisited++;
           try { repoDocs += await indexGitHubRepository(item, job.query, job.topic_key); }
           catch { /* Keep processing the other discovery results. */ }
         }
