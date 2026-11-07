@@ -83,3 +83,12 @@ Endpoints:
 - `POST /api/intelligence/world/jobs/:id/finish` — finish or fail a claimed job.
 
 This milestone creates the durable queue and worker contract, not a running crawler. A scheduled worker/search-provider integration still needs to claim jobs, search approved sources, evaluate evidence, and submit accepted documents to the ingestion endpoint. No arbitrary URL fetching, paywall bypass, private-data collection, or model-weight training is enabled by this migration.
+
+
+## Programming Knowledge Discovery Engine — milestone 3
+
+Migration `0038_programming_knowledge_domain.sql` adds a data-driven topic catalog for programming and its subfields: languages and compilers; frontend; backend and APIs; databases; mobile; AI/ML and LLM engineering; DevOps/cloud; defensive application security; testing; software architecture; developer tools; open source; data engineering; game development; embedded/IoT; and technical documentation. The topic catalog scopes shared knowledge acquisition only; it does not restrict normal assistant conversations.
+
+The scheduled worker source is `scripts/programming-knowledge-worker.ts` and the command is `npm run knowledge:worker`. It uses the already-supported Tavily search provider through the server-side `TAVILY_API_KEY` secret and `DATABASE_URL`. Each run seeds idempotent topic queries, claims up to 20 jobs (default 8), stores bounded search excerpts, records source URLs and query provenance, and labels search snippets as unverified with deliberately low initial confidence. It retries transient failures with bounded backoff. No arbitrary webpage fetch or code execution is performed.
+
+**Important current boundary:** this first worker indexes search-result excerpts, not complete documentation sites or repositories. Search snippets are discovery evidence, not verified facts. It does not yet crawl official documentation, parse Git repositories, perform semantic embeddings/vector search, rank conflicting versions, or train model weights. A host scheduler must invoke the worker; merely adding this source does not start it. The worker requires `DATABASE_URL`, `TAVILY_API_KEY`, migration 0038, and an explicitly configured cron/scheduler. Do not run migration, worker, tests, build, or deployment without approval. Use source licenses and site terms when a later full-content ingestion stage is added.
