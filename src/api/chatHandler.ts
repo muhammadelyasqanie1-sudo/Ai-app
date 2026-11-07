@@ -586,7 +586,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         }
         const calls=[...toolCalls.entries()].sort((a,b)=>a[0]-b[0]).map(([,call])=>call);
         if (!calls.length) { completedNormally=true; break; }
-        if (!requestUserId || !toolDefinitions.length || toolRound>=6) {
+        if (!requestUserId || !toolDefinitions.length || toolRound>=(browserRequested?6:3)) {
           throw new ProviderAdapterError('The model requested tools, but no enabled API tools are available or the tool-call limit was reached.', 403, 'tool_execution_unavailable');
         }
         toolRound++;
