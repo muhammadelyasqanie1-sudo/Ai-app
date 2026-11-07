@@ -87,13 +87,13 @@ async function seedTopicQueries() {
        ON CONFLICT(query_hash) DO UPDATE SET
          topic_key=COALESCE(world_knowledge_research_jobs.topic_key,EXCLUDED.topic_key),
          status=CASE WHEN world_knowledge_research_jobs.status IN ('completed','failed')
-                       AND world_knowledge_research_jobs.updated_at < now()-interval '30 days'
+                       AND world_knowledge_research_jobs.updated_at < now()-interval '7 days'
                      THEN 'queued' ELSE world_knowledge_research_jobs.status END,
          attempts=CASE WHEN world_knowledge_research_jobs.status IN ('completed','failed')
-                         AND world_knowledge_research_jobs.updated_at < now()-interval '30 days'
+                         AND world_knowledge_research_jobs.updated_at < now()-interval '7 days'
                        THEN 0 ELSE world_knowledge_research_jobs.attempts END,
          next_run_at=CASE WHEN world_knowledge_research_jobs.status IN ('completed','failed')
-                            AND world_knowledge_research_jobs.updated_at < now()-interval '30 days'
+                            AND world_knowledge_research_jobs.updated_at < now()-interval '7 days'
                           THEN now() ELSE world_knowledge_research_jobs.next_run_at END`,
       [normalized, Math.max(0, Math.min(10, topic.priority)), hash, topic.topic_key],
     );
