@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { BookOpen, BrainCircuit, Download, Plus, RefreshCw, Sparkles, Trash2, GraduationCap } from 'lucide-react';
+import { BookOpen, BrainCircuit, Download, Plus, RefreshCw, Sparkles, Trash2, GraduationCap, Code2, Search, GitBranch } from 'lucide-react';
 
 const API = ((import.meta as any).env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const csrf = () => {
@@ -19,6 +19,8 @@ async function request(path: string, init: RequestInit = {}) {
 
 type DocumentRow = { id: string; title: string; sourceLabel: string; characterCount: number; updatedAt: string };
 type TrainingRow = { id: string; prompt: string; idealAnswer: string; createdAt: string };
+type WorldStatus = { sources?: number; documents?: number; repositories?: number; releases?: number; codeFiles?: number; extractedSymbols?: number; indexedLanguages?: number; fullTextSearch?: boolean; vectorSearch?: boolean; modelWeightTraining?: boolean };
+type CodeFileRow = { id: string; repository: string; path: string; language: string; url: string; license: string; symbols: Array<{name:string;kind:string;approximate?:boolean}>; dependencies: Record<string,unknown>; excerpt: string };
 
 export const AfgIntelligencePanel: React.FC<{ language: string }> = ({ language }) => {
   const dari = language === 'dari';
@@ -33,6 +35,11 @@ export const AfgIntelligencePanel: React.FC<{ language: string }> = ({ language 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [worldStatus, setWorldStatus] = useState<WorldStatus|null>(null);
+  const [worldError, setWorldError] = useState('');
+  const [codeQuery, setCodeQuery] = useState('');
+  const [codeFiles, setCodeFiles] = useState<CodeFileRow[]>([]);
+  const [codeBusy, setCodeBusy] = useState(false);
 
   const load = useCallback(async () => {
     setBusy(true); setError('');
@@ -48,7 +55,31 @@ export const AfgIntelligencePanel: React.FC<{ language: string }> = ({ language 
     } finally { setBusy(false); }
   }, [dari]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); void loadWorld(); }, [load, loadWorld]);
+
+  const loadWorld = useCallback(async () => {
+    setWorldError('');
+    try {
+      const status = await request('/api/intelligence/world/status');
+      setWorldStatus(status);
+      const indexed = await request('/api/intelligence/world/code?limit=12');
+      setCodeFiles(Array.isArray(indexed.codeFiles) ? indexed.codeFiles : []);
+    } catch (e) {
+      setWorldStatus(null);
+      setWorldError(e instanceof Error ? e.message : (dari ? 'موتور دانش برنامه‌نویسی هنوز آماده نیست.' : 'Programming knowledge engine is not available yet.'));
+    }
+  }, [dari]);
+
+  const searchCode = async () => {
+    setCodeBusy(true); setWorldError('');
+    try {
+      const params = new URLSearchParams({ q: codeQuery.trim(), limit: '30' });
+      const result = await request('/api/intelligence/world/code?' + params.toString());
+      setCodeFiles(Array.isArray(result.codeFiles) ? result.codeFiles : []);
+    } catch (e) {
+      setWorldError(e instanceof Error ? e.message : 'Could not search indexed source code.');
+    } finally { setCodeBusy(false); }
+  };
 
   const saveKnowledge = async () => {
     if (!title.trim() || !content.trim()) return;
@@ -107,6 +138,35 @@ export const AfgIntelligencePanel: React.FC<{ language: string }> = ({ language 
     </div>
     {error && <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{error}</p>}
     {notice && <p role="status" className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-300">{notice}</p>}
+    <section className={cardClass}>
+      <div className="flex items-center gap-2"><Code2 className="h-5 w-5 text-cyan-300"/><h3 className="font-bold text-white">{dari?'دانش عمومی برنامه‌نویسی':'Programming knowledge engine'}</h3></div>
+      <p className="text-xs leading-5 text-slate-400">{dari?'مخزن‌های عمومی، فایل‌های منبع، نمادهای کد و وابستگی‌های پروژه را با حفظ پیوند منبع جست‌وجو کنید.':'Search public repositories, source files, extracted code symbols and declared dependencies with source provenance.'}</p>
+      {worldError && <p role="status" className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-200">{worldError}</p>}
+      {worldStatus && <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {[
+          [dari?'مخزن‌ها':'Repositories',worldStatus.repositories],
+          [dari?'فایل‌های کد':'Source files',worldStatus.codeFiles],
+          [dari?'نمادهای کد':'Code symbols',worldStatus.extractedSymbols],
+          [dari?'اسناد':'Documents',worldStatus.documents],
+          [dari?'نسخه‌ها':'Releases',worldStatus.releases],
+          [dari?'زبان‌ها':'Languages',worldStatus.indexedLanguages],
+        ].map(([label,value])=><div key={String(label)} className="rounded-xl border border-slate-800 bg-slate-900/70 p-3"><p className="text-[10px] text-slate-500">{label}</p><p className="mt-1 text-lg font-black text-cyan-200">{Number(value||0).toLocaleString()}</p></div>)}
+      </div>}
+      <div className="flex gap-2">
+        <input className={inputClass} value={codeQuery} onChange={e=>setCodeQuery(e.target.value)} maxLength={120} placeholder={dari?'نام تابع، کلاس یا فایل را جست‌وجو کنید':'Search function, class, symbol or file...'}/>
+        <button disabled={codeBusy||!worldStatus} onClick={()=>void searchCode()} className="shrink-0 rounded-xl bg-cyan-400 px-3 py-2 text-xs font-black text-slate-950 disabled:opacity-40"><Search className="inline h-4 w-4"/></button>
+      </div>
+      <div className="space-y-2">
+        {codeFiles.map(file=><article key={file.id} className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+          <div className="flex items-start gap-2"><GitBranch className="mt-0.5 h-4 w-4 shrink-0 text-violet-300"/><div className="min-w-0 flex-1"><p className="break-all text-xs font-bold text-white">{file.repository}</p><p className="break-all text-[11px] text-cyan-200">{file.path}</p><p className="mt-1 text-[10px] text-slate-500">{file.language} · {file.license||'unknown license'}</p></div></div>
+          {Array.isArray(file.symbols)&&file.symbols.length>0&&<p className="mt-2 break-words text-[10px] leading-5 text-slate-400">{file.symbols.slice(0,12).map(symbol=>symbol.kind+': '+symbol.name).join(' · ')}{file.symbols.some(symbol=>symbol.approximate)?' · approximate':''}</p>}
+          {file.dependencies&&Object.keys(file.dependencies).length>0&&<p className="mt-1 text-[10px] text-violet-200">{dari?'فایل وابستگی':'Dependency manifest'}: {String(file.dependencies.manifest||'manifest')}</p>}
+          <a href={file.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[10px] font-semibold text-cyan-300 underline">{dari?'مشاهده منبع در GitHub':'View source on GitHub'}</a>
+        </article>)}
+        {worldStatus&&!codeFiles.length&&<p className="text-xs text-slate-500">{dari?'هنوز فایل کدی در موتور دانش ثبت نشده است.':'No source files have been indexed yet.'}</p>}
+      </div>
+      <p className="text-[10px] leading-5 text-slate-500">{dari?'استخراج نمادها تقریبی است؛ فایل‌های عمومی فقط به‌عنوان مرجع ذخیره می‌شوند و اجرا نمی‌شوند.':'Symbol extraction is approximate. Public source is stored as reference material and is never executed.'}</p>
+    </section>
     <section className={cardClass}>
       <div className="flex items-center gap-2"><BookOpen className="h-5 w-5 text-cyan-300"/><h3 className="font-bold text-white">{dari?'دانش اختصاصی من':'My private knowledge'}</h3></div>
       <p className="text-xs text-slate-400">{dari?'متن‌های معتبر خود را اضافه کنید تا هنگام پرسش‌های مرتبط در چت بازیابی شوند.':'Add reference text that can be retrieved during relevant chats.'}</p>
