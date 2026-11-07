@@ -25,10 +25,14 @@ export async function executeWebSearchTool(userId: string, args: unknown, parent
   const input = ChatWebSearchInput.safeParse(args);
   if (!input.success) throw new Error('Provide a valid web-search query and supported filters.');
 
+  let integrationId: string | null = null;
   if (pool) {
-    const status = await pool.query("SELECT enabled,status,last_check_ok FROM integrations WHERE slug='web-search' LIMIT 1");
-    if (status.rows[0] && !(status.rows[0].enabled && status.rows[0].status === 'active' && status.rows[0].last_check_ok === true)) {
-      throw new Error('The Web Search connection is not verified and enabled. Ask an administrator to check Admin → Connections.');
+    const status = await pool.query("SELECT id,enabled,status,last_check_ok FROM integrations WHERE slug='web-search' LIMIT 1");
+    if (status.rows[0]) {
+      if (!(status.rows[0].enabled && status.rows[0].status === 'active' && status.rows[0].last_check_ok === true)) {
+        throw new Error('The Web Search connection is not verified and enabled. Ask an administrator to check Admin → Connections.');
+      }
+      integrationId = String(status.rows[0].id);
     }
   }
 
@@ -36,6 +40,18 @@ export async function executeWebSearchTool(userId: string, args: unknown, parent
   const provider = String(runtime?.config.provider || 'tavily');
   const apiKey = runtime?.credentials.api_key || process.env.TAVILY_API_KEY || '';
   if (!apiKey) throw new Error('Web Search is not configured. Connect Tavily in Admin → Connections.');
+  if (integrationId && pool) {
+    const policy = await pool.query('SELECT requests,window_seconds FROM integration_rate_limits WHERE integration_id=$1',[integrationId]);
+    const maxRequests = Math.max(1, Number(policy.rows[0]?.requests || 12));
+    const windowSeconds = Math.max(1, Number(policy.rows[0]?.window_seconds || 60));
+    const counter = await pool.query(`INSERT INTO integration_rate_counters(integration_id,user_id,window_start,request_count)
+      VALUES($1,$2,to_timestamp((floor(extract(epoch FROM now())/$3)*$3)::double precision),1)
+      ON CONFLICT(integration_id,user_id,window_start) DO UPDATE SET request_count=integration_rate_counters.request_count+1
+      RETURNING request_count`,[integrationId,userId,windowSeconds]);
+    if (Number(counter.rows[0]?.request_count || 0) > maxRequests) {
+      throw new Error('Web Search integration rate limit reached. Please retry after the current window.');
+    }
+  }
   if (activeSearches >= 3) throw new Error('Web Search is busy. Please retry shortly.');
 
   activeSearches += 1;
