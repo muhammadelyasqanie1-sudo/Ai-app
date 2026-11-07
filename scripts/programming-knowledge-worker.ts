@@ -196,7 +196,7 @@ const CODE_EXTENSIONS: Record<string,string> = {
 };
 const SKIP_CODE_PATH = /(^|\/)(node_modules|vendor|dist|build|coverage|\.git|\.next|target|Pods|out|bin)(\/|$)/i;
 const SENSITIVE_CODE_PATH = /(^|\/)(\.env(?:\..*)?|secrets?(?:\..*)?|credentials?(?:\..*)?|id_rsa|id_ed25519|.*\.(?:pem|key|p12|pfx))$/i;
-const MAX_CODE_FILES_PER_REPO = 16;
+const MAX_CODE_FILES_PER_REPO = 8;
 const MAX_CODE_BYTES_PER_FILE = 36000;
 const MAX_CODE_BYTES_PER_RUN = 240000;
 let codeBytesIndexedThisRun = 0;
