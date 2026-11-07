@@ -14,15 +14,13 @@ export async function buildPersonalContextMessage(userId: string, latestUserMess
       WHERE u.id=$1 LIMIT 1`,
     [userId],
   );
-  const memoryEnabled = settings.rows[0]?.enabled === true;
-  const memoriesPromise = memoryEnabled
-    ? pool.query(
-        `SELECT category,content FROM user_memories
-          WHERE user_id=$1 AND consent_sensitive=false
-          ORDER BY updated_at DESC LIMIT 12`,
-        [userId],
-      )
-    : Promise.resolve({ rows: [] as Array<{ category: string; content: string }> });
+  if (settings.rows[0]?.enabled !== true) return null;
+  const memoriesPromise = pool.query(
+    `SELECT category,content FROM user_memories
+      WHERE user_id=$1 AND consent_sensitive=false
+      ORDER BY updated_at DESC LIMIT 12`,
+    [userId],
+  );
   const documentsPromise = pool.query(
     `SELECT id,title,content,source_label
        FROM knowledge_documents
