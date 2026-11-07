@@ -8,19 +8,23 @@ export async function buildWorldKnowledgeContext(query: string): Promise<string>
   if (!pool || !query.trim()) return '';
   try {
     const result = await pool.query(
-      `SELECT d.title,d.content,d.topic,d.language,d.evidence_type,d.confidence,
+      `WITH search_query AS (
+         SELECT websearch_to_tsquery('simple',$1) AS tsq
+       )
+       SELECT d.title,d.content,d.topic,d.language,d.evidence_type,d.confidence,
               d.published_at,s.name AS source_name,s.canonical_url,s.trust_level,
-              s.license_label
+              s.license_label,
+              ts_rank_cd(d.search_vector,q.tsq,32) AS relevance
          FROM world_knowledge_documents d
          JOIN world_knowledge_sources s ON s.id=d.source_id
-        WHERE s.enabled=true
-          AND d.search_vector @@ plainto_tsquery('simple',$1)
+         CROSS JOIN search_query q
+        WHERE s.enabled=true AND d.search_vector @@ q.tsq
         ORDER BY
           CASE s.trust_level WHEN 'official' THEN 0 WHEN 'academic' THEN 1
             WHEN 'established' THEN 2 WHEN 'community' THEN 3 ELSE 4 END,
-          ts_rank(d.search_vector,plainto_tsquery('simple',$1)) DESC,
-          d.updated_at DESC
-        LIMIT 5`,
+          ts_rank_cd(d.search_vector,q.tsq,32) DESC,
+          d.published_at DESC NULLS LAST,d.updated_at DESC
+        LIMIT 6`,
       [query.slice(0,500)],
     );
     if (!result.rows.length) return '';
