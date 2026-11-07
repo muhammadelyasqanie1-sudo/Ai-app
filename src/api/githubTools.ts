@@ -242,8 +242,8 @@ function redactSourceSecrets(value: string): string {
 function containsPotentialSecrets(value: string): boolean {
   return redactSourceSecrets(value) !== value ||
     /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i.test(value) ||
-    /\\bAKIA[0-9A-Z]{16}\\b/.test(value) ||
-    /\\bxox[baprs]-[A-Za-z0-9-]{10,}\\b/.test(value);
+    /\bAKIA[0-9A-Z]{16}\b/.test(value) ||
+    /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/.test(value);
 }
 function repoSummary(row: any) {
   return {
