@@ -246,15 +246,19 @@ export async function handleWorldKnowledgeApi(req: IncomingMessage, res: ServerR
     const query = (url.searchParams.get('q') || '').trim().slice(0,500);
     if (!query) { reply(res, 400, { error: 'Provide a search query.' }); return true; }
     const result = await pool.query(
-      `SELECT d.id,d.title,d.content,d.topic,d.language,d.evidence_type AS "evidenceType",
+      `WITH search_query AS (
+         SELECT websearch_to_tsquery('simple',$1) AS tsq
+       )
+       SELECT d.id,d.title,d.content,d.topic,d.language,d.evidence_type AS "evidenceType",
               d.confidence,d.published_at AS "publishedAt",s.name AS "sourceName",
               s.canonical_url AS "sourceUrl",s.source_type AS "sourceType",
               s.trust_level AS "trustLevel",s.license_label AS "licenseLabel",
-              ts_rank(d.search_vector,plainto_tsquery('simple',$1)) AS relevance
+              ts_rank_cd(d.search_vector,q.tsq,32) AS relevance
          FROM world_knowledge_documents d
          JOIN world_knowledge_sources s ON s.id=d.source_id
-        WHERE s.enabled=true AND d.search_vector @@ plainto_tsquery('simple',$1)
-        ORDER BY relevance DESC,d.updated_at DESC LIMIT 8`,
+         CROSS JOIN search_query q
+        WHERE s.enabled=true AND d.search_vector @@ q.tsq
+        ORDER BY relevance DESC,d.published_at DESC NULLS LAST,d.updated_at DESC LIMIT 8`,
       [query],
     );
     reply(res, 200, { query, results: result.rows });
