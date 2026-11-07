@@ -165,7 +165,7 @@ async function storeDocument(input: {
 }
 
 function classifySource(hostname: string): { trust: 'official' | 'academic' | 'community' | 'unreviewed'; sourceType: 'documentation' | 'academic' | 'community' | 'other'; confidence: number } {
-  const host = hostname.toLowerCase().replace(/^www\\./, '');
+  const host = hostname.toLowerCase().replace(/^www\./, '');
   const matches = (domains: string[]) => domains.some((domain) => host === domain || host.endsWith('.' + domain));
   if (matches(['developer.mozilla.org','docs.python.org','typescriptlang.org','nodejs.org','react.dev','nextjs.org','vite.dev','rust-lang.org','go.dev','kotlinlang.org','developer.android.com','developer.apple.com','learn.microsoft.com','docs.github.com','docs.docker.com','kubernetes.io','postgresql.org','supabase.com','owasp.org','w3.org','cloudflare.com','docs.aws.amazon.com','developer.chrome.com','playwright.dev','docs.npmjs.com','docs.oracle.com'])) return { trust: 'official', sourceType: 'documentation', confidence: 0.78 };
   if (matches(['arxiv.org','acm.org','ieee.org','usenix.org','nist.gov','nature.com','science.org'])) return { trust: 'academic', sourceType: 'academic', confidence: 0.72 };
@@ -484,47 +484,58 @@ async function finish(job: Job, outcome: 'completed' | 'failed', error = '') {
 }
 
 async function main() {
-  const topics = await seedTopicQueries();
-  let processed = 0, excerptsIndexed = 0, repositoryDocsIndexed = 0, reposVisitedThisRun = 0;
-  for (; processed < MAX_JOBS; processed++) {
-    const job = await claimJob();
-    if (!job) break;
-    try {
-      const results = await search(job.query);
-      let excerpts = 0, repoDocs = 0, reposVisited = 0;
-      for (const item of results) {
-        if (await storeSearchExcerpt(item, job.query, job.topic_key, job.language)) excerpts++;
-        if (parseGitHubRepo(item.url || '') && reposVisited < MAX_REPOS_PER_JOB && reposVisitedThisRun < MAX_REPOS_PER_RUN && repositoryDocsIndexed + repoDocs < MAX_REPO_DOCS_PER_RUN) {
-          reposVisited++;
-          reposVisitedThisRun++;
-          try { repoDocs += await indexGitHubRepository(item, job.query, job.topic_key); }
-          catch { /* Keep processing the other discovery results. */ }
-        }
-      }
-      excerptsIndexed += excerpts;
-      repositoryDocsIndexed += repoDocs;
-      await finish(job, 'completed', excerpts + ' search excerpts and ' + repoDocs + ' public repository documents indexed.');
-    } catch (error) {
-      await finish(job, 'failed', error instanceof Error ? error.message : 'Unknown research worker error');
-    }
+  const lockClient = await pool.connect();
+  const lockResult = await lockClient.query('SELECT pg_try_advisory_lock(74062026, 1) AS acquired');
+  if (!lockResult.rows[0]?.acquired) {
+    lockClient.release();
+    process.stdout.write(JSON.stringify({ worker: 'afg-programming-knowledge', skipped: true, reason: 'another_worker_run_is_active' }) + '\n');
+    return;
   }
-  process.stdout.write(JSON.stringify({
-    worker: 'afg-programming-knowledge',
-    topicsSeeded: topics,
-    jobsProcessed: processed,
-    excerptsIndexed,
-    repositoryDocsIndexed,
-    repositoriesVisited: reposVisitedThisRun,
-    maxRepositoriesPerRun: MAX_REPOS_PER_RUN,
-    codeBytesIndexed: codeBytesIndexedThisRun,
-    codeFilesIndexed: codeFilesIndexedTotal,
-    codeSymbolsIndexed: codeSymbolsIndexedTotal,
-    dependencyManifestsIndexed: dependencyManifestsIndexedTotal,
-    maxCodeBytesPerRun: MAX_CODE_BYTES_PER_RUN,
-    maxJobsPerRun: MAX_JOBS,
-  }) + '\n');
+  try {
+    const topics = await seedTopicQueries();
+    let processed = 0, excerptsIndexed = 0, repositoryDocsIndexed = 0, reposVisitedThisRun = 0;
+    for (; processed < MAX_JOBS; processed++) {
+      const job = await claimJob();
+      if (!job) break;
+      try {
+        const results = await search(job.query);
+        let excerpts = 0, repoDocs = 0, reposVisited = 0;
+        for (const item of results) {
+          if (await storeSearchExcerpt(item, job.query, job.topic_key, job.language)) excerpts++;
+          if (parseGitHubRepo(item.url || '') && reposVisited < MAX_REPOS_PER_JOB && reposVisitedThisRun < MAX_REPOS_PER_RUN && repositoryDocsIndexed + repoDocs < MAX_REPO_DOCS_PER_RUN) {
+            reposVisited++;
+            reposVisitedThisRun++;
+            try { repoDocs += await indexGitHubRepository(item, job.query, job.topic_key); }
+            catch { /* Keep processing the other discovery results. */ }
+          }
+        }
+        excerptsIndexed += excerpts;
+        repositoryDocsIndexed += repoDocs;
+        await finish(job, 'completed', excerpts + ' search excerpts and ' + repoDocs + ' public repository documents indexed.');
+      } catch (error) {
+        await finish(job, 'failed', error instanceof Error ? error.message : 'Unknown research worker error');
+      }
+    }
+    process.stdout.write(JSON.stringify({
+      worker: 'afg-programming-knowledge',
+      topicsSeeded: topics,
+      jobsProcessed: processed,
+      excerptsIndexed,
+      repositoryDocsIndexed,
+      repositoriesVisited: reposVisitedThisRun,
+      maxRepositoriesPerRun: MAX_REPOS_PER_RUN,
+      codeBytesIndexed: codeBytesIndexedThisRun,
+      codeFilesIndexed: codeFilesIndexedTotal,
+      codeSymbolsIndexed: codeSymbolsIndexedTotal,
+      dependencyManifestsIndexed: dependencyManifestsIndexedTotal,
+      maxCodeBytesPerRun: MAX_CODE_BYTES_PER_RUN,
+      maxJobsPerRun: MAX_JOBS,
+    }) + '\n');
+  } finally {
+    await lockClient.query('SELECT pg_advisory_unlock(74062026, 1)');
+    lockClient.release();
+  }
 }
-
 main().catch((error) => {
   process.stderr.write((error instanceof Error ? error.message : 'Worker failed') + '\n');
   process.exitCode = 1;
