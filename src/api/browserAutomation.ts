@@ -177,10 +177,11 @@ async function ensureBrowserSession(userId: string, db: any, client: any): Promi
 
   if (profile?.active_session_id) {
     try {
-      const existing = await client.sessions.retrieve(String(profile.active_session_id));
-      const connectUrl = String(existing?.connectUrl || '');
+      const sessionId = String(profile.active_session_id);
+      const existing = await client.sessions.retrieve(sessionId);
+      const debugConnection = existing?.connectUrl ? null : await client.sessions.debug(sessionId).catch(() => null);
+      const connectUrl = String(existing?.connectUrl || debugConnection?.wsUrl || '');
       if (String(existing?.status || '').toUpperCase() === 'RUNNING' && connectUrl.startsWith('wss://')) {
-        const sessionId = String(profile.active_session_id);
         return { sessionId, connectUrl, liveViewUrl: await getLiveViewUrl(client,sessionId) };
       }
     } catch {
