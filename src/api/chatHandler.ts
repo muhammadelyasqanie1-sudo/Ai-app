@@ -412,7 +412,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
 
     const latestUserPrompt = [...upstreamMessages].reverse().find((message) => message.role === 'user')?.content || '';
     const githubRequested = /github|git hub|گیت.?هاب|مخزن گیت/i.test(latestUserPrompt);
-    const webSearchRequested = /\\b(web search|search the web|browse the web|look up online|internet search|online research|find sources|latest news)\\b|جستجوی وب|جست‌وجوی وب|جستجو در وب|جست‌وجو در وب|در اینترنت جستجو|در وب جستجو|وبگردی|منابع آنلاین|جستجوی اینترنتی|جست‌وجوی اینترنتی/i.test(latestUserPrompt);
+    const webSearchRequested = /\b(web search|search the web|browse the web|look up online|internet search|online research|find sources|latest news)\b|جستجوی وب|جست‌وجوی وب|جستجو در وب|جست‌وجو در وب|در اینترنت جستجو|در وب جستجو|وبگردی|منابع آنلاین|جستجوی اینترنتی|جست‌وجوی اینترنتی/i.test(latestUserPrompt);
     // Do not force ordinary chat models to support function calling. Only attach
     // external tools when the latest user request actually asks for an integration action.
     const externalToolRequested = githubRequested || webSearchRequested ||
@@ -511,7 +511,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         : callName.startsWith('mcp_') ? (isDari ? 'اجرای ابزار اتصال خارجی' : 'Running external connector')
         : callName.startsWith('api_') ? (() => {
             const definition = toolDefinitions.find((item:any) => item.function?.name === callName);
-            const match = /API service:\\s*([^.]+)/i.exec(String(definition?.function?.description || ''));
+            const match = /API service:\s*([^.]+)/i.exec(String(definition?.function?.description || ''));
             return match?.[1] ? (isDari ? 'اتصال به ' + match[1] : 'Using ' + match[1]) : (isDari ? 'اجرای ابزار API' : 'Running API tool');
           })()
         : (isDari ? 'اجرای ابزار' : 'Running tool');
@@ -520,7 +520,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       const detail = webSearch
         ? (status === 'completed' ? (isDari ? query + ' · ' + sourceCount + ' منبع' : query + ' · ' + sourceCount + ' sources') : query)
         : repo ? (targetPath ? repo + '/' + targetPath : repo) : (url ? new URL(url).hostname : undefined);
-      if (!res.writableEnded && !res.destroyed) res.write(`data: ${JSON.stringify({type:'activity',id:randomUUID(),name:callName,label,detail,url,status,timestamp:Date.now()})}\\n\\n`);
+      if (!res.writableEnded && !res.destroyed) res.write(`data: ${JSON.stringify({type:'activity',id:randomUUID(),name:callName,label,detail,url,status,timestamp:Date.now()})}\n\n`);
     };
     heartbeat = setInterval(() => {
       if (!res.writableEnded && !res.destroyed) res.write(': heartbeat\n\n');
