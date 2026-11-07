@@ -125,7 +125,7 @@ export const AfgCommandPalette: React.FC<AfgCommandPaletteProps> = (props) => {
           : (dari ? 'منوی سریع' : 'Command palette');
 
   return (
-    <div className="afg-command-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="afg-command-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="afg-command-panel" role="dialog" aria-modal="true" aria-label={title}>
         <header className="afg-command-heading">
           <div><span className="afg-command-kicker">AFG AI / QUICK OPEN</span><h2>{title}</h2></div>
