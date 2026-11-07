@@ -199,11 +199,11 @@ function codeLanguage(path: string) {
 }
 function redactPotentialSecrets(source: string) {
   return source
-    .replace(/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\\s\\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g, '[REDACTED PRIVATE KEY]')
-    .replace(/\\bAKIA[0-9A-Z]{16}\\b/g, '[REDACTED AWS ACCESS KEY]')
-    .replace(/\\bgh[pousr]_[A-Za-z0-9_]{20,}\\b/g, '[REDACTED GITHUB TOKEN]')
-    .replace(/\\bgithub_pat_[A-Za-z0-9_]{20,}\\b/g, '[REDACTED GITHUB TOKEN]')
-    .replace(/\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b/g, '[REDACTED JWT]');
+    .replace(/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g, '[REDACTED PRIVATE KEY]')
+    .replace(/\bAKIA[0-9A-Z]{16}\b/g, '[REDACTED AWS ACCESS KEY]')
+    .replace(/\bgh[pousr]_[A-Za-z0-9_]{20,}\b/g, '[REDACTED GITHUB TOKEN]')
+    .replace(/\bgithub_pat_[A-Za-z0-9_]{20,}\b/g, '[REDACTED GITHUB TOKEN]')
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, '[REDACTED JWT]');
 }
 function extractCodeSymbols(source: string, language: string) {
   const patterns: Array<{kind:string; re:RegExp}> = [];
@@ -236,7 +236,7 @@ function extractCodeSymbols(source: string, language: string) {
     let match:RegExpExecArray|null;
     while((match=item.re.exec(source))!==null) {
       const name=match[1];
-      if(name && name.length<=120) found.set(item.kind+':'+name,{name,kind:item.kind,line:source.slice(0,match.index).split('\\n').length,approximate:true});
+      if(name && name.length<=120) found.set(item.kind+':'+name,{name,kind:item.kind,line:source.slice(0,match.index).split('\n').length,approximate:true});
       if(found.size>=300) return [...found.values()];
     }
   }
@@ -263,10 +263,10 @@ async function storeCodeFile(repositoryId: string, fullName: string, license: st
   const path=String(entry.path||'').slice(0,700);
   const language=codeLanguage(path);
   const url='https://github.com/'+fullName+'/blob/'+encodeURIComponent(defaultBranch)+'/'+path.split('/').map(encodeURIComponent).join('/');
+  const safeSource=redactPotentialSecrets(source);
   const symbols=extractCodeSymbols(safeSource,language);
   const manifestNames=['package.json','requirements.txt','pyproject.toml','cargo.toml','go.mod','pom.xml'];
-  const dependencies=manifestNames.includes(path.split('/').pop()?.toLowerCase()||'') ? parseDependencyManifest(path,source) : {};
-  const safeSource=redactPotentialSecrets(source);
+  const dependencies=manifestNames.includes(path.split('/').pop()?.toLowerCase()||'') ? parseDependencyManifest(path,safeSource) : {};
   const contentHash=sha(safeSource);
   await pool.query(
     \`INSERT INTO world_knowledge_code_files(repository_id,path,language,blob_sha,html_url,license_spdx,content,symbols,dependencies,content_hash,indexed_at)
@@ -278,7 +278,7 @@ async function storeCodeFile(repositoryId: string, fullName: string, license: st
     [repositoryId,path,language,String(entry.sha||'').slice(0,80),url,license,safeSource,
       JSON.stringify(symbols),JSON.stringify(dependencies),contentHash],
   );
-  return {bytes:Buffer.byteLength(source,'utf8'),symbols:symbols.length,manifest:Object.keys(dependencies).length>0};
+  return {bytes:Buffer.byteLength(safeSource,'utf8'),symbols:symbols.length,manifest:Object.keys(dependencies).length>0};
 }
 
 async function indexGitHubRepository(result: SearchResult, query: string, topicKey: string | null) {
