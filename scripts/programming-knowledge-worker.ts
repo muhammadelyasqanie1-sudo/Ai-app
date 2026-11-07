@@ -296,12 +296,12 @@ async function storeCodeFile(repositoryId: string, fullName: string, license: st
   const dependencies=manifestNames.includes(path.split('/').pop()?.toLowerCase()||'') ? parseDependencyManifest(path,safeSource) : {};
   const contentHash=sha(safeSource);
   await pool.query(
-    \`INSERT INTO world_knowledge_code_files(repository_id,path,language,blob_sha,html_url,license_spdx,content,symbols,dependencies,content_hash,indexed_at)
+    `INSERT INTO world_knowledge_code_files(repository_id,path,language,blob_sha,html_url,license_spdx,content,symbols,dependencies,content_hash,indexed_at)
      VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,now())
      ON CONFLICT(repository_id,path) DO UPDATE SET language=EXCLUDED.language,blob_sha=EXCLUDED.blob_sha,
        html_url=EXCLUDED.html_url,license_spdx=EXCLUDED.license_spdx,content=EXCLUDED.content,
        symbols=EXCLUDED.symbols,dependencies=EXCLUDED.dependencies,content_hash=EXCLUDED.content_hash,
-       indexed_at=now(),updated_at=now()\`,
+       indexed_at=now(),updated_at=now()`,
     [repositoryId,path,language,String(entry.sha||'').slice(0,80),url,license,safeSource,
       JSON.stringify(symbols),JSON.stringify(dependencies),contentHash],
   );
