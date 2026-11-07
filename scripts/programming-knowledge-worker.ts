@@ -22,11 +22,11 @@ type SearchResult = { title?: string; url?: string; content?: string; score?: nu
 
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 function normalizeDocument(value: unknown, limit: number) {
-  return String(value || '').replace(/<script\\b[^>]*>[\\s\\S]*?<\\/script>/gi, ' ')
-    .replace(/<style\\b[^>]*>[\\s\\S]*?<\\/style>/gi, ' ')
-    .replace(/[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/g, ' ')
-    .replace(/\\r\\n?/g, '\\n').replace(/[ \\t]+\\n/g, '\\n')
-    .replace(/\\n{4,}/g, '\\n\\n\\n').trim().slice(0, limit);
+  return String(value || '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ' ')
+    .replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{4,}/g, '\n\n\n').trim().slice(0, limit);
 }
 function cleanText(value: unknown, limit: number) {
   return String(value || '').replace(/<[^>]*>/g, ' ')
