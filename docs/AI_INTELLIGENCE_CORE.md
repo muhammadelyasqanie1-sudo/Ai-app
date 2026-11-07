@@ -68,3 +68,18 @@ The authenticated API exposes:
 Relevant shared documents are retrieved into chat context automatically. Source text is explicitly untrusted and cannot override system or user instructions. Search results preserve source URLs and distinguish evidence types and trust levels. Community material can be stored, but is labelled separately from official and academic material.
 
 **This is a curated RAG knowledge layer, not autonomous web crawling or model-weight training.** The ingestion API accepts content already obtained through a permitted research workflow; it does not fetch arbitrary URLs, bypass paywalls, scrape sites, or execute downloaded content. Search currently uses PostgreSQL `simple` full-text search; Dari/Persian/Pashto language-aware tokenization, embeddings/vector search, scheduled crawlers, freshness policies, review queues and corpus-scale evaluation remain future milestones. Respect source terms, robots policies, licenses, privacy and rate limits before ingestion.
+
+
+## Continuous, topic-agnostic research queue — milestone 2
+
+The Universal Knowledge Principle is now explicit in the chat policy: no lawful academic or knowledge domain is excluded merely because it is sensitive. Knowledge and operational assistance are evaluated separately. The assistant should explain facts, history, theories, controversy, and defensive knowledge candidly, while refusing only actionable help that facilitates serious harm, crime, exploitation, or abuse and redirecting to safe alternatives.
+
+Migration `0037_world_knowledge_research_queue.sql` adds a durable research queue. Administrators can enqueue any topic, list jobs, claim work with a ten-minute lease using PostgreSQL row locking, and finish jobs. Expired leases can be reclaimed; failed work is rescheduled with bounded backoff. Duplicate topic/language requests are coalesced. The queue does not impose a subject allowlist.
+
+Endpoints:
+- `POST /api/intelligence/world/jobs` — enqueue a topic-agnostic research query.
+- `GET /api/intelligence/world/jobs` — inspect queue state.
+- `POST /api/intelligence/world/jobs/claim` — atomically claim one ready job.
+- `POST /api/intelligence/world/jobs/:id/finish` — finish or fail a claimed job.
+
+This milestone creates the durable queue and worker contract, not a running crawler. A scheduled worker/search-provider integration still needs to claim jobs, search approved sources, evaluate evidence, and submit accepted documents to the ingestion endpoint. No arbitrary URL fetching, paywall bypass, private-data collection, or model-weight training is enabled by this migration.

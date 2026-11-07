@@ -86,3 +86,8 @@ Migration `0035_hybrid_intelligence_core.sql` adds owner-scoped private knowledg
 ## Universal Knowledge Engine
 
 Migration `0036_universal_knowledge_engine.sql` adds a curated shared source registry and provenance-aware knowledge documents. It records source type, trust level, license label, language, topic, evidence type, editorial confidence, publication date and a content fingerprint. The authenticated world-knowledge API allows signed-in users to browse/search the corpus; source registration and ingestion are restricted to administrator roles. Relevant content is automatically retrieved into chat as untrusted reference material. Apply migration 0036 only after backup and explicit migration approval. This migration does not start a crawler, bypass website restrictions, or train model weights.
+
+
+## Continuous world research queue
+
+Migration `0037_world_knowledge_research_queue.sql` adds a topic-agnostic durable research queue with idempotent query hashes, priority, retry attempts, leases, and atomic job claiming. Administrators can enqueue and inspect jobs; authorized workers claim and finish jobs. The queue has no academic-topic allowlist. A separate scheduled worker and approved search-provider integration are required to execute research and ingest source-backed documents. Apply migration 0037 only after backup and explicit migration approval.

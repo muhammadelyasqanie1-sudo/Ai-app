@@ -12,6 +12,17 @@ const sourceSchema = z.object({
   licenseLabel: z.string().trim().max(120).default('unknown'),
 }).strict();
 
+const researchJobSchema = z.object({
+  query: z.string().trim().min(3).max(500),
+  language: z.enum(['english','dari','persian','pashto','arabic','urdu','russian','other','unknown']).default('unknown'),
+  priority: z.number().int().min(0).max(10).default(5),
+}).strict();
+
+const finishJobSchema = z.object({
+  outcome: z.enum(['completed','failed']),
+  summary: z.string().trim().max(2000).default(''),
+}).strict();
+
 const documentSchema = z.object({
   sourceId: z.string().uuid(),
   title: z.string().trim().min(1).max(240),
@@ -54,15 +65,95 @@ export async function handleWorldKnowledgeApi(req: IncomingMessage, res: ServerR
     return true;
   }
 
+  if (pathname === '/api/intelligence/world/jobs' && req.method === 'POST') {
+    if (!isAdmin(user.role)) { reply(res, 403, { error: 'Only administrators can schedule shared research jobs.' }); return true; }
+    try {
+      const parsed = researchJobSchema.safeParse(await readJsonBody(req, 4000));
+      if (!parsed.success) { reply(res, 400, { error: 'Provide a research query, language and priority.' }); return true; }
+      const queryHash = createHash('sha256').update(parsed.data.query.toLocaleLowerCase() + '|' + parsed.data.language).digest('hex');
+      const result = await pool.query(
+        `INSERT INTO world_knowledge_research_jobs(query,language,priority,query_hash,requested_by)
+         VALUES($1,$2,$3,$4,$5)
+         ON CONFLICT(query_hash) DO UPDATE SET
+           status=CASE WHEN world_knowledge_research_jobs.status IN ('completed','failed') THEN 'queued' ELSE world_knowledge_research_jobs.status END,
+           priority=GREATEST(world_knowledge_research_jobs.priority,EXCLUDED.priority),
+           next_run_at=CASE WHEN world_knowledge_research_jobs.status IN ('completed','failed') THEN now() ELSE world_knowledge_research_jobs.next_run_at END,
+           updated_at=now()
+         RETURNING id,query,language,priority,status,attempts,created_at AS "createdAt"`,
+        [parsed.data.query,parsed.data.language,parsed.data.priority,queryHash,user.id],
+      );
+      reply(res, 201, { job: result.rows[0] });
+    } catch {
+      reply(res, 400, { error: 'Could not schedule this research job.' });
+    }
+    return true;
+  }
+
+  if (pathname === '/api/intelligence/world/jobs' && req.method === 'GET') {
+    if (!isAdmin(user.role)) { reply(res, 403, { error: 'Administrator access is required.' }); return true; }
+    const result = await pool.query(
+      `SELECT id,query,language,priority,status,attempts,last_error AS "lastError",
+              next_run_at AS "nextRunAt",lease_until AS "leaseUntil",
+              created_at AS "createdAt",updated_at AS "updatedAt"
+         FROM world_knowledge_research_jobs ORDER BY priority DESC,created_at DESC LIMIT 100`,
+    );
+    reply(res, 200, { jobs: result.rows });
+    return true;
+  }
+
+  if (pathname === '/api/intelligence/world/jobs/claim' && req.method === 'POST') {
+    if (!isAdmin(user.role)) { reply(res, 403, { error: 'Only an authorized research worker can claim jobs.' }); return true; }
+    const result = await pool.query(
+      `WITH candidate AS (
+         SELECT id FROM world_knowledge_research_jobs
+          WHERE (status='queued' AND next_run_at<=now())
+             OR (status='processing' AND lease_until<now())
+          ORDER BY priority DESC,created_at ASC
+          FOR UPDATE SKIP LOCKED LIMIT 1
+       )
+       UPDATE world_knowledge_research_jobs j
+          SET status='processing',attempts=j.attempts+1,claimed_by=$1,
+              lease_until=now()+interval '10 minutes',updated_at=now()
+         FROM candidate WHERE j.id=candidate.id
+       RETURNING j.id,j.query,j.language,j.priority,j.attempts,j.lease_until AS "leaseUntil"`,
+      [user.id],
+    );
+    reply(res, 200, { job: result.rows[0] || null });
+    return true;
+  }
+
+  const finishMatch = /^\/api\/intelligence\/world\/jobs\/([0-9a-f-]{36})\/finish$/.exec(pathname);
+  if (finishMatch && req.method === 'POST') {
+    if (!isAdmin(user.role)) { reply(res, 403, { error: 'Only an authorized research worker can finish jobs.' }); return true; }
+    try {
+      const parsed = finishJobSchema.safeParse(await readJsonBody(req, 5000));
+      if (!parsed.success) { reply(res, 400, { error: 'Provide a valid job outcome and summary.' }); return true; }
+      const result = await pool.query(
+        `UPDATE world_knowledge_research_jobs
+            SET status=$1,last_error=CASE WHEN $1='failed' THEN NULLIF($2,'') ELSE NULL END,
+                lease_until=NULL,claimed_by=NULL,updated_at=now(),
+                next_run_at=CASE WHEN $1='failed' AND attempts<5 THEN now()+make_interval(mins => LEAST(60,5*attempts)) ELSE next_run_at END
+          WHERE id=$3 AND status='processing' AND claimed_by=$4
+          RETURNING id,status,attempts,updated_at AS "updatedAt"`,
+        [parsed.data.outcome,parsed.data.summary,finishMatch[1],user.id],
+      );
+      if (!result.rows[0]) { reply(res, 409, { error: 'Job lease not found, expired or owned by another worker.' }); return true; }
+      reply(res, 200, { job: result.rows[0], summary: parsed.data.summary });
+    } catch {
+      reply(res, 400, { error: 'Could not finish this research job.' });
+    }
+    return true;
+  }
+
   if (pathname === '/api/intelligence/world/status' && req.method === 'GET') {
     const [sources, documents] = await Promise.all([
       pool.query('SELECT count(*)::int AS total,count(*) FILTER (WHERE enabled=true)::int AS enabled FROM world_knowledge_sources'),
       pool.query('SELECT count(*)::int AS total,count(DISTINCT topic)::int AS topics FROM world_knowledge_documents'),
     ]);
     reply(res, 200, {
-      engine: 'curated-rag',
+      engine: 'continuous-research-ready-rag',
       available: true,
-      ingestion: 'administrator-only',
+      ingestion: 'administrator-curated; research-queue-enabled',
       sources: Number(sources.rows[0]?.total || 0),
       enabledSources: Number(sources.rows[0]?.enabled || 0),
       documents: Number(documents.rows[0]?.total || 0),
