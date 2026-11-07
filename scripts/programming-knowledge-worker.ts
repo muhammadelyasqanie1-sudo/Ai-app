@@ -17,7 +17,7 @@ const MAX_REPOS_PER_JOB = 2;
 const MAX_REPO_DOCS_PER_RUN = 12;
 const MAX_RELEASES_PER_REPO = 3;
 
-type Topic = { topic_key: string; label: string; search_queries: string[]; priority: number };
+type Topic = { topic_key: string; label: string; search_queries: string[]; search_queries_by_language?: Record<string,string[]>; priority: number };
 type Job = { id: string; query: string; language: string; attempts: number; topic_key: string | null };
 type SearchResult = { title?: string; url?: string; content?: string; score?: number; published_date?: string };
 
@@ -73,30 +73,37 @@ async function boundedFetch(url: string, init: RequestInit = {}, maxBytes = MAX_
   } finally { clearTimeout(timer); }
 }
 
+async function queueTopicQuery(query: string, language: string, priority: number, topicKey: string) {
+  const normalized = query.trim();
+  if (normalized.length < 3 || !['english','dari','persian','pashto'].includes(language)) return;
+  const hash = sha(normalized.toLowerCase() + '|' + language);
+  await pool.query(
+    `INSERT INTO world_knowledge_research_jobs(query,language,priority,query_hash,topic_key)
+     VALUES($1,$2,$3,$4,$5)
+     ON CONFLICT(query_hash) DO UPDATE SET
+       topic_key=COALESCE(world_knowledge_research_jobs.topic_key,EXCLUDED.topic_key),
+       status=CASE WHEN world_knowledge_research_jobs.status IN ('completed','failed')
+                     AND world_knowledge_research_jobs.updated_at < now()-interval '7 days'
+                   THEN 'queued' ELSE world_knowledge_research_jobs.status END,
+       attempts=CASE WHEN world_knowledge_research_jobs.status IN ('completed','failed')
+                       AND world_knowledge_research_jobs.updated_at < now()-interval '7 days'
+                     THEN 0 ELSE world_knowledge_research_jobs.attempts END,
+       next_run_at=CASE WHEN world_knowledge_research_jobs.status IN ('completed','failed')
+                          AND world_knowledge_research_jobs.updated_at < now()-interval '7 days'
+                        THEN now() ELSE world_knowledge_research_jobs.next_run_at END`,
+    [normalized,language,Math.max(0,Math.min(10,priority)),hash,topicKey],
+  );
+}
+
 async function seedTopicQueries() {
   const topics = await pool.query<Topic>(
-    'SELECT topic_key,label,search_queries,priority FROM world_knowledge_topics WHERE enabled=true ORDER BY priority DESC,topic_key',
+    'SELECT topic_key,label,search_queries,search_queries_by_language,priority FROM world_knowledge_topics WHERE enabled=true ORDER BY priority DESC,topic_key',
   );
-  for (const topic of topics.rows) for (const query of topic.search_queries || []) {
-    const normalized = query.trim();
-    if (normalized.length < 3) continue;
-    const hash = sha(normalized.toLowerCase() + '|english');
-    await pool.query(
-      `INSERT INTO world_knowledge_research_jobs(query,language,priority,query_hash,topic_key)
-       VALUES($1,'english',$2,$3,$4)
-       ON CONFLICT(query_hash) DO UPDATE SET
-         topic_key=COALESCE(world_knowledge_research_jobs.topic_key,EXCLUDED.topic_key),
-         status=CASE WHEN world_knowledge_research_jobs.status IN ('completed','failed')
-                       AND world_knowledge_research_jobs.updated_at < now()-interval '7 days'
-                     THEN 'queued' ELSE world_knowledge_research_jobs.status END,
-         attempts=CASE WHEN world_knowledge_research_jobs.status IN ('completed','failed')
-                         AND world_knowledge_research_jobs.updated_at < now()-interval '7 days'
-                       THEN 0 ELSE world_knowledge_research_jobs.attempts END,
-         next_run_at=CASE WHEN world_knowledge_research_jobs.status IN ('completed','failed')
-                            AND world_knowledge_research_jobs.updated_at < now()-interval '7 days'
-                          THEN now() ELSE world_knowledge_research_jobs.next_run_at END`,
-      [normalized, Math.max(0, Math.min(10, topic.priority)), hash, topic.topic_key],
-    );
+  for (const topic of topics.rows) {
+    for (const query of topic.search_queries || []) await queueTopicQuery(query,'english',topic.priority,topic.topic_key);
+    for (const [language,queries] of Object.entries(topic.search_queries_by_language || {})) {
+      for (const query of Array.isArray(queries) ? queries : []) await queueTopicQuery(query,language,topic.priority,topic.topic_key);
+    }
   }
   return topics.rowCount || 0;
 }
@@ -132,7 +139,7 @@ async function search(query: string): Promise<SearchResult[]> {
 async function storeDocument(input: {
   title: string; url: string; domain: string; content: string; topic: string;
   evidence: 'unverified' | 'reference'; confidence: number; sourceType: 'other' | 'documentation';
-  trust: 'unreviewed' | 'community' | 'established'; query: string; licenseLabel?: string; publishedAt?: string | null;
+  trust: 'unreviewed' | 'community' | 'established'; query: string; licenseLabel?: string; publishedAt?: string | null; language?: 'english' | 'dari' | 'persian' | 'pashto' | 'arabic' | 'urdu' | 'russian' | 'other' | 'unknown';
 }) {
   const title = cleanText(input.title, 240);
   const content = normalizeDocument(input.content, 29000);
@@ -149,9 +156,9 @@ async function storeDocument(input: {
   const hash = sha(url.toString() + '\n' + title + '\n' + enriched);
   await pool.query(
     `INSERT INTO world_knowledge_documents(source_id,title,content,topic,language,evidence_type,confidence,published_at,content_hash)
-     VALUES($1,$2,$3,$4,'english',$5,$6,$7,$8)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
      ON CONFLICT(content_hash) DO NOTHING`,
-    [source.rows[0].id, title, enriched, input.topic, input.evidence, Math.max(0, Math.min(1, input.confidence)), input.publishedAt || null, hash],
+    [source.rows[0].id, title, enriched, input.topic, input.language || 'english', input.evidence, Math.max(0, Math.min(1, input.confidence)), input.publishedAt || null, hash],
   );
   return true;
 }
@@ -290,7 +297,7 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
   return count;
 }
 
-async function storeSearchExcerpt(item: SearchResult, query: string, topicKey: string | null) {
+async function storeSearchExcerpt(item: SearchResult, query: string, topicKey: string | null, language: string) {
   const url = safePublicUrl(item.url);
   const title = cleanText(item.title, 240);
   const snippet = cleanText(item.content, 12000);
@@ -309,9 +316,9 @@ async function storeSearchExcerpt(item: SearchResult, query: string, topicKey: s
   const hash = sha(url.toString() + '\n' + title + '\n' + text);
   await pool.query(
     `INSERT INTO world_knowledge_documents(source_id,title,content,topic,language,evidence_type,confidence,published_at,content_hash)
-     VALUES($1,$2,$3,$4,'english','unverified',$5,$6,$7)
+     VALUES($1,$2,$3,$4,$5,'unverified',$6,$7,$8)
      ON CONFLICT(content_hash) DO NOTHING`,
-    [source.rows[0].id, title, text, topicKey || 'documentation', Math.max(0, Math.min(0.35, Number(item.score || 0) * 0.35)), published, hash],
+    [source.rows[0].id, title, text, topicKey || 'documentation', ['english','dari','persian','pashto','arabic','urdu','russian','other','unknown'].includes(language) ? language : 'unknown', Math.max(0, Math.min(0.35, Number(item.score || 0) * 0.35)), published, hash],
   );
   return true;
 }
@@ -338,7 +345,7 @@ async function main() {
       const results = await search(job.query);
       let excerpts = 0, repoDocs = 0, reposVisited = 0;
       for (const item of results) {
-        if (await storeSearchExcerpt(item, job.query, job.topic_key)) excerpts++;
+        if (await storeSearchExcerpt(item, job.query, job.topic_key, job.language)) excerpts++;
         if (parseGitHubRepo(item.url || '') && reposVisited < MAX_REPOS_PER_JOB && repositoryDocsIndexed + repoDocs < MAX_REPO_DOCS_PER_RUN) {
           reposVisited++;
           try { repoDocs += await indexGitHubRepository(item, job.query, job.topic_key); }
