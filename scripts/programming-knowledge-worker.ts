@@ -17,7 +17,7 @@ const MAX_RESULTS = 5;
 const FETCH_TIMEOUT_MS = 20000;
 
 type Topic = { topic_key: string; label: string; search_queries: string[]; priority: number };
-type Job = { id: string; query: string; language: string; attempts: number };
+type Job = { id: string; query: string; language: string; attempts: number; topic_key: string | null };
 
 function sha(value: string) {
   return createHash('sha256').update(value).digest('hex');
@@ -53,10 +53,10 @@ async function seedTopicQueries() {
       if (normalized.length < 3) continue;
       const hash = sha(normalized.toLocaleLowerCase() + '|english');
       await pool.query(
-        `INSERT INTO world_knowledge_research_jobs(query,language,priority,query_hash)
-         VALUES($1,'english',$2,$3)
-         ON CONFLICT(query_hash) DO NOTHING`,
-        [normalized, Math.max(0, Math.min(10, topic.priority)), hash],
+        `INSERT INTO world_knowledge_research_jobs(query,language,priority,query_hash,topic_key)
+         VALUES($1,'english',$2,$3,$4)
+         ON CONFLICT(query_hash) DO UPDATE SET topic_key=COALESCE(world_knowledge_research_jobs.topic_key,EXCLUDED.topic_key)`,
+        [normalized, Math.max(0, Math.min(10, topic.priority)), hash, topic.topic_key],
       );
     }
   }
@@ -77,7 +77,7 @@ async function claimJob(): Promise<Job | null> {
         SET status='processing',attempts=j.attempts+1,
             lease_until=now()+interval '3 minutes',updated_at=now()
        FROM candidate WHERE j.id=candidate.id
-     RETURNING j.id,j.query,j.language,j.attempts`,
+     RETURNING j.id,j.query,j.language,j.attempts,j.topic_key`,
   );
   return result.rows[0] || null;
 }
@@ -108,7 +108,7 @@ async function search(query: string) {
   }
 }
 
-async function storeResult(item: { title?: string; url?: string; content?: string; score?: number; published_date?: string }, query: string) {
+async function storeResult(item: { title?: string; url?: string; content?: string; score?: number; published_date?: string }, query: string, topicKey: string | null) {
   const url = safePublicUrl(item.url);
   const title = cleanText(item.title, 240);
   const snippet = cleanText(item.content, 12000);
@@ -133,9 +133,9 @@ async function storeResult(item: { title?: string; url?: string; content?: strin
   await pool.query(
     `INSERT INTO world_knowledge_documents(
        source_id,title,content,topic,language,evidence_type,confidence,published_at,content_hash
-     ) VALUES($1,$2,$3,'programming','english','unverified',$4,$5,$6)
+      ) VALUES($1,$2,$3,$7,'english','unverified',$4,$5,$6)
      ON CONFLICT(content_hash) DO NOTHING`,
-    [source.rows[0].id, title, content, Math.max(0, Math.min(0.35, Number(item.score || 0) * 0.35)), publishedAt, contentHash],
+    [source.rows[0].id, title, content, Math.max(0, Math.min(0.35, Number(item.score || 0) * 0.35)), publishedAt, contentHash, topicKey || 'documentation'],
   );
   return true;
 }
@@ -143,10 +143,10 @@ async function storeResult(item: { title?: string; url?: string; content?: strin
 async function finish(job: Job, outcome: 'completed' | 'failed', error = '') {
   await pool.query(
     `UPDATE world_knowledge_research_jobs
-        SET status=$1,last_error=$2,lease_until=NULL,claimed_by=NULL,updated_at=now(),
+        SET status=CASE WHEN $1='failed' AND attempts<5 THEN 'queued' ELSE $1 END,
+            last_error=$2,lease_until=NULL,claimed_by=NULL,updated_at=now(),
             next_run_at=CASE WHEN $1='failed' AND attempts<5
-              THEN now()+make_interval(mins => LEAST(120,5*attempts))
-              ELSE next_run_at END
+              THEN now()+make_interval(mins => LEAST(120,5*attempts)) ELSE next_run_at END
       WHERE id=$3 AND status='processing'`,
     [outcome, error.slice(0, 1000) || null, job.id],
   );
@@ -163,7 +163,7 @@ async function main() {
       const results = await search(job.query);
       let count = 0;
       for (const item of results) {
-        if (await storeResult(item, job.query)) count++;
+        if (await storeResult(item, job.query, job.topic_key)) count++;
       }
       stored += count;
       await finish(job, 'completed', count + ' programming search excerpts indexed.');
