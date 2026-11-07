@@ -1,3 +1,4 @@
+import type { MediaRequest, MediaInput, MediaOutput } from '../services/media/contracts.ts';
 export type AfgCapability =
   | 'chat'
   | 'vision'
@@ -38,6 +39,7 @@ export interface ModelDescriptor {
   enabled: boolean;
   verifiedAt: string | null;
   catalogKind?: string;
+  mediaEndpoints?: string[];
 }
 
 export interface ConfigStatus {
@@ -126,6 +128,7 @@ export interface ProviderAdapter {
   transcribe?(req: AudioRequest): Promise<Transcription>;
   synthesize?(req: TTSRequest): Promise<AudioResult>;
   voiceOptions?(modelId: string): Array<{ id: string; label: string }>;
+  executeMedia?(request: MediaRequest, inputs: MediaInput[], signal: AbortSignal): Promise<MediaOutput>;
   embed?(text: string): Promise<number[]>;
 }
 

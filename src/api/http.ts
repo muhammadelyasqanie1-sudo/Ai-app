@@ -1,3 +1,4 @@
+import { handleMediaApi } from './media.ts';
 import { handleAgentsApi } from './agents.ts';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomUUID } from 'crypto';
@@ -309,6 +310,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     if (await handleBeatApiApi(req, res)) return;
     if (await handleUserIntegrationApi(req, res, pathname)) return;
     if (await handleAccountApi(req, res, pathname)) return;
+    if (await handleMediaApi(req,res,pathname)) return;
     if (await handleFilesApi(req, res, pathname)) return;
     if (await handleConversationsApi(req, res, pathname)) return;
     if (await handleAdminTerminalGatewayApi(req, res, pathname)) return;

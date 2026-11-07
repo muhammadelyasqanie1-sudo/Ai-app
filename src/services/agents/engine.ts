@@ -237,6 +237,7 @@ async function run(taskId: string) {
           previous,
           controller.signal,
           !!step.approved_at,
+          taskId,
         );
         controller.signal.throwIfAborted();
         if (Buffer.byteLength(JSON.stringify(output)) > 100000)

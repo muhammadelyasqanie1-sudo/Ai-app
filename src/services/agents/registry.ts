@@ -39,7 +39,7 @@ export const specialists = {
     "browser_stop",
     "draft",
   ],
-  file: ["knowledge_read", "draft"],
+  file: ["knowledge_read", "draft", "media_execute"],
   personal: ["memory_search", "task_create", "draft"],
 } as const;
 export type Specialist = keyof typeof specialists;
@@ -50,6 +50,7 @@ const repo = {
 };
 const ref = z.string().regex(/^e[0-9]{1,3}$/);
 export const inputs = {
+  media_execute: z.object({ jobId: z.uuid() }).strict(),
   draft: z.object({ instruction: text }).strict(),
   memory_search: z.object({ query: text }).strict(),
   knowledge_read: z.object({ id: z.uuid() }).strict(),
@@ -233,8 +234,15 @@ export async function executeTool(
   previous: unknown[],
   signal: AbortSignal,
   approved = false,
+  taskId?: string,
 ) {
   const input = inputs[tool].parse(raw) as any;
+  if (tool === "media_execute") {
+    if (!taskId) throw new Error("Media tool requires an owned queue task.");
+    signal.throwIfAborted();
+    const { executeMediaJob } = await import("../media/engine.ts");
+    return executeMediaJob(userId,input.jobId,taskId,signal);
+  }
   signal.throwIfAborted();
   if (requiresApproval(tool) && !approved)
     throw new Error("Approval required.");
