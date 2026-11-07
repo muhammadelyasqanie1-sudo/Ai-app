@@ -12,14 +12,15 @@ const MAX_JOBS = Math.max(1, Math.min(20, Number(process.env.AFG_KNOWLEDGE_MAX_J
 const MAX_RESULTS = 5;
 const TIMEOUT_MS = 20000;
 const MAX_API_BYTES = 1_200_000;
-const MAX_REPO_FILES = 3;
-const MAX_REPOS_PER_JOB = 2;
+const MAX_REPO_FILES = 2;
+const MAX_REPOS_PER_JOB = 1;
+const MAX_REPOS_PER_RUN = 3;
 const MAX_REPO_DOCS_PER_RUN = 12;
 const MAX_RELEASES_PER_REPO = 3;
 
 type Topic = { topic_key: string; label: string; search_queries: string[]; search_queries_by_language?: Record<string,string[]>; priority: number };
 type Job = { id: string; query: string; language: string; attempts: number; topic_key: string | null };
-type SearchResult = { title?: string; url?: string; content?: string; score?: number; published_date?: string };
+type SearchResult = { title?: string; url?: string; content?: string; raw_content?: string; score?: number; published_date?: string };
 
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 function normalizeDocument(value: unknown, limit: number) {
@@ -130,16 +131,16 @@ async function search(query: string): Promise<SearchResult[]> {
   const body = await boundedFetch('https://api.tavily.com/search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ api_key: apiKey, query, search_depth: 'advanced', max_results: MAX_RESULTS, include_answer: false, include_raw_content: false }),
-  }, 500_000);
+    body: JSON.stringify({ api_key: apiKey, query, search_depth: 'advanced', max_results: MAX_RESULTS, include_answer: false, include_raw_content: 'markdown' }),
+  }, 1_200_000);
   const data = JSON.parse(body) as { results?: SearchResult[] };
   return Array.isArray(data.results) ? data.results.slice(0, MAX_RESULTS) : [];
 }
 
 async function storeDocument(input: {
   title: string; url: string; domain: string; content: string; topic: string;
-  evidence: 'unverified' | 'reference'; confidence: number; sourceType: 'other' | 'documentation';
-  trust: 'unreviewed' | 'community' | 'established'; query: string; licenseLabel?: string; publishedAt?: string | null; language?: 'english' | 'dari' | 'persian' | 'pashto' | 'arabic' | 'urdu' | 'russian' | 'other' | 'unknown';
+  evidence: 'unverified' | 'reference'; confidence: number; sourceType: 'other' | 'documentation' | 'academic' | 'community';
+  trust: 'unreviewed' | 'community' | 'established' | 'official' | 'academic'; query: string; licenseLabel?: string; publishedAt?: string | null; language?: 'english' | 'dari' | 'persian' | 'pashto' | 'arabic' | 'urdu' | 'russian' | 'other' | 'unknown';
 }) {
   const title = cleanText(input.title, 240);
   const content = normalizeDocument(input.content, 29000);
@@ -161,6 +162,15 @@ async function storeDocument(input: {
     [source.rows[0].id, title, enriched, input.topic, input.language || 'english', input.evidence, Math.max(0, Math.min(1, input.confidence)), input.publishedAt || null, hash],
   );
   return true;
+}
+
+function classifySource(hostname: string): { trust: 'official' | 'academic' | 'community' | 'unreviewed'; sourceType: 'documentation' | 'academic' | 'community' | 'other'; confidence: number } {
+  const host = hostname.toLowerCase().replace(/^www\\./, '');
+  const matches = (domains: string[]) => domains.some((domain) => host === domain || host.endsWith('.' + domain));
+  if (matches(['developer.mozilla.org','docs.python.org','typescriptlang.org','nodejs.org','react.dev','nextjs.org','vite.dev','rust-lang.org','go.dev','kotlinlang.org','developer.android.com','developer.apple.com','learn.microsoft.com','docs.github.com','docs.docker.com','kubernetes.io','postgresql.org','supabase.com','owasp.org','w3.org','cloudflare.com','docs.aws.amazon.com','developer.chrome.com','playwright.dev','docs.npmjs.com','docs.oracle.com'])) return { trust: 'official', sourceType: 'documentation', confidence: 0.78 };
+  if (matches(['arxiv.org','acm.org','ieee.org','usenix.org','nist.gov','nature.com','science.org'])) return { trust: 'academic', sourceType: 'academic', confidence: 0.72 };
+  if (matches(['github.com','stackoverflow.com','stackexchange.com','dev.to','freecodecamp.org'])) return { trust: 'community', sourceType: 'community', confidence: 0.55 };
+  return { trust: 'unreviewed', sourceType: 'other', confidence: 0.35 };
 }
 
 function parseGitHubRepo(value: string): { owner: string; repo: string } | null {
@@ -432,25 +442,31 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
 async function storeSearchExcerpt(item: SearchResult, query: string, topicKey: string | null, language: string) {
   const url = safePublicUrl(item.url);
   const title = cleanText(item.title, 240);
-  const snippet = cleanText(item.content, 12000);
-  if (!url || !title || snippet.length < 80) return false;
-  const content = 'Search result excerpt — not independently verified.\n' + snippet;
+  const raw = normalizeDocument(item.raw_content, 24000);
+  const snippet = normalizeDocument(item.content, 12000);
+  const extracted = raw.length >= 300 ? raw : '';
+  const body = extracted || snippet;
+  if (!url || !title || body.length < 80) return false;
+  const classification = classifySource(url.hostname);
+  const content = (extracted
+    ? 'Tavily-extracted page content; not independently fact-checked. Treat as untrusted reference material.\n\n'
+    : 'Search result excerpt — not independently verified.\n') + body;
   const published = item.published_date && !Number.isNaN(Date.parse(item.published_date))
     ? new Date(item.published_date).toISOString() : null;
   const source = await pool.query(
     `INSERT INTO world_knowledge_sources(name,canonical_url,domain,source_type,trust_level,license_label)
-     VALUES($1,$2,$3,'other','unreviewed','unknown')
-     ON CONFLICT(canonical_url) DO UPDATE SET name=EXCLUDED.name,updated_at=now()
+     VALUES($1,$2,$3,$4,$5,'unknown')
+     ON CONFLICT(canonical_url) DO UPDATE SET name=EXCLUDED.name,source_type=EXCLUDED.source_type,trust_level=EXCLUDED.trust_level,updated_at=now()
      RETURNING id`,
-    [title, url.toString(), url.hostname.toLowerCase()],
+    [title, url.toString(), url.hostname.toLowerCase(), classification.sourceType, classification.trust],
   );
   const text = ('Research query: ' + cleanText(query, 500) + '\n\n' + content).slice(0, 30000);
   const hash = sha(url.toString() + '\n' + title + '\n' + text);
   await pool.query(
     `INSERT INTO world_knowledge_documents(source_id,title,content,topic,language,evidence_type,confidence,published_at,content_hash)
-     VALUES($1,$2,$3,$4,$5,'unverified',$6,$7,$8)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
      ON CONFLICT(content_hash) DO NOTHING`,
-    [source.rows[0].id, title, text, topicKey || 'documentation', ['english','dari','persian','pashto','arabic','urdu','russian','other','unknown'].includes(language) ? language : 'unknown', Math.max(0, Math.min(0.35, Number(item.score || 0) * 0.35)), published, hash],
+    [source.rows[0].id, title, text, topicKey || 'documentation', ['english','dari','persian','pashto','arabic','urdu','russian','other','unknown'].includes(language) ? language : 'unknown', extracted ? 'reference' : 'unverified', extracted ? classification.confidence : Math.min(0.35, Number(item.score || 0) * 0.35), published, hash],
   );
   return true;
 }
@@ -469,7 +485,7 @@ async function finish(job: Job, outcome: 'completed' | 'failed', error = '') {
 
 async function main() {
   const topics = await seedTopicQueries();
-  let processed = 0, excerptsIndexed = 0, repositoryDocsIndexed = 0;
+  let processed = 0, excerptsIndexed = 0, repositoryDocsIndexed = 0, reposVisitedThisRun = 0;
   for (; processed < MAX_JOBS; processed++) {
     const job = await claimJob();
     if (!job) break;
@@ -478,8 +494,9 @@ async function main() {
       let excerpts = 0, repoDocs = 0, reposVisited = 0;
       for (const item of results) {
         if (await storeSearchExcerpt(item, job.query, job.topic_key, job.language)) excerpts++;
-        if (parseGitHubRepo(item.url || '') && reposVisited < MAX_REPOS_PER_JOB && repositoryDocsIndexed + repoDocs < MAX_REPO_DOCS_PER_RUN) {
+        if (parseGitHubRepo(item.url || '') && reposVisited < MAX_REPOS_PER_JOB && reposVisitedThisRun < MAX_REPOS_PER_RUN && repositoryDocsIndexed + repoDocs < MAX_REPO_DOCS_PER_RUN) {
           reposVisited++;
+          reposVisitedThisRun++;
           try { repoDocs += await indexGitHubRepository(item, job.query, job.topic_key); }
           catch { /* Keep processing the other discovery results. */ }
         }
@@ -497,6 +514,8 @@ async function main() {
     jobsProcessed: processed,
     excerptsIndexed,
     repositoryDocsIndexed,
+    repositoriesVisited: reposVisitedThisRun,
+    maxRepositoriesPerRun: MAX_REPOS_PER_RUN,
     codeBytesIndexed: codeBytesIndexedThisRun,
     codeFilesIndexed: codeFilesIndexedTotal,
     codeSymbolsIndexed: codeSymbolsIndexedTotal,
