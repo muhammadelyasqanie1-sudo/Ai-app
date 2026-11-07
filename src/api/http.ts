@@ -1,3 +1,4 @@
+import { handleAgentsApi } from './agents.ts';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomUUID } from 'crypto';
 import { handleChatApi } from './chatHandler.ts';
@@ -293,6 +294,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
       return;
     }
 
+    if (await handleAgentsApi(req, res, pathname)) return;
     if (await handleControlPlaneBridgeApi(req, res, pathname)) return;
     if (await handleUserApiConnectorApi(req, res, pathname)) return;
     if (await handleNineRouterApi(req, res, pathname)) return;

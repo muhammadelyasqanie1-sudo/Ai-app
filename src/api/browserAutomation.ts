@@ -280,18 +280,22 @@ async function pageSnapshot(page: Page) {
   };
 }
 
-async function withBrowserPage<T>(userId: string, action: (context: BrowserActionContext) => Promise<T>): Promise<T> {
+async function withBrowserPage<T>(userId: string, action: (context: BrowserActionContext) => Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!pool) throw new Error('Browser automation needs the AFG AI database.');
   const client = getBrowserbaseClient();
   const db = await pool.connect();
   let browser: Browser | null = null;
   const lockKey = 'afg-browser:' + userId;
   let locked = false;
+  const abort = () => { void browser?.close().catch(() => {}); };
+  signal?.addEventListener('abort', abort, { once: true });
   try {
+    signal?.throwIfAborted();
     await db.query('SELECT pg_advisory_lock(hashtext($1))',[lockKey]);
     locked = true;
     const session = await ensureBrowserSession(userId,db,client);
     browser = await chromium.connectOverCDP(session.connectUrl,{ timeout: 20_000 });
+    signal?.throwIfAborted();
     const contexts = browser.contexts();
     const context = contexts[0];
     if (!context) throw new Error('The remote browser session has no usable browser context.');
@@ -308,6 +312,7 @@ async function withBrowserPage<T>(userId: string, action: (context: BrowserActio
     );
     return result;
   } finally {
+    signal?.removeEventListener('abort', abort);
     if (browser) await browser.close().catch(() => {});
     if (locked) await db.query('SELECT pg_advisory_unlock(hashtext($1))',[lockKey]).catch(() => {});
     db.release();
@@ -357,7 +362,7 @@ async function snapshotResult(context: BrowserActionContext) {
   return { liveViewUrl: context.liveViewUrl, ...snapshot };
 }
 
-export async function executeBrowserAutomationTool(userId: string, toolName: string, rawArgs: unknown, latestUserPrompt = '') {
+export async function executeBrowserAutomationTool(userId: string, toolName: string, rawArgs: unknown, latestUserPrompt = '', signal?: AbortSignal, approvalVerified = false) {
   if (!userId) throw new Error('Sign in to AFG AI before using browser automation.');
   const args = objectArgs(rawArgs);
   if (toolName === 'browser_stop') return stopBrowserSession(userId);
@@ -385,7 +390,7 @@ export async function executeBrowserAutomationTool(userId: string, toolName: str
       });
       const riskyAction = /\b(send|delete|remove|purchase|buy|pay|transfer|submit|publish|post|confirm|place order)\b|ارسال|بفرست|حذف|پاک|خرید|پرداخت|انتقال|ثبت نهایی|منتشر/i.test(details.label);
       const userExplicitlyRequested = /\b(send|delete|remove|purchase|buy|pay|transfer|submit|publish|post|place order)\b|ارسال|بفرست|حذف|پاک|خرید|پرداخت|انتقال|ثبت نهایی|منتشر/i.test(latestUserPrompt);
-      if (riskyAction && !(args.confirmed_by_user === true && userExplicitlyRequested)) {
+      if (riskyAction && !(approvalVerified || (args.confirmed_by_user === true && userExplicitlyRequested))) {
         throw new Error('This control may perform an external or irreversible action. Ask the user for explicit approval for this exact action before clicking it.');
       }
       await locator.click({ timeout:12_000 });
@@ -435,7 +440,7 @@ export async function executeBrowserAutomationTool(userId: string, toolName: str
       return { action:'waited',milliseconds,...(await snapshotResult(context)) };
     }
     throw new Error('Unknown browser automation tool.');
-  });
+  }, signal);
 }
 
 export async function handleBrowserAutomationApi(req: IncomingMessage,res: ServerResponse,pathname: string): Promise<boolean> {

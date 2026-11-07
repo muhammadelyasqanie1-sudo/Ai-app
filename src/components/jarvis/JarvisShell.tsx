@@ -1,3 +1,5 @@
+import AgentWorkspace from "./AgentWorkspace";
+import { apiFetch } from "../../lib/apiClient";
 import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   Activity,
@@ -162,17 +164,48 @@ export function JarvisShell(p: Props) {
   const setIntelligence = (panel: boolean) => experience.update({ panel });
   const [prompt, setPrompt] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
+  const [agentRunning, setAgentRunning] = useState(false);
+  useEffect(() => {
+    if (!p.user.email) {
+      setAgentRunning(false);
+      return;
+    }
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const load = async () => {
+      try {
+        const res = await apiFetch("/api/agents/tasks");
+        const data = await res.json();
+        if (alive)
+          setAgentRunning(data.tasks.some((t: any) => t.status === "running"));
+      } catch {
+        if (alive) setAgentRunning(false);
+      } finally {
+        if (alive) timer = setTimeout(load, 3000);
+      }
+    };
+    void load();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [p.user.id, p.user.email]);
   const [notice, setNotice] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState("");
   const coreState = resolveCoreState({
     listening: listening || p.recording,
-    active: p.activeTasks > 0,
+    active: p.activeTasks > 0 || agentRunning,
     streaming: p.streaming,
     online: status.online,
     failed: p.failed,
     cancelled: p.cancelled,
-    activities: p.activities,
+    activities: agentRunning
+      ? [
+          ...p.activities,
+          { name: "agent_execute", label: "", status: "running" },
+        ]
+      : p.activities,
   });
   const currentTool = p.activeTasks
     ? p.activities.find((item) => item.status === "running")
@@ -939,19 +972,24 @@ export function JarvisShell(p: Props) {
                   {w("No background listening. Stop recording at any time.")}
                 </small>
               </section>
+            ) : p.tab === "automation" ? (
+              <AgentWorkspace
+                key={p.user.id || "guest"}
+                language={p.language}
+                model={p.selectedModel}
+                onActivity={setAgentRunning}
+              />
             ) : localTabs.includes(p.tab) ? (
               <section className="j-local-page">
                 <div className="j-eyebrow">
                   {labels[p.tab as keyof typeof labels]}
                 </div>
                 <h1>
-                  {p.tab === "automation"
-                    ? "Good workflows need real connections."
-                    : p.tab === "browser"
-                      ? "A wider world of context."
-                      : p.tab === "memory"
-                        ? "Memory, on your terms."
-                        : "Build a world of knowledge."}
+                  {p.tab === "browser"
+                    ? "A wider world of context."
+                    : p.tab === "memory"
+                      ? "Memory, on your terms."
+                      : "Build a world of knowledge."}
                 </h1>
                 <div className="j-configuration">
                   <span className="j-summary-icon violet">
@@ -962,24 +1000,20 @@ export function JarvisShell(p: Props) {
                     )}
                   </span>
                   <h3>
-                    {p.tab === "automation"
-                      ? "Workflow execution is not connected"
-                      : p.tab === "browser"
-                        ? p.capabilities.capabilities.research
-                          ? "Research capability detected"
-                          : "Research requires configuration"
-                        : p.tab === "memory"
-                          ? "Manage your saved memories in account settings"
-                          : "Start with your documents"}
+                    {p.tab === "browser"
+                      ? p.capabilities.capabilities.research
+                        ? "Research capability detected"
+                        : "Research requires configuration"
+                      : p.tab === "memory"
+                        ? "Manage your saved memories in account settings"
+                        : "Start with your documents"}
                   </h3>
                   <p>
-                    {p.tab === "automation"
-                      ? "The existing tools center provides individual actions. A visual workflow editor, scheduler, and resumable execution engine are not implemented."
-                      : p.tab === "browser"
-                        ? "The existing research tool uses configured search providers. Browser automation requires an authenticated session and an authorized backend. Web pages are untrusted sources."
-                        : p.tab === "memory"
-                          ? "Signed-in memory uses the existing account service. You can review, edit, and delete memories in Settings. No memories are saved by this command center automatically."
-                          : "Inspect and search text documents locally. Semantic collections and vector indexing are not connected to this workspace."}
+                    {p.tab === "browser"
+                      ? "The existing research tool uses configured search providers. Browser automation requires an authenticated session and an authorized backend. Web pages are untrusted sources."
+                      : p.tab === "memory"
+                        ? "Signed-in memory uses the existing account service. You can review, edit, and delete memories in Settings. No memories are saved by this command center automatically."
+                        : "Inspect and search text documents locally. Semantic collections and vector indexing are not connected to this workspace."}
                   </p>
                   <button
                     className="j-primary"
