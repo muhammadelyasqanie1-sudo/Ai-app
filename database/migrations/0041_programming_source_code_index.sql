@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS world_knowledge_code_files (
   symbols jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(symbols)='array'),
   dependencies jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(dependencies)='object'),
   content_hash char(64) NOT NULL,
+  search_vector tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(path,'') || ' ' || coalesce(content,'') || ' ' || coalesce(symbols::text,''))) STORED,
   indexed_at timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -23,3 +24,6 @@ CREATE INDEX IF NOT EXISTS world_knowledge_code_files_language_idx
   ON world_knowledge_code_files(language);
 CREATE INDEX IF NOT EXISTS world_knowledge_code_files_hash_idx
   ON world_knowledge_code_files(content_hash);
+
+CREATE INDEX IF NOT EXISTS world_knowledge_code_files_search_idx
+  ON world_knowledge_code_files USING gin(search_vector);
