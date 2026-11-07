@@ -231,10 +231,16 @@ async function repositoryNeedsRefresh(fullName: string): Promise<boolean> {
 
 const CODE_EXTENSIONS: Record<string,string> = {
   ts:'typescript',tsx:'tsx',js:'javascript',jsx:'javascript',mjs:'javascript',cjs:'javascript',
-  py:'python',go:'go',rs:'rust',java:'java',kt:'kotlin',swift:'swift',sql:'sql',
-  sh:'shell',yaml:'yaml',yml:'yaml',json:'json',md:'markdown',mdx:'mdx',toml:'toml',
+  py:'python',pyi:'python',go:'go',rs:'rust',java:'java',kt:'kotlin',swift:'swift',sql:'sql',
+  c:'c',h:'c',cc:'cpp',cpp:'cpp',hpp:'cpp',cs:'csharp',rb:'ruby',php:'php',dart:'dart',scala:'scala',
+  ex:'elixir',exs:'elixir',lua:'lua',vue:'vue',svelte:'svelte',graphql:'graphql',proto:'protobuf',
+  sh:'shell',ps1:'powershell',r:'r',jl:'julia',hs:'haskell',clj:'clojure',elm:'elm',groovy:'groovy',
+  yaml:'yaml',yml:'yaml',json:'json',md:'markdown',mdx:'mdx',toml:'toml',
 };
-const SKIP_CODE_PATH = /(^|\/)(node_modules|vendor|dist|build|coverage|\.git|\.next|target|Pods|out|bin)(\/|$)/i;
+const SOURCE_CODE_EXTENSIONS = new Set(['ts','tsx','js','jsx','mjs','cjs','py','pyi','go','rs','java','kt','swift','sql','c','h','cc','cpp','hpp','cs','rb','php','dart','scala','ex','exs','lua','vue','svelte','graphql','proto','sh','ps1','r','jl','hs','clj','elm','groovy']);
+const DEPENDENCY_MANIFESTS = new Set(['package.json','requirements.txt','pyproject.toml','cargo.toml','go.mod','pom.xml']);
+const PREFERRED_SOURCE_ROOTS = new Set(['src','lib','app','packages','cmd','internal','crates','server','client','engine']);
+const SKIP_CODE_PATH = /(^|\/)(node_modules|vendor|dist|build|coverage|\.git|\.github|\.next|target|Pods|out|bin|docs)(\/|$)/i;
 const SENSITIVE_CODE_PATH = /(^|\/)(\.env(?:\..*)?|secrets?(?:\..*)?|credentials?(?:\..*)?|id_rsa|id_ed25519|.*\.(?:pem|key|p12|pfx))$/i;
 const MAX_CODE_FILES_PER_REPO = 8;
 const MAX_CODE_BYTES_PER_FILE = 36000;
@@ -455,11 +461,22 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
     }
     const codeCandidates = entries.filter((entry: any) => {
       if (entry.type !== 'blob' || typeof entry.path !== 'string' || SKIP_CODE_PATH.test(entry.path) || SENSITIVE_CODE_PATH.test(entry.path)) return false;
-      const language = codeLanguage(entry.path);
       const base = entry.path.split('/').pop()?.toLowerCase() || '';
-      const manifest = ['package.json','requirements.txt','pyproject.toml','cargo.toml','go.mod','pom.xml'].includes(base);
-      return (language !== 'unknown' || manifest) && Number(entry.size || 0) >= 20 &&
+      const extension = base.includes('.') ? base.split('.').pop() || '' : '';
+      const manifest = DEPENDENCY_MANIFESTS.has(base);
+      return (SOURCE_CODE_EXTENSIONS.has(extension) || manifest) && Number(entry.size || 0) >= 20 &&
         Number(entry.size || 0) <= MAX_CODE_BYTES_PER_FILE;
+    }).sort((a: any, b: any) => {
+      const rank = (entry: any) => {
+        const path = String(entry.path || '');
+        const root = path.split('/')[0].toLowerCase();
+        const base = path.split('/').pop()?.toLowerCase() || '';
+        if (DEPENDENCY_MANIFESTS.has(base)) return 3;
+        if (['test','tests','spec','specs'].includes(root)) return 2;
+        if (PREFERRED_SOURCE_ROOTS.has(root)) return 0;
+        return 1;
+      };
+      return rank(a) - rank(b) || String(a.path).localeCompare(String(b.path));
     }).slice(0, MAX_CODE_FILES_PER_REPO);
     for (const entry of codeCandidates) {
       if (codeBytesIndexedThisRun >= MAX_CODE_BYTES_PER_RUN) break;
