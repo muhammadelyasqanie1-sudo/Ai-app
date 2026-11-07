@@ -214,6 +214,20 @@ async function githubApi(path: string): Promise<any> {
   return JSON.parse(await boundedFetch('https://api.github.com' + path, { headers }, MAX_API_BYTES));
 }
 
+async function githubRepositorySearch(query: string, license: string): Promise<any[]> {
+  const q = query + ' license:' + license;
+  const response = await githubApi('/search/repositories?q=' + encodeURIComponent(q) + '&sort=stars&order=desc&per_page=10');
+  return Array.isArray(response.items) ? response.items.slice(0, 10) : [];
+}
+
+async function repositoryNeedsRefresh(fullName: string): Promise<boolean> {
+  const existing = await pool.query('SELECT last_checked_at FROM world_knowledge_repositories WHERE full_name=$1', [fullName]);
+  const lastChecked = existing.rows[0]?.last_checked_at;
+  if (!lastChecked) return true;
+  const timestamp = new Date(lastChecked).getTime();
+  return !Number.isFinite(timestamp) || Date.now() - timestamp >= 7 * 24 * 60 * 60 * 1000;
+}
+
 
 const CODE_EXTENSIONS: Record<string,string> = {
   ts:'typescript',tsx:'tsx',js:'javascript',jsx:'javascript',mjs:'javascript',cjs:'javascript',
@@ -547,6 +561,34 @@ async function main() {
         await finish(job, 'failed', error instanceof Error ? error.message : 'Unknown research worker error');
       }
     }
+    const directRepositorySearches = [
+      { query: 'AI coding agent', license: 'mit', topic: 'coding-agents' },
+      { query: 'AI coding agent', license: 'apache-2.0', topic: 'coding-agents' },
+      { query: 'Playwright browser automation', license: 'mit', topic: 'browser-automation' },
+      { query: 'tree-sitter language server', license: 'mit', topic: 'compiler-tooling' },
+    ];
+    for (const discovery of directRepositorySearches) {
+      if (reposVisitedThisRun >= MAX_REPOS_PER_RUN || repositoryDocsIndexed >= MAX_REPO_DOCS_PER_RUN) break;
+      try {
+        const candidates = await githubRepositorySearch(discovery.query, discovery.license);
+        for (const candidate of candidates) {
+          if (reposVisitedThisRun >= MAX_REPOS_PER_RUN || repositoryDocsIndexed >= MAX_REPO_DOCS_PER_RUN) break;
+          const fullName = cleanText(candidate.full_name, 180);
+          if (!fullName || !await repositoryNeedsRefresh(fullName)) continue;
+          reposVisitedThisRun++;
+          try {
+            const indexed = await indexGitHubRepository({
+              title: fullName,
+              url: String(candidate.html_url || ('https://github.com/' + fullName)),
+              content: cleanText(candidate.description, 2000),
+              score: 0.95,
+            }, 'GitHub Search API: ' + discovery.query + ' license:' + discovery.license, discovery.topic);
+            repositoryDocsIndexed += indexed;
+          } catch { /* One repository must not stop the rest of the research run. */ }
+        }
+      } catch { /* GitHub search may be rate-limited; Tavily discovery remains available. */ }
+    }
+
     process.stdout.write(JSON.stringify({
       worker: 'afg-programming-knowledge',
       topicsSeeded: topics,
