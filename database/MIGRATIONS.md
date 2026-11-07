@@ -105,3 +105,8 @@ Apply migration 0038 only after a database backup and explicit migration approva
 ## Deep programming repository research worker
 
 The worker command `npm run knowledge:worker` now inspects public GitHub repository results discovered by Tavily. It indexes a repository README and up to three small documentation-oriented files, records the source URL and declared SPDX license when available, preserves Markdown/code formatting, and labels repository material as community reference. It is deliberately bounded to two repositories per job and twelve repository documents per worker run. It does not clone or execute code, access private repositories, or mirror GitHub. Optional `GITHUB_TOKEN` is a server-side secret for API rate-limit headroom; without it the worker uses the unauthenticated public API quota.
+
+
+## Programming repository and release tracking
+
+Migration `0039_programming_release_tracking.sql` adds structured metadata for discovered public GitHub repositories and a normalized release-history table. The bounded knowledge worker records repository metadata, the declared SPDX license, last push time and up to three latest published releases, including release-note text and canonical GitHub URLs. Release notes with sufficient content are indexed in the knowledge corpus with publication dates. It does not clone or execute repositories. Apply migration 0039 after 0038 and only after backup/recovery review. The worker's recurring seed-query refresh interval is seven days.
