@@ -21,8 +21,7 @@ The chat tool loop allows up to six rounds for a requested browser task, with a 
 
 Create a Browserbase project and configure these server-side environment variables on Railway's `Ai-app` service in the `production` environment. The existing `TAVILY_API_KEY` remains unchanged and is used for web search, not browser control:
 
-- `BROWSERBASE_API_KEY`
-- `BROWSERBASE_PROJECT_ID`
+- `BROWSERBASE_API_KEY` only. Browserbase infers the project from this API key; do not set `BROWSERBASE_PROJECT_ID`.
 
 The application uses Browserbase's hosted Chromium environment and Playwright CDP connection. It does not download or run a local Chromium binary on the AFG AI server.
 
@@ -61,7 +60,7 @@ This is UI automation through the user's browser session; it is not a Gmail API 
 
 Browser automation is **not active in a deployed environment** merely because these source changes are committed. Activation requires all of the following:
 
-1. Add `BROWSERBASE_API_KEY` and `BROWSERBASE_PROJECT_ID` as private variables to Railway's `Ai-app` production service. Keep the existing `TAVILY_API_KEY`; do not replace it.
+1. Set `BROWSERBASE_API_KEY` as a private variable on Railway's `Ai-app` service. Browserbase infers the project from the key. Keep the existing `TAVILY_API_KEY`; do not replace it.
 2. Apply migration `0042_browser_automation_profiles.sql` after database backup approval.
 3. Deploy this working branch to Railway. The current production service source is `main`, so browser automation is not live until the feature branch is deployed or merged.
 4. Allow Railway to install the added runtime dependencies during the approved deployment.
