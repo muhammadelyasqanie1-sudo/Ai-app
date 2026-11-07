@@ -7,11 +7,12 @@ import {
 import type { Language, Theme, UserProfile } from '../../types/afg';
 import { AfgAccountSettings } from './AfgAccountSettings';
 import { AfgFileLibrary } from './AfgFileLibrary';
+import { AfgIntelligencePanel } from './AfgIntelligencePanel';
 import { AfgApiConnectorPanel } from './AfgApiConnectorPanel';
 import { getHubUi } from '../../utils/localeUi';
 
 type Context = 'user' | 'admin';
-type SettingId = 'language'|'appearance'|'chat'|'memory'|'coding'|'privacy'|'files'|'models'|'local'|'voice'|'github'|'telegram'|'ftp'|'mcp'|'byok'|'router'|'api-hub'|'9router';
+type SettingId = 'language'|'appearance'|'chat'|'memory'|'intelligence'|'coding'|'privacy'|'files'|'models'|'local'|'voice'|'github'|'telegram'|'ftp'|'mcp'|'byok'|'router'|'api-hub'|'9router';
 type Item = { id: SettingId; group: string; title: string; subtitle: string; icon: React.ElementType; keywords: string[] };
 type Status = 'active'|'ready'|'setup'|'disabled'|'unknown';
 
@@ -41,6 +42,7 @@ const ITEMS: Item[] = [
   {id:'appearance',group:'Personalize',title:'Appearance',subtitle:'Theme, accent color, density and typography.',icon:Palette,keywords:['light','dark','system','neon','color']},
   {id:'chat',group:'Personalize',title:'Chat settings',subtitle:'Response preferences, chat width and startup behavior.',icon:MessageSquare,keywords:['instructions','prompt','images','startup']},
   {id:'memory',group:'Personalize',title:'Memory',subtitle:'Review and manage saved memory items.',icon:Brain,keywords:['remember','saved memory']},
+  {id:'intelligence',group:'Your Assistant',title:'AFG AI Intelligence',subtitle:'Private knowledge, memory retrieval and training-data curation.',icon:Brain,keywords:['knowledge','training','fine tuning','rag','dataset','learning','دانش','آموزش']},
   {id:'coding',group:'Personalize',title:'Coding',subtitle:'Coding workspace and execution preferences.',icon:Code2,keywords:['agent','terminal','programming','sandbox']},
   {id:'privacy',group:'Personalize',title:'Privacy & security',subtitle:'Account security, sessions and personal data.',icon:Shield,keywords:['lock','biometric','screenshots','delete account']},
   {id:'files',group:'Your Assistant',title:'Files & workspace',subtitle:'Private file library, upload and quarantine status.',icon:FileText,keywords:['upload','pdf','documents','workspace','storage']},
@@ -238,6 +240,7 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
         <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><selected.icon className="h-5 w-5"/></span><div className="min-w-0 flex-1"><h2 className="font-black text-white">{selected.id==='api-hub'&&fa?'فهرست APIها و کلیدها':selected.id==='9router'&&fa?'درگاه هوش مصنوعی 9Router':selected.title}</h2><p className="text-xs text-slate-400">{selected.subtitle}</p></div>{['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(page)&&statusBadge(page)}</div>
       </div>
       {page==='files' && <AfgFileLibrary language={language}/>}
+      {page==='intelligence' && <AfgIntelligencePanel language={language}/>}
       {page==='api-hub'&&<AfgApiConnectorPanel language={language}/>}
       {page==='9router'&&<div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4"><h3 className="font-semibold text-white">9Router AI Gateway</h3><p className="mt-2 text-sm leading-6 text-slate-300">{fa?'وضعیت و مدیریت درگاه 9Router از بخش مدیریت امن و جداگانه انجام می‌شود. این صفحه هیچ لینک یا وضعیت ساختگی نشان نمی‌دهد.':'9Router gateway administration is handled through the separate authenticated control plane. This page does not display a fabricated link or status.'}</p></div>}
       {(['appearance','language','chat','memory','coding','privacy'] as SettingId[]).includes(page) && <>
