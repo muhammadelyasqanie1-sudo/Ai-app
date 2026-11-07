@@ -12,13 +12,22 @@ const MAX_JOBS = Math.max(1, Math.min(20, Number(process.env.AFG_KNOWLEDGE_MAX_J
 const MAX_RESULTS = 5;
 const TIMEOUT_MS = 20000;
 const MAX_API_BYTES = 1_200_000;
-const MAX_REPO_FILES = 4;
+const MAX_REPO_FILES = 3;
+const MAX_REPOS_PER_JOB = 2;
+const MAX_REPO_DOCS_PER_RUN = 12;
 
 type Topic = { topic_key: string; label: string; search_queries: string[]; priority: number };
 type Job = { id: string; query: string; language: string; attempts: number; topic_key: string | null };
 type SearchResult = { title?: string; url?: string; content?: string; score?: number; published_date?: string };
 
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
+function normalizeDocument(value: unknown, limit: number) {
+  return String(value || '').replace(/<script\\b[^>]*>[\\s\\S]*?<\\/script>/gi, ' ')
+    .replace(/<style\\b[^>]*>[\\s\\S]*?<\\/style>/gi, ' ')
+    .replace(/[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/g, ' ')
+    .replace(/\\r\\n?/g, '\\n').replace(/[ \\t]+\\n/g, '\\n')
+    .replace(/\\n{4,}/g, '\\n\\n\\n').trim().slice(0, limit);
+}
 function cleanText(value: unknown, limit: number) {
   return String(value || '').replace(/<[^>]*>/g, ' ')
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ' ')
@@ -125,7 +134,7 @@ async function storeDocument(input: {
   trust: 'unreviewed' | 'community' | 'established'; query: string;
 }) {
   const title = cleanText(input.title, 240);
-  const content = cleanText(input.content, 29000);
+  const content = normalizeDocument(input.content, 29000);
   const url = safePublicUrl(input.url);
   if (!url || !title || content.length < 80) return false;
   const source = await pool.query(
