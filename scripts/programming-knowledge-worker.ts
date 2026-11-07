@@ -447,7 +447,7 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
 async function storeSearchExcerpt(item: SearchResult, query: string, topicKey: string | null, language: string) {
   const url = safePublicUrl(item.url);
   const title = cleanText(item.title, 240);
-  if (url && (url.hostname === 'github.com' || url.hostname.endsWith('.githubusercontent.com')) && parseGitHubRepo(url.toString())) return false;
+  if (url && (url.hostname === 'github.com' || url.hostname.endsWith('.githubusercontent.com'))) return false;
   const raw = normalizeDocument(item.raw_content, 24000);
   const snippet = normalizeDocument(item.content, 12000);
   const extracted = raw.length >= 300 ? raw : '';
