@@ -413,7 +413,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     }
 
     const latestUserPrompt = [...upstreamMessages].reverse().find((message) => message.role === 'user')?.content || '';
-    const repositoryActionRequested = /\b(inspect|review|audit|analy[sz]e|understand|explore|map|debug|fix|edit|update|change|modify|refactor|implement|open|read|commit|create)\b|بررسی|تحلیل|بازبینی|عیب.?یابی|اصلاح|تغییر|ویرایش|بخوان|باز کن/i.test(latestUserPrompt);
+    const repositoryActionRequested = /\b(inspect|review|audit|analy[sz]e|understand|explore|map|scan|check|debug|fix|edit|update|change|modify|refactor|implement|open|read|commit|create)\b|بررسی|تحلیل|بازبینی|وارسی|چک|عیب.?یابی|اصلاح|تغییر|ویرایش|بخوان|باز کن/i.test(latestUserPrompt);
     const repositorySubjectMentioned = /\b(repository|repo|codebase|source code|project files|my project)\b|مخزن|ریپو|کدبیس|کدهای پروژه|فایل.?های پروژه|پروژه.?ام/i.test(latestUserPrompt);
     const githubRequested = /github|git hub|گیت.?هاب|مخزن گیت/i.test(latestUserPrompt) ||
       (repositoryActionRequested && repositorySubjectMentioned);
