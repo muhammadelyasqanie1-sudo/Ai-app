@@ -65,6 +65,30 @@ const definitions = [
   {
     type: 'function',
     function: {
+      name: 'github_get_repository_tree',
+      description: 'Capability category: coding. Inspect the tracked file and directory structure of an accessible repository before making architectural or code changes. Returns bounded paths and file sizes; it does not read file contents. Use github_get_file for selected files.',
+      parameters: { type: 'object', properties: {
+        owner: { type: 'string' }, repo: { type: 'string' },
+        ref: { type: 'string', description: 'Optional branch, tag, or commit. Defaults to the repository default branch.' },
+        path_prefix: { type: 'string', description: 'Optional directory or file path prefix to inspect a specific part of a large repository.' },
+        limit: { type: 'integer', minimum: 20, maximum: 120 },
+      }, required: ['owner', 'repo'], additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'github_compare_branches',
+      description: 'Capability category: coding. Compare two branches, tags, or commit references in an accessible repository for code review. Returns commit summaries, ahead/behind counts, changed file statistics, and bounded patch excerpts. Read full files with github_get_file when needed.',
+      parameters: { type: 'object', properties: {
+        owner: { type: 'string' }, repo: { type: 'string' },
+        base: { type: 'string' }, head: { type: 'string' },
+      }, required: ['owner', 'repo', 'base', 'head'], additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'github_create_branch',
       description: 'Capability category: coding. Create a new branch from the repository default branch or a supplied base branch. Use this before changing files; never create the working branch directly on the default branch.',
       parameters: { type: 'object', properties: {
@@ -82,6 +106,23 @@ const definitions = [
         owner: { type: 'string' }, repo: { type: 'string' }, path: { type: 'string' },
         branch: { type: 'string' }, content: { type: 'string' }, message: { type: 'string' },
       }, required: ['owner', 'repo', 'path', 'branch', 'content', 'message'], additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'github_commit_files',
+      description: 'Capability category: coding. Atomically commit a related set of text-file additions or updates to an existing non-default working branch using the GitHub Git Data API. Supports up to 12 files and a bounded total payload. Never use on the default branch; this changes the repository and must be explicitly requested by the user.',
+      parameters: { type: 'object', properties: {
+        owner: { type: 'string' }, repo: { type: 'string' },
+        branch: { type: 'string' }, message: { type: 'string' },
+        files: { type: 'array', minItems: 1, maxItems: 12, items: {
+          type: 'object', properties: {
+            path: { type: 'string' },
+            content: { type: 'string' },
+          }, required: ['path', 'content'], additionalProperties: false,
+        } },
+      }, required: ['owner', 'repo', 'branch', 'message', 'files'], additionalProperties: false },
     },
   },
   {
@@ -198,6 +239,12 @@ function redactSourceSecrets(value: string): string {
     .replace(/(Bearer\s+)[A-Za-z0-9._~+/-]{16,}/gi, '$1[REDACTED]')
     .replace(/((?:api[_-]?key|access[_-]?token|client[_-]?secret|password)\s*[:=]\s*["']?)[^"'\s,;]+/gi, '$1[REDACTED]');
 }
+function containsPotentialSecrets(value: string): boolean {
+  return redactSourceSecrets(value) !== value ||
+    /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i.test(value) ||
+    /\bAKIA[0-9A-Z]{16}\b/.test(value) ||
+    /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/.test(value);
+}
 function repoSummary(row: any) {
   return {
     full_name: row.full_name,
@@ -288,6 +335,75 @@ export async function executeGitHubTool(userId: string, toolName: string, rawArg
     })) };
   }
 
+  if (toolName === 'github_get_repository_tree') {
+    const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
+    const requestedRef = optionalText(args, 'ref', 200);
+    const requestedPrefix = optionalText(args, 'path_prefix', 500);
+    const pathPrefix = requestedPrefix ? safeFilePath(requestedPrefix) : '';
+    const limit = boundedNumber(args.limit, 80, 20, 120);
+    const repository = await request(token, repoPath(owner, repo));
+    const defaultBranch = String(repository.data.default_branch || 'main');
+    const ref = requestedRef || defaultBranch;
+    const commit = await request(token, repoPath(owner, repo) + '/commits/' + encodeURIComponent(ref));
+    const treeSha = String(commit.data?.commit?.tree?.sha || '');
+    if (!/^[a-f0-9]{40}$/i.test(treeSha)) throw new Error('GitHub did not return a valid repository tree reference.');
+    const tree = await request(token, repoPath(owner, repo) + '/git/trees/' + treeSha + '?recursive=1');
+    const allEntries = Array.isArray(tree.data?.tree) ? tree.data.tree : [];
+    const entries = pathPrefix
+      ? allEntries.filter((item: any) => item.path === pathPrefix || String(item.path || '').startsWith(pathPrefix + '/'))
+      : allEntries;
+    const visible = entries.slice(0, limit).map((item: any) => ({
+      path: String(item.path || '').slice(0, 500),
+      type: item.type === 'tree' ? 'directory' : item.type === 'blob' ? 'file' : 'other',
+      ...(item.type === 'blob' ? { size: Number(item.size || 0) } : {}),
+    }));
+    await audit(userId, 'repository.tree.read', owner, repo, { ref, pathPrefix: pathPrefix || null, returned: visible.length, total: entries.length, truncated: Boolean(tree.data?.truncated || entries.length > limit) });
+    return {
+      repository: owner + '/' + repo,
+      ref,
+      default_branch: defaultBranch,
+      path_prefix: pathPrefix || null,
+      total_entries: entries.length,
+      repository_tree_truncated: Boolean(tree.data?.truncated),
+      truncated: Boolean(tree.data?.truncated || entries.length > limit),
+      entries: visible,
+    };
+  }
+
+  if (toolName === 'github_compare_branches') {
+    const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
+    const base = safeBranch(requiredText(args, 'base', 200));
+    const head = safeBranch(requiredText(args, 'head', 200));
+    if (base === head) throw new Error('Choose two different references to compare.');
+    const comparison = await request(token, repoPath(owner, repo) + '/compare/' + encodeURIComponent(base) + '...' + encodeURIComponent(head));
+    const files = Array.isArray(comparison.data?.files) ? comparison.data.files : [];
+    const commits = Array.isArray(comparison.data?.commits) ? comparison.data.commits : [];
+    await audit(userId, 'branches.compare', owner, repo, { base, head, files: files.length, commits: commits.length });
+    return {
+      repository: owner + '/' + repo,
+      base,
+      head,
+      status: comparison.data?.status || 'unknown',
+      ahead_by: Number(comparison.data?.ahead_by || 0),
+      behind_by: Number(comparison.data?.behind_by || 0),
+      total_commits: commits.length,
+      commits: commits.slice(0, 10).map((item: any) => ({
+        sha: String(item.sha || '').slice(0, 40),
+        message: String(item.commit?.message || '').split(String.fromCharCode(10))[0].slice(0, 240),
+      })),
+      total_changed_files: files.length,
+      changed_files: files.slice(0, 8).map((item: any) => ({
+        filename: String(item.filename || '').slice(0, 500),
+        status: String(item.status || 'modified'),
+        additions: Number(item.additions || 0),
+        deletions: Number(item.deletions || 0),
+        changes: Number(item.changes || 0),
+        ...(typeof item.patch === 'string' ? { patch: redactSourceSecrets(item.patch).slice(0, 700) } : {}),
+      })),
+      files_truncated: files.length > 8,
+    };
+  }
+
   if (toolName === 'github_create_branch') {
     const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
     const branch = safeBranch(requiredText(args, 'branch', 120));
@@ -309,7 +425,7 @@ export async function executeGitHubTool(userId: string, toolName: string, rawArg
     const path = safeFilePath(requiredText(args, 'path', 500));
     const branch = safeBranch(requiredText(args, 'branch', 120));
     const content = requiredContent(args, 'content', 100_000);
-    if (/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)/.test(content)) {
+    if (containsPotentialSecrets(content)) {
       throw new Error('The proposed file content appears to contain a credential or private key and was not committed.');
     }
     const message = requiredText(args, 'message', 200);
@@ -332,6 +448,78 @@ export async function executeGitHubTool(userId: string, toolName: string, rawArg
     const updated = await request(token, fileEndpoint.split('?')[0], { method: 'PUT', body: JSON.stringify(body) });
     await audit(userId, 'file.write', owner, repo, { path, branch, commit: updated.data.commit?.sha || null });
     return { committed: true, path, branch, commit: updated.data.commit?.sha || null, html_url: updated.data.content?.html_url || null };
+  }
+
+  if (toolName === 'github_commit_files') {
+    const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
+    const branch = safeBranch(requiredText(args, 'branch', 120));
+    const message = requiredText(args, 'message', 200);
+    if (!Array.isArray(args.files) || args.files.length < 1 || args.files.length > 12) {
+      throw new Error('Provide between one and twelve files for an atomic commit.');
+    }
+    const seen = new Set<string>();
+    let totalBytes = 0;
+    const files = args.files.map((raw: unknown) => {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Each file must include a path and text content.');
+      const item = raw as Json;
+      const path = safeFilePath(requiredText(item, 'path', 500));
+      const content = requiredContent(item, 'content', 50_000);
+      if (seen.has(path)) throw new Error('The same file path cannot appear twice in one commit.');
+      seen.add(path);
+      if (containsPotentialSecrets(content)) {
+        throw new Error('One proposed file appears to contain a credential or private key. No files were committed.');
+      }
+      totalBytes += Buffer.byteLength(content, 'utf8');
+      if (totalBytes > 100_000) throw new Error('The combined text content must be 100 KB or smaller.');
+      return { path, content };
+    });
+    const repository = await request(token, repoPath(owner, repo));
+    if (branch === String(repository.data.default_branch || 'main')) {
+      throw new Error('Direct commits to the default branch are blocked. Create and use a working branch.');
+    }
+    const refResult = await request(token, repoPath(owner, repo) + '/git/ref/heads/' + encodeURIComponent(branch));
+    const parentSha = String(refResult.data?.object?.sha || '');
+    if (!/^[a-f0-9]{40}$/i.test(parentSha)) throw new Error('GitHub did not return a valid working-branch commit.');
+    const parent = await request(token, repoPath(owner, repo) + '/git/commits/' + parentSha);
+    const baseTreeSha = String(parent.data?.tree?.sha || '');
+    if (!/^[a-f0-9]{40}$/i.test(baseTreeSha)) throw new Error('GitHub did not return a valid base tree.');
+    const blobs = await Promise.all(files.map(async (file: { path: string; content: string }) => {
+      const result = await request(token, repoPath(owner, repo) + '/git/blobs', {
+        method: 'POST',
+        body: JSON.stringify({ content: file.content, encoding: 'utf-8' }),
+      });
+      const sha = String(result.data?.sha || '');
+      if (!/^[a-f0-9]{40}$/i.test(sha)) throw new Error('GitHub did not return a valid file blob.');
+      return { path: file.path, mode: '100644', type: 'blob', sha };
+    }));
+    const tree = await request(token, repoPath(owner, repo) + '/git/trees', {
+      method: 'POST',
+      body: JSON.stringify({ base_tree: baseTreeSha, tree: blobs }),
+    });
+    const treeSha = String(tree.data?.sha || '');
+    if (!/^[a-f0-9]{40}$/i.test(treeSha)) throw new Error('GitHub did not return a valid new tree.');
+    const commit = await request(token, repoPath(owner, repo) + '/git/commits', {
+      method: 'POST',
+      body: JSON.stringify({ message, tree: treeSha, parents: [parentSha] }),
+    });
+    const commitSha = String(commit.data?.sha || '');
+    if (!/^[a-f0-9]{40}$/i.test(commitSha)) throw new Error('GitHub did not return a valid commit.');
+    await request(token, repoPath(owner, repo) + '/git/refs/heads/' + encodeURIComponent(branch), {
+      method: 'PATCH',
+      body: JSON.stringify({ sha: commitSha, force: false }),
+    });
+    await audit(userId, 'files.commit', owner, repo, { branch, paths: files.map((file: { path: string }) => file.path), commit: commitSha });
+    return {
+      committed: true,
+      atomic: true,
+      repository: owner + '/' + repo,
+      branch,
+      commit: commitSha,
+      commit_url: 'https://github.com/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/commit/' + commitSha,
+      files: files.map((file: { path: string }) => file.path),
+      file_count: files.length,
+      total_bytes: totalBytes,
+    };
   }
 
   if (toolName === 'github_create_pull_request') {

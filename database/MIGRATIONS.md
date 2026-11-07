@@ -76,3 +76,68 @@ Migration `0033_api_connector_key_queue.sql` adds queue state, observed quota me
 ## API key renewal lifecycle and usage reporting
 
 Migration `0034_api_key_lifecycle_usage_ledger.sql` adds explicit lifecycle state (`active`, `waiting`, `expired`, `revoked`) plus owner-supplied expiry and renewal dates to the encrypted API key vault. It is separate from migration 0033, which manages quota-waiting key selection. Waiting and expired credentials are retained and cannot be reactivated or deleted; add a newly issued provider key, verify it, then activate it. The authenticated `GET /api/api-hub/usage` endpoint summarizes actual connector runs for the previous 30 days. Provider costs are not estimated. Apply migration 0034 with `npm run db:migrate` after reviewing the backup and recovery plan.
+
+
+## Hybrid Intelligence Core
+
+Migration `0035_hybrid_intelligence_core.sql` adds owner-scoped private knowledge documents with PostgreSQL full-text indexing and explicitly consented training examples. Existing `user_memories` storage is reused; sensitive memories are excluded from automatic context retrieval. Apply only after backup and explicit migration approval. Training examples are user-owned dataset curation, not automatic model training or fine-tuning.
+
+
+## Universal Knowledge Engine
+
+Migration `0036_universal_knowledge_engine.sql` adds a curated shared source registry and provenance-aware knowledge documents. It records source type, trust level, license label, language, topic, evidence type, editorial confidence, publication date and a content fingerprint. The authenticated world-knowledge API allows signed-in users to browse/search the corpus; source registration and ingestion are restricted to administrator roles. Relevant content is automatically retrieved into chat as untrusted reference material. Apply migration 0036 only after backup and explicit migration approval. This migration does not start a crawler, bypass website restrictions, or train model weights.
+
+
+## Continuous world research queue
+
+Migration `0037_world_knowledge_research_queue.sql` adds a topic-agnostic durable research queue with idempotent query hashes, priority, retry attempts, leases, and atomic job claiming. Administrators can enqueue and inspect jobs; authorized workers claim and finish jobs. The queue has no academic-topic allowlist. A separate scheduled worker and approved search-provider integration are required to execute research and ingest source-backed documents. Apply migration 0037 only after backup and explicit migration approval.
+
+
+## Programming-only knowledge discovery engine
+
+Migration `0038_programming_knowledge_domain.sql` adds an extensible programming topic catalog covering languages, frontend, backend/API engineering, databases, mobile, AI/ML, DevOps/cloud, defensive security, testing, architecture, developer tooling, open source, data engineering, games, embedded/IoT and technical documentation. It associates recurring search jobs with their topic. The catalog is data-driven; add topics and search phrases without adding a subject allowlist to chat.
+
+The bounded worker is `scripts/programming-knowledge-worker.ts`, invoked with `npm run knowledge:worker`. It requires `DATABASE_URL` and `TAVILY_API_KEY`, seeds idempotent research jobs from enabled topics, claims a bounded number of jobs, searches Tavily, and stores short result excerpts with source URL, query provenance, low initial confidence and an explicit unverified evidence label. It does not fetch arbitrary result pages, download code, execute source material, bypass paywalls, or claim to train model weights. Search excerpts are discovery leads, not full verified documentation. Failed jobs receive bounded retries; each run is capped by `AFG_KNOWLEDGE_MAX_JOBS` (1–20, default 8).
+
+Apply migration 0038 only after a database backup and explicit migration approval. Configure the search API key as a server-side secret in the hosting environment; never commit it. A hosting cron/scheduler must be configured separately to invoke the worker periodically. Source changes do not create or activate a schedule, run migrations, execute the worker, or deploy the service.
+
+
+## Deep programming repository research worker
+
+The worker command `npm run knowledge:worker` now inspects public GitHub repository results discovered by Tavily. It indexes a repository README and up to three small documentation-oriented files, records the source URL and declared SPDX license when available, preserves Markdown/code formatting, and labels repository material as community reference. It is deliberately bounded to two repositories per job and twelve repository documents per worker run. It does not clone or execute code, access private repositories, or mirror GitHub. Optional `GITHUB_TOKEN` is a server-side secret for API rate-limit headroom; without it the worker uses the unauthenticated public API quota.
+
+
+## Programming repository and release tracking
+
+Migration `0039_programming_release_tracking.sql` adds structured metadata for discovered public GitHub repositories and a normalized release-history table. The bounded knowledge worker records repository metadata, the declared SPDX license, last push time and up to three latest published releases, including release-note text and canonical GitHub URLs. Release notes with sufficient content are indexed in the knowledge corpus with publication dates. It does not clone or execute repositories. Apply migration 0039 after 0038 and only after backup/recovery review. The worker's recurring seed-query refresh interval is seven days.
+
+
+## Multilingual programming research discovery
+
+Migration `0040_multilingual_programming_discovery.sql` adds language-specific search phrases to each programming topic for Dari, Persian and Pashto. The research worker creates separate idempotent jobs per language and stores search excerpts with the corresponding language label. GitHub repository documentation retains its own English label where appropriate. Apply after migration 0039; no model translation or weights training is performed.
+
+
+## Public programming source-code index
+
+Migration `0041_programming_source_code_index.sql` adds a bounded, repository-linked index of public source files, approximate extracted symbol names, and selected dependency manifests. The worker applies extension, path, file-size and per-run byte limits; it does not clone repositories or execute/install indexed code. Symbol extraction is heuristic and must not be treated as a complete syntax tree; line positions are approximate. The worker excludes common credential/key/secret path names and redacts several common private-key/token patterns, but this is not a guarantee that all secrets are detected. Dependency metadata reflects manifest declarations, not resolved or security-audited dependency graphs. Apply after migration 0040 and backup/recovery review. The authenticated `GET /api/intelligence/world/code` endpoint searches indexed paths, source text and extracted symbol names. A generated PostgreSQL search vector and GIN index support ranked code retrieval, and chat context can retrieve matching source-file excerpts alongside ordinary knowledge documents.
+
+## Remote browser automation profiles
+
+Migration `0042_browser_automation_profiles.sql` adds a per-user mapping to an isolated Browserbase persistent Context and records only the active remote session ID and limited recent page metadata. Browser cookies and signed-in website state remain in the remote Context; credentials are never copied into AFG AI's PostgreSQL records. The authenticated browser automation API and chat tools require the private server environment variable `BROWSERBASE_API_KEY` in addition to this migration. Browserbase infers the project from the API key; `BROWSERBASE_PROJECT_ID` is not required. Apply migration 0042 only after database backup and recovery-plan review. See `docs/BROWSER_AUTOMATION.md` for the activation checklist, Gmail live-view sign-in procedure, and security boundaries. A migration and source commit do not activate or deploy a Browserbase session.
+
+
+## Expanded programming research curriculum
+
+Migration `0043_expanded_programming_research_curriculum.sql` adds deeper discovery topics for computer-science fundamentals, systems and functional programming, networking, distributed systems, cloud-native engineering, observability/SRE, performance, advanced testing, accessibility, design systems, desktop development, browser automation, AI coding agents, compiler/AST/LSP tooling, API interoperability, applied cryptography, robotics, blockchain engineering and technical communication. It seeds focused English searches plus Dari/Persian/Pashto searches for selected core areas. The `coding-agents` topic has highest priority and targets repository-aware agents, tool loops, planning, multi-file editing, context engineering, sandboxing, approval gates and evaluation benchmarks.
+
+Apply 0043 only after migrations 0035–0042, a database backup, and explicit migration approval. The migration only adds research topics; it does not run the worker or start a scheduler. The worker still needs a scheduled invocation with server-side `DATABASE_URL` and `TAVILY_API_KEY`. Browserbase is interactive browser control and is not currently the background research provider; background discovery uses Tavily and the public GitHub API. No worker run, migration, test, build or deployment is performed by adding this migration.
+
+## Backend-only row-level security for intelligence data
+
+Migration `0044_intelligence_backend_only_rls.sql` enables PostgreSQL row-level security on private knowledge, opt-in training examples, shared research sources/documents/jobs/topics, repository/release/source-code indexes and browser profiles. These tables are accessed through AFG AI's authenticated backend using its private database connection; no anonymous or client-side Data API policies are added. The server remains responsible for user ownership checks. Apply after 0043.
+
+## Deeper research ingestion
+
+The programming worker now asks Tavily for extracted Markdown page content, not just snippets. It labels extracted pages as unverified reference material, applies a conservative domain-based source classification (official documentation, academic, community, or unreviewed), stores provenance and caps each page. Short snippets remain explicitly unverified. The worker is bounded to three public GitHub repositories per run and a small number of documentation/source files to avoid exhausting unauthenticated GitHub API limits. GitHub source code is reference data only: it is never executed, installed or treated as instructions. A GitHub token is optional but improves API headroom.
+
+The Railway deployment uses the existing Ai-app service to avoid provisioning a second always-on resource. Set `AFG_KNOWLEDGE_WORKER_ENABLED=true`; the API process then launches the worker as a child process after startup and every `AFG_KNOWLEDGE_WORKER_INTERVAL_MINUTES` (default 60, minimum 30). The child uses the existing server-side `DATABASE_URL` and `TAVILY_API_KEY`; no key is exposed to the browser. A PostgreSQL advisory lock prevents overlapping runs across replicas. The service continues serving chat normally; do not replace its start command with the worker. The initial delay defaults to 90 seconds. The bounded worker processes up to eight jobs and three public GitHub repositories per run, then revisits completed topics after seven days.

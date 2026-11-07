@@ -6,6 +6,8 @@ import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './a
 import { prepareVerifiedChat } from '../services/chatService.ts';
 import { enforceModelSubscription } from './modelAccess.ts';
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
+import { buildPersonalContextMessage } from '../services/intelligenceContext.ts';
+import { buildProfessionalCapabilityPrompt } from '../services/afgProfessionalStandard.ts';
 
 const requestSchema = z.object({
   conversationId: z.string().uuid().nullable().optional(),
@@ -200,9 +202,13 @@ export async function handlePersonalGatewayApi(
        ) recent ORDER BY created_at ASC,id ASC`,
       [conversationId],
     );
+    const personalContext = await buildPersonalContextMessage(user.id, input.content);
+    const conversationMessages = history.rows.map((row: any) => ({ role: row.role, content: String(row.content) }));
+    conversationMessages.unshift({ role: 'system', content: buildProfessionalCapabilityPrompt(input.content) });
+    if (personalContext) conversationMessages.unshift({ role: 'system', content: personalContext });
     const prepared = await prepareVerifiedChat({
       model,
-      messages: history.rows.map((row: any) => ({ role: row.role, content: String(row.content) })),
+      messages: conversationMessages,
       signal: abort.signal,
       onModelSelected: async (providerId, modelId) => {
         await enforceModelSubscription(user.id, providerId, modelId);

@@ -7,11 +7,12 @@ import {
 import type { Language, Theme, UserProfile } from '../../types/afg';
 import { AfgAccountSettings } from './AfgAccountSettings';
 import { AfgFileLibrary } from './AfgFileLibrary';
+import { AfgIntelligencePanel } from './AfgIntelligencePanel';
 import { AfgApiConnectorPanel } from './AfgApiConnectorPanel';
 import { getHubUi } from '../../utils/localeUi';
 
 type Context = 'user' | 'admin';
-type SettingId = 'language'|'appearance'|'chat'|'memory'|'coding'|'privacy'|'files'|'models'|'local'|'voice'|'github'|'telegram'|'ftp'|'mcp'|'byok'|'router'|'api-hub'|'9router';
+type SettingId = 'language'|'appearance'|'chat'|'memory'|'intelligence'|'coding'|'privacy'|'files'|'models'|'local'|'voice'|'github'|'telegram'|'ftp'|'mcp'|'byok'|'router'|'api-hub'|'9router';
 type Item = { id: SettingId; group: string; title: string; subtitle: string; icon: React.ElementType; keywords: string[] };
 type Status = 'active'|'ready'|'setup'|'disabled'|'unknown';
 
@@ -41,6 +42,7 @@ const ITEMS: Item[] = [
   {id:'appearance',group:'Personalize',title:'Appearance',subtitle:'Theme, accent color, density and typography.',icon:Palette,keywords:['light','dark','system','neon','color']},
   {id:'chat',group:'Personalize',title:'Chat settings',subtitle:'Response preferences, chat width and startup behavior.',icon:MessageSquare,keywords:['instructions','prompt','images','startup']},
   {id:'memory',group:'Personalize',title:'Memory',subtitle:'Review and manage saved memory items.',icon:Brain,keywords:['remember','saved memory']},
+  {id:'intelligence',group:'Your Assistant',title:'AFG AI Intelligence',subtitle:'Private knowledge, memory retrieval and training-data curation.',icon:Brain,keywords:['knowledge','training','fine tuning','rag','dataset','learning','دانش','آموزش']},
   {id:'coding',group:'Personalize',title:'Coding',subtitle:'Coding workspace and execution preferences.',icon:Code2,keywords:['agent','terminal','programming','sandbox']},
   {id:'privacy',group:'Personalize',title:'Privacy & security',subtitle:'Account security, sessions and personal data.',icon:Shield,keywords:['lock','biometric','screenshots','delete account']},
   {id:'files',group:'Your Assistant',title:'Files & workspace',subtitle:'Private file library, upload and quarantine status.',icon:FileText,keywords:['upload','pdf','documents','workspace','storage']},
@@ -212,7 +214,7 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
   const statusBadge=(id:SettingId)=><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${status[id]==='active'?'bg-emerald-500/15 text-emerald-300':status[id]==='disabled'?'bg-slate-700 text-slate-400':'bg-amber-500/10 text-amber-300'}`}>{statusLabel(id)}</span>;
   const row=(item:Item)=><button key={item.id} type="button" disabled={isDisabled(item.id)} onClick={()=>{setPage(item.id);setError('');setNotice('');}} className={`group flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-cyan-400/5 disabled:cursor-not-allowed disabled:opacity-50 ${fa?'text-right':''}`}>
     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/15 bg-cyan-500/5 text-cyan-300"><item.icon className="h-5 w-5"/></span>
-    <span className="min-w-0 flex-1"><span className="block text-sm font-bold text-white">{item.id==='api-hub'&&fa?'فهرست APIها و کلیدها':item.id==='9router'&&fa?'درگاه هوش مصنوعی 9Router':item.title}</span><span className="mt-0.5 block text-xs leading-5 text-slate-400">{item.id==='api-hub'&&fa?'کشف APIها، ذخیره امن کلیدهای خود و فعال‌سازی ابزارهای هوشمند.':item.id==='9router'&&fa?'مدل‌های گفتگو، تصویر، ویدیو، صدا، جستجوی وب و Embedding.':item.subtitle}</span></span>
+    <span className="min-w-0 flex-1"><span className="block text-sm font-bold text-white">{item.id==='api-hub'&&fa?'فهرست APIها و کلیدها':item.id==='9router'&&fa?'درگاه هوش مصنوعی 9Router':item.id==='intelligence'&&fa?'هوش اختصاصی AFG AI':item.title}</span><span className="mt-0.5 block text-xs leading-5 text-slate-400">{item.id==='api-hub'&&fa?'کشف APIها، ذخیره امن کلیدهای خود و فعال‌سازی ابزارهای هوشمند.':item.id==='9router'&&fa?'مدل‌های گفتگو، تصویر، ویدیو، صدا، جستجوی وب و Embedding.':item.id==='intelligence'&&fa?'مدیریت دانش خصوصی، حافظه و آماده‌سازی داده‌های آموزشی.':item.subtitle}</span></span>
     <span className="flex shrink-0 items-center gap-2">{(status[item.id]||item.id==='github')&&['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(item.id)&&statusBadge(item.id)}<ChevronRight className={`h-4 w-4 text-slate-500 ${fa?'rotate-180':''}`}/></span>
   </button>;
 
@@ -235,9 +237,10 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
     {page&&selected ? <div className="space-y-4 animate-in slide-in-from-right-2">
       <button type="button" onClick={()=>setPage(null)} className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-300"><ArrowLeft className={`h-4 w-4 ${fa?'rotate-180':''}`}/>{t.back}</button>
       <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
-        <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><selected.icon className="h-5 w-5"/></span><div className="min-w-0 flex-1"><h2 className="font-black text-white">{selected.id==='api-hub'&&fa?'فهرست APIها و کلیدها':selected.id==='9router'&&fa?'درگاه هوش مصنوعی 9Router':selected.title}</h2><p className="text-xs text-slate-400">{selected.subtitle}</p></div>{['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(page)&&statusBadge(page)}</div>
+        <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><selected.icon className="h-5 w-5"/></span><div className="min-w-0 flex-1"><h2 className="font-black text-white">{selected.id==='api-hub'&&fa?'فهرست APIها و کلیدها':selected.id==='9router'&&fa?'درگاه هوش مصنوعی 9Router':selected.id==='intelligence'&&fa?'هوش اختصاصی AFG AI':selected.title}</h2><p className="text-xs text-slate-400">{selected.id==='intelligence'&&fa?'مدیریت دانش خصوصی و داده‌های آموزشی':selected.subtitle}</p></div>{['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(page)&&statusBadge(page)}</div>
       </div>
       {page==='files' && <AfgFileLibrary language={language}/>}
+      {page==='intelligence' && <AfgIntelligencePanel language={language}/>}
       {page==='api-hub'&&<AfgApiConnectorPanel language={language}/>}
       {page==='9router'&&<div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4"><h3 className="font-semibold text-white">9Router AI Gateway</h3><p className="mt-2 text-sm leading-6 text-slate-300">{fa?'وضعیت و مدیریت درگاه 9Router از بخش مدیریت امن و جداگانه انجام می‌شود. این صفحه هیچ لینک یا وضعیت ساختگی نشان نمی‌دهد.':'9Router gateway administration is handled through the separate authenticated control plane. This page does not display a fabricated link or status.'}</p></div>}
       {(['appearance','language','chat','memory','coding','privacy'] as SettingId[]).includes(page) && <>
