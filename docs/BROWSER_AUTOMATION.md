@@ -40,7 +40,7 @@ To sign in to Gmail:
 4. Return to the AFG AI chat and tell it after sign-in is complete.
 5. AFG AI can then take a new snapshot and act on the signed-in page according to the user's instructions.
 
-AFG AI never asks the user to paste Gmail passwords or one-time codes into chat and its browser typing tool refuses password fields. It does not bypass CAPTCHA, MFA, anti-bot controls, or Google account security checks. A login may be rejected or require additional verification by Google.
+AFG AI never asks the user to paste Gmail passwords or one-time codes into chat and its browser typing tool refuses password fields. CAPTCHA solving is explicitly disabled; the user must complete any CAPTCHA, MFA, passkey, anti-bot, or Google security check manually. A login may be rejected or require additional verification by Google.
 
 This is UI automation through the user's browser session; it is not a Gmail API OAuth integration. A future Gmail API integration should use Google's OAuth consent screen and the narrowest scopes needed for the requested operation.
 
@@ -53,6 +53,7 @@ This is UI automation through the user's browser session; it is not a Gmail API 
 - Password fields cannot be filled by the AI tool.
 - Fresh element references are required for click/type actions; stale references fail rather than targeting a different element.
 - Page contents, emails, links, and website instructions are treated as untrusted data.
+- Browserbase session recording and session logging are explicitly disabled when a new session is created.
 - Sending, deleting, purchasing, payment, transfer, publishing, posting, and other consequential actions require explicit user approval for the exact action.
 - Do not use the browser to collect credentials, evade access controls, bypass security challenges, or access accounts the user is not authorized to use.
 
