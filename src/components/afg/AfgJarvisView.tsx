@@ -349,7 +349,7 @@ export function AfgJarvisView({ language }: { language: Language }) {
         </div>
         <p className="mt-2 rounded-xl bg-white/5 p-3 text-sm">{label('Microphone permission', 'دسترسی میکروفون')}: <strong className={status?.microphonePermission ? 'text-emerald-300' : 'text-amber-300'}>{status?.microphonePermission ? label('Granted','داده شده') : label('Requested only when listening starts','فقط هنگام شروع شنیدن درخواست می‌شود')}</strong></p>
         <button className={button + ' mt-3 w-full'} onClick={() => void run('settings', () => AFGJarvis.openAccessibilitySettings())}>{label('Open Accessibility settings', 'باز کردن تنظیمات دسترس‌پذیری')}</button>
-        <p className="mt-3 text-xs leading-5 text-slate-400">{label('Enable “AFG AI Jarvis device controls” yourself. Android displays the system consent screen. The service does not record or upload screen events.', 'گزینه «کنترل دستگاه AFG AI» را خودتان فعال کنید. اندروید صفحه تأیید سیستمی را نشان می‌دهد. این سرویس رویدادهای صفحه را ضبط یا ارسال نمی‌کند.')}</p>
+        <p className="mt-3 text-xs leading-5 text-slate-400">{label('Enable “AFG AI device controls” yourself. Android displays the system consent screen. The service does not record or upload screen events.', 'گزینه «کنترل دستگاه AFG AI» را خودتان فعال کنید. اندروید صفحه تأیید سیستمی را نشان می‌دهد. این سرویس رویدادهای صفحه را ضبط یا ارسال نمی‌کند.')}</p>
       </section>
       <section className={card}>
         <h2 className="font-bold text-white">{label('Open an installed app', 'باز کردن برنامه نصب‌شده')}</h2>
