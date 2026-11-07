@@ -76,3 +76,8 @@ Migration `0033_api_connector_key_queue.sql` adds queue state, observed quota me
 ## API key renewal lifecycle and usage reporting
 
 Migration `0034_api_key_lifecycle_usage_ledger.sql` adds explicit lifecycle state (`active`, `waiting`, `expired`, `revoked`) plus owner-supplied expiry and renewal dates to the encrypted API key vault. It is separate from migration 0033, which manages quota-waiting key selection. Waiting and expired credentials are retained and cannot be reactivated or deleted; add a newly issued provider key, verify it, then activate it. The authenticated `GET /api/api-hub/usage` endpoint summarizes actual connector runs for the previous 30 days. Provider costs are not estimated. Apply migration 0034 with `npm run db:migrate` after reviewing the backup and recovery plan.
+
+
+## Hybrid Intelligence Core
+
+Migration `0035_hybrid_intelligence_core.sql` adds owner-scoped private knowledge documents with PostgreSQL full-text indexing and explicitly consented training examples. Existing `user_memories` storage is reused; sensitive memories are excluded from automatic context retrieval. Apply only after backup and explicit migration approval. Training examples are user-owned dataset curation, not automatic model training or fine-tuning.
