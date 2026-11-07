@@ -181,12 +181,21 @@ async function storeDocument(input: {
   return true;
 }
 
-function classifySource(hostname: string): { trust: 'official' | 'academic' | 'community' | 'unreviewed'; sourceType: 'documentation' | 'academic' | 'community' | 'other'; confidence: number } {
+function classifySource(hostname: string): { trust: 'official' | 'academic' | 'established' | 'community' | 'unreviewed'; sourceType: 'documentation' | 'academic' | 'community' | 'other'; confidence: number } {
   const host = hostname.toLowerCase().replace(/^www\./, '');
   const matches = (domains: string[]) => domains.some((domain) => host === domain || host.endsWith('.' + domain));
-  if (matches(['developer.mozilla.org','docs.python.org','typescriptlang.org','nodejs.org','react.dev','nextjs.org','vite.dev','rust-lang.org','go.dev','kotlinlang.org','developer.android.com','developer.apple.com','learn.microsoft.com','docs.github.com','docs.docker.com','kubernetes.io','postgresql.org','supabase.com','owasp.org','w3.org','cloudflare.com','docs.aws.amazon.com','developer.chrome.com','playwright.dev','docs.npmjs.com','docs.oracle.com'])) return { trust: 'official', sourceType: 'documentation', confidence: 0.78 };
+  if (matches([
+    'developer.mozilla.org','docs.python.org','typescriptlang.org','nodejs.org','react.dev','nextjs.org','vite.dev','rust-lang.org','go.dev','kotlinlang.org',
+    'developer.android.com','developer.apple.com','learn.microsoft.com','docs.microsoft.com','azure.microsoft.com','developers.google.com','cloud.google.com','docs.cloud.google.com',
+    'docs.github.com','docs.docker.com','kubernetes.io','postgresql.org','supabase.com','owasp.org','w3.org','cloudflare.com','aws.amazon.com','docs.aws.amazon.com',
+    'developer.chrome.com','playwright.dev','docs.npmjs.com','docs.oracle.com','docs.rs','pkg.go.dev','pytorch.org','tensorflow.org','huggingface.co',
+    'fastapi.tiangolo.com','docs.djangoproject.com','flask.palletsprojects.com','spring.io','docs.spring.io','developer.hashicorp.com','terraform.io','docs.ansible.com',
+    'docs.ros.org','docs.flutter.dev','reactnative.dev','expo.dev','flutter.dev','tauri.app','electronjs.org','docs.stripe.com','developer.paypal.com',
+    'docs.opencv.org','scikit-learn.org','numpy.org','pandas.pydata.org','jupyter.org'
+  ])) return { trust: 'official', sourceType: 'documentation', confidence: 0.78 };
   if (matches(['arxiv.org','acm.org','ieee.org','usenix.org','nist.gov','nature.com','science.org'])) return { trust: 'academic', sourceType: 'academic', confidence: 0.72 };
-  if (matches(['github.com','stackoverflow.com','stackexchange.com','dev.to','freecodecamp.org'])) return { trust: 'community', sourceType: 'community', confidence: 0.55 };
+  if (matches(['martinfowler.com','netflixtechblog.com','engineering.fb.com','github.blog','shopify.engineering','stackoverflow.blog','airbnb.tech','increment.com','sre.google','stripe.com/blog'])) return { trust: 'established', sourceType: 'documentation', confidence: 0.68 };
+  if (matches(['github.com','stackoverflow.com','stackexchange.com','dev.to','freecodecamp.org','reddit.com','medium.com','hashnode.dev'])) return { trust: 'community', sourceType: 'community', confidence: 0.55 };
   return { trust: 'unreviewed', sourceType: 'other', confidence: 0.35 };
 }
 
