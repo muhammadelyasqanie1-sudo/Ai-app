@@ -131,7 +131,7 @@ async function search(query: string): Promise<SearchResult[]> {
 async function storeDocument(input: {
   title: string; url: string; domain: string; content: string; topic: string;
   evidence: 'unverified' | 'reference'; confidence: number; sourceType: 'other' | 'documentation';
-  trust: 'unreviewed' | 'community' | 'established'; query: string;
+  trust: 'unreviewed' | 'community' | 'established'; query: string; licenseLabel?: string;
 }) {
   const title = cleanText(input.title, 240);
   const content = normalizeDocument(input.content, 29000);
@@ -139,10 +139,10 @@ async function storeDocument(input: {
   if (!url || !title || content.length < 80) return false;
   const source = await pool.query(
     `INSERT INTO world_knowledge_sources(name,canonical_url,domain,source_type,trust_level,license_label)
-     VALUES($1,$2,$3,$4,$5,'unknown')
-     ON CONFLICT(canonical_url) DO UPDATE SET name=EXCLUDED.name,updated_at=now()
+     VALUES($1,$2,$3,$4,$5,$6)
+     ON CONFLICT(canonical_url) DO UPDATE SET name=EXCLUDED.name,license_label=EXCLUDED.license_label,updated_at=now()
      RETURNING id`,
-    [title, url.toString(), input.domain || url.hostname.toLowerCase(), input.sourceType, input.trust],
+    [title, url.toString(), input.domain || url.hostname.toLowerCase(), input.sourceType, input.trust, cleanText(input.licenseLabel || 'unknown', 100)],
   );
   const enriched = ('Research query: ' + cleanText(input.query, 400) + '\n\n' + content).slice(0, 30000);
   const hash = sha(url.toString() + '\n' + title + '\n' + enriched);
@@ -193,7 +193,7 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
         url: htmlUrl + '/blob/' + encodeURIComponent(defaultBranch) + '/' + String(readme.path || 'README.md').split('/').map(encodeURIComponent).join('/'),
         domain: 'github.com', content: 'Repository: ' + fullName + '\nDescription: ' + description + '\nLicense declared by GitHub: ' + license + '\nDefault branch: ' + defaultBranch + '\n\n' + markdown,
         topic: topicKey || 'open-source', evidence: 'reference', confidence: 0.65,
-        sourceType: 'documentation', trust: 'community', query,
+        sourceType: 'documentation', trust: 'community', query, licenseLabel: license,
       }));
     }
   } catch { /* README may be absent or unavailable; retain other search evidence. */ }
