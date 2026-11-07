@@ -32,7 +32,7 @@ import { getIntlLocale } from '../../utils/i18n';
 
 interface AfgChatViewProps {
   messages: AfgMessage[];
-  agentActivities?: Array<{id:string;name:string;label:string;detail?:string;url?:string;status:'running'|'completed'|'failed';timestamp:number}>;
+  agentActivities?: Array<{id:string;name:string;label:string;detail?:string;url?:string;sources?:Array<{title:string;url:string;snippet?:string;publishedDate?:string}>;status:'running'|'completed'|'failed';timestamp:number}>;
   onSendMessage: (text: string, attachments: ChatAttachment[]) => void;
   onStop: () => void;
   onRetryMessage: (messageId: string) => void;
@@ -204,10 +204,10 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
       {/* Messages Scroll Area */}
       <div className="flex-1 overflow-y-auto px-1 sm:px-3 py-4 space-y-5">
         {agentActivities.length > 0 && (
-          <section className="mx-auto w-full max-w-3xl rounded-2xl border border-cyan-800/40 bg-slate-950/70 p-3 shadow-lg" aria-live="polite" aria-label={language === 'dari' ? 'فعالیت زنده هوش مصنوعی' : 'Live AI activity'}>
+          <section className="mx-auto w-full max-w-3xl rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-lg dark:border-cyan-800/40 dark:bg-slate-950/70" aria-live="polite" aria-label={language === 'dari' ? 'فعالیت زنده هوش مصنوعی' : 'Live AI activity'}>
             <div className="mb-2 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-cyan-200"><Globe className="h-4 w-4" />{language === 'dari' ? 'فعالیت زنده هوش مصنوعی' : 'Live AI activity'}</div>
-              <span className="text-[10px] text-slate-400">{agentActivities.some(item => item.status === 'running') ? (language === 'dari' ? 'در حال اجرا' : 'Working') : (language === 'dari' ? 'گزارش فعالیت' : 'Activity log')}</span>
+              <div className="flex items-center gap-2 text-xs font-bold text-cyan-700 dark:text-cyan-200"><Globe className="h-4 w-4" />{language === 'dari' ? 'فعالیت زنده هوش مصنوعی' : 'Live AI activity'}</div>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">{agentActivities.some(item => item.status === 'running') ? (language === 'dari' ? 'در حال اجرا' : 'Working') : (language === 'dari' ? 'گزارش فعالیت' : 'Activity log')}</span>
             </div>
             <ol className="space-y-2">
               {agentActivities.map((item) => (
@@ -215,11 +215,12 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                   <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${item.status === 'completed' ? 'bg-emerald-400' : item.status === 'failed' ? 'bg-rose-400' : 'bg-cyan-300 animate-pulse'}`} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="font-semibold text-slate-200">{item.label}</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">{item.label}</span>
                       <span className="text-[10px] text-slate-500">{item.status === 'completed' ? (language === 'dari' ? 'انجام شد' : 'Completed') : item.status === 'failed' ? (language === 'dari' ? 'ناموفق' : 'Failed') : (language === 'dari' ? 'در حال انجام' : 'In progress')}</span>
                     </div>
-                    {item.detail && <div className="mt-0.5 break-all text-[11px] text-slate-400">{item.detail}</div>}
-                    {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-block break-all text-[11px] text-cyan-400 underline underline-offset-2">{item.url}</a>}
+                    {item.detail && <div className="mt-0.5 break-all text-[11px] text-slate-600 dark:text-slate-400">{item.detail}</div>}
+                    {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-block break-all text-[11px] text-cyan-700 underline dark:text-cyan-400 underline-offset-2">{item.url}</a>}
+                    {item.sources && item.sources.length > 0 && <div className="mt-2 grid gap-2">{item.sources.map((source,index) => <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer" className="block rounded-xl border border-slate-200 bg-slate-50 p-2 text-left hover:border-cyan-400 dark:border-slate-700 dark:bg-slate-900/70"><span className="block text-[11px] font-semibold text-cyan-800 dark:text-cyan-300">{index + 1}. {source.title}</span>{source.snippet && <span className="mt-1 block text-[10px] leading-relaxed text-slate-600 dark:text-slate-400">{source.snippet}</span>}{source.publishedDate && <span className="mt-1 block text-[10px] text-slate-500">{source.publishedDate}</span>}</a>)}</div>}
                   </div>
                 </li>
               ))}
