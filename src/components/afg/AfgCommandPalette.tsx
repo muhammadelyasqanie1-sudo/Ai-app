@@ -39,6 +39,7 @@ interface AfgCommandPaletteProps {
   onOpenTerminal: () => void;
   onClearChat: () => void;
   onFindInChat: (query: string) => void;
+  onOpenAfgAssistant: () => void;
 }
 
 const defaults: AfgSystemFeatures = {
@@ -53,7 +54,7 @@ export const AfgCommandPalette: React.FC<AfgCommandPaletteProps> = (props) => {
     thinkingLevel, onThinkingLevel, planMode, onPlanMode,
     dualPlanning, onDualPlanning, permissionLevel, onPermissionLevel,
     onOpenHistory, onOpenSettings, onOpenNavigation, onOpenTerminal,
-    onClearChat, onFindInChat,
+    onClearChat, onFindInChat, onOpenAfgAssistant,
   } = props;
   const features = props.features || defaults;
   const dari = language === 'dari';
@@ -191,6 +192,7 @@ export const AfgCommandPalette: React.FC<AfgCommandPaletteProps> = (props) => {
                 </div>
                 <div className="afg-command-group">
                   <div className="afg-command-section">{dari?'ابزارها و حالت‌ها':'TOOLS & MODES'}</div>
+                  {action(<Sparkles size={18}/>, 'AFG AI', dari ? 'دستیار دستگاه، فرمان صوتی و مدل محلی' : 'Device assistant, voice commands and local AI', () => { onOpenAfgAssistant(); onClose(); })}
                   {action(<Github size={18}/>,'GitHub',features.github_connected?(dari?'متصل و تأییدشده':'Connected and health-verified'):(dari?'برای اتصال، تنظیمات را باز کنید':'Not connected — open Connections in Settings'),()=>{onOpenSettings();onClose();},features.github_connected?<Check size={17}/>:<ChevronRight size={16}/>)}
                   {action(<ListChecks size={18}/>,dari?'حالت برنامه‌ریزی':'Plan mode',planMode?(dari?'فعال':'Enabled'):(dari?'ابتدا طرح مرحله‌ای':'Plan before implementation'),()=>onPlanMode(!planMode),planMode?<Check size={17}/>:<span className="afg-command-switch"/> )}
                   {action(<Layers size={18}/>,dari?'برنامه‌ریزی دوگانه':'Dual planning',features.dual_planning_enabled?(dualPlanning?'Enabled':'Available'):(dari?'پشتیبانی سرور فعال نیست':'Not supported by this backend'),()=>onDualPlanning(!dualPlanning),features.dual_planning_enabled?<Check size={17}/>:<Lock size={15}/>,!features.dual_planning_enabled)}
