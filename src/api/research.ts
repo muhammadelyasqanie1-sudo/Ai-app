@@ -14,6 +14,113 @@ function reply(res: ServerResponse, status: number, payload: unknown, requestId:
   res.end(JSON.stringify({ ...payload as object, requestId }));
 }
 
+const ChatWebSearchInput = z.object({
+  query: z.string().trim().min(1).max(MAX_QUERY_LENGTH),
+  max_results: z.number().int().min(1).max(8).optional(),
+  time_range: z.enum(['day','week','month','year']).optional(),
+}).strict();
+
+export async function executeWebSearchTool(userId: string, args: unknown, parentSignal?: AbortSignal) {
+  if (!userId) throw new Error('Sign in is required to search the web.');
+  const input = ChatWebSearchInput.safeParse(args);
+  if (!input.success) throw new Error('Provide a valid web-search query and supported filters.');
+
+  if (pool) {
+    const status = await pool.query("SELECT enabled,status,last_check_ok FROM integrations WHERE slug='web-search' LIMIT 1");
+    if (status.rows[0] && !(status.rows[0].enabled && status.rows[0].status === 'active' && status.rows[0].last_check_ok === true)) {
+      throw new Error('The Web Search connection is not verified and enabled. Ask an administrator to check Admin → Connections.');
+    }
+  }
+
+  const runtime = await getIntegrationRuntime('web-search');
+  const provider = String(runtime?.config.provider || 'tavily');
+  const apiKey = runtime?.credentials.api_key || process.env.TAVILY_API_KEY || '';
+  if (!apiKey) throw new Error('Web Search is not configured. Connect Tavily in Admin → Connections.');
+  if (activeSearches >= 3) throw new Error('Web Search is busy. Please retry shortly.');
+
+  activeSearches += 1;
+  const controller = new AbortController();
+  const onParentAbort = () => controller.abort();
+  if (parentSignal?.aborted) controller.abort();
+  else parentSignal?.addEventListener('abort', onParentAbort, { once: true });
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+
+  try {
+    const query = input.data.query;
+    const maxResults = input.data.max_results || 6;
+    let endpoint: string;
+    let init: RequestInit;
+    if (provider === 'brave') {
+      endpoint = 'https://api.search.brave.com/res/v1/web/search?q=' + encodeURIComponent(query) + '&count=' + maxResults;
+      init = { headers: { 'X-Subscription-Token': apiKey, Accept: 'application/json' }, signal: controller.signal, redirect: 'error' };
+    } else if (provider === 'serpapi') {
+      endpoint = 'https://serpapi.com/search.json?engine=google&q=' + encodeURIComponent(query) + '&num=' + maxResults + '&api_key=' + encodeURIComponent(apiKey);
+      init = { signal: controller.signal, redirect: 'error' };
+    } else if (provider === 'tavily') {
+      endpoint = 'https://api.tavily.com/search';
+      init = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        signal: controller.signal,
+        redirect: 'error',
+        body: JSON.stringify({
+          api_key: apiKey,
+          query,
+          search_depth: 'advanced',
+          max_results: maxResults,
+          include_answer: false,
+          include_raw_content: false,
+          ...(input.data.time_range ? { time_range: input.data.time_range } : {}),
+        }),
+      };
+    } else {
+      throw new Error('The configured Web Search provider is not supported.');
+    }
+
+    const upstream = await fetch(endpoint, init);
+    if (!upstream.ok) {
+      const reason = upstream.status === 401 || upstream.status === 403
+        ? 'The Web Search API key was rejected.'
+        : upstream.status === 429
+          ? 'The Web Search provider rate limit or credit quota was reached.'
+          : 'The Web Search provider returned an error (HTTP ' + upstream.status + ').';
+      throw new Error(reason);
+    }
+
+    const data = await upstream.json() as any;
+    const rawResults = provider === 'brave' ? data.web?.results : provider === 'serpapi' ? data.organic_results : data.results;
+    const sources = Array.isArray(rawResults) ? rawResults.filter((item: any) => {
+      const url = item?.url || item?.link;
+      return typeof url === 'string' && /^https?:\\/\\//i.test(url) && typeof item.title === 'string';
+    }).slice(0, maxResults).map((item: any) => ({
+      title: String(item.title).slice(0, 300),
+      url: String(item.url || item.link),
+      snippet: typeof (item.content || item.description || item.snippet) === 'string'
+        ? String(item.content || item.description || item.snippet).slice(0, 1200)
+        : '',
+      ...(typeof item.score === 'number' ? { score: item.score } : {}),
+      ...(typeof item.published_date === 'string' ? { publishedDate: item.published_date.slice(0, 40) } : {}),
+    })) : [];
+
+    return {
+      provider,
+      query,
+      sourceCount: sources.length,
+      sources,
+      responseTimeSeconds: typeof data.response_time === 'number' ? data.response_time : undefined,
+    };
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(parentSignal?.aborted ? 'Web Search was cancelled.' : 'Web Search timed out after 15 seconds.');
+    }
+    throw error instanceof Error ? error : new Error('Web Search failed.');
+  } finally {
+    clearTimeout(timeout);
+    parentSignal?.removeEventListener('abort', onParentAbort);
+    activeSearches = Math.max(0, activeSearches - 1);
+  }
+}
+
 export async function handleResearchApi(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   const pathname = new URL(req.url || '/', 'http://localhost').pathname;
   if (pathname !== '/api/research') return false;
