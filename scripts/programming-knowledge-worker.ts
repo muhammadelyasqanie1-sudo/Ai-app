@@ -238,10 +238,10 @@ const CODE_EXTENSIONS: Record<string,string> = {
   py:'python',pyi:'python',go:'go',rs:'rust',java:'java',kt:'kotlin',swift:'swift',sql:'sql',
   c:'c',h:'c',cc:'cpp',cpp:'cpp',hpp:'cpp',cs:'csharp',rb:'ruby',php:'php',dart:'dart',scala:'scala',
   ex:'elixir',exs:'elixir',lua:'lua',vue:'vue',svelte:'svelte',graphql:'graphql',proto:'protobuf',
-  sh:'shell',ps1:'powershell',r:'r',jl:'julia',hs:'haskell',clj:'clojure',elm:'elm',groovy:'groovy',
+  sh:'shell',ps1:'powershell',r:'r',jl:'julia',hs:'haskell',clj:'clojure',elm:'elm',groovy:'groovy',html:'html',htm:'html',css:'css',scss:'scss',sass:'sass',less:'less',
   yaml:'yaml',yml:'yaml',json:'json',md:'markdown',mdx:'mdx',toml:'toml',
 };
-const SOURCE_CODE_EXTENSIONS = new Set(['ts','tsx','js','jsx','mjs','cjs','py','pyi','go','rs','java','kt','swift','sql','c','h','cc','cpp','hpp','cs','rb','php','dart','scala','ex','exs','lua','vue','svelte','graphql','proto','sh','ps1','r','jl','hs','clj','elm','groovy']);
+const SOURCE_CODE_EXTENSIONS = new Set(['ts','tsx','js','jsx','mjs','cjs','py','pyi','go','rs','java','kt','swift','sql','c','h','cc','cpp','hpp','cs','rb','php','dart','scala','ex','exs','lua','vue','svelte','graphql','sh','ps1','r','jl','hs','clj','elm','groovy','html','htm','css','scss','sass','less']);
 const DEPENDENCY_MANIFESTS = new Set(['package.json','requirements.txt','pyproject.toml','cargo.toml','go.mod','pom.xml']);
 const PREFERRED_SOURCE_ROOTS = new Set(['src','lib','app','packages','cmd','internal','crates','server','client','engine']);
 const SKIP_CODE_PATH = /(^|\/)(node_modules|vendor|dist|build|coverage|\.git|\.github|\.next|target|Pods|out|bin|docs)(\/|$)/i;
@@ -482,6 +482,15 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
       };
       return rank(a) - rank(b) || String(a.path).localeCompare(String(b.path));
     }).slice(0, MAX_CODE_FILES_PER_REPO);
+    const candidatePaths = codeCandidates.map((entry: any) => String(entry.path));
+    if (candidatePaths.length) {
+      await pool.query(
+        'DELETE FROM world_knowledge_code_files WHERE repository_id=$1 AND NOT (path = ANY($2::text[]))',
+        [repoRow.rows[0].id, candidatePaths],
+      );
+    } else {
+      await pool.query('DELETE FROM world_knowledge_code_files WHERE repository_id=$1', [repoRow.rows[0].id]);
+    }
     for (const entry of codeCandidates) {
       if (codeBytesIndexedThisRun >= MAX_CODE_BYTES_PER_RUN) break;
       const path = String(entry.path).split('/').map(encodeURIComponent).join('/');
