@@ -101,3 +101,17 @@ The programming research worker now recognizes public GitHub repository results 
 The worker enforces response byte limits, request timeouts, no redirects, a bounded number of jobs/results/repositories/files, and only contacts the fixed Tavily and GitHub API hosts. It does not clone repositories, execute source code, index arbitrary binary assets, or bypass private repository permissions. A `GITHUB_TOKEN` may be configured as an optional server-side secret to increase GitHub API rate limits; only public repositories are indexed. If no license is declared, the source license remains unknown and the material must not be treated as freely reusable.
 
 This milestone is a bounded documentation/repository discovery layer, not a complete mirror of GitHub. Large repositories, source-code files, release histories, issues, pull requests, dependency graphs, and full-text semantic indexing remain future work. Search-result excerpts remain explicitly unverified; repository documentation is reference material with community provenance, not automatically authoritative or security-reviewed.
+
+
+## Repository release intelligence and freshness-aware retrieval — milestones 5–6
+
+Migration `0039_programming_release_tracking.sql` adds structured public repository metadata and release history. The worker now records public repository identity, default branch, declared SPDX license, stars/forks, last push time, and up to three latest published GitHub releases per discovered repository. Release notes are stored with their original GitHub release URL and publication date, and indexed as reference documents when the release body contains useful notes. Release checks are bounded and share the worker's existing request, response-size and per-run limits. Research topic seed queries are eligible for refresh after seven days rather than thirty, allowing recurring discovery to notice newer documentation and releases.
+
+Knowledge retrieval now uses PostgreSQL `websearch_to_tsquery('simple', ...)` and cover-density ranking instead of strict `plainto_tsquery` matching. This supports quoted phrases and explicit OR/negation syntax and ranks matching documents by relevance, source trust, and publication freshness. It remains PostgreSQL full-text retrieval, not embeddings or a vector database; language-specific morphology and high-quality Dari/Pashto tokenization are still future work.
+
+Authenticated read endpoints expose the tracked corpus:
+- `GET /api/intelligence/world/repositories?q=&limit=`
+- `GET /api/intelligence/world/repositories/:id/releases`
+- `GET /api/intelligence/world/status` now includes repository and release counts.
+
+All repository/release data is public-source reference material. Stars and push dates are metadata, not quality guarantees; prereleases are labeled, licenses are recorded as declared by GitHub, and no code is executed. The worker still needs migrations 0035–0039, server-side `TAVILY_API_KEY`, and a scheduler to run periodically. Optional `GITHUB_TOKEN` improves API quota headroom. No migration, worker run, build, test, or deployment has been performed in this milestone.
