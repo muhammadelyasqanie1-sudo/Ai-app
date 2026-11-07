@@ -123,7 +123,7 @@ export async function handleWorldKnowledgeApi(req: IncomingMessage, res: ServerR
   if (pathname === '/api/intelligence/world/documents' && req.method === 'POST') {
     if (!isAdmin(user.role)) { reply(res, 403, { error: 'Only administrators can ingest shared knowledge.' }); return true; }
     try {
-      const parsed = documentSchema.safeParse(await readJsonBody(req, 36000));
+      const parsed = documentSchema.safeParse(await readJsonBody(req, 100_000));
       if (!parsed.success) { reply(res, 400, { error: 'Provide a valid source, title, content, topic, language and evidence classification.' }); return true; }
       const source = await pool.query(
         'SELECT id FROM world_knowledge_sources WHERE id=$1 AND enabled=true LIMIT 1',
@@ -143,7 +143,7 @@ export async function handleWorldKnowledgeApi(req: IncomingMessage, res: ServerR
         [parsed.data.sourceId,parsed.data.title,parsed.data.content,parsed.data.topic,parsed.data.language,
           parsed.data.evidenceType,parsed.data.confidence,parsed.data.publishedAt || null,contentHash,user.id],
       );
-      reply(res, 201, { document: result.rows[0], deduplicated: false });
+      reply(res, 201, { document: result.rows[0], stored: true });
     } catch {
       reply(res, 400, { error: 'Could not ingest this knowledge document.' });
     }
