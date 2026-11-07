@@ -14,25 +14,29 @@ export async function buildPersonalContextMessage(userId: string, latestUserMess
       WHERE u.id=$1 LIMIT 1`,
     [userId],
   );
-  if (settings.rows[0]?.enabled !== true) return null;
-
-  const [memories, documents] = await Promise.all([
-    pool.query(
-      `SELECT category,content FROM user_memories
-        WHERE user_id=$1 AND consent_sensitive=false
-        ORDER BY updated_at DESC LIMIT 12`,
-      [userId],
-    ),
-    pool.query(
-      `SELECT id,title,content,source_label
-         FROM knowledge_documents
-        WHERE user_id=$1
-          AND search_vector @@ plainto_tsquery('simple',$2)
-        ORDER BY ts_rank(search_vector,plainto_tsquery('simple',$2)) DESC, updated_at DESC
-        LIMIT 4`,
-      [userId, latestUserMessage.slice(0, 2000)],
-    ),
-  ]);
+  const memoryEnabled = settings.rows[0]?.enabled === true;
+  const memoriesPromise = memoryEnabled
+    ? pool.query(
+        `SELECT category,content FROM user_memories
+          WHERE user_id=$1 AND consent_sensitive=false
+          ORDER BY updated_at DESC LIMIT 12`,
+        [userId],
+      )
+    : Promise.resolve({ rows: [] as Array<{ category: string; content: string }> });
+  const documentsPromise = pool.query(
+    `SELECT id,title,content,source_label
+       FROM knowledge_documents
+      WHERE user_id=$1
+        AND search_vector @@ plainto_tsquery('simple',$2)
+      ORDER BY ts_rank(search_vector,plainto_tsquery('simple',$2)) DESC, updated_at DESC
+      LIMIT 4`,
+    [userId, latestUserMessage.slice(0, 2000)],
+  ).catch(() => {
+    // Migration 0035 may not have been applied yet. Keep ordinary chat available.
+    console.warn('AFG_KNOWLEDGE_RETRIEVAL_UNAVAILABLE', JSON.stringify({ reason: 'schema_or_query_unavailable' }));
+    return { rows: [] as Array<{ id: string; title: string; content: string; source_label: string }> };
+  });
+  const [memories, documents] = await Promise.all([memoriesPromise, documentsPromise]);
 
   const memoryLines = memories.rows.map((row: { category: string; content: string }) =>
     `- [${String(row.category).slice(0, 24)}] ${String(row.content).slice(0, 500)}`,
