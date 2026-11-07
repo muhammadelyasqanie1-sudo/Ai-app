@@ -146,21 +146,61 @@ export async function handleWorldKnowledgeApi(req: IncomingMessage, res: ServerR
   }
 
   if (pathname === '/api/intelligence/world/status' && req.method === 'GET') {
-    const [sources, documents] = await Promise.all([
+    const [sources, documents, repositories, releases] = await Promise.all([
       pool.query('SELECT count(*)::int AS total,count(*) FILTER (WHERE enabled=true)::int AS enabled FROM world_knowledge_sources'),
       pool.query('SELECT count(*)::int AS total,count(DISTINCT topic)::int AS topics FROM world_knowledge_documents'),
+      pool.query('SELECT count(*)::int AS total,count(*) FILTER (WHERE last_checked_at >= now()-interval \'7 days\')::int AS checked_recently FROM world_knowledge_repositories'),
+      pool.query('SELECT count(*)::int AS total FROM world_knowledge_releases WHERE draft=false'),
     ]);
     reply(res, 200, {
-      engine: 'continuous-research-ready-rag',
+      engine: 'programming-research-rag',
       available: true,
-      ingestion: 'administrator-curated; research-queue-enabled',
+      ingestion: 'scheduled-worker-required; bounded-public-repository-indexing',
       sources: Number(sources.rows[0]?.total || 0),
       enabledSources: Number(sources.rows[0]?.enabled || 0),
       documents: Number(documents.rows[0]?.total || 0),
       topics: Number(documents.rows[0]?.topics || 0),
+      repositories: Number(repositories.rows[0]?.total || 0),
+      repositoriesCheckedRecently: Number(repositories.rows[0]?.checked_recently || 0),
+      releases: Number(releases.rows[0]?.total || 0),
       modelWeightTraining: false,
       vectorSearch: false,
+      fullTextSearch: true,
     });
+    return true;
+  }
+
+  if (pathname === '/api/intelligence/world/repositories' && req.method === 'GET') {
+    const url = new URL(req.url || '/', 'http://localhost');
+    const query = (url.searchParams.get('q') || '').trim().slice(0,160);
+    const limit = Math.max(1,Math.min(100,Number(url.searchParams.get('limit') || 50)));
+    const result = await pool.query(
+      `SELECT id,owner,repo,full_name AS "fullName",default_branch AS "defaultBranch",
+              license_spdx AS license,stars,forks,pushed_at AS "pushedAt",
+              latest_release_tag AS "latestReleaseTag",
+              latest_release_published_at AS "latestReleasePublishedAt",
+              last_checked_at AS "lastCheckedAt",metadata
+         FROM world_knowledge_repositories
+        WHERE $1='' OR full_name ILIKE '%' || $1 || '%' OR COALESCE(metadata->>'description','') ILIKE '%' || $1 || '%'
+        ORDER BY pushed_at DESC NULLS LAST,stars DESC LIMIT $2`,
+      [query,limit],
+    );
+    reply(res, 200, { repositories: result.rows });
+    return true;
+  }
+
+  const repositoryReleasesMatch = /^\\/api\\/intelligence\\/world\\/repositories\\/([0-9a-f-]{36})\\/releases$/.exec(pathname);
+  if (repositoryReleasesMatch && req.method === 'GET') {
+    const result = await pool.query(
+      `SELECT r.tag_name AS "tagName",r.release_name AS name,r.body,r.html_url AS url,
+              r.target_commitish AS "targetCommitish",r.published_at AS "publishedAt",
+              r.prerelease
+         FROM world_knowledge_releases r
+        WHERE r.repository_id=$1 AND r.draft=false
+        ORDER BY r.published_at DESC NULLS LAST LIMIT 30`,
+      [repositoryReleasesMatch[1]],
+    );
+    reply(res, 200, { releases: result.rows });
     return true;
   }
 
