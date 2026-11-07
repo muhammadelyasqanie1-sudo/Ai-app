@@ -413,8 +413,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     }
 
     const latestUserPrompt = [...upstreamMessages].reverse().find((message) => message.role === 'user')?.content || '';
-    const repositoryActionRequested = /\\b(inspect|review|audit|analy[sz]e|understand|explore|map|debug|fix|edit|update|change|modify|refactor|implement|open|read)\\b|بررسی|تحلیل|بازبینی|عیب.?یابی|اصلاح|تغییر|ویرایش|بخوان|باز کن/i.test(latestUserPrompt);
-    const repositorySubjectMentioned = /\\b(repository|repo|codebase|source code|project files|my project)\\b|مخزن|ریپو|کدبیس|کدهای پروژه|فایل.?های پروژه|پروژه.?ام/i.test(latestUserPrompt);
+    const repositoryActionRequested = /\b(inspect|review|audit|analy[sz]e|understand|explore|map|debug|fix|edit|update|change|modify|refactor|implement|open|read)\b|بررسی|تحلیل|بازبینی|عیب.?یابی|اصلاح|تغییر|ویرایش|بخوان|باز کن/i.test(latestUserPrompt);
+    const repositorySubjectMentioned = /\b(repository|repo|codebase|source code|project files|my project)\b|مخزن|ریپو|کدبیس|کدهای پروژه|فایل.?های پروژه|پروژه.?ام/i.test(latestUserPrompt);
     const githubRequested = /github|git hub|گیت.?هاب|مخزن گیت/i.test(latestUserPrompt) ||
       (repositoryActionRequested && repositorySubjectMentioned);
     const webSearchRequested = /\b(web search|search the web|browse the web|look up online|internet search|online research|find sources|latest news|search online|search internet|google it|look up)\b|جستجوی وب|جست‌وجوی وب|جستجو در وب|جست‌وجو در وب|در اینترنت جستجو|در وب جستجو|وبگردی|منابع آنلاین|جستجوی اینترنتی|جست‌وجوی اینترنتی|آخرین اخبار|جدیدترین اخبار|اخبار امروز|اطلاعات به‌روز|در گوگل جستجو|سرچ کن|جستجو کن|جست‌وجو کن/i.test(latestUserPrompt);
