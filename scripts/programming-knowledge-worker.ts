@@ -189,6 +189,9 @@ const MAX_CODE_FILES_PER_REPO = 16;
 const MAX_CODE_BYTES_PER_FILE = 36000;
 const MAX_CODE_BYTES_PER_RUN = 240000;
 let codeBytesIndexedThisRun = 0;
+let codeFilesIndexedTotal = 0;
+let codeSymbolsIndexedTotal = 0;
+let dependencyManifestsIndexedTotal = 0;
 function codeLanguage(path: string) {
   const ext = path.split('.').pop()?.toLowerCase() || '';
   return CODE_EXTENSIONS[ext] || 'unknown';
@@ -407,11 +410,13 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
         codeBytesIndexedThisRun += indexed.bytes;
         codeFilesIndexed++;
         symbolsIndexed += indexed.symbols;
-        if(indexed.manifest) manifestsIndexed++;
+        codeFilesIndexedTotal++;
+        codeSymbolsIndexedTotal += indexed.symbols;
+        if(indexed.manifest) { manifestsIndexed++; dependencyManifestsIndexedTotal++; }
       } catch { /* Skip individual source files that exceed limits or disappear during indexing. */ }
     }
   } catch { /* Tree API may be unavailable or too large; README remains useful. */ }
-  return count + codeFilesIndexed;
+  return count;
 }
 
 async function storeSearchExcerpt(item: SearchResult, query: string, topicKey: string | null, language: string) {
@@ -483,6 +488,9 @@ async function main() {
     excerptsIndexed,
     repositoryDocsIndexed,
     codeBytesIndexed: codeBytesIndexedThisRun,
+    codeFilesIndexed: codeFilesIndexedTotal,
+    codeSymbolsIndexed: codeSymbolsIndexedTotal,
+    dependencyManifestsIndexed: dependencyManifestsIndexedTotal,
     maxCodeBytesPerRun: MAX_CODE_BYTES_PER_RUN,
     maxJobsPerRun: MAX_JOBS,
   }) + '\n');
