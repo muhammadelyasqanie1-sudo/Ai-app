@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   X, Home, MessageSquare, Image as ImageIcon, Wrench, Settings,
   History, ShieldAlert, Video, Terminal, BookOpen, FolderOpen,
-  ChevronDown, Sparkles, UserRound, Compass, BrainCircuit, Cpu
+  ChevronDown, Sparkles, UserRound, Compass, BrainCircuit
 } from 'lucide-react';
 import { AfgBrainLogo } from './AfgBrainLogo';
 import type { TabType, Language, UserProfile } from '../../types/afg';
@@ -53,7 +53,6 @@ export const AfgSideMenu: React.FC<AfgSideMenuProps> = ({
     { id: 'video-gen' as TabType, label: dari ? 'ابزارهای ویدیو' : 'Video tools', icon: Video },
     { id: 'tools' as TabType, label: t.navTools, icon: Wrench },
     { id: 'terminal' as TabType, label: dari ? 'ترمینل' : 'Terminal', icon: Terminal },
-    { id: 'jarvis' as TabType, label: dari ? 'دستیار جارویس' : 'JARVIS device assistant', icon: Cpu },
     { id: 'offline-chat' as TabType, label: dari ? 'حالت آفلاین' : 'Offline Mode', icon: BrainCircuit },
     { id: 'offline-learning' as TabType, label: dari ? 'آموزش آفلاین' : 'Offline learning', icon: BookOpen },
   ];

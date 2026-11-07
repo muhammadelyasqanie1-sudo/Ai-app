@@ -153,6 +153,7 @@ export default function App() {
   // Modals state
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isAfgAssistantOpen, setIsAfgAssistantOpen] = useState(false);
 
   // Sync RTL and Dark Mode with DOM
   useEffect(() => {
@@ -870,6 +871,7 @@ export default function App() {
             systemFeatures={systemFeatures}
             findQuery={chatFindQuery}
             onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+            onOpenAfgAssistant={() => setIsAfgAssistantOpen(true)}
           />
         )}
 
@@ -892,8 +894,6 @@ export default function App() {
         )}
 
         {currentTab === 'terminal' && <LazyAfgTerminalView language={language} />}
-        {currentTab === 'jarvis' && <LazyAfgJarvisView language={language} />}
-
         {currentTab === 'offline-learning' && <LazyAfgOfflineView language={language} />}
 
         {(currentTab === 'offline-ai-hub' || currentTab === 'offline-chat' || currentTab === 'offline-models') && (
@@ -928,6 +928,18 @@ export default function App() {
         </React.Suspense>
         </ErrorBoundary>
       </main>
+
+      {isAfgAssistantOpen && (
+        <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-950/85 p-2 backdrop-blur-md sm:p-5" role="dialog" aria-modal="true" aria-label={language === 'dari' ? 'دستیار AFG AI' : 'AFG AI assistant'}>
+          <div className="mx-auto mb-3 flex max-w-4xl items-center justify-between rounded-2xl border border-cyan-400/25 bg-slate-950/95 px-4 py-3 shadow-2xl">
+            <div className="flex items-center gap-2 text-sm font-bold text-cyan-200"><span className="grid h-8 w-8 place-items-center rounded-xl border border-cyan-300/30 bg-cyan-300/10">✦</span>AFG AI</div>
+            <button type="button" onClick={() => setIsAfgAssistantOpen(false)} className="rounded-xl border border-white/15 px-3 py-2 text-sm text-slate-200 hover:bg-white/10">{language === 'dari' ? 'بستن' : 'Close'}</button>
+          </div>
+          <React.Suspense fallback={<div className="mx-auto max-w-4xl rounded-2xl border border-cyan-400/20 bg-slate-900 p-6 text-center text-sm text-cyan-200">{language === 'dari' ? 'در حال بارگذاری دستیار...' : 'Loading assistant...'}</div>}>
+            <LazyAfgJarvisView language={language} />
+          </React.Suspense>
+        </div>
+      )}
 
       {currentTab !== 'terminal' && systemFeatures.terminal_exec_enabled && (
         <button
@@ -964,6 +976,7 @@ export default function App() {
         onOpenTerminal={() => setCurrentTab('terminal')}
         onClearChat={() => { activeChatAbortRef.current?.abort(); handleNewChat(); }}
         onFindInChat={(query) => setChatFindQuery(query)}
+        onOpenAfgAssistant={() => setIsAfgAssistantOpen(true)}
       />
 
       {/* Slide-over Side Menu Drawer */}

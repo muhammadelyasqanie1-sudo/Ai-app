@@ -55,6 +55,7 @@ interface AfgChatViewProps {
   systemFeatures: AfgSystemFeatures;
   findQuery: string;
   onOpenCommandPalette: () => void;
+  onOpenAfgAssistant: () => void;
 }
 
 export const AfgChatView: React.FC<AfgChatViewProps> = ({
@@ -82,6 +83,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   systemFeatures,
   findQuery,
   onOpenCommandPalette,
+  onOpenAfgAssistant,
 }) => {
   const t = translations[language];
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -195,7 +197,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">{(planMode || thinkingLevel !== 'standard') && <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-1 text-[9px] font-semibold text-cyan-200 animate-pulse">{planMode ? (language === 'dari' ? 'برنامه‌ریزی' : 'Plan mode') : '🧠 ' + thinkingLevel}</span>}<button type="button" onClick={onOpenCommandPalette} className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-2 text-[10px] font-semibold text-cyan-200 hover:bg-cyan-500/20">{language === 'dari' ? 'منوی سریع' : 'Quick menu'} <span className="opacity-60">⌘K</span></button></div>
+        <div className="flex items-center gap-1.5">{(planMode || thinkingLevel !== 'standard') && <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-1 text-[9px] font-semibold text-cyan-200 animate-pulse">{planMode ? (language === 'dari' ? 'برنامه‌ریزی' : 'Plan mode') : '🧠 ' + thinkingLevel}</span>}<button type="button" onClick={onOpenAfgAssistant} className="rounded-lg border border-violet-400/35 bg-gradient-to-r from-cyan-500/15 via-violet-500/15 to-fuchsia-500/15 px-2.5 py-2 text-[10px] font-bold text-cyan-100 shadow-[0_0_18px_rgba(124,77,255,.12)] hover:border-cyan-300/60">✦ AFG AI</button><button type="button" onClick={onOpenCommandPalette} className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-2 text-[10px] font-semibold text-cyan-200 hover:bg-cyan-500/20">{language === 'dari' ? 'منوی سریع' : 'Quick menu'} <span className="opacity-60">⌘K</span></button></div>
         {isLoading && <button onClick={onStop} className="flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300"><Square className="w-3 h-3" />{language === 'dari' ? 'توقف' : 'Stop'}</button>}
       </div>
 
