@@ -412,7 +412,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
 
     const latestUserPrompt = [...upstreamMessages].reverse().find((message) => message.role === 'user')?.content || '';
     const githubRequested = /github|git hub|گیت.?هاب|مخزن گیت/i.test(latestUserPrompt);
-    const webSearchRequested = /\b(web search|search the web|browse the web|look up online|internet search|online research|find sources|latest news)\b|جستجوی وب|جست‌وجوی وب|جستجو در وب|جست‌وجو در وب|در اینترنت جستجو|در وب جستجو|وبگردی|منابع آنلاین|جستجوی اینترنتی|جست‌وجوی اینترنتی|آخرین اخبار|جدیدترین اخبار|اخبار امروز|اطلاعات به‌روز|در گوگل جستجو|سرچ کن|جستجو کن|جست‌وجو کن/i.test(latestUserPrompt);
+    const webSearchRequested = /\b(web search|search the web|browse the web|look up online|internet search|online research|find sources|latest news|search online|search internet|google it|look up)\b|جستجوی وب|جست‌وجوی وب|جستجو در وب|جست‌وجو در وب|در اینترنت جستجو|در وب جستجو|وبگردی|منابع آنلاین|جستجوی اینترنتی|جست‌وجوی اینترنتی|آخرین اخبار|جدیدترین اخبار|اخبار امروز|اطلاعات به‌روز|در گوگل جستجو|سرچ کن|جستجو کن|جست‌وجو کن/i.test(latestUserPrompt);
     // Do not force ordinary chat models to support function calling. Only attach
     // external tools when the latest user request actually asks for an integration action.
     const externalToolRequested = githubRequested || webSearchRequested ||
@@ -505,21 +505,23 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         github_update_file:isDari?'به‌روزرسانی فایل در GitHub':'Update GitHub file',
         github_create_pull_request:isDari?'ایجاد درخواست ادغام':'Create pull request',
       };
+      const apiDefinition = callName.startsWith('api_') ? toolDefinitions.find((item:any) => item.function?.name === callName) : undefined;
+      const apiServiceName = /API service:\s*([^.]+)/i.exec(String(apiDefinition?.function?.description || ''))?.[1];
+      const connectorToolName = callName.replace(/^mcp_/, '').replace(/_/g, ' ').slice(0,120);
       const label = webSearch
         ? (isDari ? 'جستجوی وب با Tavily' : 'Searching the web with Tavily')
         : github ? (labels[callName] || (isDari ? 'فعالیت در GitHub' : 'GitHub activity'))
         : callName.startsWith('mcp_') ? (isDari ? 'اجرای ابزار اتصال خارجی' : 'Running external connector')
-        : callName.startsWith('api_') ? (() => {
-            const definition = toolDefinitions.find((item:any) => item.function?.name === callName);
-            const match = /API service:\s*([^.]+)/i.exec(String(definition?.function?.description || ''));
-            return match?.[1] ? (isDari ? 'اتصال به ' + match[1] : 'Using ' + match[1]) : (isDari ? 'اجرای ابزار API' : 'Running API tool');
-          })()
+        : callName.startsWith('api_') ? (apiServiceName ? (isDari ? 'اتصال به ' + apiServiceName : 'Using ' + apiServiceName) : (isDari ? 'اجرای ابزار API' : 'Running API tool'))
         : (isDari ? 'اجرای ابزار' : 'Running tool');
       const query = typeof input.query === 'string' ? input.query.trim().slice(0,180) : '';
       const sourceCount = Number(observedRecord.sourceCount || (Array.isArray(observedRecord.sources) ? observedRecord.sources.length : 0));
       const detail = webSearch
         ? (status === 'completed' ? (isDari ? query + ' · ' + sourceCount + ' منبع' : query + ' · ' + sourceCount + ' sources') : query)
-        : repo ? (targetPath ? repo + '/' + targetPath : repo) : (url ? new URL(url).hostname : undefined);
+        : repo ? (targetPath ? repo + '/' + targetPath : repo)
+        : callName.startsWith('mcp_') ? connectorToolName
+        : callName.startsWith('api_') ? apiServiceName
+        : (url ? new URL(url).hostname : undefined);
       if (!res.writableEnded && !res.destroyed) res.write(`data: ${JSON.stringify({type:'activity',id:randomUUID(),name:callName,label,detail,url,status,timestamp:Date.now()})}\n\n`);
     };
     heartbeat = setInterval(() => {
