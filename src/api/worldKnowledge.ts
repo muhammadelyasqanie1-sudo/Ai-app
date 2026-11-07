@@ -189,7 +189,7 @@ export async function handleWorldKnowledgeApi(req: IncomingMessage, res: ServerR
     return true;
   }
 
-  const repositoryReleasesMatch = /^\\/api\\/intelligence\\/world\\/repositories\\/([0-9a-f-]{36})\\/releases$/.exec(pathname);
+  const repositoryReleasesMatch = /^\/api\/intelligence\/world\/repositories\/([0-9a-f-]{36})\/releases$/.exec(pathname);
   if (repositoryReleasesMatch && req.method === 'GET') {
     const result = await pool.query(
       `SELECT r.tag_name AS "tagName",r.release_name AS name,r.body,r.html_url AS url,
