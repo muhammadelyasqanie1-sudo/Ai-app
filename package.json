@@ -53,7 +53,9 @@
     "yaml": "^2.8.1",
     "@afg-ai/capacitor-device-info": "file:plugins/capacitor-device-info",
     "@afg-ai/capacitor-offline-models": "file:plugins/capacitor-offline-models",
-    "@afg-ai/capacitor-jarvis": "file:plugins/capacitor-jarvis"
+    "@afg-ai/capacitor-jarvis": "file:plugins/capacitor-jarvis",
+    "@browserbasehq/sdk": "^2.22.0",
+    "playwright-core": "^1.65.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
