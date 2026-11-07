@@ -255,7 +255,7 @@ export function AfgJarvisView({ language }: { language: Language }) {
     } catch (e: any) { setLocalAiError(e?.message || label('Local AI command understanding failed.', 'درک فرمان با هوش محلی ناموفق بود.')); }
     finally { setLocalAiBusy(false); }
   }
-  return <main className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6" dir={rtl ? 'rtl' : 'ltr'}>
+  return <main className="afg-device-assistant mx-auto max-w-4xl space-y-5 p-4 sm:p-6" dir={rtl ? 'rtl' : 'ltr'}>
     <header className="relative overflow-hidden rounded-3xl border border-cyan-400/25 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-5 sm:p-7">
       <div className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full bg-cyan-400/10 blur-3xl" />
       <div className="relative flex items-center gap-4"><div className="grid h-16 w-16 place-items-center rounded-2xl border border-cyan-300/40 bg-cyan-300/10 text-3xl text-cyan-200">◉</div>

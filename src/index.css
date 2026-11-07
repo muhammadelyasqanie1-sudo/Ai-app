@@ -1018,3 +1018,64 @@ html:not(.dark):not(.neon) .afg-account-settings [class*="bg-cyan-950"],
 html:not(.dark):not(.neon) .afg-account-settings [class*="bg-rose-950"] {
   background-color: color-mix(in srgb,var(--accent-cyan) 7%,var(--bg-surface)) !important;
 }
+
+
+/* Theme-aware AFG AI device assistant and its chat overlay. */
+.afg-assistant-overlay {
+  background: color-mix(in srgb, var(--bg-main) 92%, transparent);
+  color: var(--text-primary);
+}
+.afg-assistant-overlay-header {
+  background: var(--header-glass);
+  border-color: var(--border-color) !important;
+  color: var(--text-primary);
+  backdrop-filter: blur(16px);
+}
+.afg-assistant-overlay-header button {
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+.afg-device-assistant { color: var(--text-primary); }
+.afg-device-assistant > header .text-white { color: #fff !important; }
+.afg-device-assistant .text-white { color: var(--text-primary); }
+.afg-device-assistant .text-slate-200,
+.afg-device-assistant .text-slate-300 { color: var(--text-secondary); }
+.afg-device-assistant .text-slate-400,
+.afg-device-assistant .text-slate-500 { color: var(--text-muted); }
+.afg-device-assistant [class*="bg-slate-950"],
+.afg-device-assistant [class*="bg-slate-900"] {
+  background-color: var(--bg-surface) !important;
+}
+.afg-device-assistant [class*="bg-black/"],
+.afg-device-assistant [class*="bg-white/5"] {
+  background-color: var(--bg-surface-subtle) !important;
+}
+.afg-device-assistant [class*="border-white/"],
+.afg-device-assistant [class*="border-cyan-400/"],
+.afg-device-assistant [class*="border-violet-400/"] {
+  border-color: var(--border-color) !important;
+}
+.afg-device-assistant input,
+.afg-device-assistant textarea,
+.afg-device-assistant select {
+  background-color: var(--bg-surface-subtle) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+.afg-device-assistant input::placeholder,
+.afg-device-assistant textarea::placeholder { color: var(--text-muted) !important; }
+.afg-device-assistant button:focus-visible,
+.afg-assistant-overlay-header button:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+html:not(.dark):not(.neon) .afg-device-assistant .text-cyan-100,
+html:not(.dark):not(.neon) .afg-device-assistant .text-cyan-200 { color: #0e7490 !important; }
+html:not(.dark):not(.neon) .afg-device-assistant .text-violet-100,
+html:not(.dark):not(.neon) .afg-device-assistant .text-violet-200 { color: #6d28d9 !important; }
+html:not(.dark):not(.neon) .afg-device-assistant .text-emerald-200,
+html:not(.dark):not(.neon) .afg-device-assistant .text-emerald-300 { color: #047857 !important; }
+html:not(.dark):not(.neon) .afg-device-assistant .text-amber-200,
+html:not(.dark):not(.neon) .afg-device-assistant .text-amber-300 { color: #92400e !important; }
+html:not(.dark):not(.neon) .afg-device-assistant .text-rose-200,
+html:not(.dark):not(.neon) .afg-device-assistant .text-rose-300 { color: #be123c !important; }
