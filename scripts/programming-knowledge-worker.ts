@@ -17,6 +17,7 @@ const MAX_REPOS_PER_JOB = 1;
 const MAX_REPOS_PER_RUN = 3;
 const MAX_REPO_DOCS_PER_RUN = 12;
 const MAX_RELEASES_PER_REPO = 3;
+const PERMISSIVE_SOURCE_LICENSES = new Set(['MIT','MIT-0','Apache-2.0','BSD-2-Clause','BSD-3-Clause','ISC','0BSD','Unlicense']);
 
 type Topic = { topic_key: string; label: string; search_queries: string[]; search_queries_by_language?: Record<string,string[]>; priority: number };
 type Job = { id: string; query: string; language: string; attempts: number; topic_key: string | null };
@@ -338,7 +339,7 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
         if (release.draft || !release.tag_name || !release.html_url) continue;
         const tag = cleanText(release.tag_name,160);
         const releaseName = cleanText(release.name || tag,240);
-        const body = normalizeDocument(release.body || '',18000);
+        const body = PERMISSIVE_SOURCE_LICENSES.has(license) ? normalizeDocument(release.body || '',18000) : '';
         const publishedAt = release.published_at && !Number.isNaN(Date.parse(release.published_at))
           ? new Date(release.published_at).toISOString() : null;
         const releaseHash = sha(fullName + '|' + tag + '|' + body);
@@ -373,7 +374,9 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
   } catch { /* Release API may be rate-limited or unavailable; keep repository docs. */ }
 
   try {
-    const readme = await githubApi('/repos/' + encoded(owner) + '/' + encoded(repo) + '/readme');
+    const readme = PERMISSIVE_SOURCE_LICENSES.has(license)
+      ? await githubApi('/repos/' + encoded(owner) + '/' + encoded(repo) + '/readme')
+      : {};
     if (readme.encoding === 'base64' && typeof readme.content === 'string') {
       const markdown = Buffer.from(readme.content.replace(/\s/g, ''), 'base64').toString('utf8').slice(0, 24000);
       count += Number(await storeDocument({
@@ -387,7 +390,9 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
   } catch { /* README may be absent or unavailable; retain other search evidence. */ }
 
   try {
-    const tree = await githubApi('/repos/' + encoded(owner) + '/' + encoded(repo) + '/git/trees/' + encodeURIComponent(defaultBranch) + '?recursive=1');
+    const tree = PERMISSIVE_SOURCE_LICENSES.has(license)
+      ? await githubApi('/repos/' + encoded(owner) + '/' + encoded(repo) + '/git/trees/' + encodeURIComponent(defaultBranch) + '?recursive=1')
+      : { tree: [] };
     const entries = Array.isArray(tree.tree) ? tree.tree : [];
     const docCandidates = entries.filter((entry: any) =>
       entry.type === 'blob' && typeof entry.path === 'string' &&
@@ -442,6 +447,7 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
 async function storeSearchExcerpt(item: SearchResult, query: string, topicKey: string | null, language: string) {
   const url = safePublicUrl(item.url);
   const title = cleanText(item.title, 240);
+  if (url && (url.hostname === 'github.com' || url.hostname.endsWith('.githubusercontent.com'))) return false;
   const raw = normalizeDocument(item.raw_content, 24000);
   const snippet = normalizeDocument(item.content, 12000);
   const extracted = raw.length >= 300 ? raw : '';
