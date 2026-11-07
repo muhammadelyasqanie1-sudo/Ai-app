@@ -356,7 +356,7 @@ function requireElementRef(value: unknown): string {
 
 async function snapshotResult(context: BrowserActionContext) {
   const snapshot = await pageSnapshot(context.page);
-  return { ...snapshot, liveViewUrl: context.liveViewUrl };
+  return { liveViewUrl: context.liveViewUrl, ...snapshot };
 }
 
 export async function executeBrowserAutomationTool(userId: string, toolName: string, rawArgs: unknown, latestUserPrompt = '') {
