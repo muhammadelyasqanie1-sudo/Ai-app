@@ -53,3 +53,18 @@ When a signed-in user has a verified GitHub connection and asks AFG AI to inspec
 - Existing write operations remain branch-scoped: the assistant must create/use a non-default working branch before committing file changes. Pull requests are created only when the user explicitly asks.
 
 These tools improve repository understanding and review, but they are not a code execution sandbox. The hosted terminal remains read-only; running builds, tests, application code, or deployments is not enabled by this milestone.
+
+
+## Universal Knowledge Engine — first implementation milestone
+
+Migration `0036_universal_knowledge_engine.sql` adds a shared source registry and a provenance-aware knowledge document store. Source records include domain, source type, trust level and license label. Documents retain language, topic, evidence classification, editorial confidence, publication date and a SHA-256 content fingerprint for deduplication.
+
+The authenticated API exposes:
+- `GET /api/intelligence/world/status` — engine and corpus counts.
+- `GET /api/intelligence/world/sources` and `GET /api/intelligence/world/documents` — browse curated source metadata and document metadata.
+- `GET /api/intelligence/world/search?q=...` — search the shared corpus.
+- `POST /api/intelligence/world/sources` and `POST /api/intelligence/world/documents` — administrator-only source registration and content ingestion.
+
+Relevant shared documents are retrieved into chat context automatically. Source text is explicitly untrusted and cannot override system or user instructions. Search results preserve source URLs and distinguish evidence types and trust levels. Community material can be stored, but is labelled separately from official and academic material.
+
+**This is a curated RAG knowledge layer, not autonomous web crawling or model-weight training.** The ingestion API accepts content already obtained through a permitted research workflow; it does not fetch arbitrary URLs, bypass paywalls, scrape sites, or execute downloaded content. Search currently uses PostgreSQL `simple` full-text search; Dari/Persian/Pashto language-aware tokenization, embeddings/vector search, scheduled crawlers, freshness policies, review queues and corpus-scale evaluation remain future milestones. Respect source terms, robots policies, licenses, privacy and rate limits before ingestion.

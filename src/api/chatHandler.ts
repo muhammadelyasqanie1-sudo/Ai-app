@@ -8,6 +8,7 @@ import { getEnabledGitHubToolDefinitions, executeGitHubTool } from './githubTool
 import { executeWebSearchTool } from './research.ts';
 import { buildToolModePrompt } from '../services/toolModes.ts';
 import { buildProfessionalCapabilityPrompt } from '../services/afgProfessionalStandard.ts';
+import { buildWorldKnowledgeContext } from '../services/worldKnowledgeContext.ts';
 import { getProductivityPrompt } from './productivity.ts';
 import { authenticateRequest } from './auth.ts';
 import { pool } from './database.ts';
@@ -359,6 +360,9 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
           : 'PERMISSION LEVEL: GUIDED. Explain consequential steps and request confirmation before destructive or external changes.',
     ].filter(Boolean).join(' ');
 
+    const latestUserPromptForKnowledge = [...messages].reverse().find((message) => message.role === 'user')?.content || '';
+    const worldKnowledgePrompt = await buildWorldKnowledgeContext(latestUserPromptForKnowledge);
+
     const systemMessages = [
       `Respond in clear, natural ${responseLanguage}. Keep the entire response in ${responseLanguage} unless the user explicitly requests another language.`,
       'You are AFG AI. Be honest about uncertainty and limitations. Never fabricate citations, URLs, quotations, sources, or tool results. Cite only sources actually supplied or retrieved in this request. If no verifiable source is available, say so clearly. Distinguish confirmed facts from estimates and opinions.',
@@ -367,6 +371,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       advancedModePrompt,
       getProductivityPrompt(body.productivityType, body.productivityParameters, requestedLanguage),
       memoryPrompt,
+      worldKnowledgePrompt,
       userPreferencePrompt,
     ].filter(Boolean);
 
