@@ -32,7 +32,7 @@ import { getIntlLocale } from '../../utils/i18n';
 
 interface AfgChatViewProps {
   messages: AfgMessage[];
-  agentActivities?: Array<{id:string;name:string;label:string;detail?:string;url?:string;status:'running'|'completed'|'failed';timestamp:number}>;
+  agentActivities?: Array<{id:string;name:string;label:string;detail?:string;url?:string;sources?:Array<{title:string;url:string;snippet?:string;publishedDate?:string}>;status:'running'|'completed'|'failed';timestamp:number}>;
   onSendMessage: (text: string, attachments: ChatAttachment[]) => void;
   onStop: () => void;
   onRetryMessage: (messageId: string) => void;
@@ -220,6 +220,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                     </div>
                     {item.detail && <div className="mt-0.5 break-all text-[11px] text-slate-600 dark:text-slate-400">{item.detail}</div>}
                     {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-block break-all text-[11px] text-cyan-700 underline dark:text-cyan-400 underline-offset-2">{item.url}</a>}
+                    {item.sources && item.sources.length > 0 && <div className="mt-2 grid gap-2">{item.sources.map((source,index) => <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer" className="block rounded-xl border border-slate-200 bg-slate-50 p-2 text-left hover:border-cyan-400 dark:border-slate-700 dark:bg-slate-900/70"><span className="block text-[11px] font-semibold text-cyan-800 dark:text-cyan-300">{index + 1}. {source.title}</span>{source.snippet && <span className="mt-1 block text-[10px] leading-relaxed text-slate-600 dark:text-slate-400">{source.snippet}</span>}{source.publishedDate && <span className="mt-1 block text-[10px] text-slate-500">{source.publishedDate}</span>}</a>)}</div>}
                   </div>
                 </li>
               ))}
