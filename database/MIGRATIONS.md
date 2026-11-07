@@ -157,3 +157,5 @@ Migration `0046_prioritize_coding_agent_research.sql` sets `coding-agents` to th
 ## Synchronize queued research priorities
 
 Migration `0047_sync_research_job_priorities.sql` updates queued and retryable failed research jobs to match their current topic priority after curriculum changes. This ensures newly prioritized coding-agent topics are processed ahead of lower-priority AI/ML and general topics without disturbing already completed or currently leased jobs.
+
+The worker also uses GitHub's repository Search API directly for MIT- and Apache-2.0-licensed AI coding agents, plus MIT-licensed Playwright/browser-automation and Tree-sitter/LSP tooling. It checks repository freshness before re-indexing and remains capped at three repositories and a bounded number of files per run. This supplements Tavily discovery so code examples can be found even when general web ranking does not return GitHub repository URLs.
