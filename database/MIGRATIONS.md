@@ -81,3 +81,8 @@ Migration `0034_api_key_lifecycle_usage_ledger.sql` adds explicit lifecycle stat
 ## Hybrid Intelligence Core
 
 Migration `0035_hybrid_intelligence_core.sql` adds owner-scoped private knowledge documents with PostgreSQL full-text indexing and explicitly consented training examples. Existing `user_memories` storage is reused; sensitive memories are excluded from automatic context retrieval. Apply only after backup and explicit migration approval. Training examples are user-owned dataset curation, not automatic model training or fine-tuning.
+
+
+## Universal Knowledge Engine
+
+Migration `0036_universal_knowledge_engine.sql` adds a curated shared source registry and provenance-aware knowledge documents. It records source type, trust level, license label, language, topic, evidence type, editorial confidence, publication date and a content fingerprint. The authenticated world-knowledge API allows signed-in users to browse/search the corpus; source registration and ingestion are restricted to administrator roles. Relevant content is automatically retrieved into chat as untrusted reference material. Apply migration 0036 only after backup and explicit migration approval. This migration does not start a crawler, bypass website restrictions, or train model weights.
