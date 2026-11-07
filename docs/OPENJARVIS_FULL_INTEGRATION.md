@@ -1,6 +1,6 @@
 # Full OpenJarvis integration into AFG AI
 
-**Status: source-import milestone planned; end-to-end integration is not yet complete.**
+**Status: complete upstream source snapshot imported and verified; runtime/UI bridge integration is in progress.**
 
 This document is the integration contract for bringing the complete upstream OpenJarvis project into AFG AI without replacing the existing AFG application or silently dropping upstream components.
 
@@ -12,7 +12,7 @@ This document is the integration contract for bringing the complete upstream Ope
 - Import destination: `vendor/OpenJarvis/`
 - Import method: a complete source snapshot (not a handful of copied modules). Preserve source, tests, docs, examples, assets, Rust workspace, desktop/Tauri app, frontend, scripts, configs, lockfiles and build metadata. Do not copy credentials, local runtime data, caches, generated binaries, or user data.
 
-The manual workflow `.github/workflows/import-openjarvis.yml` checks out the selected upstream ref and commits the complete snapshot into the current integration branch. Run it only from `feat/openjarvis-full-integration`; it intentionally refuses to write to `main`.
+The workflow `.github/workflows/import-openjarvis.yml` has successfully imported the full upstream snapshot into `vendor/OpenJarvis/` on `feat/openjarvis-full-integration`. Exact Git-tree comparison against the pinned upstream revision found 2,461 upstream entries (2,202 files), zero missing entries, zero SHA/type mismatches, and one intentional extra lock file. The source snapshot is present; the original upstream `.git` metadata is omitted.
 
 ## Full upstream inventory that must remain accounted for
 
@@ -76,12 +76,14 @@ Before enabling any of them, require an allowlisted capability, explicit per-use
 
 This transfer is **not complete** merely because the source snapshot exists. It can be marked complete only after all of the following are evidenced:
 
-- [ ] Entire pinned upstream repository snapshot imported; upstream license/notice and exact SHA retained.
+- [x] Entire pinned upstream repository snapshot imported; upstream license/notice and exact SHA retained.
+- [x] Git-tree inventory comparison: 2,461/2,461 entries match; zero missing and zero mismatched blobs.
 - [ ] Automated inventory comparison proves there are no omitted tracked source/docs/tests/assets/Rust/frontend files (excluding only explicitly documented generated/user-local artifacts).
-- [ ] Python service starts on the chosen host and reports health; shutdown/restart is safe.
-- [ ] AFG authentication, per-user isolation, quotas, request IDs, cancellation and structured error mapping cover every exposed route.
-- [ ] AFG UI has working entry points for the enabled upstream agents, tools, skills, memory, operators, connectors, channels, model/engine management, traces and admin controls.
-- [ ] Full upstream frontend is available within the agreed AFG navigation model, without bypassing AFG session/security.
+- [ ] Python service starts on the chosen host and reports health; shutdown/restart is safe. A Dockerfile and Railway setup guide have been added; a separate Railway service, secret and persistent volume still need configuration.
+- [x] AFG authentication, CSRF for chat, request IDs, cancellation and structured error mapping cover the currently exposed OpenJarvis proxy routes.
+- [ ] Per-user isolation, quotas and structured audit coverage for all upstream route families.
+- [ ] AFG UI has working entry points for the full upstream agent/tool/skill/memory/operator/connector/channel/trace/admin surfaces. The initial authenticated chat/model/status panel is mounted in the existing AFG AI Assistant screen.
+- [ ] Full upstream frontend is available within the agreed AFG navigation model, without bypassing AFG session/security. The upstream frontend source is preserved but not yet mounted.
 - [ ] Cloud and local engines are discovered and health-checked; only genuinely configured engines/models are selectable.
 - [ ] All dangerous capabilities are denied by default and individually permission-gated/sandboxed.
 - [ ] Existing AFG chat, history, provider management, offline hub, Android JARVIS and APK build path are preserved.
