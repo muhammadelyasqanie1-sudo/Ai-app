@@ -105,7 +105,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<TabType>('chat');
   const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
   const [messages, setMessages] = useState<AfgMessage[]>(INITIAL_MESSAGES);
-  const [agentActivities, setAgentActivities] = useState<Array<{id:string;name:string;label:string;detail?:string;url?:string;status:'running'|'completed'|'failed';timestamp:number}>>([]);
+  const [agentActivities, setAgentActivities] = useState<Array<{id:string;name:string;label:string;detail?:string;url?:string;sources?:Array<{title:string;url:string;snippet?:string;publishedDate?:string}>;status:'running'|'completed'|'failed';timestamp:number}>>([]);
   const [currentSessionId, setCurrentSessionId] = useState(() => `chat-${Date.now()}`);
   const [isLoading, setIsLoading] = useState(false);
   const activeChatAbortRef = useRef<AbortController | null>(null);
@@ -670,7 +670,8 @@ export default function App() {
                 const parsed = JSON.parse(dataStr);
                 if (parsed.type === 'meta' && typeof parsed.requestId === 'string') { requestId = parsed.requestId; }
                 else if (parsed.type === 'activity' && typeof parsed.id === 'string' && typeof parsed.label === 'string' && ['running','completed','failed'].includes(parsed.status)) {
-                  const activity = { id: parsed.id, name: String(parsed.name || 'tool'), label: parsed.label, detail: typeof parsed.detail === 'string' ? parsed.detail : undefined, url: typeof parsed.url === 'string' ? parsed.url : undefined, status: parsed.status as 'running'|'completed'|'failed', timestamp: Number(parsed.timestamp) || Date.now() };
+                  const activitySources = Array.isArray(parsed.sources) ? parsed.sources.slice(0,8).filter((source: any) => source && typeof source.title === 'string' && typeof source.url === 'string' && /^https?:\\/\\//i.test(source.url)).map((source: any) => ({ title: source.title.slice(0,240), url: source.url, snippet: typeof source.snippet === 'string' ? source.snippet.slice(0,500) : undefined, publishedDate: typeof source.publishedDate === 'string' ? source.publishedDate.slice(0,40) : undefined })) : undefined;
+                  const activity = { id: parsed.id, name: String(parsed.name || 'tool'), label: parsed.label, detail: typeof parsed.detail === 'string' ? parsed.detail : undefined, url: typeof parsed.url === 'string' ? parsed.url : undefined, sources: activitySources, status: parsed.status as 'running'|'completed'|'failed', timestamp: Number(parsed.timestamp) || Date.now() };
                   setAgentActivities(previous => { const index = previous.findIndex(item => item.name === activity.name && item.status === 'running'); if (activity.status !== 'running' && index >= 0) return previous.map((item,i) => i === index ? { ...item, ...activity } : item); return [...previous, activity].slice(-30); });
                 }
                 else if (parsed.type === 'content' && typeof parsed.text === 'string') {
