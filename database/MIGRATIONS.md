@@ -149,3 +149,7 @@ GitHub source text (README, release notes, documentation and source files) is no
 Migration `0045_github_repository_discovery_queries.sql` adds explicit `site:github.com` searches for permissively licensed AI coding agents, browser automation tools, compiler/AST/LSP tooling, distributed systems and open-source reference implementations. This improves actual repository/code discovery instead of relying only on Tavily's general web ranking. The worker still stores GitHub text only when the repository declares an allowlisted permissive license.
 
 The source classifier now recognizes a broader set of official developer documentation domains (including Google Cloud, AWS, Microsoft, Python, Rust, Go, React, Flutter, FastAPI, Django, PyTorch, TensorFlow and others), academic sources, established engineering publications, and community discussions. Source trust is a ranking hint, not proof that every statement is correct.
+
+## Coding-agent research priority
+
+Migration `0046_prioritize_coding_agent_research.sql` raises `coding-agents` to priority 12 and elevates open-source, browser automation, compiler tooling, advanced testing and architecture topics to priority 10. This makes repository-aware coding-agent research the first scheduled learning track while preserving the rest of the programming curriculum.
