@@ -194,7 +194,7 @@ export async function verifyUserPassword(userId:string,password:string):Promise<
   return verifyPassword(password,encoded);
 }
 
-export async function createSession(userId: string, res: ServerResponse): Promise<void> {
+export async function createSession(userId: string, res: ServerResponse): Promise<string> {
   if (!pool) throw new Error('Database is not configured.');
   const sessionToken = randomBytes(32).toString('base64url');
   const csrfToken = randomBytes(32).toString('base64url');
@@ -206,6 +206,7 @@ export async function createSession(userId: string, res: ServerResponse): Promis
     [userId, hash(sessionToken), expiresAt],
   );
   setSessionCookies(res, sessionToken, csrfToken, isAdministrator ? 8 * 60 * 60 : Math.floor(SESSION_TTL_MS / 1000));
+  return csrfToken;
 }
 
 
@@ -370,10 +371,10 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       );
       const userId = redeemed.rows[0]?.user_id as string | undefined;
       if (!userId) { sendAuthJson(res, 401, { error: 'Google sign-in handoff has expired or was already used.' }); return true; }
-      await createSession(userId, res);
+      const csrfToken = await createSession(userId, res);
       await recordAuthSecurityEvent(req, userId, 'auth.google_mobile_handoff');
       await recordSecurityNotification(userId, 'security.sign_in', 'New sign-in', 'Your AFG AI account was signed in with Google.');
-      sendAuthJson(res, 200, { authenticated: true });
+      sendAuthJson(res, 200, { authenticated: true, csrfToken });
       return true;
     } catch { sendAuthJson(res, 400, { error: 'Could not complete Google sign-in on this device.' }); return true; }
   }
