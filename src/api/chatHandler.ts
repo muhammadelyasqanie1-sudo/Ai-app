@@ -492,7 +492,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       const webSearch = callName === 'tavily_search';
       const observedRecord = observed && typeof observed === 'object' ? observed as Record<string,unknown> : {};
       const repo = github && typeof input.owner==='string' && typeof input.repo==='string' ? (input.owner+'/'+input.repo).replace(/[^a-zA-Z0-9_.\/-]/g,'').slice(0,180) : undefined;
-      const url = findUrl(observed) || findUrl(input);
+      const url = webSearch ? undefined : (findUrl(observed) || findUrl(input));
+      const sources = webSearch && Array.isArray(observedRecord.sources) ? observedRecord.sources.slice(0,8).filter((source:any) => source && typeof source.title === 'string' && typeof source.url === 'string' && Boolean(safeUrl(source.url))).map((source:any) => ({ title: String(source.title).slice(0,240), url: safeUrl(source.url), snippet: typeof source.snippet === 'string' ? source.snippet.slice(0,500) : undefined, publishedDate: typeof source.publishedDate === 'string' ? source.publishedDate.slice(0,40) : undefined })) : undefined;
       const targetPath = typeof input.path === 'string' ? input.path.replace(/[^a-zA-Z0-9_.@/-]/g,'').slice(0,160) : undefined;
       const isDari = body.language === 'dari';
       const labels:Record<string,string> = {
@@ -522,7 +523,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         : callName.startsWith('mcp_') ? connectorToolName
         : callName.startsWith('api_') ? apiServiceName
         : (url ? new URL(url).hostname : undefined);
-      if (!res.writableEnded && !res.destroyed) res.write(`data: ${JSON.stringify({type:'activity',id:randomUUID(),name:callName,label,detail,url,status,timestamp:Date.now()})}\n\n`);
+      if (!res.writableEnded && !res.destroyed) res.write(`data: ${JSON.stringify({type:'activity',id:randomUUID(),name:callName,label,detail,url,sources,status,timestamp:Date.now()})}\n\n`);
     };
     heartbeat = setInterval(() => {
       if (!res.writableEnded && !res.destroyed) res.write(': heartbeat\n\n');
