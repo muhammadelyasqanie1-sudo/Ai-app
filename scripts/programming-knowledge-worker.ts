@@ -15,6 +15,7 @@ const MAX_API_BYTES = 1_200_000;
 const MAX_REPO_FILES = 3;
 const MAX_REPOS_PER_JOB = 2;
 const MAX_REPO_DOCS_PER_RUN = 12;
+const MAX_RELEASES_PER_REPO = 3;
 
 type Topic = { topic_key: string; label: string; search_queries: string[]; priority: number };
 type Job = { id: string; query: string; language: string; attempts: number; topic_key: string | null };
@@ -131,7 +132,7 @@ async function search(query: string): Promise<SearchResult[]> {
 async function storeDocument(input: {
   title: string; url: string; domain: string; content: string; topic: string;
   evidence: 'unverified' | 'reference'; confidence: number; sourceType: 'other' | 'documentation';
-  trust: 'unreviewed' | 'community' | 'established'; query: string; licenseLabel?: string;
+  trust: 'unreviewed' | 'community' | 'established'; query: string; licenseLabel?: string; publishedAt?: string | null;
 }) {
   const title = cleanText(input.title, 240);
   const content = normalizeDocument(input.content, 29000);
@@ -147,10 +148,10 @@ async function storeDocument(input: {
   const enriched = ('Research query: ' + cleanText(input.query, 400) + '\n\n' + content).slice(0, 30000);
   const hash = sha(url.toString() + '\n' + title + '\n' + enriched);
   await pool.query(
-    `INSERT INTO world_knowledge_documents(source_id,title,content,topic,language,evidence_type,confidence,content_hash)
-     VALUES($1,$2,$3,$4,'english',$5,$6,$7)
+    `INSERT INTO world_knowledge_documents(source_id,title,content,topic,language,evidence_type,confidence,published_at,content_hash)
+     VALUES($1,$2,$3,$4,'english',$5,$6,$7,$8)
      ON CONFLICT(content_hash) DO NOTHING`,
-    [source.rows[0].id, title, enriched, input.topic, input.evidence, Math.max(0, Math.min(1, input.confidence)), hash],
+    [source.rows[0].id, title, enriched, input.topic, input.evidence, Math.max(0, Math.min(1, input.confidence)), input.publishedAt || null, hash],
   );
   return true;
 }
@@ -182,7 +183,69 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
   const description = cleanText(metadata.description, 2000);
   const license = cleanText(metadata.license?.spdx_id || 'unknown', 100);
   const defaultBranch = String(metadata.default_branch || 'main').slice(0, 120);
+  const repoSource = await pool.query(
+    `INSERT INTO world_knowledge_sources(name,canonical_url,domain,source_type,trust_level,license_label)
+     VALUES($1,$2,'github.com','documentation','community',$3)
+     ON CONFLICT(canonical_url) DO UPDATE SET name=EXCLUDED.name,license_label=EXCLUDED.license_label,updated_at=now()
+     RETURNING id`,
+    [fullName, htmlUrl, license],
+  );
+  const repoRow = await pool.query(
+    `INSERT INTO world_knowledge_repositories(
+       owner,repo,full_name,source_id,default_branch,license_spdx,stars,forks,pushed_at,last_commit_sha,metadata,last_checked_at
+     ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,now())
+     ON CONFLICT(full_name) DO UPDATE SET
+       source_id=EXCLUDED.source_id,default_branch=EXCLUDED.default_branch,license_spdx=EXCLUDED.license_spdx,
+       stars=EXCLUDED.stars,forks=EXCLUDED.forks,pushed_at=EXCLUDED.pushed_at,
+       last_commit_sha=EXCLUDED.last_commit_sha,metadata=EXCLUDED.metadata,last_checked_at=now(),updated_at=now()
+     RETURNING id`,
+    [owner,repo,fullName,repoSource.rows[0].id,defaultBranch,license,
+      Math.max(0,Number(metadata.stargazers_count||0)),Math.max(0,Number(metadata.forks_count||0)),
+      metadata.pushed_at && !Number.isNaN(Date.parse(metadata.pushed_at)) ? new Date(metadata.pushed_at).toISOString() : null,
+      cleanText(metadata.default_branch || '',120),
+      JSON.stringify({ description, archived: Boolean(metadata.archived), language: cleanText(metadata.language,80), topics: Array.isArray(metadata.topics) ? metadata.topics.slice(0,20) : [] })],
+  );
   let count = 0;
+
+  try {
+    const releases = await githubApi('/repos/' + encoded(owner) + '/' + encoded(repo) + '/releases?per_page=' + MAX_RELEASES_PER_REPO);
+    if (Array.isArray(releases)) {
+      for (const release of releases.slice(0, MAX_RELEASES_PER_REPO)) {
+        if (release.draft || !release.tag_name || !release.html_url) continue;
+        const tag = cleanText(release.tag_name,160);
+        const releaseName = cleanText(release.name || tag,240);
+        const body = normalizeDocument(release.body || '',18000);
+        const publishedAt = release.published_at && !Number.isNaN(Date.parse(release.published_at))
+          ? new Date(release.published_at).toISOString() : null;
+        const releaseHash = sha(fullName + '|' + tag + '|' + body);
+        await pool.query(
+          `INSERT INTO world_knowledge_releases(repository_id,tag_name,release_name,body,html_url,target_commitish,published_at,prerelease,draft,content_hash)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8,false,$9)
+           ON CONFLICT(repository_id,tag_name) DO UPDATE SET
+             release_name=EXCLUDED.release_name,body=EXCLUDED.body,html_url=EXCLUDED.html_url,
+             target_commitish=EXCLUDED.target_commitish,published_at=EXCLUDED.published_at,
+             prerelease=EXCLUDED.prerelease,content_hash=EXCLUDED.content_hash,updated_at=now()`,
+          [repoRow.rows[0].id,tag,releaseName,body,String(release.html_url).slice(0,2048),
+            cleanText(release.target_commitish,120),publishedAt,Boolean(release.prerelease),releaseHash],
+        );
+        if (publishedAt && (!metadata.latest_release?.published_at || Date.parse(publishedAt) >= Date.parse(metadata.latest_release.published_at))) {
+          await pool.query(
+            'UPDATE world_knowledge_repositories SET latest_release_tag=$1,latest_release_published_at=$2,updated_at=now() WHERE id=$3',
+            [tag,publishedAt,repoRow.rows[0].id],
+          );
+        }
+        if (body.length >= 80) {
+          count += Number(await storeDocument({
+            title: fullName + ' — Release ' + tag + ': ' + releaseName,
+            url: String(release.html_url), domain: 'github.com',
+            content: 'Repository: ' + fullName + '\\nRelease tag: ' + tag + '\\nPrerelease: ' + Boolean(release.prerelease) + '\\nLicense declared by GitHub: ' + license + '\\n\\n' + body,
+            topic: topicKey || 'open-source', evidence: 'reference', confidence: 0.7,
+            sourceType: 'documentation', trust: 'community', query, licenseLabel: license, publishedAt,
+          }));
+        }
+      }
+    }
+  } catch { /* Release API may be rate-limited or unavailable; keep repository docs. */ }
 
   try {
     const readme = await githubApi('/repos/' + encoded(owner) + '/' + encoded(repo) + '/readme');
