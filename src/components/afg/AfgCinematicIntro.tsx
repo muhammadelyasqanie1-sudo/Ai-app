@@ -25,10 +25,6 @@ const copy = {
     connecting: 'در حال بررسی',
     offline: 'تأییدنشده',
     apiStatus: 'وضعیت API',
-    soundOn: 'فعال‌کردن صدای ورود',
-    soundOff: 'خاموش‌کردن صدای ورود',
-    soundEnabled: 'صدا روشن',
-    soundDisabled: 'صدا خاموش',
   },
   english: {
     eyebrow: 'NEXT-GENERATION INTELLIGENCE',
@@ -47,10 +43,6 @@ const copy = {
     connecting: 'CHECKING',
     offline: 'UNVERIFIED',
     apiStatus: 'API STATUS',
-    soundOn: 'Enable welcome sound',
-    soundOff: 'Mute welcome sound',
-    soundEnabled: 'SOUND ON',
-    soundDisabled: 'SOUND OFF',
   },
 };
 
@@ -80,12 +72,10 @@ const RTL_LANGUAGES: Language[] = ['dari', 'persian', 'pashto', 'arabic', 'urdu'
 
 export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, onComplete }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
   const [progress, setProgress] = useState(0);
   const [nodeState, setNodeState] = useState<NodeState>('checking');
   const [latency, setLatency] = useState<number | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
   const t = language === 'english' ? copy.english : copy.dari;
   const isRtl = RTL_LANGUAGES.includes(language);
 
@@ -96,6 +86,13 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
     media.addEventListener?.('change', syncMotion);
     return () => media.removeEventListener?.('change', syncMotion);
   }, []);
+
+  useEffect(() => {
+    // Let the full motion sequence play, then continue automatically.
+    const delay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1800 : 6800;
+    const timer = window.setTimeout(onComplete, delay);
+    return () => window.clearTimeout(timer);
+  }, [onComplete]);
 
   // Lightweight canvas scene: a living neural network, floating sparks and a warm
   // golden ignition point. Particle counts stay bounded for mid-range Android devices.
@@ -332,47 +329,6 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
     };
   }, []);
 
-  const playDigitalChime = async () => {
-    if (!soundEnabled || typeof window === 'undefined' || !('AudioContext' in window)) return;
-    try {
-      const audio = new AudioContext();
-      audioContextRef.current = audio;
-      await audio.resume();
-      const now = audio.currentTime;
-      const master = audio.createGain();
-      master.gain.setValueAtTime(0.0001, now);
-      master.gain.exponentialRampToValueAtTime(0.16, now + 0.06);
-      master.gain.exponentialRampToValueAtTime(0.0001, now + 1.9);
-      master.connect(audio.destination);
-      let endedOscillators = 0;
-      [523.25, 659.25, 783.99, 1046.5].forEach((frequency, index) => {
-        const oscillator = audio.createOscillator();
-        const gain = audio.createGain();
-        oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(frequency, now);
-        gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.exponentialRampToValueAtTime(0.11 / (index + 1), now + 0.05 + index * 0.07);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.65 + index * 0.06);
-        oscillator.connect(gain);
-        gain.connect(master);
-        oscillator.onended = () => {
-          endedOscillators += 1;
-          if (endedOscillators === 4 && audioContextRef.current === audio) {
-            audioContextRef.current = null;
-            void audio.close().catch(() => undefined);
-          }
-        };
-        oscillator.start(now);
-        oscillator.stop(now + 1.95);
-      });
-    } catch {
-      const audio = audioContextRef.current;
-      audioContextRef.current = null;
-      if (audio && audio.state !== 'closed') void audio.close().catch(() => undefined);
-      // Audio is decorative; entry must work even when sound is unavailable.
-    }
-  };
-
   const nodeLabel = nodeState === 'online' ? t.ready : nodeState === 'checking' ? t.connecting : t.offline;
 
   return (
@@ -391,23 +347,11 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
 
       <header className="afg-boot-header">
         <div className="afg-boot-wordmark"><span className="afg-boot-mark">A</span><span>AFG <b>AI</b></span><small>INTELLIGENCE SYSTEM</small></div>
-        <div className="afg-boot-header-actions">
-          <button
-            type="button"
-            className="afg-boot-sound"
-            aria-label={soundEnabled ? t.soundOff : t.soundOn}
-            aria-pressed={soundEnabled}
-            onClick={() => setSoundEnabled((enabled) => !enabled)}
-          >
-            <span aria-hidden="true">{soundEnabled ? '♪' : '♫̸'}</span>
-            <span>{soundEnabled ? t.soundEnabled : t.soundDisabled}</span>
-          </button>
-          <div className={`afg-boot-status state-${nodeState}`} aria-live="polite">
-            <i />
-            <span>{t.apiStatus}</span>
-            <b>{nodeLabel}</b>
-            <em>{latency === null ? '—' : `${latency} ms`}</em>
-          </div>
+        <div className={`afg-boot-status state-${nodeState}`} aria-live="polite">
+          <i />
+          <span>{t.apiStatus}</span>
+          <b>{nodeLabel}</b>
+          <em>{latency === null ? '—' : `${latency} ms`}</em>
         </div>
       </header>
 
@@ -439,9 +383,6 @@ export const AfgCinematicIntro: React.FC<AfgCinematicIntroProps> = ({ language, 
             <div className="afg-boot-progress-meta"><span>{t.loading}</span><b>{String(progress).padStart(2, '0')}%</b></div>
             <div className="afg-boot-progress"><i style={{ width: progress + '%' }} /></div>
             <div className="afg-boot-footer-row"><span>BUILT FOR WHAT'S NEXT</span><span>AFGHANISTAN · GLOBAL INTELLIGENCE</span></div>
-            <button type="button" className="afg-boot-enter" onClick={() => { void playDigitalChime(); onComplete(); }} disabled={progress < 100}>
-              <span>{t.enter}</span><b aria-hidden="true">↗</b>
-            </button>
           </footer>
         </div>
       </section>
