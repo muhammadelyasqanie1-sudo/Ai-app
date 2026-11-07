@@ -88,6 +88,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const attachmentButtonRef = useRef<HTMLButtonElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -97,7 +98,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
-      if (menuRef.current && !menuRef.current.contains(target)) setIsMenuOpen(false);
+      if (menuRef.current && !menuRef.current.contains(target) && !attachmentButtonRef.current?.contains(target)) setIsMenuOpen(false);
       if (showEmojiPicker &&
           !emojiPickerRef.current?.contains(target) &&
           !emojiButtonRef.current?.contains(target)) {
@@ -322,8 +323,10 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
         
         {/* Big '+' Attachment Button (Left in LTR, Right in RTL or consistent with Screenshot 1) */}
         <button
+          ref={attachmentButtonRef}
           type="button"
           onClick={() => { if (fileUploadEnabled) setIsMenuOpen(!isMenuOpen); }}
+          aria-expanded={isMenuOpen}
           disabled={!fileUploadEnabled}
           className={`w-11 h-11 sm:w-13 sm:h-13 rounded-full flex items-center justify-center shrink-0 transition-all ${
             isMenuOpen
