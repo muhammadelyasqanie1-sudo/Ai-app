@@ -19,7 +19,7 @@ The chat tool loop allows up to six rounds for a requested browser task, with a 
 
 ## Provider setup
 
-Create a Browserbase project and configure these server-side environment variables in the hosting service:
+Create a Browserbase project and configure these server-side environment variables on Railway's `Ai-app` service in the `production` environment. The existing `TAVILY_API_KEY` remains unchanged and is used for web search, not browser control:
 
 - `BROWSERBASE_API_KEY`
 - `BROWSERBASE_PROJECT_ID`
@@ -61,10 +61,10 @@ This is UI automation through the user's browser session; it is not a Gmail API 
 
 Browser automation is **not active in a deployed environment** merely because these source changes are committed. Activation requires all of the following:
 
-1. Install the new runtime dependencies during the next approved deployment.
-2. Set `BROWSERBASE_API_KEY` and `BROWSERBASE_PROJECT_ID` as private server environment variables.
-3. Apply migration `0042_browser_automation_profiles.sql` after backup approval.
-4. Deploy this working branch (or merge it through the repository's normal review process).
+1. Add `BROWSERBASE_API_KEY` and `BROWSERBASE_PROJECT_ID` as private variables to Railway's `Ai-app` production service. Keep the existing `TAVILY_API_KEY`; do not replace it.
+2. Apply migration `0042_browser_automation_profiles.sql` after database backup approval.
+3. Deploy this working branch to Railway. The current production service source is `main`, so browser automation is not live until the feature branch is deployed or merged.
+4. Allow Railway to install the added runtime dependencies during the approved deployment.
 5. Confirm the authenticated browser status endpoint `GET /api/browser/status` reports configured and migration-ready.
 
 The user can end a session with `DELETE /api/browser/session`; the remote session is released and its persistent Context is retained for the same AFG AI user.
