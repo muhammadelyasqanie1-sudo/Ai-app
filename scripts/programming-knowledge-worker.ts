@@ -220,9 +220,13 @@ async function githubRepositorySearch(query: string, license: string): Promise<a
   return Array.isArray(response.items) ? response.items.slice(0, 10) : [];
 }
 
+const REPOSITORY_INDEX_VERSION = 2;
+
 async function repositoryNeedsRefresh(fullName: string): Promise<boolean> {
-  const existing = await pool.query('SELECT last_checked_at FROM world_knowledge_repositories WHERE full_name=$1', [fullName]);
-  const lastChecked = existing.rows[0]?.last_checked_at;
+  const existing = await pool.query('SELECT last_checked_at,metadata FROM world_knowledge_repositories WHERE full_name=$1', [fullName]);
+  const row = existing.rows[0];
+  if (!row || Number(row.metadata?.indexVersion || 0) < REPOSITORY_INDEX_VERSION) return true;
+  const lastChecked = row.last_checked_at;
   if (!lastChecked) return true;
   const timestamp = new Date(lastChecked).getTime();
   return !Number.isFinite(timestamp) || Date.now() - timestamp >= 7 * 24 * 60 * 60 * 1000;
@@ -369,7 +373,7 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
       Math.max(0,Number(metadata.stargazers_count||0)),Math.max(0,Number(metadata.forks_count||0)),
       metadata.pushed_at && !Number.isNaN(Date.parse(metadata.pushed_at)) ? new Date(metadata.pushed_at).toISOString() : null,
       null,
-      JSON.stringify({ description, archived: Boolean(metadata.archived), language: cleanText(metadata.language,80), topics: Array.isArray(metadata.topics) ? metadata.topics.slice(0,20) : [] })],
+      JSON.stringify({ indexVersion: REPOSITORY_INDEX_VERSION, description, archived: Boolean(metadata.archived), language: cleanText(metadata.language,80), topics: Array.isArray(metadata.topics) ? metadata.topics.slice(0,20) : [] })],
   );
   let count = 0;
   let codeFilesIndexed = 0;
