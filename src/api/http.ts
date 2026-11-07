@@ -24,6 +24,7 @@ import { handleWorldKnowledgeApi } from './worldKnowledge.ts';
 import { handleRoutingComboApi } from './routingCombos.ts';
 import { handleApiHubApi } from './apiHub.ts';
 import { handleRemoteMcpApi } from './remoteMcp.ts';
+import { handleBrowserAutomationApi } from './browserAutomation.ts';
 import { handleUserApiConnectorApi } from './userApiConnectors.ts';
 import { handleNineRouterApi } from './nineRouter.ts';
 import { handleControlPlaneBridgeApi } from './controlPlaneBridge.ts';
@@ -297,6 +298,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     if (await handleNineRouterApi(req, res, pathname)) return;
     if (await handleApiHubApi(req, res, pathname)) return;
     if (await handleRemoteMcpApi(req, res, pathname)) return;
+    if (await handleBrowserAutomationApi(req, res, pathname)) return;
     if (await handleAuthApi(req, res, pathname)) return;
     if (await handlePersonalGatewayApi(req, res, pathname, requestId)) return;
     if (await handleWorldKnowledgeApi(req, res, pathname)) return;
