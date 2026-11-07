@@ -146,11 +146,12 @@ export async function handleWorldKnowledgeApi(req: IncomingMessage, res: ServerR
   }
 
   if (pathname === '/api/intelligence/world/status' && req.method === 'GET') {
-    const [sources, documents, repositories, releases] = await Promise.all([
+    const [sources, documents, repositories, releases, codeFiles] = await Promise.all([
       pool.query('SELECT count(*)::int AS total,count(*) FILTER (WHERE enabled=true)::int AS enabled FROM world_knowledge_sources'),
       pool.query('SELECT count(*)::int AS total,count(DISTINCT topic)::int AS topics,count(DISTINCT language)::int AS languages FROM world_knowledge_documents'),
       pool.query('SELECT count(*)::int AS total,count(*) FILTER (WHERE last_checked_at >= now()-interval \'7 days\')::int AS checked_recently FROM world_knowledge_repositories'),
       pool.query('SELECT count(*)::int AS total FROM world_knowledge_releases WHERE draft=false'),
+      pool.query('SELECT count(*)::int AS total,COALESCE(sum(jsonb_array_length(symbols)),0)::int AS symbols FROM world_knowledge_code_files'),
     ]);
     reply(res, 200, {
       engine: 'programming-research-rag',
@@ -164,6 +165,9 @@ export async function handleWorldKnowledgeApi(req: IncomingMessage, res: ServerR
       repositories: Number(repositories.rows[0]?.total || 0),
       repositoriesCheckedRecently: Number(repositories.rows[0]?.checked_recently || 0),
       releases: Number(releases.rows[0]?.total || 0),
+      codeFiles: Number(codeFiles.rows[0]?.total || 0),
+      extractedSymbols: Number(codeFiles.rows[0]?.symbols || 0),
+      dependencyManifests: 'indexed-when-discovered',
       modelWeightTraining: false,
       vectorSearch: false,
       fullTextSearch: true,
@@ -187,6 +191,28 @@ export async function handleWorldKnowledgeApi(req: IncomingMessage, res: ServerR
       [query,limit],
     );
     reply(res, 200, { repositories: result.rows });
+    return true;
+  }
+
+  if (pathname === '/api/intelligence/world/code' && req.method === 'GET') {
+    const url = new URL(req.url || '/', 'http://localhost');
+    const query = (url.searchParams.get('q') || '').trim().slice(0,120);
+    const language = (url.searchParams.get('language') || '').trim().slice(0,40);
+    const limit = Math.max(1,Math.min(50,Number(url.searchParams.get('limit') || 20)));
+    const result = await pool.query(
+      `SELECT f.id,f.repository_id AS "repositoryId",r.full_name AS "repository",
+              f.path,f.language,f.html_url AS url,f.license_spdx AS license,
+              f.symbols,f.dependencies,f.content_hash AS "contentHash",
+              CASE WHEN $1='' THEN left(f.content,2400) ELSE left(f.content,5000) END AS excerpt
+         FROM world_knowledge_code_files f
+         JOIN world_knowledge_repositories r ON r.id=f.repository_id
+        WHERE ($1='' OR f.path ILIKE '%' || $1 || '%' OR f.content ILIKE '%' || $1 || '%'
+          OR EXISTS (SELECT 1 FROM jsonb_array_elements(f.symbols) s WHERE s->>'name' ILIKE '%' || $1 || '%'))
+          AND ($2='' OR f.language=$2)
+        ORDER BY f.indexed_at DESC LIMIT $3`,
+      [query,language,limit],
+    );
+    reply(res,200,{codeFiles:result.rows,query,language});
     return true;
   }
 
