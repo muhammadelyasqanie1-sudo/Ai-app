@@ -569,26 +569,28 @@ async function main() {
   try {
     const topics = await seedTopicQueries();
     let processed = 0, excerptsIndexed = 0, repositoryDocsIndexed = 0, reposVisitedThisRun = 0;
-    for (; processed < MAX_JOBS; processed++) {
-      const job = await claimJob();
-      if (!job) break;
+    const staleRepositories = await pool.query(
+      `SELECT r.full_name,s.canonical_url
+       FROM world_knowledge_repositories r
+       JOIN world_knowledge_sources s ON s.id=r.source_id
+       WHERE COALESCE((r.metadata->>'indexVersion')::int,0) < $1
+       ORDER BY CASE WHEN r.license_spdx IN ('MIT','MIT-0','Apache-2.0','BSD-2-Clause','BSD-3-Clause','ISC','0BSD','Unlicense') THEN 0 ELSE 1 END,
+                r.last_checked_at ASC NULLS FIRST
+       LIMIT $2`,
+      [REPOSITORY_INDEX_VERSION, MAX_REPOS_PER_RUN],
+    );
+    for (const stale of staleRepositories.rows) {
+      if (reposVisitedThisRun >= MAX_REPOS_PER_RUN) break;
+      reposVisitedThisRun++;
       try {
-        const results = await search(job.query);
-        let excerpts = 0, repoDocs = 0, reposVisited = 0;
-        for (const item of results) {
-          if (await storeSearchExcerpt(item, job.query, job.topic_key, job.language)) excerpts++;
-          if (parseGitHubRepo(item.url || '') && reposVisited < MAX_REPOS_PER_JOB && reposVisitedThisRun < MAX_REPOS_PER_RUN && repositoryDocsIndexed + repoDocs < MAX_REPO_DOCS_PER_RUN) {
-            reposVisited++;
-            reposVisitedThisRun++;
-            try { repoDocs += await indexGitHubRepository(item, job.query, job.topic_key); }
-            catch { /* Keep processing the other discovery results. */ }
-          }
-        }
-        excerptsIndexed += excerpts;
-        repositoryDocsIndexed += repoDocs;
-        await finish(job, 'completed', excerpts + ' search excerpts and ' + repoDocs + ' public repository documents indexed.');
+        repositoryDocsIndexed += await indexGitHubRepository({
+          title: String(stale.full_name),
+          url: String(stale.canonical_url),
+          content: 'Reindex existing public repository after source-first code index policy update.',
+          score: 0.95,
+        }, 'Repository reindex: source-first code index policy', 'open-source');
       } catch (error) {
-        await finish(job, 'failed', error instanceof Error ? error.message : 'Unknown research worker error');
+        console.warn('AFG_GITHUB_REINDEX_FAILED', JSON.stringify({ repository: stale.full_name, error: error instanceof Error ? error.message.slice(0, 240) : 'unknown' }));
       }
     }
     const directRepositorySearches = [
@@ -618,7 +620,28 @@ async function main() {
         }
       } catch { /* GitHub search may be rate-limited; Tavily discovery remains available. */ }
     }
-
+    for (; processed < MAX_JOBS; processed++) {
+      const job = await claimJob();
+      if (!job) break;
+      try {
+        const results = await search(job.query);
+        let excerpts = 0, repoDocs = 0, reposVisited = 0;
+        for (const item of results) {
+          if (await storeSearchExcerpt(item, job.query, job.topic_key, job.language)) excerpts++;
+          if (parseGitHubRepo(item.url || '') && reposVisited < MAX_REPOS_PER_JOB && reposVisitedThisRun < MAX_REPOS_PER_RUN && repositoryDocsIndexed + repoDocs < MAX_REPO_DOCS_PER_RUN) {
+            reposVisited++;
+            reposVisitedThisRun++;
+            try { repoDocs += await indexGitHubRepository(item, job.query, job.topic_key); }
+            catch { /* Keep processing the other discovery results. */ }
+          }
+        }
+        excerptsIndexed += excerpts;
+        repositoryDocsIndexed += repoDocs;
+        await finish(job, 'completed', excerpts + ' search excerpts and ' + repoDocs + ' public repository documents indexed.');
+      } catch (error) {
+        await finish(job, 'failed', error instanceof Error ? error.message : 'Unknown research worker error');
+      }
+    }
     process.stdout.write(JSON.stringify({
       worker: 'afg-programming-knowledge',
       topicsSeeded: topics,
