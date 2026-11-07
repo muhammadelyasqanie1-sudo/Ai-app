@@ -7,6 +7,7 @@ import { installConsoleSecretRedaction } from './src/security/redaction.ts';
 import { pool } from './src/api/database.ts';
 import { syncPublicApiCatalog } from './src/services/publicApiCatalog.ts';
 import { getVerifiedModelDescriptors } from './src/services/providerGateway.ts';
+import { startProgrammingKnowledgeScheduler } from './scripts/programming-knowledge-scheduler.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -121,4 +122,5 @@ app.listen(PORT, () => {
   console.info('SERVER_LISTENING', JSON.stringify({ port: PORT, service: 'afg-ai-api' }));
   void bootstrapPublicApiCatalog();
   void bootstrapProviderCatalog();
+  startProgrammingKnowledgeScheduler();
 });
