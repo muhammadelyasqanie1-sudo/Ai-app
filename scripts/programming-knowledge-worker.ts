@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Pool } from 'pg';
+import { shouldUseDatabaseTls } from '../src/api/databaseTls.ts';
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
 const apiKey = process.env.TAVILY_API_KEY?.trim();
@@ -7,7 +8,22 @@ const githubToken = process.env.GITHUB_TOKEN?.trim();
 if (!databaseUrl) throw new Error('DATABASE_URL is required.');
 if (!apiKey) throw new Error('TAVILY_API_KEY is required for the programming knowledge worker.');
 
-const pool = new Pool({ connectionString: databaseUrl, max: 2, connectionTimeoutMillis: 8000, idleTimeoutMillis: 10000 });
+const useDatabaseTls = shouldUseDatabaseTls(databaseUrl, process.env.DATABASE_SSL);
+const databaseSslCa = process.env.DATABASE_SSL_CA?.replace(/\\n/g, '\n').trim();
+const pool = new Pool({
+  connectionString: databaseUrl,
+  max: 2,
+  connectionTimeoutMillis: 8000,
+  idleTimeoutMillis: 10000,
+  ...(useDatabaseTls
+    ? {
+        ssl: {
+          rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false',
+          ...(databaseSslCa ? { ca: databaseSslCa } : {}),
+        },
+      }
+    : {}),
+});
 const MAX_JOBS = Math.max(1, Math.min(20, Number(process.env.AFG_KNOWLEDGE_MAX_JOBS || 8)));
 const MAX_RESULTS = 5;
 const TIMEOUT_MS = 20000;
