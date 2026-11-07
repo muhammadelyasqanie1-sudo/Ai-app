@@ -195,7 +195,12 @@ async function ensureBrowserSession(userId: string, db: any, client: any): Promi
 
   const session = await client.sessions.create({
     projectId,
-    browserSettings: { context: { id: String(profile.browserbase_context_id), persist: true } },
+    browserSettings: {
+      context: { id: String(profile.browserbase_context_id), persist: true },
+      solveCaptchas: false,
+      recordSession: false,
+      logSession: false,
+    },
     keepAlive: true,
     api_timeout: 3600,
     userMetadata: { afgUserId: userId },
