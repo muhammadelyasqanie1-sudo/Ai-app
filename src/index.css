@@ -992,3 +992,29 @@ html.neon {
 .afg-offline-hub button:focus-visible, .afg-drawer-panel button:focus-visible {
   outline: 2px solid var(--accent-cyan); outline-offset: 2px;
 }
+
+
+/* Light-scheme contrast for semantic accents that were authored for dark surfaces. */
+html:not(.dark):not(.neon) .afg-settings-hub .text-cyan-100,
+html:not(.dark):not(.neon) .afg-settings-hub .text-cyan-200,
+html:not(.dark):not(.neon) .afg-account-settings .text-cyan-100,
+html:not(.dark):not(.neon) .afg-account-settings .text-cyan-200,
+html:not(.dark):not(.neon) .afg-drawer-panel .text-cyan-100,
+html:not(.dark):not(.neon) .afg-drawer-panel .text-cyan-200 { color: #0e7490 !important; }
+html:not(.dark):not(.neon) .afg-settings-hub .text-emerald-200,
+html:not(.dark):not(.neon) .afg-settings-hub .text-emerald-300,
+html:not(.dark):not(.neon) .afg-account-settings .text-emerald-200,
+html:not(.dark):not(.neon) .afg-account-settings .text-emerald-300 { color: #047857 !important; }
+html:not(.dark):not(.neon) .afg-settings-hub .text-amber-200,
+html:not(.dark):not(.neon) .afg-account-settings .text-amber-200,
+html:not(.dark):not(.neon) .afg-offline-hub .text-amber-200 { color: #92400e !important; }
+html:not(.dark):not(.neon) .afg-settings-hub .text-rose-200,
+html:not(.dark):not(.neon) .afg-account-settings .text-rose-200 { color: #be123c !important; }
+html:not(.dark):not(.neon) .afg-settings-hub .text-violet-200,
+html:not(.dark):not(.neon) .afg-account-settings .text-violet-200 { color: #6d28d9 !important; }
+html:not(.dark):not(.neon) .afg-settings-hub [class*="bg-cyan-950"],
+html:not(.dark):not(.neon) .afg-settings-hub [class*="bg-slate-950"],
+html:not(.dark):not(.neon) .afg-account-settings [class*="bg-cyan-950"],
+html:not(.dark):not(.neon) .afg-account-settings [class*="bg-rose-950"] {
+  background-color: color-mix(in srgb,var(--accent-cyan) 7%,var(--bg-surface)) !important;
+}
