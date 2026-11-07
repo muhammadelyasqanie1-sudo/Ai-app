@@ -91,7 +91,7 @@ export async function executeWebSearchTool(userId: string, args: unknown, parent
     const rawResults = provider === 'brave' ? data.web?.results : provider === 'serpapi' ? data.organic_results : data.results;
     const sources = Array.isArray(rawResults) ? rawResults.filter((item: any) => {
       const url = item?.url || item?.link;
-      return typeof url === 'string' && /^https?:\\/\\//i.test(url) && typeof item.title === 'string';
+      return typeof url === 'string' && /^https?:\/\//i.test(url) && typeof item.title === 'string';
     }).slice(0, maxResults).map((item: any) => ({
       title: String(item.title).slice(0, 300),
       url: String(item.url || item.link),
