@@ -185,6 +185,7 @@ const CODE_EXTENSIONS: Record<string,string> = {
   sh:'shell',yaml:'yaml',yml:'yaml',json:'json',md:'markdown',mdx:'mdx',toml:'toml',
 };
 const SKIP_CODE_PATH = /(^|\/)(node_modules|vendor|dist|build|coverage|\.git|\.next|target|Pods|out|bin)(\/|$)/i;
+const SENSITIVE_CODE_PATH = /(^|\/)(\.env(?:\..*)?|secrets?(?:\..*)?|credentials?(?:\..*)?|id_rsa|id_ed25519|.*\.(?:pem|key|p12|pfx))$/i;
 const MAX_CODE_FILES_PER_REPO = 16;
 const MAX_CODE_BYTES_PER_FILE = 36000;
 const MAX_CODE_BYTES_PER_RUN = 240000;
@@ -195,6 +196,14 @@ let dependencyManifestsIndexedTotal = 0;
 function codeLanguage(path: string) {
   const ext = path.split('.').pop()?.toLowerCase() || '';
   return CODE_EXTENSIONS[ext] || 'unknown';
+}
+function redactPotentialSecrets(source: string) {
+  return source
+    .replace(/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\\s\\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g, '[REDACTED PRIVATE KEY]')
+    .replace(/\\bAKIA[0-9A-Z]{16}\\b/g, '[REDACTED AWS ACCESS KEY]')
+    .replace(/\\bgh[pousr]_[A-Za-z0-9_]{20,}\\b/g, '[REDACTED GITHUB TOKEN]')
+    .replace(/\\bgithub_pat_[A-Za-z0-9_]{20,}\\b/g, '[REDACTED GITHUB TOKEN]')
+    .replace(/\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b/g, '[REDACTED JWT]');
 }
 function extractCodeSymbols(source: string, language: string) {
   const patterns: Array<{kind:string; re:RegExp}> = [];
@@ -222,12 +231,12 @@ function extractCodeSymbols(source: string, language: string) {
   } else if(language==='sql') {
     patterns.push({kind:'sql-object',re:/\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE|TABLE|VIEW)\s+([A-Za-z_][\w.]*)/gi});
   }
-  const found = new Map<string,{name:string;kind:string;approximate:true}>();
+  const found = new Map<string,{name:string;kind:string;line:number;approximate:true}>();
   for(const item of patterns) {
     let match:RegExpExecArray|null;
     while((match=item.re.exec(source))!==null) {
       const name=match[1];
-      if(name && name.length<=120) found.set(item.kind+':'+name,{name,kind:item.kind,approximate:true});
+      if(name && name.length<=120) found.set(item.kind+':'+name,{name,kind:item.kind,line:source.slice(0,match.index).split('\\n').length,approximate:true});
       if(found.size>=300) return [...found.values()];
     }
   }
@@ -254,10 +263,11 @@ async function storeCodeFile(repositoryId: string, fullName: string, license: st
   const path=String(entry.path||'').slice(0,700);
   const language=codeLanguage(path);
   const url='https://github.com/'+fullName+'/blob/'+encodeURIComponent(defaultBranch)+'/'+path.split('/').map(encodeURIComponent).join('/');
-  const symbols=extractCodeSymbols(source,language);
+  const symbols=extractCodeSymbols(safeSource,language);
   const manifestNames=['package.json','requirements.txt','pyproject.toml','cargo.toml','go.mod','pom.xml'];
   const dependencies=manifestNames.includes(path.split('/').pop()?.toLowerCase()||'') ? parseDependencyManifest(path,source) : {};
-  const contentHash=sha(source);
+  const safeSource=redactPotentialSecrets(source);
+  const contentHash=sha(safeSource);
   await pool.query(
     \`INSERT INTO world_knowledge_code_files(repository_id,path,language,blob_sha,html_url,license_spdx,content,symbols,dependencies,content_hash,indexed_at)
      VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,now())
@@ -265,7 +275,7 @@ async function storeCodeFile(repositoryId: string, fullName: string, license: st
        html_url=EXCLUDED.html_url,license_spdx=EXCLUDED.license_spdx,content=EXCLUDED.content,
        symbols=EXCLUDED.symbols,dependencies=EXCLUDED.dependencies,content_hash=EXCLUDED.content_hash,
        indexed_at=now(),updated_at=now()\`,
-    [repositoryId,path,language,String(entry.sha||'').slice(0,80),url,license,source,
+    [repositoryId,path,language,String(entry.sha||'').slice(0,80),url,license,safeSource,
       JSON.stringify(symbols),JSON.stringify(dependencies),contentHash],
   );
   return {bytes:Buffer.byteLength(source,'utf8'),symbols:symbols.length,manifest:Object.keys(dependencies).length>0};
@@ -390,7 +400,7 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
       } catch { /* Skip individual files that exceed limits or disappear during indexing. */ }
     }
     const codeCandidates = entries.filter((entry: any) => {
-      if (entry.type !== 'blob' || typeof entry.path !== 'string' || SKIP_CODE_PATH.test(entry.path)) return false;
+      if (entry.type !== 'blob' || typeof entry.path !== 'string' || SKIP_CODE_PATH.test(entry.path) || SENSITIVE_CODE_PATH.test(entry.path)) return false;
       const language = codeLanguage(entry.path);
       const base = entry.path.split('/').pop()?.toLowerCase() || '';
       const manifest = ['package.json','requirements.txt','pyproject.toml','cargo.toml','go.mod','pom.xml'].includes(base);
