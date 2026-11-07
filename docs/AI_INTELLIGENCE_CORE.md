@@ -120,3 +120,10 @@ All repository/release data is public-source reference material. Stars and push 
 ## Multilingual programming discovery — milestone 7
 
 Migration `0040_multilingual_programming_discovery.sql` adds language-specific search phrases to the programming topic catalog for Dari, Persian and Pashto. The worker now queues those queries separately with language-aware idempotency keys and records the language of each search-result excerpt. English remains the language label for English GitHub README/release documentation; the language of a search query is not incorrectly used to relabel source documents. This improves discovery coverage but does not translate sources, guarantee search-provider recall, or provide full Dari/Pashto stemming. Apply migration 0040 after 0039.
+
+
+## Public source-code and dependency intelligence — milestone 9
+
+Migration `0041_programming_source_code_index.sql` adds a bounded per-repository source-file index. The public GitHub tree is filtered to a conservative extension allowlist; generated/vendor/build directories, binaries, and oversized files are skipped. The worker indexes at most 16 candidate files per repository, 36 KB per file, and 240 KB of source text per worker run. It extracts approximate symbol names for supported languages and records selected dependency manifests (package.json, requirements.txt, pyproject.toml, Cargo.toml, go.mod, pom.xml). Extraction is heuristic, not a compiler or complete AST, and dependency versions are recorded as declared rather than resolved.
+
+Authenticated search is available at `GET /api/intelligence/world/code?q=&language=&limit=`. Status includes source-code file and extracted-symbol counts. Each record retains repository, path, GitHub URL, blob SHA, declared license and content fingerprint. Public code remains subject to its repository's declared license; unknown licenses remain unknown. Source files and manifests are never executed, installed, or evaluated. Apply migration 0041 after backup/review before enabling the worker. No migration, test, build, worker run, or deployment is performed by these source edits.
