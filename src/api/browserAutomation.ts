@@ -55,13 +55,12 @@ async function assertPublicHttpUrl(value: string): Promise<URL> {
 
 function getBrowserbaseClient(): any {
   const apiKey = process.env.BROWSERBASE_API_KEY?.trim() || '';
-  const projectId = process.env.BROWSERBASE_PROJECT_ID?.trim() || '';
-  if (!apiKey || !projectId) throw new Error('Browser automation is not configured. Set BROWSERBASE_API_KEY and BROWSERBASE_PROJECT_ID in the server environment.');
+  if (!apiKey) throw new Error('Browser automation is not configured. Set BROWSERBASE_API_KEY in the server environment.');
   return new Browserbase({ apiKey, timeout: 30_000, maxRetries: 1 });
 }
 
 export async function getBrowserAutomationStatus(userId: string | null = null) {
-  const configured = Boolean(process.env.BROWSERBASE_API_KEY?.trim() && process.env.BROWSERBASE_PROJECT_ID?.trim());
+  const configured = Boolean(process.env.BROWSERBASE_API_KEY?.trim());
   if (!pool) return { configured, migrationReady: false, signedIn: Boolean(userId), active: false, lastUrl: null, lastActivityAt: null };
   try {
     if (!userId) {
@@ -138,7 +137,7 @@ const browserTools = [
 }));
 
 export async function getEnabledBrowserToolDefinitions(userId: string) {
-  if (!userId || !pool || !process.env.BROWSERBASE_API_KEY?.trim() || !process.env.BROWSERBASE_PROJECT_ID?.trim()) return [];
+  if (!userId || !pool || !process.env.BROWSERBASE_API_KEY?.trim()) return [];
   try {
     await pool.query('SELECT user_id FROM browser_automation_profiles LIMIT 0');
     return browserTools;
@@ -157,14 +156,14 @@ async function getLiveViewUrl(client: any, sessionId: string): Promise<string | 
 }
 
 async function ensureBrowserSession(userId: string, db: any, client: any): Promise<{ sessionId: string; connectUrl: string; liveViewUrl: string | null }> {
-  const projectId = process.env.BROWSERBASE_PROJECT_ID!.trim();
   let profileResult = await db.query(
     'SELECT browserbase_context_id,active_session_id FROM browser_automation_profiles WHERE user_id=$1 LIMIT 1',
     [userId],
   );
   let profile = profileResult.rows[0];
   if (!profile) {
-    const context = await client.contexts.create({ projectId });
+    // Browserbase infers the project from the API key; no project ID is required.
+    const context = await client.contexts.create();
     if (!context?.id) throw new Error('Browser provider did not create an isolated user context.');
     profileResult = await db.query(
       `INSERT INTO browser_automation_profiles(user_id,browserbase_context_id)
@@ -195,7 +194,6 @@ async function ensureBrowserSession(userId: string, db: any, client: any): Promi
   }
 
   const session = await client.sessions.create({
-    projectId,
     browserSettings: {
       context: { id: String(profile.browserbase_context_id), persist: true },
       solveCaptchas: false,
@@ -331,7 +329,7 @@ async function stopBrowserSession(userId: string): Promise<{ stopped: boolean; c
     );
     const sessionId = String(result.rows[0]?.active_session_id || '');
     if (!sessionId) return { stopped: false, contextSaved: true };
-    await client.sessions.update(sessionId,{ status: 'REQUEST_RELEASE', projectId: process.env.BROWSERBASE_PROJECT_ID!.trim() });
+    await client.sessions.update(sessionId,{ status: 'REQUEST_RELEASE' });
     await db.query(
       'UPDATE browser_automation_profiles SET active_session_id=NULL,session_expires_at=NULL,last_activity_at=now(),updated_at=now() WHERE user_id=$1',
       [userId],
