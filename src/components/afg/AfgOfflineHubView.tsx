@@ -1,3 +1,4 @@
+// Trigger the repository's Android APK build workflow; no runtime behavior change.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownToLine, Cpu, HardDrive, MessageSquare, Search, ShieldCheck, Sparkles, WifiOff, X } from 'lucide-react';
 import type { Language } from '../../types/afg';
