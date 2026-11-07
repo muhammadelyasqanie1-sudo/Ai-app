@@ -216,13 +216,13 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
     <span className="flex shrink-0 items-center gap-2">{(status[item.id]||item.id==='github')&&['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(item.id)&&statusBadge(item.id)}<ChevronRight className={`h-4 w-4 text-slate-500 ${fa?'rotate-180':''}`}/></span>
   </button>;
 
-  if(context==='admin') return <section className="mx-auto w-full max-w-[1500px] px-3 py-4 sm:px-6">
+  if(context==='admin') return <section className="afg-settings-hub mx-auto w-full max-w-[1500px] px-3 py-4 sm:px-6">
     <button onClick={()=>setContext('user')} className="mb-3 inline-flex items-center gap-2 text-sm text-cyan-300"><ArrowLeft className="h-4 w-4"/>{t.back}</button>
     <p className="mb-3 text-xs text-slate-400">{t.adminIntro}</p>
     <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4"><h2 className="font-bold text-white">{t.admin}</h2><p className="mt-2 text-sm leading-6 text-slate-300">{fa?'پنل قدیمی مدیریت داخل برنامه حذف شده است. مدیریت زیرساخت و کاربران از درگاه امن و جداگانه 9Router انجام می‌شود.':'The legacy in-app admin panel has been removed. Infrastructure and user administration are handled by the separate authenticated 9Router control plane.'}</p></div>
   </section>;
 
-  return <section className="mx-auto w-full max-w-3xl space-y-4 px-3 py-4 sm:px-6" dir={fa?'rtl':'ltr'}>
+  return <section className="afg-settings-hub mx-auto w-full max-w-3xl space-y-4 px-3 py-4 sm:px-6" dir={fa?'rtl':'ltr'}>
     <header className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div><h1 className="text-2xl font-black text-white">{fa?'تنظیمات':'Settings'}</h1><p className="mt-1 text-xs text-slate-400">{fa?'مرکز تنظیمات AFG AI':'Manage your AFG AI experience'}</p></div>
