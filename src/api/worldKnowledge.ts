@@ -52,7 +52,7 @@ function safeHttpUrl(value: string): URL | null {
 export async function handleWorldKnowledgeApi(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
   if (!pathname.startsWith('/api/intelligence/world/')) return false;
   if (!pool) {
-    reply(res, 503, { error: 'Universal Knowledge Engine requires DATABASE_URL and migration 0036.' });
+    reply(res, 503, { error: 'Programming knowledge APIs require DATABASE_URL and migrations 0036–0041.' });
     return true;
   }
   const user = await authenticateRequest(req);
@@ -206,7 +206,8 @@ export async function handleWorldKnowledgeApi(req: IncomingMessage, res: ServerR
               CASE WHEN $1='' THEN left(f.content,2400) ELSE left(f.content,5000) END AS excerpt
          FROM world_knowledge_code_files f
          JOIN world_knowledge_repositories r ON r.id=f.repository_id
-        WHERE ($1='' OR f.path ILIKE '%' || $1 || '%' OR f.content ILIKE '%' || $1 || '%'
+        WHERE ($1='' OR f.search_vector @@ websearch_to_tsquery('simple',$1)
+          OR f.path ILIKE '%' || $1 || '%'
           OR EXISTS (SELECT 1 FROM jsonb_array_elements(f.symbols) s WHERE s->>'name' ILIKE '%' || $1 || '%'))
           AND ($2='' OR f.language=$2)
         ORDER BY f.indexed_at DESC LIMIT $3`,
