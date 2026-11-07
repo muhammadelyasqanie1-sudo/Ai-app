@@ -239,6 +239,12 @@ function redactSourceSecrets(value: string): string {
     .replace(/(Bearer\s+)[A-Za-z0-9._~+/-]{16,}/gi, '$1[REDACTED]')
     .replace(/((?:api[_-]?key|access[_-]?token|client[_-]?secret|password)\s*[:=]\s*["']?)[^"'\s,;]+/gi, '$1[REDACTED]');
 }
+function containsPotentialSecrets(value: string): boolean {
+  return redactSourceSecrets(value) !== value ||
+    /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i.test(value) ||
+    /\\bAKIA[0-9A-Z]{16}\\b/.test(value) ||
+    /\\bxox[baprs]-[A-Za-z0-9-]{10,}\\b/.test(value);
+}
 function repoSummary(row: any) {
   return {
     full_name: row.full_name,
@@ -419,7 +425,7 @@ export async function executeGitHubTool(userId: string, toolName: string, rawArg
     const path = safeFilePath(requiredText(args, 'path', 500));
     const branch = safeBranch(requiredText(args, 'branch', 120));
     const content = requiredContent(args, 'content', 100_000);
-    if (/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)/.test(content)) {
+    if (containsPotentialSecrets(content)) {
       throw new Error('The proposed file content appears to contain a credential or private key and was not committed.');
     }
     const message = requiredText(args, 'message', 200);
@@ -460,7 +466,7 @@ export async function executeGitHubTool(userId: string, toolName: string, rawArg
       const content = requiredContent(item, 'content', 50_000);
       if (seen.has(path)) throw new Error('The same file path cannot appear twice in one commit.');
       seen.add(path);
-      if (/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)/.test(content)) {
+      if (containsPotentialSecrets(content)) {
         throw new Error('One proposed file appears to contain a credential or private key. No files were committed.');
       }
       totalBytes += Buffer.byteLength(content, 'utf8');
