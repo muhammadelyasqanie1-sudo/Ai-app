@@ -825,7 +825,7 @@ export default function App() {
         onToggleLanguage={handleToggleLanguage}
         onToggleTheme={handleToggleTheme}
         onOpenSettings={() => setCurrentTab('settings')}
-        onOpenMenu={() => setIsCommandPaletteOpen(true)}
+        onOpenMenu={() => setIsSideMenuOpen(true)}
         onNewChat={handleNewChat}
         onOpenModels={() => setCurrentTab('offline-models')}
       />
@@ -940,7 +940,7 @@ export default function App() {
       </main>
 
       {isAfgAssistantOpen && (
-        <div className="afg-assistant-overlay fixed inset-0 z-[100] overflow-y-auto p-2 backdrop-blur-md sm:p-5" role="dialog" aria-modal="true" aria-label={language === 'dari' ? 'دستیار AFG AI' : 'AFG AI assistant'}>
+        <div className="afg-assistant-overlay fixed inset-0 z-[100] overflow-y-auto p-2 backdrop-blur-md sm:p-5" role="dialog" aria-modal="true" aria-label={language === 'dari' ? 'دستیار AFG AI' : 'AFG AI assistant'} onClick={(event) => { if (event.target === event.currentTarget) setIsAfgAssistantOpen(false); }}>
           <div className="afg-assistant-overlay-header mx-auto mb-3 flex max-w-4xl items-center justify-between rounded-2xl border border-cyan-400/25 px-4 py-3 shadow-2xl">
             <div className="flex items-center gap-2 text-sm font-bold text-cyan-200"><span className="grid h-8 w-8 place-items-center rounded-xl border border-cyan-300/30 bg-cyan-300/10">✦</span>AFG AI</div>
             <button type="button" onClick={() => setIsAfgAssistantOpen(false)} className="rounded-xl border border-white/15 px-3 py-2 text-sm text-slate-200 hover:bg-white/10">{language === 'dari' ? 'بستن' : 'Close'}</button>
