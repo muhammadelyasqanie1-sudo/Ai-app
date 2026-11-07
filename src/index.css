@@ -924,3 +924,71 @@ html.neon {
   background-color: var(--bg-surface-subtle) !important;
 }
 .afg-app-header .border-slate-700\/40 { border-color: var(--border-color) !important; }
+
+
+/* Unified theme tokens for settings, account controls, navigation and Offline AI Hub. */
+.afg-settings-hub,
+.afg-account-settings,
+.afg-offline-hub,
+.afg-drawer-panel { color: var(--text-primary); }
+.afg-settings-hub .text-white,
+.afg-account-settings .text-white,
+.afg-offline-hub .text-slate-900,
+.afg-drawer-panel .text-white { color: var(--text-primary) !important; }
+.afg-settings-hub .text-slate-200,
+.afg-settings-hub .text-slate-300,
+.afg-settings-hub .text-slate-400,
+.afg-account-settings .text-slate-200,
+.afg-account-settings .text-slate-300,
+.afg-account-settings .text-slate-400,
+.afg-offline-hub .text-slate-600,
+.afg-offline-hub .text-slate-700,
+.afg-drawer-panel .text-slate-300,
+.afg-drawer-panel .text-slate-400 { color: var(--text-secondary) !important; }
+.afg-settings-hub .text-slate-500,
+.afg-settings-hub .text-slate-600,
+.afg-account-settings .text-slate-500,
+.afg-account-settings .text-slate-600,
+.afg-offline-hub .text-slate-500,
+.afg-offline-hub .text-slate-400,
+.afg-drawer-panel .text-slate-500 { color: var(--text-muted) !important; }
+
+.afg-settings-hub [class*="bg-slate-950"],
+.afg-settings-hub [class*="bg-slate-900"],
+.afg-account-settings [class*="bg-slate-950"],
+.afg-account-settings [class*="bg-slate-900"],
+.afg-offline-hub .bg-white { background-color: var(--bg-surface) !important; color: var(--text-primary); }
+.afg-settings-hub [class*="border-slate-800"],
+.afg-settings-hub [class*="border-slate-700"],
+.afg-account-settings [class*="border-slate-800"],
+.afg-account-settings [class*="border-slate-700"],
+.afg-offline-hub [class*="border-slate-200"],
+.afg-drawer-panel [class*="border-white"] { border-color: var(--border-color) !important; }
+.afg-settings-hub [class*="divide-slate-800"] > :not([hidden]) ~ :not([hidden]),
+.afg-account-settings [class*="divide-slate-800"] > :not([hidden]) ~ :not([hidden]) { border-color: var(--border-color) !important; }
+
+.afg-settings-hub input:not([type="checkbox"]):not([type="radio"]),
+.afg-settings-hub textarea, .afg-settings-hub select,
+.afg-account-settings input:not([type="checkbox"]):not([type="radio"]),
+.afg-account-settings textarea, .afg-account-settings select,
+.afg-offline-hub input:not([type="checkbox"]):not([type="radio"]),
+.afg-offline-hub textarea, .afg-offline-hub select {
+  background-color: var(--bg-surface-subtle) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+.afg-settings-hub input::placeholder, .afg-settings-hub textarea::placeholder,
+.afg-account-settings input::placeholder, .afg-account-settings textarea::placeholder,
+.afg-offline-hub input::placeholder, .afg-offline-hub textarea::placeholder { color: var(--text-muted) !important; }
+
+.afg-drawer-panel .hover\\:bg-white\\/10:hover,
+.afg-drawer-panel .hover\\:bg-white\\/\\[0\\.06\\]:hover { background-color: var(--bg-surface-hover) !important; }
+.afg-drawer-panel .text-slate-950,
+.afg-offline-hub .text-slate-950 { color: #06131c !important; }
+.afg-offline-hub .bg-slate-500\\/5 { background-color: color-mix(in srgb,var(--bg-surface-subtle) 82%,transparent) !important; }
+.afg-offline-hub .bg-white { box-shadow: var(--card-shadow); }
+.afg-offline-hub .border { border-color: var(--border-color); }
+.afg-settings-hub button:focus-visible, .afg-account-settings button:focus-visible,
+.afg-offline-hub button:focus-visible, .afg-drawer-panel button:focus-visible {
+  outline: 2px solid var(--accent-cyan); outline-offset: 2px;
+}
