@@ -314,7 +314,7 @@ export async function executeGitHubTool(userId: string, toolName: string, rawArg
   if (toolName === 'github_get_repository_tree') {
     const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
     const requestedRef = optionalText(args, 'ref', 200);
-    const limit = boundedNumber(args.limit, 250, 20, 400);
+    const limit = boundedNumber(args.limit, 120, 20, 180);
     const repository = await request(token, repoPath(owner, repo));
     const defaultBranch = String(repository.data.default_branch || 'main');
     const ref = requestedRef || defaultBranch;
@@ -358,18 +358,18 @@ export async function executeGitHubTool(userId: string, toolName: string, rawArg
       total_commits: commits.length,
       commits: commits.slice(0, 20).map((item: any) => ({
         sha: String(item.sha || '').slice(0, 40),
-        message: String(item.commit?.message || '').split('\\n')[0].slice(0, 240),
+        message: String(item.commit?.message || '').split(String.fromCharCode(10))[0].slice(0, 240),
       })),
       total_changed_files: files.length,
-      changed_files: files.slice(0, 20).map((item: any) => ({
+      changed_files: files.slice(0, 10).map((item: any) => ({
         filename: String(item.filename || '').slice(0, 500),
         status: String(item.status || 'modified'),
         additions: Number(item.additions || 0),
         deletions: Number(item.deletions || 0),
         changes: Number(item.changes || 0),
-        ...(typeof item.patch === 'string' ? { patch: redactSourceSecrets(item.patch).slice(0, 1800) } : {}),
+        ...(typeof item.patch === 'string' ? { patch: redactSourceSecrets(item.patch).slice(0, 800) } : {}),
       })),
-      files_truncated: files.length > 20,
+      files_truncated: files.length > 10,
     };
   }
 
