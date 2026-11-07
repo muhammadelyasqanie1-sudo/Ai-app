@@ -7,6 +7,7 @@ import { buildJarvisLocalCommandPrompt, extractJarvisLocalCommand, buildJarvisNe
 import { downloadNeedle3Model, listOfflineDownloads, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
 import { generateNativeLlamaResponse, getNativeLlamaRuntimeInfo, loadNativeLlamaModel, unloadNativeLlamaModel, type NativeLlamaRuntimeInfo } from '../../lib/offlineLlamaRuntime';
 import { generateNativeNeedleResponse, getNativeNeedleRuntimeInfo, loadNativeNeedleModel, NEEDLE3_MODEL_ID, type NativeNeedleRuntimeInfo } from '../../lib/offlineNeedleRuntime';
+import { AfgOpenJarvisPanel } from './AfgOpenJarvisPanel';
 
 const actions: Array<{ id: JarvisAction; en: string; fa: string }> = [
   { id: 'back', en: 'Back', fa: 'بازگشت' }, { id: 'home', en: 'Home', fa: 'صفحه اصلی' },
@@ -261,6 +262,7 @@ export function AfgJarvisView({ language }: { language: Language }) {
       <div className="relative flex items-center gap-4"><div className="grid h-16 w-16 place-items-center rounded-2xl border border-cyan-300/40 bg-cyan-300/10 text-3xl text-cyan-200">◉</div>
         <div><p className="text-xs font-bold tracking-[.25em] text-cyan-300">AFG AI</p><h1 className="mt-1 text-2xl font-black text-white">{label('AFG AI assistant', 'دستیار AFG AI')}</h1><p className="mt-1 text-sm text-slate-300">{label('Local Android controls with your explicit approval.', 'کنترل محلی اندروید با تأیید مستقیم شما.')}</p></div></div>
     </header>
+    <AfgOpenJarvisPanel language={language} />
     {!native && <section className={card}><p className="font-semibold text-amber-300">{label('Android app required', 'نسخه اندروید لازم است')}</p><p className="mt-2 text-sm text-slate-300">{label('Device-control features are available only in the installed AFG AI Android app, not in a browser tab.', 'قابلیت‌های کنترل دستگاه فقط در نسخه نصب‌شده اندروید AFG AI فعال‌اند، نه در مرورگر.')}</p></section>}
     {native && <>
       <section className={card}>

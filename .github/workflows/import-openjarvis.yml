@@ -1,0 +1,76 @@
+name: Import complete OpenJarvis source
+
+on:
+  push:
+    branches:
+      - feat/openjarvis-full-integration
+    paths:
+      - .github/workflows/import-openjarvis.yml
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "OpenJarvis branch, tag, or commit to import"
+        required: true
+        default: "c5a7766e04d4d7dc114d3182bd07914f45a48b2d"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: openjarvis-import-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  import:
+    if: github.ref == 'refs/heads/feat/openjarvis-full-integration'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout AFG AI integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/openjarvis-full-integration
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Checkout the complete upstream repository
+        id: upstream
+        uses: actions/checkout@v4
+        with:
+          repository: open-jarvis/OpenJarvis
+          ref: ${{ inputs.upstream_ref || 'c5a7766e04d4d7dc114d3182bd07914f45a48b2d' }}
+          path: vendor/OpenJarvis
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Record exact upstream revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf vendor/OpenJarvis/.git
+          cat > vendor/OpenJarvis/UPSTREAM_LOCK.json <<'EOF'
+          {
+            "repository": "https://github.com/open-jarvis/OpenJarvis",
+            "commit": "${{ steps.upstream.outputs.commit }}",
+            "license": "Apache-2.0",
+            "imported_by": "AFG AI"
+          }
+          EOF
+
+      - name: Commit full source snapshot to integration branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_NAME}" != "feat/openjarvis-full-integration" ]]; then
+            echo "Refusing to write outside the dedicated integration branch."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f vendor/OpenJarvis
+          if git diff --cached --quiet; then
+            echo "The pinned upstream snapshot is already present."
+            exit 0
+          fi
+          git commit -m "chore: import complete OpenJarvis source snapshot"
+          git push origin HEAD:feat/openjarvis-full-integration
