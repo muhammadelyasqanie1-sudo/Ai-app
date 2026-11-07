@@ -1,6 +1,11 @@
 name: Import complete OpenJarvis source
 
 on:
+  push:
+    branches:
+      - feat/openjarvis-full-integration
+    paths:
+      - .github/workflows/import-openjarvis.yml
   workflow_dispatch:
     inputs:
       upstream_ref:
@@ -33,7 +38,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: open-jarvis/OpenJarvis
-          ref: ${{ inputs.upstream_ref }}
+          ref: ${{ inputs.upstream_ref || 'c5a7766e04d4d7dc114d3182bd07914f45a48b2d' }}
           path: vendor/OpenJarvis
           fetch-depth: 1
           persist-credentials: false
@@ -54,8 +59,6 @@ jobs:
 
       - name: Commit full source snapshot to integration branch
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           if [[ "${GITHUB_REF_NAME}" != "feat/openjarvis-full-integration" ]]; then
