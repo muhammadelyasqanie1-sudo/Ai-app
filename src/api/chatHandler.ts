@@ -412,7 +412,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
 
     const latestUserPrompt = [...upstreamMessages].reverse().find((message) => message.role === 'user')?.content || '';
     const githubRequested = /github|git hub|گیت.?هاب|مخزن گیت/i.test(latestUserPrompt);
-    const webSearchRequested = /\b(web search|search the web|browse the web|look up online|internet search|online research|find sources|latest news)\b|جستجوی وب|جست‌وجوی وب|جستجو در وب|جست‌وجو در وب|در اینترنت جستجو|در وب جستجو|وبگردی|منابع آنلاین|جستجوی اینترنتی|جست‌وجوی اینترنتی/i.test(latestUserPrompt);
+    const webSearchRequested = /\b(web search|search the web|browse the web|look up online|internet search|online research|find sources|latest news)\b|جستجوی وب|جست‌وجوی وب|جستجو در وب|جست‌وجو در وب|در اینترنت جستجو|در وب جستجو|وبگردی|منابع آنلاین|جستجوی اینترنتی|جست‌وجوی اینترنتی|آخرین اخبار|جدیدترین اخبار|اخبار امروز|اطلاعات به‌روز|در گوگل جستجو|سرچ کن|جستجو کن|جست‌وجو کن/i.test(latestUserPrompt);
     // Do not force ordinary chat models to support function calling. Only attach
     // external tools when the latest user request actually asks for an integration action.
     const externalToolRequested = githubRequested || webSearchRequested ||
@@ -491,7 +491,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       const github = callName.startsWith('github_');
       const webSearch = callName === 'tavily_search';
       const observedRecord = observed && typeof observed === 'object' ? observed as Record<string,unknown> : {};
-      const repo = github && typeof input.owner==='string' && typeof input.repo==='string' ? (input.owner+'/'+input.repo).replace(/[^a-zA-Z0-9_.\\/-]/g,'').slice(0,180) : undefined;
+      const repo = github && typeof input.owner==='string' && typeof input.repo==='string' ? (input.owner+'/'+input.repo).replace(/[^a-zA-Z0-9_.\/-]/g,'').slice(0,180) : undefined;
       const url = findUrl(observed) || findUrl(input);
       const targetPath = typeof input.path === 'string' ? input.path.replace(/[^a-zA-Z0-9_.@/-]/g,'').slice(0,160) : undefined;
       const isDari = body.language === 'dari';
@@ -571,7 +571,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
                 ? await executeRemoteMcpTool(requestUserId,call.function.name,args)
                 : call.function.name.startsWith('github_')
                   ? await executeGitHubTool(requestUserId,call.function.name,args)
-                  : await executeUserApiTool(requestUserId,call.function.name,args)
+                  : await executeUserApiTool(requestUserId,call.function.name,args);
             const serialized=JSON.stringify(result);
             toolMessages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:serialized.slice(0,16_000)});
             estimatedInputTokens+=Math.ceil(serialized.length/4);
