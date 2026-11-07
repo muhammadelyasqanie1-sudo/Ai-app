@@ -20,7 +20,7 @@ async function request(path: string, init: RequestInit = {}) {
 type DocumentRow = { id: string; title: string; sourceLabel: string; characterCount: number; updatedAt: string };
 type TrainingRow = { id: string; prompt: string; idealAnswer: string; createdAt: string };
 type WorldStatus = { sources?: number; documents?: number; repositories?: number; releases?: number; codeFiles?: number; extractedSymbols?: number; indexedLanguages?: number; fullTextSearch?: boolean; vectorSearch?: boolean; modelWeightTraining?: boolean };
-type CodeFileRow = { id: string; repository: string; path: string; language: string; url: string; license: string; symbols: Array<{name:string;kind:string;approximate?:boolean}>; dependencies: Record<string,unknown>; excerpt: string };
+type CodeFileRow = { id: string; repository: string; path: string; language: string; url: string; license: string; symbols: Array<{name:string;kind:string;line?:number;approximate?:boolean}>; dependencies: Record<string,unknown>; excerpt: string };
 
 export const AfgIntelligencePanel: React.FC<{ language: string }> = ({ language }) => {
   const dari = language === 'dari';
@@ -159,7 +159,7 @@ export const AfgIntelligencePanel: React.FC<{ language: string }> = ({ language 
       <div className="space-y-2">
         {codeFiles.map(file=><article key={file.id} className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
           <div className="flex items-start gap-2"><GitBranch className="mt-0.5 h-4 w-4 shrink-0 text-violet-300"/><div className="min-w-0 flex-1"><p className="break-all text-xs font-bold text-white">{file.repository}</p><p className="break-all text-[11px] text-cyan-200">{file.path}</p><p className="mt-1 text-[10px] text-slate-500">{file.language} · {file.license||'unknown license'}</p></div></div>
-          {Array.isArray(file.symbols)&&file.symbols.length>0&&<p className="mt-2 break-words text-[10px] leading-5 text-slate-400">{file.symbols.slice(0,12).map(symbol=>symbol.kind+': '+symbol.name).join(' · ')}{file.symbols.some(symbol=>symbol.approximate)?' · approximate':''}</p>}
+          {Array.isArray(file.symbols)&&file.symbols.length>0&&<p className="mt-2 break-words text-[10px] leading-5 text-slate-400">{file.symbols.slice(0,12).map(symbol=>symbol.kind+': '+symbol.name+(symbol.line?' (L'+symbol.line+')':'')).join(' · ')}{file.symbols.some(symbol=>symbol.approximate)?' · approximate':''}</p>}
           {file.dependencies&&Object.keys(file.dependencies).length>0&&<p className="mt-1 text-[10px] text-violet-200">{dari?'فایل وابستگی':'Dependency manifest'}: {String(file.dependencies.manifest||'manifest')}</p>}
           <a href={file.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[10px] font-semibold text-cyan-300 underline">{dari?'مشاهده منبع در GitHub':'View source on GitHub'}</a>
         </article>)}
