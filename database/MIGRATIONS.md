@@ -115,3 +115,8 @@ Migration `0039_programming_release_tracking.sql` adds structured metadata for d
 ## Multilingual programming research discovery
 
 Migration `0040_multilingual_programming_discovery.sql` adds language-specific search phrases to each programming topic for Dari, Persian and Pashto. The research worker creates separate idempotent jobs per language and stores search excerpts with the corresponding language label. GitHub repository documentation retains its own English label where appropriate. Apply after migration 0039; no model translation or weights training is performed.
+
+
+## Public programming source-code index
+
+Migration `0041_programming_source_code_index.sql` adds a bounded, repository-linked index of public source files, approximate extracted symbol names, and selected dependency manifests. The worker applies extension, path, file-size and per-run byte limits; it does not clone repositories or execute/install indexed code. Symbol extraction is heuristic and must not be treated as a complete syntax tree. Dependency metadata reflects manifest declarations, not resolved or security-audited dependency graphs. Apply after migration 0040 and backup/recovery review. The authenticated `GET /api/intelligence/world/code` endpoint searches indexed paths, source text and extracted symbol names.
