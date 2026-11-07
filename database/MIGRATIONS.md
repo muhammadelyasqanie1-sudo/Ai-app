@@ -152,4 +152,4 @@ The source classifier now recognizes a broader set of official developer documen
 
 ## Coding-agent research priority
 
-Migration `0046_prioritize_coding_agent_research.sql` raises `coding-agents` to priority 12 and elevates open-source, browser automation, compiler tooling, advanced testing and architecture topics to priority 10. This makes repository-aware coding-agent research the first scheduled learning track while preserving the rest of the programming curriculum.
+Migration `0046_prioritize_coding_agent_research.sql` sets `coding-agents` to the maximum priority 10 and lowers generic AI/ML plus open-source, browser automation, compiler tooling, advanced testing and architecture topics to priority 9. This makes repository-aware coding-agent research the first scheduled learning track while preserving the rest of the programming curriculum.
