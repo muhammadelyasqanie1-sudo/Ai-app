@@ -61,9 +61,15 @@ export const AfgAuthGate: React.FC<Props> = ({ language, onContinueGuest, onAuth
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ticket }),
         });
+        const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
-          const payload = await response.json().catch(() => ({}));
           throw new Error(typeof payload.error === 'string' ? payload.error : t.error);
+        }
+        // The API is cross-origin from Capacitor's WebView, so its CSRF cookie
+        // is not readable through document.cookie. Persist the matching token
+        // returned by the one-time mobile session exchange.
+        if (typeof payload.csrfToken === 'string' && payload.csrfToken.length >= 32) {
+          sessionStorage.setItem('afg_csrf_token', payload.csrfToken);
         }
         if (active) onAuthenticated();
       } catch (e) { if (active) setError(e instanceof Error ? e.message : t.error); }
