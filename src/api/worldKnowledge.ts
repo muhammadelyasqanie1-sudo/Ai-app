@@ -148,7 +148,7 @@ export async function handleWorldKnowledgeApi(req: IncomingMessage, res: ServerR
   if (pathname === '/api/intelligence/world/status' && req.method === 'GET') {
     const [sources, documents, repositories, releases] = await Promise.all([
       pool.query('SELECT count(*)::int AS total,count(*) FILTER (WHERE enabled=true)::int AS enabled FROM world_knowledge_sources'),
-      pool.query('SELECT count(*)::int AS total,count(DISTINCT topic)::int AS topics FROM world_knowledge_documents'),
+      pool.query('SELECT count(*)::int AS total,count(DISTINCT topic)::int AS topics,count(DISTINCT language)::int AS languages FROM world_knowledge_documents'),
       pool.query('SELECT count(*)::int AS total,count(*) FILTER (WHERE last_checked_at >= now()-interval \'7 days\')::int AS checked_recently FROM world_knowledge_repositories'),
       pool.query('SELECT count(*)::int AS total FROM world_knowledge_releases WHERE draft=false'),
     ]);
@@ -160,6 +160,7 @@ export async function handleWorldKnowledgeApi(req: IncomingMessage, res: ServerR
       enabledSources: Number(sources.rows[0]?.enabled || 0),
       documents: Number(documents.rows[0]?.total || 0),
       topics: Number(documents.rows[0]?.topics || 0),
+      indexedLanguages: Number(documents.rows[0]?.languages || 0),
       repositories: Number(repositories.rows[0]?.total || 0),
       repositoriesCheckedRecently: Number(repositories.rows[0]?.checked_recently || 0),
       releases: Number(releases.rows[0]?.total || 0),
