@@ -360,7 +360,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
 
     if (req.method === 'GET' && pathname === '/api/ready') {
       const database = await checkDatabase();
-      const ready = database.configured && database.connected;
+      const ready = database.configured && database.connected && database.schemaReady === true;
       sendJson(res, ready ? 200 : 503, {
         status: ready ? 'ready' : 'degraded',
         database,

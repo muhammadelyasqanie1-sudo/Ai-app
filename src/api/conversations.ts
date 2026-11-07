@@ -18,7 +18,7 @@ const messageSchema = z.object({
   role: z.enum(['user','assistant']),
   content: z.string().min(1).max(50_000),
   model: z.string().trim().min(1).max(300).nullable().optional(),
-  status: z.enum(['complete','failed']).optional(),
+  status: z.enum(['complete','failed','cancelled']).optional(),
   clientMessageId: z.string().uuid().optional(),
 }).strict();
 
@@ -46,14 +46,18 @@ export async function handleConversationsApi(req: IncomingMessage, res: ServerRe
   if (pathname === '/api/conversations' && req.method === 'GET') {
     const url = new URL(req.url || '/', 'http://localhost');
     const includeArchived = url.searchParams.get('archived') === 'true';
+    const pagination = z.object({ limit: z.coerce.number().int().min(1).max(200), offset: z.coerce.number().int().min(0).max(100000), search: z.string().max(180) }).safeParse({ limit: url.searchParams.get('limit') || 200, offset: url.searchParams.get('offset') || 0, search: url.searchParams.get('search') || '' });
+    if (!pagination.success) { reply(res,400,{error:'Invalid pagination or search parameters.'}); return true; }
+    const { limit, offset, search } = pagination.data;
     const result = await pool.query(
       `SELECT c.id,c.title,c.model,c.provider,c.created_at AS "createdAt",c.updated_at AS "updatedAt",c.archived_at AS "archivedAt",
               (SELECT m.content FROM messages m WHERE m.conversation_id=c.id ORDER BY m.created_at DESC LIMIT 1) AS "lastMessage"
          FROM conversations c WHERE c.user_id=$1 AND ($2::boolean OR c.archived_at IS NULL)
-        ORDER BY c.updated_at DESC LIMIT 200`,
-      [user.id,includeArchived],
+        AND ($3::text = '' OR strpos(lower(c.title), lower($3)) > 0)
+        ORDER BY c.updated_at DESC,c.id DESC LIMIT $4 OFFSET $5`,
+      [user.id,includeArchived,search,limit + 1,offset],
     );
-    reply(res,200,{conversations:result.rows}); return true;
+    reply(res,200,{conversations:result.rows.slice(0,limit),nextOffset:result.rows.length > limit ? offset + limit : null}); return true;
   }
 
   if (pathname === '/api/conversations' && req.method === 'POST') {
@@ -106,6 +110,8 @@ export async function handleConversationsApi(req: IncomingMessage, res: ServerRe
     let created = true;
     try {
       await client.query('BEGIN');
+      const owner = await client.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2 FOR UPDATE', [conversationId,user.id]);
+      if (!owner.rows.length) { await client.query('ROLLBACK'); reply(res,404,{error:'Conversation not found.'}); return true; }
       const result = await client.query(
         `INSERT INTO messages(id,conversation_id,role,content,model,status)
          VALUES(COALESCE($1::uuid,gen_random_uuid()),$2,$3,$4,$5,$6)
