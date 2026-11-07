@@ -34,4 +34,4 @@ Apply additive migration `0035_hybrid_intelligence_core.sql` using the repositor
 - No embeddings provider is configured or invoked; this implementation does not pretend vector search exists.
 - Knowledge ingestion is plain text only. PDF/image extraction and file attachments remain disabled until their secure pipeline is complete.
 - There is no training job runner, GPU worker, model registry for fine-tuned artifacts, evaluation suite or automatic model promotion.
-- No dedicated UI screens have been added in this backend milestone; the APIs are ready for a localized Knowledge and Training workspace.
+- A localized Knowledge and Training workspace is available under Settings → Your Assistant → AFG AI Intelligence. It supports plain-text knowledge management, explicit-consent training examples, deletion and JSONL export.
