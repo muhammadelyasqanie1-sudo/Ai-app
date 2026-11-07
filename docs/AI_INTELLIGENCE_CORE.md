@@ -115,3 +115,8 @@ Authenticated read endpoints expose the tracked corpus:
 - `GET /api/intelligence/world/status` now includes repository and release counts.
 
 All repository/release data is public-source reference material. Stars and push dates are metadata, not quality guarantees; prereleases are labeled, licenses are recorded as declared by GitHub, and no code is executed. The worker still needs migrations 0035–0039, server-side `TAVILY_API_KEY`, and a scheduler to run periodically. Optional `GITHUB_TOKEN` improves API quota headroom. No migration, worker run, build, test, or deployment has been performed in this milestone.
+
+
+## Multilingual programming discovery — milestone 7
+
+Migration `0040_multilingual_programming_discovery.sql` adds language-specific search phrases to the programming topic catalog for Dari, Persian and Pashto. The worker now queues those queries separately with language-aware idempotency keys and records the language of each search-result excerpt. English remains the language label for English GitHub README/release documentation; the language of a search query is not incorrectly used to relabel source documents. This improves discovery coverage but does not translate sources, guarantee search-provider recall, or provide full Dari/Pashto stemming. Apply migration 0040 after 0039.
