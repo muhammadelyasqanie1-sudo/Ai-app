@@ -46,9 +46,10 @@ This is a prompt-level quality layer. It does **not** by itself add a code execu
 
 When a signed-in user has a verified GitHub connection and asks AFG AI to inspect, review, debug, or change a repository, the chat API can expose the user-scoped GitHub tools. Repository-related wording in English and Dari can trigger this workflow without requiring the user to say "GitHub" explicitly.
 
-- `github_get_repository_tree` resolves the selected ref and returns a bounded list of tracked paths and file sizes (maximum 180 entries per call). It does not download every file; the assistant should select relevant paths and then use `github_get_file`.
-- `github_compare_branches` compares two refs and returns commit summaries, ahead/behind counts, file-change statistics, and bounded/redacted patch excerpts for up to ten changed files.
+- `github_get_repository_tree` resolves the selected ref and returns a bounded list of tracked paths and file sizes (default 80, maximum 120 entries per call); an optional `path_prefix` lets the assistant inspect a focused subtree. It does not download every file; the assistant should select relevant paths and then use `github_get_file`.
+- `github_compare_branches` compares two refs and returns commit summaries, ahead/behind counts, file-change statistics, and bounded/redacted patch excerpts for up to eight changed files.
 - Existing `github_search_code` and `github_get_file` support targeted code discovery and inspection.
+- `github_commit_files` creates up to twelve text-file blobs, a new Git tree and a single commit, then advances the existing working branch without force-pushing. This keeps related source changes together and avoids a sequence of independent file commits; the combined text payload is capped at 100 KB.
 - Existing write operations remain branch-scoped: the assistant must create/use a non-default working branch before committing file changes. Pull requests are created only when the user explicitly asks.
 
 These tools improve repository understanding and review, but they are not a code execution sandbox. The hosted terminal remains read-only; running builds, tests, application code, or deployments is not enabled by this milestone.
