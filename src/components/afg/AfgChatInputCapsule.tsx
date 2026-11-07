@@ -88,19 +88,35 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const emojiButtonRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  // Close popup menu when clicking outside
+  // Dismiss composer popovers on outside touch/click and Escape.
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsMenuOpen(false);
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (menuRef.current && !menuRef.current.contains(target)) setIsMenuOpen(false);
+      if (showEmojiPicker &&
+          !emojiPickerRef.current?.contains(target) &&
+          !emojiButtonRef.current?.contains(target)) {
+        setShowEmojiPicker(false);
       }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setIsMenuOpen(false);
+      setShowEmojiPicker(false);
+      setLinkInputOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showEmojiPicker, isMenuOpen, linkInputOpen]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -279,7 +295,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
 
       {/* Emoji Picker Popover */}
       {showEmojiPicker && (
-        <div className="absolute -top-12 left-14 z-40 flex items-center gap-1 p-1.5 rounded-xl bg-slate-900/95 border border-cyan-600/40 backdrop-blur-md shadow-xl">
+        <div ref={emojiPickerRef} className="absolute -top-12 left-14 z-40 flex items-center gap-1 p-1.5 rounded-xl bg-slate-900/95 border border-cyan-600/40 backdrop-blur-md shadow-xl">
           {quickEmojis.map((emoji) => (
             <button
               key={emoji}
@@ -341,8 +357,10 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
 
         {/* Emoji Button */}
         <button
+          ref={emojiButtonRef}
           type="button"
           onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+          aria-expanded={showEmojiPicker}
           className="p-2 text-slate-400 hover:text-amber-300 hover:scale-110 transition-all"
           title="Emoji"
           aria-label="Add Emoji"
