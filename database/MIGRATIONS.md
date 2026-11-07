@@ -110,3 +110,8 @@ The worker command `npm run knowledge:worker` now inspects public GitHub reposit
 ## Programming repository and release tracking
 
 Migration `0039_programming_release_tracking.sql` adds structured metadata for discovered public GitHub repositories and a normalized release-history table. The bounded knowledge worker records repository metadata, the declared SPDX license, last push time and up to three latest published releases, including release-note text and canonical GitHub URLs. Release notes with sufficient content are indexed in the knowledge corpus with publication dates. It does not clone or execute repositories. Apply migration 0039 after 0038 and only after backup/recovery review. The worker's recurring seed-query refresh interval is seven days.
+
+
+## Multilingual programming research discovery
+
+Migration `0040_multilingual_programming_discovery.sql` adds language-specific search phrases to each programming topic for Dari, Persian and Pashto. The research worker creates separate idempotent jobs per language and stores search excerpts with the corresponding language label. GitHub repository documentation retains its own English label where appropriate. Apply after migration 0039; no model translation or weights training is performed.
