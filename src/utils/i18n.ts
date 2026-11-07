@@ -53,5 +53,5 @@ export function applyDocumentLocale(language: Language): void {
     indonesian:'AFG AI — Asisten Cerdas Anda', portuguese:'AFG AI — Seu assistente inteligente',
     japanese:'AFG AI — スマートアシスタント', korean:'AFG AI — 스마트 어시스턴트',
   };
-  document.title = titles[language].replace('AFG AI', 'JARVIS');
+  document.title = titles[language];
 }

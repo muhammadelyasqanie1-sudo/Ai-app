@@ -110,6 +110,7 @@ export default function App() {
   const [agentActivities, setAgentActivities] = useState<Array<{id:string;name:string;label:string;detail?:string;url?:string;sources?:Array<{title:string;url:string;snippet?:string;publishedDate?:string}>;status:'running'|'completed'|'failed';timestamp:number}>>([]);
   const [currentSessionId, setCurrentSessionId] = useState(() => `chat-${Date.now()}`);
   const [isLoading, setIsLoading] = useState(false);
+  const [audioListening, setAudioListening] = useState(false);
   const activeChatAbortRef = useRef<AbortController | null>(null);
   const serverConversationRef = useRef<string | null>(null);
   const wasAuthenticatedRef = useRef(false);
@@ -180,6 +181,8 @@ export default function App() {
       document.documentElement.classList.toggle('dark', resolved === 'dark' || resolved === 'neon');
       document.documentElement.classList.toggle('light', resolved === 'light');
       document.documentElement.classList.toggle('neon', resolved === 'neon');
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolved === 'light' ? '#f2f5fb' : '#05060a');
+      document.querySelector('link[rel="icon"]')?.setAttribute('href', resolved === 'light' ? '/afg-ai-mark-light.svg' : '/afg-ai-icon.svg');
     };
     applyTheme();
     localStorage.setItem('afg_theme', theme);
@@ -416,7 +419,7 @@ export default function App() {
           if (!active) return;
           const restored: AfgMessage[] = (Array.isArray(payload?.messages) ? payload.messages : [])
             .filter((item: any) => item?.role === 'user' || item?.role === 'assistant')
-            .map((item: any) => ({ id:String(item.id), role:item.role, content:String(item.content || ''), timestamp:item.createdAt ? new Date(item.createdAt).getTime() : Date.now(), isError:item.status === 'failed' || item.status === 'cancelled' }));
+            .map((item: any) => ({ id:String(item.id), role:item.role, content:String(item.content || ''), timestamp:item.createdAt ? new Date(item.createdAt).getTime() : Date.now(), isError:item.status === 'failed' || item.status === 'cancelled', isCancelled:item.status === 'cancelled' }));
           setMessages(restored);
           setCurrentSessionId(String(latest.id));
           serverConversationRef.current = String(latest.id);
@@ -709,7 +712,7 @@ export default function App() {
 
       if (abortController.signal.aborted) {
         const cancelledContent = fullContent.trim() || 'Generation cancelled.';
-        setMessages(prev => prev.map(message => message.id === assistantId ? { ...message, content: cancelledContent, isStreaming: false, isError: true, retryable: true } : message));
+        setMessages(prev => prev.map(message => message.id === assistantId ? { ...message, content: cancelledContent, isStreaming: false, isError: true, isCancelled: true, retryable: true } : message));
         if (persistedConversationId && userMessagePersisted) {
           try { await persistServerMessage(persistedConversationId, 'assistant', cancelledContent, 'cancelled', assistantId); }
           catch { setProfileLoadError('The cancelled response could not be saved.'); }
@@ -818,7 +821,9 @@ export default function App() {
         capabilities={capabilitySnapshot} models={modelOptions} selectedModel={selectedModel}
         onModel={handleSelectModel} onPrompt={handleStartChatWithPrompt} onNewChat={handleNewChat}
         onStop={handleStopGeneration} onSignIn={() => setHasEnteredApp(false)} theme={theme} onTheme={handleToggleTheme}
-        activeTasks={isLoading ? 1 : 0}>
+        activeTasks={isLoading ? 1 : 0} activities={agentActivities} recording={audioListening}
+        streaming={isLoading && !!messages.at(-1)?.content && !messages.at(-1)?.isError}
+        failed={!isLoading && !!messages.at(-1)?.isError && !messages.at(-1)?.isCancelled} cancelled={!isLoading && !!messages.at(-1)?.isCancelled} onSetTheme={setTheme} onLanguage={handleSetLanguage}>
       {profileLoadError && <div role="alert" className="mx-auto mt-2 w-[min(94%,48rem)] rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
         {profileLoadError}
         <button type="button" className="ms-3 underline font-semibold" onClick={() => { setChatLoadAttempt((value) => value + 1); window.dispatchEvent(new Event('afg-auth-change')); }}>{language === 'dari' ? 'تلاش دوباره' : 'Retry'}</button>
@@ -848,6 +853,7 @@ export default function App() {
           <AfgChatView
             messages={messages}
             agentActivities={agentActivities}
+            onRecordingChange={setAudioListening}
             onSendMessage={handleSendMessage}
             onStop={handleStopGeneration}
             onRetryMessage={handleRetryMessage}

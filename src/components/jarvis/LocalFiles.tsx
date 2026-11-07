@@ -1,6 +1,10 @@
+import { formatFileSize, formatLocalizedNumber } from "../../utils/i18n";
+import type { Language } from "../../types/afg";
+import { workspaceCopy } from "./workspaceCopy";
 import { useRef, useState } from "react";
 import { FileText, Upload, X, Search, ShieldCheck } from "lucide-react";
-export function LocalFiles() {
+export function LocalFiles({ language }: { language: Language }) {
+  const w = workspaceCopy(language);
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<{
     name: string;
@@ -14,7 +18,7 @@ export function LocalFiles() {
     if (!selected) return;
     setError("");
     if (selected.size > 2 * 1024 * 1024) {
-      setError("Choose a text document smaller than 2 MB.");
+      setError(w("Choose a text document smaller than 2 MB."));
       return;
     }
     if (
@@ -23,7 +27,9 @@ export function LocalFiles() {
       )
     ) {
       setError(
-        "This local viewer supports text, Markdown, CSV, JSON, XML, and source code. PDF and Office extraction require another tool.",
+        w(
+          "This local viewer supports text, Markdown, CSV, JSON, XML, and source code. PDF and Office extraction require another tool.",
+        ),
       );
       return;
     }
@@ -34,7 +40,7 @@ export function LocalFiles() {
       setFile({ name: selected.name, bytes: selected.size, text });
       setQuery("");
     } catch {
-      setError("The document could not be read as text.");
+      setError(w("The document could not be read as text."));
     } finally {
       setBusy(false);
       if (input.current) input.current.value = "";
@@ -48,11 +54,12 @@ export function LocalFiles() {
     : lines;
   return (
     <section className="j-local-page">
-      <div className="j-eyebrow">LOCAL WORKSPACE</div>
-      <h1>Your files. Your device.</h1>
+      <div className="j-eyebrow">{w("LOCAL WORKSPACE")}</div>
+      <h1>{w("Your files. Your device.")}</h1>
       <p className="j-muted">
-        Open and search a document locally. Nothing is uploaded or sent to an AI
-        provider.
+        {w(
+          "Open and search a document locally. Nothing is uploaded or sent to an AI provider.",
+        )}
       </p>
       <input
         ref={input}
@@ -67,7 +74,7 @@ export function LocalFiles() {
         disabled={busy}
       >
         <Upload size={16} />
-        {busy ? "Reading document…" : "Open a document"}
+        {busy ? w("Reading document…") : w("Open a document")}
       </button>
       {error && (
         <p role="alert" className="j-error">
@@ -79,32 +86,36 @@ export function LocalFiles() {
           <header>
             <FileText size={18} />
             <strong>{file.name}</strong>
-            <span>{(file.bytes / 1024).toFixed(1)} KB</span>
-            <button aria-label="Close document" onClick={() => setFile(null)}>
+            <span>{formatFileSize(file.bytes, language)}</span>
+            <button
+              aria-label={w("Close document")}
+              onClick={() => setFile(null)}
+            >
               <X size={18} />
             </button>
           </header>
           <label className="j-search">
             <Search size={16} />
             <input
-              aria-label="Find in document"
+              aria-label={w("Find in document")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Find in document"
+              placeholder={w("Find in document")}
             />
           </label>
           <p className="j-muted">
-            {matches.length} {query ? "matching lines" : "lines"}
+            {formatLocalizedNumber(matches.length, language)}{" "}
+            {query ? w("matching lines") : w("lines")}
           </p>
-          <pre>{matches.join("\n") || "No matching lines."}</pre>
+          <pre>{matches.join("\n") || w("No matching lines.")}</pre>
         </div>
       ) : (
         <div className="j-empty">
           <FileText size={38} />
-          <h3>A little context goes a long way.</h3>
-          <p>Open a text document to inspect its contents.</p>
+          <h3>{w("A little context goes a long way.")}</h3>
+          <p>{w("Open a text document to inspect its contents.")}</p>
           <span>
-            <ShieldCheck size={14} /> Local processing · 2 MB maximum
+            <ShieldCheck size={14} /> {w("Local processing · 2 MB maximum")}
           </span>
         </div>
       )}

@@ -4,8 +4,8 @@
   "description": "AFG AI offline-capable assistant",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#060b18",
-  "theme_color": "#060b18",
+  "background_color": "#05060a",
+  "theme_color": "#05060a",
   "orientation": "portrait-primary",
   "icons": [
     {

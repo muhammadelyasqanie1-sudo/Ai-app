@@ -40,6 +40,7 @@ interface AfgChatViewProps {
   onBranchMessage: (messageId: string) => void;
   onDeleteMessage: (messageId: string) => void;
   isLoading: boolean;
+  onRecordingChange?: (active: boolean) => void;
   isInitialLoading?: boolean;
   language: Language;
   user: UserProfile;
@@ -68,6 +69,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   onBranchMessage,
   onDeleteMessage,
   isLoading,
+  onRecordingChange,
   isInitialLoading = false,
   language,
   user,
@@ -188,10 +190,10 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
             <Bot className="w-4 h-4 text-cyan-400" />
           </div>
           <div>
-            <h2 className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+            <h1 className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
               <span>{t.chatTitle}</span>
-              <span className={`w-2 h-2 rounded-full ${capabilities.chat ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" : "bg-amber-300"}`} aria-label={capabilities.chat ? (language === "dari" ? "مدل تأییدشده فعال" : "Verified chat model available") : (language === "dari" ? "مدل تأییدشده موجود نیست" : "No verified chat model")} />
-            </h2>
+              <span className={`w-2 h-2 rounded-full ${capabilities.chat ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" : "bg-amber-300"}`} role="img" aria-label={capabilities.chat ? (language === "dari" ? "مدل تأییدشده فعال" : "Verified chat model available") : (language === "dari" ? "مدل تأییدشده موجود نیست" : "No verified chat model")} />
+            </h1>
             <p className="text-[10px] text-cyan-400/80">
               {t.chatSubtitle}
             </p>
@@ -453,7 +455,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
       <div className="py-2">
         <AfgChatInputCapsule
           onSendMessage={onSendMessage}
-          disabled={isLoading}
+          disabled={isInitialLoading}
           language={language}
           availableModels={availableModels}
           modelOptions={modelOptions}
@@ -463,6 +465,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
           speechToTextAvailable={capabilities['speech-to-text'] && systemFeatures.voice_stt_enabled}
           fileUploadEnabled={systemFeatures.file_upload_enabled}
           isLoading={isLoading}
+          onRecordingChange={onRecordingChange}
           onStop={onStop}
           thinkingLevel={thinkingLevel}
           planMode={planMode}

@@ -88,10 +88,12 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
   const loadSessionMessages = async (session: AfgChatSession): Promise<AfgChatSession> => {
     if (!isAuthenticated || session.id.startsWith('chat-')) return session;
     const response = await apiFetch('/api/conversations/' + encodeURIComponent(session.id) + '/messages');
-    const payload = await response.json() as { messages?: Array<{ id: string; role: 'user' | 'assistant'; content: string; createdAt: string }> };
+    const payload = await response.json() as { messages?: Array<{ id: string; role: 'user' | 'assistant'; content: string; createdAt: string; status?: string }> };
     const loaded = (payload.messages || []).map((message) => ({
       id: message.id,
       role: message.role,
+      isError: message.status === 'failed' || message.status === 'cancelled',
+      isCancelled: message.status === 'cancelled',
       content: message.content,
       timestamp: new Date(message.createdAt).getTime(),
     }));

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   Activity,
   ArrowDownToLine,
@@ -50,7 +50,26 @@ import type {
 import { navigationCopy } from "./copy";
 import { useCommandStatus, useLocalTasks } from "./useCommandCenter";
 import { LocalFiles } from "./LocalFiles";
+import {
+  resolveCoreState,
+  useExperience,
+  type ToolActivity,
+} from "./experience";
+import { workspaceCopy } from "./workspaceCopy";
+import { experienceCopy } from "./experienceCopy";
+import { formatLocalizedNumber, getIntlLocale } from "../../utils/i18n";
 import "./jarvis.css";
+import "./intelligence.css";
+const IntelligenceCore = lazy(() => import("./IntelligenceCore"));
+const ExperiencePanel = lazy(() => import("./ExperiencePanel"));
+const BrandMark = () => (
+  <svg className="afg-brand-symbol" viewBox="0 0 32 32" aria-hidden="true">
+    <ellipse cx="16" cy="16" rx="14" ry="6" transform="rotate(-32 16 16)" />
+    <ellipse cx="16" cy="16" rx="14" ry="6" transform="rotate(60 16 16)" />
+    <circle cx="16" cy="16" r="4" />
+    <path d="M12 16h8M16 12v8" />
+  </svg>
+);
 
 type Props = {
   children: React.ReactNode;
@@ -69,6 +88,13 @@ type Props = {
   theme: Theme;
   onTheme: () => void;
   activeTasks: number;
+  activities: ToolActivity[];
+  streaming: boolean;
+  recording: boolean;
+  failed: boolean;
+  cancelled: boolean;
+  onSetTheme: (theme: Theme) => void;
+  onLanguage: (language: Language) => void;
 };
 const navItems = [
   ["home", LayoutDashboard],
@@ -99,6 +125,27 @@ const localTabs = [
 
 export function JarvisShell(p: Props) {
   const labels = navigationCopy(p.language);
+  const visual = experienceCopy(p.language);
+  const w = workspaceCopy(p.language);
+  const n = (value: number) => formatLocalizedNumber(value, p.language);
+  const experience = useExperience();
+  const [experienceMode, setExperienceMode] = useState<
+    "intro" | "settings" | null
+  >(() => {
+    try {
+      return localStorage.getItem("afg_intro_seen") === "true" ? null : "intro";
+    } catch {
+      return null;
+    }
+  });
+  const closeExperience = () => {
+    setExperienceMode(null);
+    try {
+      localStorage.setItem("afg_intro_seen", "true");
+    } catch {
+      /* In-memory dismissal remains available. */
+    }
+  };
   const status = useCommandStatus();
   const taskStore = useLocalTasks(p.user.id);
   const [drawer, setDrawer] = useState(false);
@@ -111,19 +158,48 @@ export function JarvisShell(p: Props) {
     media.addEventListener("change", changed);
     return () => media.removeEventListener("change", changed);
   }, []);
-  const [intelligence, setIntelligence] = useState(true);
+  const intelligence = experience.preferences.panel;
+  const setIntelligence = (panel: boolean) => experience.update({ panel });
   const [prompt, setPrompt] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [notice, setNotice] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState("");
+  const coreState = resolveCoreState({
+    listening: listening || p.recording,
+    active: p.activeTasks > 0,
+    streaming: p.streaming,
+    online: status.online,
+    failed: p.failed,
+    cancelled: p.cancelled,
+    activities: p.activities,
+  });
+  const currentTool = p.activeTasks
+    ? p.activities.find((item) => item.status === "running")
+    : undefined;
+  const core = (compact = false) => (
+    <Suspense
+      fallback={
+        <div
+          className={compact ? "afg-core is-compact" : "afg-core-placeholder"}
+        />
+      }
+    >
+      <IntelligenceCore
+        state={coreState}
+        profile={experience.profile}
+        reduced={experience.reduced}
+        compact={compact}
+      />
+    </Suspense>
+  );
   const recognition = useRef<any>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const available = p.models.filter((m) => m.selectable);
   const pending = taskStore.tasks.filter((t) => !t.done);
   const modelLabel =
     p.selectedModel === "auto"
-      ? "Auto · verified models"
+      ? w("Auto · verified models")
       : p.models.find((m) => `${m.providerId}::${m.id}` === p.selectedModel)
           ?.displayName || p.selectedModel;
   const speechSupported =
@@ -141,10 +217,12 @@ export function JarvisShell(p: Props) {
   useEffect(() => {
     recognition.current?.abort();
     setListening(false);
+    window.scrollTo({ top: 0, behavior: "instant" });
   }, [p.tab]);
   useEffect(() => () => recognition.current?.abort(), []);
   useEffect(() => {
     const shortcut = (e: KeyboardEvent) => {
+      if (document.querySelector(".afg-experience-dialog[open]")) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -186,7 +264,9 @@ export function JarvisShell(p: Props) {
     instance.onend = () => setListening(false);
     instance.onerror = () => {
       setVoiceError(
-        "Speech input could not start. Check microphone permission and browser support.",
+        w(
+          "Speech input could not start. Check microphone permission and browser support.",
+        ),
       );
       setListening(false);
     };
@@ -198,7 +278,7 @@ export function JarvisShell(p: Props) {
     try {
       instance.start();
     } catch {
-      setVoiceError("Speech input is unavailable.");
+      setVoiceError(w("Speech input is unavailable."));
     }
   };
   const submit = (e: React.FormEvent) => {
@@ -223,10 +303,10 @@ export function JarvisShell(p: Props) {
   };
   const statusText = (state: string) =>
     ({
-      online: "Connected",
-      unavailable: "Unavailable",
-      configuration: "Requires configuration",
-      checking: "Checking…",
+      online: w("Connected"),
+      unavailable: w("Unavailable"),
+      configuration: w("Requires configuration"),
+      checking: w("Checking…"),
     })[state] || state;
   const composerView = (
     <form className="j-composer" onSubmit={submit}>
@@ -234,10 +314,10 @@ export function JarvisShell(p: Props) {
         <Sparkles size={20} />
         <textarea
           ref={composer}
-          aria-label="Message JARVIS"
+          aria-label={w("Message AFG AI")}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Ask JARVIS anything, or describe a task…"
+          placeholder={w("Ask AFG AI anything, or describe a task…")}
           rows={2}
           maxLength={16000}
           onKeyDown={(e) => {
@@ -260,8 +340,8 @@ export function JarvisShell(p: Props) {
         <div className="j-composer-tools">
           <button
             type="button"
-            title="Open a local document"
-            aria-label="Open a local document"
+            title={w("Open a local document")}
+            aria-label={w("Open a local document")}
             onClick={() => go("files")}
           >
             <Plus size={18} />
@@ -270,13 +350,15 @@ export function JarvisShell(p: Props) {
           <label className="j-model-select">
             <Cpu size={14} />
             <select
-              aria-label="AI model"
+              aria-label={w("AI model")}
               value={p.selectedModel}
               onChange={(e) => p.onModel(e.target.value)}
             >
               <option value="auto">
-                Auto ·{" "}
-                {available.length ? "verified models" : "no model connected"}
+                {w("Auto ·")}{" "}
+                {available.length
+                  ? w("verified models")
+                  : w("no model connected")}
               </option>
               {p.models.map((m) => (
                 <option
@@ -285,7 +367,7 @@ export function JarvisShell(p: Props) {
                   disabled={!m.selectable}
                 >
                   {m.displayName}
-                  {!m.selectable ? " · unavailable" : ""}
+                  {!m.selectable ? " · " + w("unavailable") : ""}
                 </option>
               ))}
             </select>
@@ -297,10 +379,14 @@ export function JarvisShell(p: Props) {
             type="button"
             onClick={voice}
             disabled={!speechSupported}
-            aria-label={listening ? "Stop microphone" : "Start voice input"}
+            aria-label={
+              listening ? w("Stop microphone") : w("Start voice input")
+            }
             title={
               speechSupported
-                ? "Browser speech input; audio may be processed by your browser provider"
+                ? w(
+                    "Browser speech input; audio may be processed by your browser provider",
+                  )
                 : "Speech recognition is unavailable in this browser"
             }
             className={listening ? "j-listening" : ""}
@@ -311,7 +397,9 @@ export function JarvisShell(p: Props) {
             className="j-send"
             type={p.activeTasks ? "button" : "submit"}
             onClick={p.activeTasks ? p.onStop : undefined}
-            aria-label={p.activeTasks ? "Stop generation" : "Send message"}
+            aria-label={
+              p.activeTasks ? w("Stop generation") : w("Send message")
+            }
             disabled={!p.activeTasks && !prompt.trim()}
           >
             {p.activeTasks ? <Square size={16} /> : <ArrowUp size={18} />}
@@ -326,17 +414,23 @@ export function JarvisShell(p: Props) {
     </form>
   );
   return (
-    <div className="jarvis-app" data-theme={p.theme}>
+    <div
+      className="jarvis-app"
+      data-theme={p.theme}
+      data-reduced={experience.reduced}
+      data-graphics={experience.profile}
+      data-tab={p.tab}
+    >
       {drawer && (
         <button
           className="j-drawer-overlay"
-          aria-label="Close navigation"
+          aria-label={w("Close navigation")}
           onClick={() => setDrawer(false)}
         />
       )}
       <aside
         className={`j-sidebar ${drawer ? "is-open" : ""}`}
-        aria-label="Main navigation"
+        aria-label={w("Main navigation")}
         inert={mobile && !drawer}
       >
         <a
@@ -348,12 +442,12 @@ export function JarvisShell(p: Props) {
           }}
         >
           <span className="j-brand-mark">
-            <AudioLines size={25} />
+            <BrandMark />
           </span>
           <span>
-            JARVIS<small>PERSONAL AI SYSTEM</small>
+            AFG <b>AI</b>
+            <small>{w("INTELLIGENT WORKSPACE")}</small>
           </span>
-          <span className="j-version">1.0</span>
         </a>
         <button
           className="j-new-chat"
@@ -362,14 +456,14 @@ export function JarvisShell(p: Props) {
             setDrawer(false);
           }}
         >
-          <Plus size={17} /> New conversation <span>＋</span>
+          <Plus size={17} /> {w("New conversation")} <span>＋</span>
         </button>
-        <div className="j-nav-label">WORKSPACE</div>
+        <div className="j-nav-label">{w("WORKSPACE")}</div>
         <nav>
           {navItems.map(([id, Icon], index) => (
             <React.Fragment key={id}>
               {index === 9 && (
-                <div className="j-nav-label j-nav-space">PERSONAL</div>
+                <div className="j-nav-label j-nav-space">{w("PERSONAL")}</div>
               )}
               <button
                 aria-current={p.tab === id ? "page" : undefined}
@@ -379,7 +473,7 @@ export function JarvisShell(p: Props) {
                 <Icon size={17} />
                 <span>{labels[id]}</span>
                 {id === "tasks" && pending.length > 0 && (
-                  <i>{pending.length}</i>
+                  <i>{n(pending.length)}</i>
                 )}
                 {id === "home" && <span className="j-nav-dot" />}
               </button>
@@ -392,7 +486,8 @@ export function JarvisShell(p: Props) {
               <Cpu size={18} />
             </span>
             <span>
-              Make it local<small>Explore offline AI models</small>
+              {w("Make it local")}
+              <small>{w("Explore offline AI models")}</small>
             </span>
             <ChevronRight size={15} />
           </button>
@@ -408,11 +503,11 @@ export function JarvisShell(p: Props) {
               {p.user.email ? p.user.nameEn.slice(0, 2).toUpperCase() : "YO"}
             </span>
             <span>
-              {p.user.email ? p.user.nameEn : "Your workspace"}
+              {p.user.email ? p.user.nameEn : w("Your workspace")}
               <small>
                 {p.user.email
-                  ? "Account settings"
-                  : "Local workspace · Sign in"}
+                  ? w("Account settings")
+                  : w("Local workspace · Sign in")}
               </small>
             </span>
             <ChevronDown size={14} />
@@ -425,14 +520,17 @@ export function JarvisShell(p: Props) {
             <button
               className="j-mobile-menu"
               onClick={() => setDrawer(true)}
-              aria-label="Open navigation"
+              aria-label={w("Open navigation")}
             >
               <Menu size={20} />
             </button>
-            <span className="j-breadcrumb">Workspace</span>
+            <span className="afg-mobile-wordmark">
+              AFG <b>AI</b>
+            </span>
+            <span className="j-breadcrumb">{w("Workspace")}</span>
             <ChevronRight size={13} />
             <strong>
-              {labels[p.tab as keyof typeof labels] || "Workspace"}
+              {labels[p.tab as keyof typeof labels] || w("Workspace")}
             </strong>
           </div>
           <div className="j-top-actions">
@@ -443,12 +541,12 @@ export function JarvisShell(p: Props) {
                 }
               />
               {status.backend === "online"
-                ? "System connected"
-                : "System unavailable"}
+                ? w("System connected")
+                : w("System unavailable")}
             </span>
             <button
-              aria-label="Focus command input"
-              title="Command input · Ctrl/⌘ K"
+              aria-label={w("Focus command input")}
+              title={w("Command input · Ctrl/⌘ K")}
               onClick={() => {
                 go("home");
                 setTimeout(() => composer.current?.focus(), 50);
@@ -457,18 +555,26 @@ export function JarvisShell(p: Props) {
               <Search size={18} />
             </button>
             <button
-              aria-label="System notifications"
+              className="j-notifications-button"
+              aria-label={w("System notifications")}
               onClick={() => setNotice(!notice)}
             >
               <Bell size={18} />
-              {status.database === "unavailable" && (
+              {status.database === w("unavailable") && (
                 <span className="j-notification-dot" />
               )}
+            </button>
+            <button
+              aria-label={visual.appearance}
+              title={visual.appearance}
+              onClick={() => setExperienceMode("settings")}
+            >
+              <Sparkles size={18} />
             </button>
             <span className="j-top-divider" />
             <button
               className="j-intelligence-toggle"
-              aria-label="Toggle intelligence panel"
+              aria-label={w("Toggle intelligence panel")}
               aria-pressed={intelligence}
               onClick={() => setIntelligence(!intelligence)}
             >
@@ -478,11 +584,13 @@ export function JarvisShell(p: Props) {
         </header>
         {notice && (
           <div className="j-notice" role="status">
-            <strong>System notifications</strong>
+            <strong>{w("System notifications")}</strong>
             <p>
               {status.database === "online"
-                ? "Database connection verified."
-                : "Account and synchronization features require a connected PostgreSQL database."}
+                ? w("Database connection verified.")
+                : w(
+                    "Account and synchronization features require a connected PostgreSQL database.",
+                  )}
             </p>
             <button
               onClick={() => {
@@ -490,7 +598,7 @@ export function JarvisShell(p: Props) {
                 setNotice(false);
               }}
             >
-              Open settings <ArrowRight size={13} />
+              {w("Open settings")} <ArrowRight size={13} />
             </button>
           </div>
         )}
@@ -499,63 +607,81 @@ export function JarvisShell(p: Props) {
             className="j-workspace"
             role={localTabs.includes(p.tab) ? "main" : undefined}
           >
+            {p.tab === "chat" && (
+              <div
+                className="afg-live-strip"
+                role="region"
+                aria-label={visual.core}
+              >
+                {core(true)}
+                <div>
+                  <strong>{visual.core}</strong>
+                  <span role="status" aria-live="polite">
+                    {currentTool?.label || visual[coreState]}
+                  </span>
+                </div>
+                {p.activeTasks > 0 && (
+                  <button
+                    type="button"
+                    onClick={p.onStop}
+                    aria-label={w("Stop generation")}
+                  >
+                    <Square size={15} />
+                  </button>
+                )}
+              </div>
+            )}
             {p.tab === "home" ? (
               <div className="j-dashboard">
                 <div className="j-page-heading">
                   <div className="j-eyebrow">
-                    <span /> YOUR INTELLIGENCE, CONNECTED
+                    <span /> {visual.workspace}
                   </div>
                   <span className="j-date">
-                    {new Intl.DateTimeFormat(
-                      p.language === "english" ? "en" : undefined,
-                      { weekday: "short", month: "short", day: "numeric" },
-                    ).format(new Date())}
+                    {new Intl.DateTimeFormat(getIntlLocale(p.language), {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                    }).format(new Date())}
                   </span>
                 </div>
                 {!status.online && (
                   <div className="j-offline-banner" role="status">
                     <WifiOff size={15} />
                     <span>
-                      Network signal is offline. Local tasks and files remain
-                      available; cloud features may be unreachable.
+                      {w(
+                        "Network signal is offline. Local tasks and files remain available; cloud features may be unreachable.",
+                      )}
                     </span>
                     <button onClick={() => go("offline-models")}>
-                      Local models <ArrowRight size={13} />
+                      {w("Local models")} <ArrowRight size={13} />
                     </button>
                   </div>
                 )}
                 <section className="j-hero">
                   <div className="j-hero-copy">
-                    <span className="j-hero-kicker">
-                      A little less busy. A lot more possible.
-                    </span>
+                    <span className="j-hero-kicker">{visual.design}</span>
                     <h1>
-                      Your world.
+                      {visual.heroA}
                       <br />
-                      Working <em>together.</em>
+                      <em>{visual.heroB}</em>
                     </h1>
-                    <p>
-                      Think, create, and get things done.
-                      <br />
-                      One intelligent workspace, built around you.
-                    </p>
+                    <p>{visual.heroBody}</p>
                     <button onClick={() => go("chat")}>
-                      Let’s get started <ArrowRight size={15} />
+                      {visual.start} <ArrowRight size={15} />
                     </button>
                   </div>
-                  <div className="j-orb-scene" aria-hidden="true">
-                    <div className="j-orbit orbit-one" />
-                    <div className="j-orbit orbit-two" />
-                    <div className="j-orb">
-                      <div className="j-orb-core" />
-                      <div className="j-orb-grid" />
+                  <div className="afg-core-stage">
+                    {core()}
+                    <div
+                      className="afg-core-label"
+                      data-state={coreState}
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <span className="afg-state-dot" />
+                      {visual[coreState]}
                     </div>
-                    <div className="j-orb-caption">
-                      <span /> J A R V I S <small>YOUR PERSONAL AI</small>
-                    </div>
-                    <span className="j-star star-one" />
-                    <span className="j-star star-two" />
-                    <span className="j-star star-three" />
                   </div>
                 </section>
                 <div className="j-summary-grid">
@@ -564,11 +690,13 @@ export function JarvisShell(p: Props) {
                       <Cpu size={19} />
                     </span>
                     <span>
-                      <strong>{available.length} verified models</strong>
+                      <strong>
+                        {n(available.length)} {w("verified models")}
+                      </strong>
                       <small>
                         {available.length
-                          ? "Ready for your next idea"
-                          : "Connect a provider to begin"}
+                          ? w("Ready for your next idea")
+                          : w("Connect a provider to begin")}
                       </small>
                     </span>
                     <ChevronRight size={15} />
@@ -578,8 +706,10 @@ export function JarvisShell(p: Props) {
                       <ListTodo size={19} />
                     </span>
                     <span>
-                      <strong>{pending.length} open tasks</strong>
-                      <small>Your focus, in one place</small>
+                      <strong>
+                        {n(pending.length)} {w("open tasks")}
+                      </strong>
+                      <small>{w("Your focus, in one place")}</small>
                     </span>
                     <ChevronRight size={15} />
                   </button>
@@ -588,46 +718,46 @@ export function JarvisShell(p: Props) {
                       <ShieldCheck size={19} />
                     </span>
                     <span>
-                      <strong>A local-first workspace</strong>
-                      <small>Files stay on your device</small>
+                      <strong>{w("A local-first workspace")}</strong>
+                      <small>{w("Files stay on your device")}</small>
                     </span>
                     <ChevronRight size={15} />
                   </button>
                 </div>
                 <div className="j-section-title">
-                  <h2>What’s on your mind?</h2>
-                  <span>A place to start</span>
+                  <h2>{w("What’s on your mind?")}</h2>
+                  <span>{w("A place to start")}</span>
                 </div>
                 <div className="j-quick-grid">
                   {[
                     {
                       icon: Globe,
                       color: "cyan",
-                      title: "Explore an idea",
-                      text: "Go deeper. Connect the dots.",
+                      title: w("Explore an idea"),
+                      text: w("Go deeper. Connect the dots."),
                       prompt:
                         "Help me explore a new idea. Ask me what I would like to research and explain which research tools are available.",
                     },
                     {
                       icon: Code2,
                       color: "violet",
-                      title: "Build something",
-                      text: "From first thought to first line.",
+                      title: w("Build something"),
+                      text: w("From first thought to first line."),
                       prompt:
                         "Help me plan a coding project. Ask about the project and available tools before suggesting implementation steps.",
                     },
                     {
                       icon: FileText,
                       color: "blue",
-                      title: "Bring your context",
-                      text: "Your documents, a little clearer.",
+                      title: w("Bring your context"),
+                      text: w("Your documents, a little clearer."),
                       tab: "files" as TabType,
                     },
                     {
                       icon: Zap,
                       color: "amber",
-                      title: "Find your focus",
-                      text: "Make room for what matters.",
+                      title: w("Find your focus"),
+                      text: w("Make room for what matters."),
                       tab: "tasks" as TabType,
                     },
                   ].map((item) => (
@@ -649,11 +779,11 @@ export function JarvisShell(p: Props) {
                 </div>
                 <div className="j-section-title j-recent-title">
                   <h2>
-                    Your workspace activity{" "}
-                    <span>{taskStore.tasks.length}</span>
+                    {w("Your workspace activity")}{" "}
+                    <span>{n(taskStore.tasks.length)}</span>
                   </h2>
                   <button onClick={() => go("tasks")}>
-                    View tasks <ArrowRight size={13} />
+                    {w("View tasks")} <ArrowRight size={13} />
                   </button>
                 </div>
                 <div className="j-activity-list">
@@ -670,8 +800,8 @@ export function JarvisShell(p: Props) {
                         <div>
                           <strong>{t.title}</strong>
                           <small>
-                            {t.done ? "Completed" : "Open task"} · Saved on this
-                            device
+                            {t.done ? w("Completed") : w("Open task")} ·{" "}
+                            {w("Saved on this device")}
                           </small>
                         </div>
                         <ChevronRight size={14} />
@@ -683,13 +813,17 @@ export function JarvisShell(p: Props) {
                         <Activity size={17} />
                       </span>
                       <div>
-                        <strong>A fresh start, with room to grow.</strong>
+                        <strong>
+                          {w("A fresh start, with room to grow.")}
+                        </strong>
                         <small>
-                          Your local tasks will appear here as you create them.
+                          {w(
+                            "Your local tasks will appear here as you create them.",
+                          )}
                         </small>
                       </div>
                       <button onClick={() => go("tasks")}>
-                        Create a task <Plus size={14} />
+                        {w("Create a task")} <Plus size={14} />
                       </button>
                     </div>
                   )}
@@ -697,26 +831,30 @@ export function JarvisShell(p: Props) {
                 <div className="j-home-composer">
                   {composerView}
                   <div className="j-composer-note">
-                    <ShieldCheck size={12} /> You’re in control. Sensitive
-                    actions require your approval.<span>⌘ K to focus</span>
+                    <ShieldCheck size={12} />{" "}
+                    {w(
+                      "You’re in control. Sensitive actions require your approval.",
+                    )}
+                    <span>{w("⌘ K to focus")}</span>
                   </div>
                 </div>
               </div>
             ) : p.tab === "tasks" ? (
               <section className="j-local-page">
-                <div className="j-eyebrow">PERSONAL WORKSPACE</div>
+                <div className="j-eyebrow">{w("PERSONAL WORKSPACE")}</div>
                 <div className="j-section-title">
-                  <h1>A little more focused.</h1>
+                  <h1>{w("A little more focused.")}</h1>
                   <button
                     onClick={exportTasks}
                     disabled={!taskStore.tasks.length}
                   >
-                    <ArrowDownToLine size={15} /> Export
+                    <ArrowDownToLine size={15} /> {w("Export")}
                   </button>
                 </div>
                 <p className="j-muted">
-                  A private task list, stored on this browser. Tasks do not
-                  execute automatically.
+                  {w(
+                    "A private task list, stored on this browser. Tasks do not execute automatically.",
+                  )}
                 </p>
                 <form
                   className="j-task-form"
@@ -726,34 +864,34 @@ export function JarvisShell(p: Props) {
                   }}
                 >
                   <input
-                    aria-label="Task title"
+                    aria-label={w("Task title")}
                     value={taskTitle}
                     onChange={(e) => setTaskTitle(e.target.value)}
-                    placeholder="What would you like to get done?"
+                    placeholder={w("What would you like to get done?")}
                     maxLength={300}
                     required
                   />
                   <button type="submit" className="j-primary">
-                    <Plus size={17} /> Add task
+                    <Plus size={17} /> {w("Add task")}
                   </button>
                 </form>
                 {taskStore.error && (
                   <p role="alert" className="j-error">
-                    {taskStore.error}
+                    {w(taskStore.error)}
                   </p>
                 )}
                 <div className="j-task-list">
                   {taskStore.tasks.map((t) => (
                     <div key={t.id} className={t.done ? "done" : ""}>
                       <button
-                        aria-label={`${t.done ? "Reopen" : "Complete"} ${t.title}`}
+                        aria-label={`${t.done ? w("Reopen") : w("Complete")} ${t.title}`}
                         onClick={() => taskStore.toggle(t.id)}
                       >
                         {t.done ? <Check size={19} /> : <Circle size={19} />}
                       </button>
                       <span>{t.title}</span>
                       <button
-                        aria-label={`Delete ${t.title}`}
+                        aria-label={`${w("Delete")} ${t.title}`}
                         onClick={() => taskStore.remove(t.id)}
                       >
                         <Trash2 size={16} />
@@ -764,32 +902,41 @@ export function JarvisShell(p: Props) {
                 {!taskStore.tasks.length && (
                   <div className="j-empty">
                     <ListTodo size={36} />
-                    <h3>Clear space for your next step.</h3>
-                    <p>Add your first task above.</p>
+                    <h3>{w("Clear space for your next step.")}</h3>
+                    <p>{w("Add your first task above.")}</p>
                   </div>
                 )}
               </section>
             ) : p.tab === "files" ? (
-              <LocalFiles />
+              <LocalFiles language={p.language} />
             ) : p.tab === "voice" ? (
               <section className="j-local-page j-voice-page">
-                <div className="j-eyebrow">VOICE WORKSPACE</div>
-                <div className={`j-voice-orb ${listening ? "listening" : ""}`}>
-                  <AudioLines size={50} />
+                <div className="j-eyebrow">{w("VOICE WORKSPACE")}</div>
+                <div className="afg-voice-core">{core()}</div>
+                <div
+                  className="afg-core-label"
+                  data-state={coreState}
+                  role="status"
+                >
+                  {visual[coreState]}
                 </div>
                 <h1>
                   {listening
-                    ? "Listening to you…"
-                    : "A conversation starts with you."}
+                    ? w("Listening to you…")
+                    : w("A conversation starts with you.")}
                 </h1>
                 <p className="j-muted">
                   {speechSupported
-                    ? "Tap the microphone to dictate. Your browser may send audio to its speech service. Review the transcript before sending."
-                    : "This browser does not provide speech recognition. You can continue with text chat."}
+                    ? w(
+                        "Tap the microphone to dictate. Your browser may send audio to its speech service. Review the transcript before sending.",
+                      )
+                    : w(
+                        "This browser does not provide speech recognition. You can continue with text chat.",
+                      )}
                 </p>
                 {composerView}
                 <small className="j-muted">
-                  No background listening. Stop recording at any time.
+                  {w("No background listening. Stop recording at any time.")}
                 </small>
               </section>
             ) : localTabs.includes(p.tab) ? (
@@ -847,7 +994,7 @@ export function JarvisShell(p: Props) {
                     }
                   >
                     {p.tab === "memory"
-                      ? "Open settings"
+                      ? w("Open settings")
                       : p.tab === "knowledge"
                         ? "Open local files"
                         : "Open tools center"}
@@ -863,36 +1010,42 @@ export function JarvisShell(p: Props) {
             <aside className="j-intelligence" aria-label="Intelligence panel">
               <div className="j-panel-title">
                 <span>
-                  <Activity size={15} /> Intelligence
+                  <Activity size={15} /> {w("Intelligence")}
                 </span>
                 <button
-                  aria-label="Hide intelligence panel"
+                  aria-label={w("Hide intelligence panel")}
                   onClick={() => setIntelligence(false)}
                 >
                   <X size={14} />
                 </button>
               </div>
               <div className="j-model-card">
-                <div className="j-eyebrow">AI ENGINE</div>
+                <div className="j-eyebrow">{w("AI ENGINE")}</div>
                 <div className="j-engine-mark">
                   <Sparkles size={20} />
                 </div>
-                <h3>{available.length ? modelLabel : "Ready when you are."}</h3>
+                <h3>
+                  {available.length ? modelLabel : w("Ready when you are.")}
+                </h3>
                 <p>
                   {available.length
-                    ? `${available.length} verified text models available`
-                    : "Connect your preferred AI provider to unlock your assistant."}
+                    ? `${n(available.length)} ${w("verified text models available")}`
+                    : w(
+                        "Connect your preferred AI provider to unlock your assistant.",
+                      )}
                 </p>
                 <button onClick={() => go("settings")}>
-                  {available.length ? "Manage providers" : "Connect a provider"}
+                  {available.length
+                    ? w("Manage providers")
+                    : w("Connect a provider")}
                   <ArrowRight size={13} />
                 </button>
               </div>
               <div className="j-panel-section">
                 <div className="j-panel-subtitle">
-                  SYSTEM STATUS
+                  {w("SYSTEM STATUS")}
                   <button
-                    aria-label="Refresh system status"
+                    aria-label={w("Refresh system status")}
                     onClick={status.refresh}
                   >
                     <Activity size={13} />
@@ -901,26 +1054,28 @@ export function JarvisShell(p: Props) {
                 {[
                   {
                     icon: Globe,
-                    name: "Network signal",
-                    state: status.online ? "Online" : "Offline",
+                    name: w("Network signal"),
+                    state: status.online ? w("Online") : w("Offline"),
                     ok: status.online,
                   },
                   {
                     icon: Cpu,
-                    name: "Backend API",
+                    name: w("Backend API"),
                     state: statusText(status.backend),
                     ok: status.backend === "online",
                   },
                   {
                     icon: HardDrive,
-                    name: "Database",
+                    name: w("Database"),
                     state: statusText(status.database),
                     ok: status.database === "online",
                   },
                   {
                     icon: Bot,
-                    name: "AI models",
-                    state: available.length ? "Available" : "Not connected",
+                    name: w("AI models"),
+                    state: available.length
+                      ? w("Available")
+                      : w("Not connected"),
                     ok: available.length > 0,
                   },
                 ].map((s) => (
@@ -932,55 +1087,58 @@ export function JarvisShell(p: Props) {
                 ))}
                 <p className="j-status-time">
                   {status.checkedAt
-                    ? `Checked ${status.checkedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                    : "Checking live services…"}
+                    ? `${w("Checked")} ${status.checkedAt.toLocaleTimeString(getIntlLocale(p.language), { hour: "2-digit", minute: "2-digit" })}`
+                    : w("Checking live services…")}
                 </p>
               </div>
               <div className="j-panel-section">
                 <div className="j-panel-subtitle">
-                  YOUR DEVICE
+                  {w("YOUR DEVICE")}
                   <ShieldCheck size={13} />
                 </div>
                 <div className="j-device-card">
                   <div>
                     <Command size={18} />
                     <span>
-                      Browser workspace<small>This device</small>
+                      {w("Browser workspace")}
+                      <small>{w("This device")}</small>
                     </span>
                     <span className="j-green-dot" />
                   </div>
                   <p>
-                    Local files and tasks stay here. OS controls require the
-                    native Android bridge.
+                    {w(
+                      "Local files and tasks stay here. OS controls require the native Android bridge.",
+                    )}
                   </p>
                 </div>
               </div>
               <div className="j-panel-section">
                 <div className="j-panel-subtitle">
-                  IN PROGRESS<span>{p.activeTasks}</span>
+                  {w("IN PROGRESS")}
+                  <span>{n(p.activeTasks)}</span>
                 </div>
                 <div className="j-running">
                   <span
                     className={p.activeTasks ? "j-green-dot" : "j-idle-dot"}
                   />
-                  {p.activeTasks
-                    ? "Assistant is working"
-                    : "All clear. Space to think."}
+                  {currentTool?.label || visual[coreState]}
                 </div>
               </div>
               <div className="j-privacy-card">
                 <ShieldCheck size={19} />
-                <strong>Designed around your privacy.</strong>
+                <strong>{w("Designed around your privacy.")}</strong>
                 <p>
-                  Provider keys stay on the server. You choose what to share.
+                  {w(
+                    "Provider keys stay on the server. You choose what to share.",
+                  )}
                 </p>
                 <button onClick={() => go("settings")}>
-                  Your preferences <ArrowRight size={13} />
+                  {w("Your preferences")} <ArrowRight size={13} />
                 </button>
               </div>
               <div className="j-panel-footer">
-                <span className="j-small-mark">✳</span> ONE ASSISTANT. MORE
-                POSSIBILITY.
+                <span className="j-small-mark">✳</span>{" "}
+                {w("ONE ASSISTANT. MORE POSSIBILITY.")}
               </div>
             </aside>
           )}
@@ -993,16 +1151,38 @@ export function JarvisShell(p: Props) {
               }
             />
             {status.backend === "online"
-              ? "Connected to workspace"
-              : "Backend unavailable"}
+              ? w("Connected to workspace")
+              : w("Backend unavailable")}
           </span>
           <span>
-            <ShieldCheck size={11} /> Local task storage{" "}
-            <span className="j-footer-separator">/</span> JARVIS v1.0
+            <ShieldCheck size={11} /> {w("Local task storage")}{" "}
+            <span className="j-footer-separator">/</span> AFG AI
           </span>
         </footer>
       </div>
-      <nav className="j-mobile-bottom" aria-label="Mobile navigation">
+      {experienceMode && (
+        <Suspense fallback={null}>
+          <ExperiencePanel
+            key={experienceMode}
+            intro={experienceMode === "intro"}
+            onClose={closeExperience}
+            language={p.language}
+            onLanguage={p.onLanguage}
+            theme={p.theme}
+            onTheme={p.onSetTheme}
+            preferences={experience.preferences}
+            update={experience.update}
+            profile={experience.profile}
+            reduced={experience.reduced}
+            storageError={experience.storageError}
+            models={available.length}
+            signedIn={!!p.user.email}
+            onNavigate={go}
+            onSignIn={p.onSignIn}
+          />
+        </Suspense>
+      )}
+      <nav className="j-mobile-bottom" aria-label={w("Mobile navigation")}>
         {(["home", "chat", "voice", "tasks", "settings"] as const).map((id) => {
           const Icon =
             id === "settings"

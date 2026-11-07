@@ -70,6 +70,7 @@ export interface AfgMessage {
   isStreaming?: boolean;
   retryable?: boolean;
   isError?: boolean;
+  isCancelled?: boolean;
 }
 
 export interface AfgChatSession {
