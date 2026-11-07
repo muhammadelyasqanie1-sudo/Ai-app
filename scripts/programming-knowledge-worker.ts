@@ -202,7 +202,7 @@ async function indexGitHubRepository(result: SearchResult, query: string, topicK
     [owner,repo,fullName,repoSource.rows[0].id,defaultBranch,license,
       Math.max(0,Number(metadata.stargazers_count||0)),Math.max(0,Number(metadata.forks_count||0)),
       metadata.pushed_at && !Number.isNaN(Date.parse(metadata.pushed_at)) ? new Date(metadata.pushed_at).toISOString() : null,
-      cleanText(metadata.default_branch || '',120),
+      null,
       JSON.stringify({ description, archived: Boolean(metadata.archived), language: cleanText(metadata.language,80), topics: Array.isArray(metadata.topics) ? metadata.topics.slice(0,20) : [] })],
   );
   let count = 0;
