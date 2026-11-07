@@ -416,7 +416,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     // Do not force ordinary chat models to support function calling. Only attach
     // external tools when the latest user request actually asks for an integration action.
     const externalToolRequested = githubRequested || webSearchRequested ||
-      /\\b(api connector|remote mcp|mcp server|call an api|use an api|fetch url|open url|query api|external tool)\\b|اتصال api|ابزار خارجی/i.test(latestUserPrompt);
+      /\b(api connector|remote mcp|mcp server|call an api|use an api|fetch url|open url|query api|external tool)\b|اتصال api|ابزار خارجی/i.test(latestUserPrompt);
     // User-owned connectors are exposed only for a relevant request, and only
     // after the owner has verified/enabled them. Credentials remain server-side.
     const githubToolDefinitions = requestUserId && githubRequested
