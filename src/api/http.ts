@@ -24,6 +24,7 @@ import { handleApiHubApi } from './apiHub.ts';
 import { handleRemoteMcpApi } from './remoteMcp.ts';
 import { handleUserApiConnectorApi } from './userApiConnectors.ts';
 import { handleNineRouterApi } from './nineRouter.ts';
+import { handleOpenJarvisApi } from './openjarvis.ts';
 import { handleControlPlaneBridgeApi } from './controlPlaneBridge.ts';
 
 type ApiRequest = IncomingMessage & { originalUrl?: string };
@@ -293,6 +294,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     if (await handleControlPlaneBridgeApi(req, res, pathname)) return;
     if (await handleUserApiConnectorApi(req, res, pathname)) return;
     if (await handleNineRouterApi(req, res, pathname)) return;
+    if (await handleOpenJarvisApi(req, res, pathname, requestId)) return;
     if (await handleApiHubApi(req, res, pathname)) return;
     if (await handleRemoteMcpApi(req, res, pathname)) return;
     if (await handleAuthApi(req, res, pathname)) return;
