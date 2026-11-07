@@ -41,3 +41,14 @@ Apply additive migration `0035_hybrid_intelligence_core.sql` using the repositor
 The chat API and authenticated personal gateway now prepend a professional capability standard based on the latest user request. Coding requests receive senior-engineering workflow guidance (inspect before edit, preserve project conventions, secure implementation, edge cases, evidence-based debugging and honest execution reporting). Design and motion requests receive product-design guidance (visual hierarchy, design systems, responsive behavior, accessibility, motion timing/easing, performance and reduced-motion support).
 
 This is a prompt-level quality layer. It does **not** by itself add a code execution sandbox, browser automation, Figma integration, video renderer, GPU worker, or new model weights. Actual outcomes still depend on the selected verified model and the integrations/tools that are genuinely connected and authorized. No claim is made that this layer outperforms Claude or every leading model; that requires repeatable benchmark results.
+
+## GitHub repository analysis and code review tools
+
+When a signed-in user has a verified GitHub connection and asks AFG AI to inspect, review, debug, or change a repository, the chat API can expose the user-scoped GitHub tools. Repository-related wording in English and Dari can trigger this workflow without requiring the user to say "GitHub" explicitly.
+
+- `github_get_repository_tree` resolves the selected ref and returns a bounded list of tracked paths and file sizes (maximum 180 entries per call). It does not download every file; the assistant should select relevant paths and then use `github_get_file`.
+- `github_compare_branches` compares two refs and returns commit summaries, ahead/behind counts, file-change statistics, and bounded/redacted patch excerpts for up to ten changed files.
+- Existing `github_search_code` and `github_get_file` support targeted code discovery and inspection.
+- Existing write operations remain branch-scoped: the assistant must create/use a non-default working branch before committing file changes. Pull requests are created only when the user explicitly asks.
+
+These tools improve repository understanding and review, but they are not a code execution sandbox. The hosted terminal remains read-only; running builds, tests, application code, or deployments is not enabled by this milestone.
