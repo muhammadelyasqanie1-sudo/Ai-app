@@ -155,6 +155,15 @@ export default function App() {
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isAfgAssistantOpen, setIsAfgAssistantOpen] = useState(false);
 
+  useEffect(() => {
+    if (!isAfgAssistantOpen) return;
+    const handleAssistantEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsAfgAssistantOpen(false);
+    };
+    window.addEventListener('keydown', handleAssistantEscape);
+    return () => window.removeEventListener('keydown', handleAssistantEscape);
+  }, [isAfgAssistantOpen]);
+
   // Sync RTL and Dark Mode with DOM
   useEffect(() => {
     if (!hasSelectedLanguage) return;
@@ -935,9 +944,11 @@ export default function App() {
             <div className="flex items-center gap-2 text-sm font-bold text-cyan-200"><span className="grid h-8 w-8 place-items-center rounded-xl border border-cyan-300/30 bg-cyan-300/10">✦</span>AFG AI</div>
             <button type="button" onClick={() => setIsAfgAssistantOpen(false)} className="rounded-xl border border-white/15 px-3 py-2 text-sm text-slate-200 hover:bg-white/10">{language === 'dari' ? 'بستن' : 'Close'}</button>
           </div>
-          <React.Suspense fallback={<div className="mx-auto max-w-4xl rounded-2xl border border-cyan-400/20 bg-slate-900 p-6 text-center text-sm text-cyan-200">{language === 'dari' ? 'در حال بارگذاری دستیار...' : 'Loading assistant...'}</div>}>
-            <LazyAfgJarvisView language={language} />
-          </React.Suspense>
+          <ErrorBoundary>
+            <React.Suspense fallback={<div className="mx-auto max-w-4xl rounded-2xl border border-cyan-400/20 bg-slate-900 p-6 text-center text-sm text-cyan-200">{language === 'dari' ? 'در حال بارگذاری دستیار...' : 'Loading assistant...'}</div>}>
+              <LazyAfgJarvisView language={language} />
+            </React.Suspense>
+          </ErrorBoundary>
         </div>
       )}
 
