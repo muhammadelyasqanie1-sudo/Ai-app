@@ -91,3 +91,12 @@ Migration `0036_universal_knowledge_engine.sql` adds a curated shared source reg
 ## Continuous world research queue
 
 Migration `0037_world_knowledge_research_queue.sql` adds a topic-agnostic durable research queue with idempotent query hashes, priority, retry attempts, leases, and atomic job claiming. Administrators can enqueue and inspect jobs; authorized workers claim and finish jobs. The queue has no academic-topic allowlist. A separate scheduled worker and approved search-provider integration are required to execute research and ingest source-backed documents. Apply migration 0037 only after backup and explicit migration approval.
+
+
+## Programming-only knowledge discovery engine
+
+Migration `0038_programming_knowledge_domain.sql` adds an extensible programming topic catalog covering languages, frontend, backend/API engineering, databases, mobile, AI/ML, DevOps/cloud, defensive security, testing, architecture, developer tooling, open source, data engineering, games, embedded/IoT and technical documentation. It associates recurring search jobs with their topic. The catalog is data-driven; add topics and search phrases without adding a subject allowlist to chat.
+
+The bounded worker is `scripts/programming-knowledge-worker.ts`, invoked with `npm run knowledge:worker`. It requires `DATABASE_URL` and `TAVILY_API_KEY`, seeds idempotent research jobs from enabled topics, claims a bounded number of jobs, searches Tavily, and stores short result excerpts with source URL, query provenance, low initial confidence and an explicit unverified evidence label. It does not fetch arbitrary result pages, download code, execute source material, bypass paywalls, or claim to train model weights. Search excerpts are discovery leads, not full verified documentation. Failed jobs receive bounded retries; each run is capped by `AFG_KNOWLEDGE_MAX_JOBS` (1–20, default 8).
+
+Apply migration 0038 only after a database backup and explicit migration approval. Configure the search API key as a server-side secret in the hosting environment; never commit it. A hosting cron/scheduler must be configured separately to invoke the worker periodically. Source changes do not create or activate a schedule, run migrations, execute the worker, or deploy the service.
