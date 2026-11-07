@@ -55,7 +55,17 @@ async function seedTopicQueries() {
       await pool.query(
         `INSERT INTO world_knowledge_research_jobs(query,language,priority,query_hash,topic_key)
          VALUES($1,'english',$2,$3,$4)
-         ON CONFLICT(query_hash) DO UPDATE SET topic_key=COALESCE(world_knowledge_research_jobs.topic_key,EXCLUDED.topic_key)`,
+         ON CONFLICT(query_hash) DO UPDATE SET
+           topic_key=COALESCE(world_knowledge_research_jobs.topic_key,EXCLUDED.topic_key),
+           status=CASE WHEN world_knowledge_research_jobs.status IN ('completed','failed')
+                         AND world_knowledge_research_jobs.updated_at < now()-interval '30 days'
+                       THEN 'queued' ELSE world_knowledge_research_jobs.status END,
+           attempts=CASE WHEN world_knowledge_research_jobs.status IN ('completed','failed')
+                           AND world_knowledge_research_jobs.updated_at < now()-interval '30 days'
+                         THEN 0 ELSE world_knowledge_research_jobs.attempts END,
+           next_run_at=CASE WHEN world_knowledge_research_jobs.status IN ('completed','failed')
+                              AND world_knowledge_research_jobs.updated_at < now()-interval '30 days'
+                            THEN now() ELSE world_knowledge_research_jobs.next_run_at END
         [normalized, Math.max(0, Math.min(10, topic.priority)), hash, topic.topic_key],
       );
     }
