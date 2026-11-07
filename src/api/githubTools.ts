@@ -70,7 +70,8 @@ const definitions = [
       parameters: { type: 'object', properties: {
         owner: { type: 'string' }, repo: { type: 'string' },
         ref: { type: 'string', description: 'Optional branch, tag, or commit. Defaults to the repository default branch.' },
-        limit: { type: 'integer', minimum: 20, maximum: 400 },
+        path_prefix: { type: 'string', description: 'Optional directory or file path prefix to inspect a specific part of a large repository.' },
+        limit: { type: 'integer', minimum: 20, maximum: 120 },
       }, required: ['owner', 'repo'], additionalProperties: false },
     },
   },
@@ -314,7 +315,9 @@ export async function executeGitHubTool(userId: string, toolName: string, rawArg
   if (toolName === 'github_get_repository_tree') {
     const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
     const requestedRef = optionalText(args, 'ref', 200);
-    const limit = boundedNumber(args.limit, 120, 20, 180);
+    const requestedPrefix = optionalText(args, 'path_prefix', 500);
+    const pathPrefix = requestedPrefix ? safeFilePath(requestedPrefix).replace(/\\/$/, '') : '';
+    const limit = boundedNumber(args.limit, 80, 20, 120);
     const repository = await request(token, repoPath(owner, repo));
     const defaultBranch = String(repository.data.default_branch || 'main');
     const ref = requestedRef || defaultBranch;
@@ -322,18 +325,23 @@ export async function executeGitHubTool(userId: string, toolName: string, rawArg
     const treeSha = String(commit.data?.commit?.tree?.sha || '');
     if (!/^[a-f0-9]{40}$/i.test(treeSha)) throw new Error('GitHub did not return a valid repository tree reference.');
     const tree = await request(token, repoPath(owner, repo) + '/git/trees/' + treeSha + '?recursive=1');
-    const entries = Array.isArray(tree.data?.tree) ? tree.data.tree : [];
+    const allEntries = Array.isArray(tree.data?.tree) ? tree.data.tree : [];
+    const entries = pathPrefix
+      ? allEntries.filter((item: any) => item.path === pathPrefix || String(item.path || '').startsWith(pathPrefix + '/'))
+      : allEntries;
     const visible = entries.slice(0, limit).map((item: any) => ({
       path: String(item.path || '').slice(0, 500),
       type: item.type === 'tree' ? 'directory' : item.type === 'blob' ? 'file' : 'other',
       ...(item.type === 'blob' ? { size: Number(item.size || 0) } : {}),
     }));
-    await audit(userId, 'repository.tree.read', owner, repo, { ref, returned: visible.length, total: entries.length, truncated: Boolean(tree.data?.truncated || entries.length > limit) });
+    await audit(userId, 'repository.tree.read', owner, repo, { ref, pathPrefix: pathPrefix || null, returned: visible.length, total: entries.length, truncated: Boolean(tree.data?.truncated || entries.length > limit) });
     return {
       repository: owner + '/' + repo,
       ref,
       default_branch: defaultBranch,
+      path_prefix: pathPrefix || null,
       total_entries: entries.length,
+      repository_tree_truncated: Boolean(tree.data?.truncated),
       truncated: Boolean(tree.data?.truncated || entries.length > limit),
       entries: visible,
     };
@@ -356,20 +364,20 @@ export async function executeGitHubTool(userId: string, toolName: string, rawArg
       ahead_by: Number(comparison.data?.ahead_by || 0),
       behind_by: Number(comparison.data?.behind_by || 0),
       total_commits: commits.length,
-      commits: commits.slice(0, 20).map((item: any) => ({
+      commits: commits.slice(0, 10).map((item: any) => ({
         sha: String(item.sha || '').slice(0, 40),
         message: String(item.commit?.message || '').split(String.fromCharCode(10))[0].slice(0, 240),
       })),
       total_changed_files: files.length,
-      changed_files: files.slice(0, 10).map((item: any) => ({
+      changed_files: files.slice(0, 8).map((item: any) => ({
         filename: String(item.filename || '').slice(0, 500),
         status: String(item.status || 'modified'),
         additions: Number(item.additions || 0),
         deletions: Number(item.deletions || 0),
         changes: Number(item.changes || 0),
-        ...(typeof item.patch === 'string' ? { patch: redactSourceSecrets(item.patch).slice(0, 800) } : {}),
+        ...(typeof item.patch === 'string' ? { patch: redactSourceSecrets(item.patch).slice(0, 700) } : {}),
       })),
-      files_truncated: files.length > 10,
+      files_truncated: files.length > 8,
     };
   }
 
