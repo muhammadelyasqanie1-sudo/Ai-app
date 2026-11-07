@@ -28,6 +28,8 @@
     "noEmit": true
   },
   "exclude": [
-    "dist"
+    "dist",
+    "vendor/OpenJarvis",
+    "services/openjarvis"
   ]
 }
