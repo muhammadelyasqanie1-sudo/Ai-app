@@ -316,7 +316,7 @@ export async function executeGitHubTool(userId: string, toolName: string, rawArg
     const owner = requiredText(args, 'owner', 100), repo = requiredText(args, 'repo', 100);
     const requestedRef = optionalText(args, 'ref', 200);
     const requestedPrefix = optionalText(args, 'path_prefix', 500);
-    const pathPrefix = requestedPrefix ? safeFilePath(requestedPrefix).replace(/\\/$/, '') : '';
+    const pathPrefix = requestedPrefix ? safeFilePath(requestedPrefix) : '';
     const limit = boundedNumber(args.limit, 80, 20, 120);
     const repository = await request(token, repoPath(owner, repo));
     const defaultBranch = String(repository.data.default_branch || 'main');
