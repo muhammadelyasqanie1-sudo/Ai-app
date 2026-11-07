@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   Menu, 
   Bell, 
@@ -42,6 +42,28 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
 }) => {
   const t = translations[language];
   const [modelsMenuOpen, setModelsMenuOpen] = useState(false);
+  const modelsMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!modelsMenuOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (modelsMenuRef.current && !modelsMenuRef.current.contains(event.target as Node)) {
+        setModelsMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setModelsMenuOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [modelsMenuOpen]);
   const [connection, setConnection] = useState<'live'|'degraded'|'offline'|'connecting'>(() => (document.documentElement.dataset.afgConnection as any) || 'connecting');
   useEffect(() => {
     const update = (event: Event) => setConnection((event as CustomEvent<string>).detail as any);
@@ -116,9 +138,9 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
             )}
           </button>
 
-          <div className="relative">
-            <button type="button" onClick={() => setModelsMenuOpen(value => !value)} aria-label={language === 'dari' ? 'گزینه‌های بیشتر' : 'More options'} aria-expanded={modelsMenuOpen} aria-haspopup="menu" className="grid h-11 w-11 place-items-center rounded-full border border-slate-700/40 bg-slate-800/60 text-slate-300 transition hover:bg-slate-700/70 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400"><MoreVertical className="h-5 w-5" /></button>
-            {modelsMenuOpen && <div role="menu" className="absolute end-0 top-12 z-[100] min-w-48 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#101d32]">
+          <div className="relative" ref={modelsMenuRef}>
+            <button type="button" onClick={() => setModelsMenuOpen(value => !value)} aria-label={language === 'dari' ? 'گزینه‌های بیشتر' : 'More options'} aria-expanded={modelsMenuOpen} aria-haspopup="menu" aria-controls="afg-header-more-menu" className="grid h-11 w-11 place-items-center rounded-full border border-slate-700/40 bg-slate-800/60 text-slate-300 transition hover:bg-slate-700/70 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400"><MoreVertical className="h-5 w-5" /></button>
+            {modelsMenuOpen && <div id="afg-header-more-menu" role="menu" className="absolute end-0 top-12 z-[100] min-w-48 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#101d32]">
               <button type="button" role="menuitem" onClick={() => { setModelsMenuOpen(false); onOpenModels?.(); }} className="flex min-h-11 w-full items-center rounded-xl px-3 text-start text-sm font-semibold text-slate-800 transition hover:bg-cyan-500/10 dark:text-cyan-100">{language === 'dari' ? 'کتابخانه مدل‌ها' : 'Model library'}</button>
               <button type="button" role="menuitem" onClick={() => { setModelsMenuOpen(false); onOpenSettings(); }} className="flex min-h-11 w-full items-center rounded-xl px-3 text-start text-sm font-semibold text-slate-800 transition hover:bg-cyan-500/10 dark:text-cyan-100">{language === 'dari' ? 'تنظیمات' : 'Settings'}</button>
             </div>}

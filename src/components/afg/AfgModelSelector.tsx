@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, Lock, Search, X } from 'lucide-react';
 import type { AfgModelOption, Language } from '../../types/afg';
 import './AfgModelSelector.css';
@@ -23,6 +23,18 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
   const [query, setQuery] = useState('');
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [showUpgrade, setShowUpgrade] = useState<AfgModelOption | null>(null);
+
+  useEffect(() => {
+    if (!open && !showUpgrade) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setOpen(false);
+      setShowUpgrade(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, showUpgrade]);
   const dari = language !== 'english';
   const selected = models.find(m => selectedModel === m.providerId + '::' + m.id);
   const providerEntries = useMemo(() => {
@@ -74,6 +86,7 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
   const choose = (model: AfgModelOption) => {
     const supportedInChat = Boolean(model.capabilities?.imageGen || (model.capabilities?.text && model.capabilities?.streaming));
     if (!model.selectable || !supportedInChat) {
+      setOpen(false);
       setShowUpgrade(model);
       return;
     }
@@ -87,7 +100,7 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
       <span className="min-w-0 truncate font-semibold">{selected?.displayName || (dari ? 'انتخاب خودکار مدل' : 'Auto model')}</span>
       <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
     </button>
-    {open && <div className="afg-model-sheet-root" role="presentation" onMouseDown={e => { if(e.target===e.currentTarget)setOpen(false); }}>
+    {open && <div className="afg-model-sheet-root" role="presentation" onClick={e => { if(e.target===e.currentTarget){setOpen(false);setShowUpgrade(null);} }}>
       <section className="afg-model-sheet" role="dialog" aria-modal="true" aria-label={dari ? 'انتخاب مدل' : 'Select model'}>
         <header className="flex items-center justify-between border-b px-4 py-4">
           <div><h2 className="text-base font-semibold">{dari ? 'انتخاب مدل' : 'Select model'}</h2><p className="mt-1 text-xs opacity-60">{selectedProvider ? providerLabel(selectedProvider) + ' · ' + models.filter((model) => model.providerId === selectedProvider).length : providerEntries.length + ' providers'}</p></div>
@@ -116,8 +129,8 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
         <footer className="border-t px-4 py-3 text-xs opacity-60">{dari?'هزینه‌ها و دسترسی بر اساس اطلاعات تأییدشده ارائه‌دهنده نمایش داده می‌شود.':'Pricing and access are shown only when confirmed by the provider.'}</footer>
       </section>
     </div>}
-    {showUpgrade&&<div className="afg-model-sheet-root" onMouseDown={e=>{if(e.target===e.currentTarget)setShowUpgrade(null);}}><section className="afg-model-paywall" role="dialog" aria-modal="true">
-      <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-amber-100 text-amber-700"><Lock/></div><h3 className="text-lg font-semibold">{showUpgrade.selectable && !showUpgrade.capabilities?.imageGen && !(showUpgrade.capabilities?.text && showUpgrade.capabilities?.streaming) ? (dari?'این مدل برای چت مستقیم نیست':'This is not a chat model') : showUpgrade.requiresSubscription ? (dari?'اشتراک ویژه لازم است':'Premium subscription required') : (dari?'این مدل در دسترس نیست':'Model access restricted')}</h3><p className="mt-2 text-sm opacity-70">{showUpgrade.selectable && !showUpgrade.capabilities?.imageGen && !(showUpgrade.capabilities?.text && showUpgrade.capabilities?.streaming) ? (dari?'این مدل در گروه قابلیت خودش نمایش داده می‌شود و از ورودی چت قابل اجرا نیست.':'This model appears in its capability group and cannot run as a chat completion.') : showUpgrade.requiresSubscription ? (dari ? 'برای استفاده از این مدل، طرح '+String(showUpgrade.accessTier||'Pro').toUpperCase()+' را فعال کنید.' : 'Upgrade to the '+String(showUpgrade.accessTier||'Pro').toUpperCase()+' plan to use this model.') : (showUpgrade.disabledReason || (dari?'مدیر دسترسی این مدل را غیرفعال کرده است.':'This model is disabled by the administrator.'))}</p><button className="afg-model-close mt-5 w-full" onClick={()=>setShowUpgrade(null)}>{dari?'متوجه شدم':'Got it'}</button>
+    {showUpgrade&&<div className="afg-model-sheet-root" onClick={e=>{if(e.target===e.currentTarget){setShowUpgrade(null);setOpen(false);}}}><section className="afg-model-paywall" role="dialog" aria-modal="true">
+      <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-amber-100 text-amber-700"><Lock/></div><h3 className="text-lg font-semibold">{showUpgrade.selectable && !showUpgrade.capabilities?.imageGen && !(showUpgrade.capabilities?.text && showUpgrade.capabilities?.streaming) ? (dari?'این مدل برای چت مستقیم نیست':'This is not a chat model') : showUpgrade.requiresSubscription ? (dari?'اشتراک ویژه لازم است':'Premium subscription required') : (dari?'این مدل در دسترس نیست':'Model access restricted')}</h3><p className="mt-2 text-sm opacity-70">{showUpgrade.selectable && !showUpgrade.capabilities?.imageGen && !(showUpgrade.capabilities?.text && showUpgrade.capabilities?.streaming) ? (dari?'این مدل در گروه قابلیت خودش نمایش داده می‌شود و از ورودی چت قابل اجرا نیست.':'This model appears in its capability group and cannot run as a chat completion.') : showUpgrade.requiresSubscription ? (dari ? 'برای استفاده از این مدل، طرح '+String(showUpgrade.accessTier||'Pro').toUpperCase()+' را فعال کنید.' : 'Upgrade to the '+String(showUpgrade.accessTier||'Pro').toUpperCase()+' plan to use this model.') : (showUpgrade.disabledReason || (dari?'مدیر دسترسی این مدل را غیرفعال کرده است.':'This model is disabled by the administrator.'))}</p><button className="afg-model-close mt-5 w-full" onClick={()=>{setShowUpgrade(null);setOpen(false);}}>{dari?'متوجه شدم':'Got it'}</button>
     </section></div>}
   </>;
 };
