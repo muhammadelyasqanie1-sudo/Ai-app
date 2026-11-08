@@ -149,7 +149,7 @@ export default function IntelligenceCore({
   return (
     <div
       ref={ref}
-      className={\`afg-core \${compact ? "is-compact" : ""}\`}
+      className={`afg-core ${compact ? "is-compact" : ""}`}
       data-state={state}
       data-visual-state={visualState}
       data-profile={profile}
@@ -186,8 +186,8 @@ export default function IntelligenceCore({
             className="afg-core-particle"
             style={{
               "--i": i,
-              "--angle": \`\${i * 137.5}deg\`,
-              "--distance": \`\${103 + (i % 3) * 14}px\`,
+              "--angle": `${i * 137.5}deg`,
+              "--distance": `${103 + (i % 3) * 14}px`,
             } as React.CSSProperties}
           />
         ))}
