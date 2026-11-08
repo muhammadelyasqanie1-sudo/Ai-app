@@ -599,7 +599,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         : (url ? new URL(url).hostname : undefined);
       const timestamp = Date.now();
       const durationMs = status === 'running' || !startedAt ? undefined : Math.max(0, timestamp - startedAt);
-      if (!res.writableEnded && !res.destroyed) res.write(`data: ${JSON.stringify({type:'activity',id:activityId || randomUUID(),name:callName,label,detail,url,sources,status,startedAt:startedAt || timestamp,durationMs,timestamp})}\n\n`);
+      if (!res.writableEnded && !res.destroyed) res.write(`data: ${JSON.stringify({type:'activity',id:activityId || randomUUID(),requestId:id,name:callName,label,detail,url,sources,status,startedAt:startedAt || timestamp,durationMs,timestamp})}\n\n`);
     };
     heartbeat = setInterval(() => {
       if (!res.writableEnded && !res.destroyed) res.write(': heartbeat\n\n');
