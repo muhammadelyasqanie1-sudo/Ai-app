@@ -111,6 +111,7 @@ export default function App() {
   const [currentSessionId, setCurrentSessionId] = useState(() => `chat-${Date.now()}`);
   const [isLoading, setIsLoading] = useState(false);
   const [audioListening, setAudioListening] = useState(false);
+  const [audioSpeaking, setAudioSpeaking] = useState(false);
   const activeChatAbortRef = useRef<AbortController | null>(null);
   const serverConversationRef = useRef<string | null>(null);
   const wasAuthenticatedRef = useRef(false);
@@ -821,7 +822,7 @@ export default function App() {
         capabilities={capabilitySnapshot} models={modelOptions} selectedModel={selectedModel}
         onModel={handleSelectModel} onPrompt={handleStartChatWithPrompt} onNewChat={handleNewChat}
         onStop={handleStopGeneration} onSignIn={() => setHasEnteredApp(false)} theme={theme} onTheme={handleToggleTheme}
-        activeTasks={isLoading ? 1 : 0} activities={agentActivities} recording={audioListening}
+        activeTasks={isLoading ? 1 : 0} activities={agentActivities} recording={audioListening} speaking={audioSpeaking}
         streaming={isLoading && !!messages.at(-1)?.content && !messages.at(-1)?.isError}
         failed={!isLoading && !!messages.at(-1)?.isError && !messages.at(-1)?.isCancelled} cancelled={!isLoading && !!messages.at(-1)?.isCancelled} onSetTheme={setTheme} onLanguage={handleSetLanguage}>
       {profileLoadError && <div role="alert" className="mx-auto mt-2 w-[min(94%,48rem)] rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
@@ -854,6 +855,7 @@ export default function App() {
             messages={messages}
             agentActivities={agentActivities}
             onRecordingChange={setAudioListening}
+            onSpeakingChange={setAudioSpeaking}
             onSendMessage={handleSendMessage}
             onStop={handleStopGeneration}
             onRetryMessage={handleRetryMessage}
