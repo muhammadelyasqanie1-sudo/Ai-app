@@ -34,7 +34,7 @@ import { getIntlLocale } from '../../utils/i18n';
 
 interface AfgChatViewProps {
   messages: AfgMessage[];
-  agentActivities?: Array<{id:string;name:string;label:string;detail?:string;url?:string;sources?:Array<{title:string;url:string;snippet?:string;publishedDate?:string}>;status:'running'|'completed'|'failed';timestamp:number}>;
+  agentActivities?: Array<{id:string;name:string;label:string;detail?:string;url?:string;sources?:Array<{title:string;url:string;snippet?:string;publishedDate?:string}>;status:'running'|'completed'|'failed';startedAt?:number;durationMs?:number;timestamp:number}>;
   onSendMessage: (text: string, attachments: ChatAttachment[]) => void;
   onStop: () => void;
   onRetryMessage: (messageId: string) => void;
@@ -94,6 +94,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   const t = translations[language];
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isSlowResponse, setIsSlowResponse] = useState(false);
+  const [activityExpanded, setActivityExpanded] = useState(true);
   useEffect(() => {
     if (!isLoading) { setIsSlowResponse(false); return; }
     const timer = window.setTimeout(() => setIsSlowResponse(true), 10000);
@@ -220,18 +221,20 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
       <div className="flex-1 overflow-y-auto px-1 sm:px-3 py-4 space-y-5">
         {agentActivities.length > 0 && (
           <section className="mx-auto w-full max-w-3xl rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-lg dark:border-cyan-800/40 dark:bg-slate-950/70" aria-live="polite" aria-label={language === 'dari' ? 'فعالیت زنده هوش مصنوعی' : 'Live AI activity'}>
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-cyan-700 dark:text-cyan-200"><Globe className="h-4 w-4" />{language === 'dari' ? 'فعالیت زنده هوش مصنوعی' : 'Live AI activity'}</div>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">{agentActivities.some(item => item.status === 'running') ? (language === 'dari' ? 'در حال اجرا' : 'Working') : (language === 'dari' ? 'گزارش فعالیت' : 'Activity log')}</span>
-            </div>
-            <ol className="space-y-2">
+            <button type="button" onClick={() => setActivityExpanded(value => !value)} aria-expanded={activityExpanded} className="mb-2 flex w-full items-center justify-between gap-3 rounded-xl px-1 py-1 text-start hover:bg-cyan-500/5">
+              <span className="flex min-w-0 items-center gap-2 text-xs font-bold text-cyan-700 dark:text-cyan-200"><Globe className="h-4 w-4 shrink-0" /><span>{language === 'dari' ? 'فعالیت زنده هوش مصنوعی' : language === 'persian' ? 'فعالیت زنده هوش مصنوعی' : language === 'pashto' ? 'د AI ژوندۍ کړنې' : language === 'arabic' ? 'نشاط الذكاء الاصطناعي المباشر' : 'Live AI activity'}</span></span>
+              <span className="flex shrink-0 items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400"><span>{agentActivities.filter(item => item.status === 'running').length ? (language === 'dari' ? 'در حال اجرا' : 'Working') : (language === 'dari' ? 'گزارش فعالیت' : 'Activity log')} · {agentActivities.length}</span>{activityExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</span>
+            </button>
+            {activityExpanded && <ol className="space-y-2">
               {agentActivities.map((item) => (
                 <li key={item.id} className="flex items-start gap-2 text-xs">
-                  <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${item.status === 'completed' ? 'bg-emerald-400' : item.status === 'failed' ? 'bg-rose-400' : 'bg-cyan-300 animate-pulse'}`} />
+                  <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[9px] font-bold ${item.status === 'completed' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : item.status === 'failed' ? 'border-rose-500/40 bg-rose-500/10 text-rose-500' : 'border-cyan-500/40 bg-cyan-500/10 text-cyan-500'}`}>{item.status === 'completed' ? '✓' : item.status === 'failed' ? '!' : <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="font-semibold text-slate-800 dark:text-slate-200">{item.label}</span>
                       <span className="text-[10px] text-slate-500">{item.status === 'completed' ? (language === 'dari' ? 'انجام شد' : 'Completed') : item.status === 'failed' ? (language === 'dari' ? 'ناموفق' : 'Failed') : (language === 'dari' ? 'در حال انجام' : 'In progress')}</span>
+                      {item.durationMs !== undefined && <span className="text-[10px] tabular-nums text-slate-400">{(item.durationMs / 1000).toFixed(1)}s</span>}
+                      {item.status === 'running' && <span className="text-[10px] text-cyan-600 dark:text-cyan-400">{language === 'dari' ? 'اکنون' : 'Now'}</span>}
                     </div>
                     {item.detail && <div className="mt-0.5 break-all text-[11px] text-slate-600 dark:text-slate-400">{item.detail}</div>}
                     {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-block break-all text-[11px] text-cyan-700 underline dark:text-cyan-400 underline-offset-2">{item.url}</a>}
@@ -239,7 +242,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                   </div>
                 </li>
               ))}
-            </ol>
+            </ol>}
           </section>
         )}
         
