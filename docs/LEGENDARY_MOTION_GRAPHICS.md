@@ -20,7 +20,7 @@ The current runtime states map to cinematic states without fabricated activity:
 - thinking → violet counter-orbit and inward energy
 - searching → blue research scan
 - executing → cyan/violet stepped coding orbit
-- generating → violet/amber bloom
+- generating (text stream) → violet thinking state; image-generation bloom remains reserved for a verified image-job signal
 - error → rose hard pulse
 - offline/cancelled → static muted state
 
