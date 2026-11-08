@@ -1,47 +1,7 @@
-const CACHE_NAME = 'afg-ai-shell-v2';
-const SHELL_URLS = ['/', '/index.html'];
-
-self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL_URLS)).catch(() => undefined));
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('afg-ai-shell-') && key !== CACHE_NAME).map(key => caches.delete(key))))
-  );
-  self.clients.claim();
-});
-
-self.addEventListener('fetch', event => {
-  const request = event.request;
-  if (request.method !== 'GET') return;
-  const url = new URL(request.url);
-  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
-
-  if (request.mode === 'navigate') {
-    event.respondWith((async () => {
-      const cache = await caches.open(CACHE_NAME);
-      try {
-        const response = await fetch(request);
-        if (response.ok) await cache.put('/index.html', response.clone());
-        return response;
-      } catch {
-        return (await cache.match('/index.html')) || (await cache.match('/')) || Response.error();
-      }
-    })());
-    return;
-  }
-
-  if (['script', 'style', 'worker', 'font', 'image'].includes(request.destination)) {
-    event.respondWith((async () => {
-      const cache = await caches.open(CACHE_NAME);
-      const cached = await cache.match(request);
-      const network = fetch(request).then(response => {
-        if (response.ok && response.type === 'basic') void cache.put(request, response.clone());
-        return response;
-      }).catch(() => null);
-      return cached || (await network) || Response.error();
-    })());
-  }
-});
+const CACHE_NAME='afg-ai-shell-v3',PREFIX='afg-ai-shell-';
+const SHELL=['/','/index.html','/manifest.webmanifest','/afg-ai-icon.svg','/afg-ai-hero-poster.svg'];
+self.addEventListener('install',event=>{event.waitUntil((async()=>{const cache=await caches.open(CACHE_NAME);await Promise.all(SHELL.map(async p=>{try{const r=await fetch(p,{cache:'reload'});if(r.ok)await cache.put(p,r);}catch{/* optional shell asset */}}));})());self.skipWaiting();});
+self.addEventListener('activate',event=>{event.waitUntil((async()=>{const keys=await caches.keys();await Promise.all(keys.filter(k=>k.startsWith(PREFIX)&&k!==CACHE_NAME).map(k=>caches.delete(k)));await self.clients.claim();})());});
+self.addEventListener('fetch',event=>{const q=event.request;if(q.method!=='GET')return;const u=new URL(q.url);if(u.origin!==self.location.origin||u.pathname.startsWith('/api/'))return;
+if(q.mode==='navigate'){event.respondWith((async()=>{const c=await caches.open(CACHE_NAME);try{const r=await fetch(q);if(r.ok)await c.put('/index.html',r.clone());return r;}catch{return(await c.match('/index.html'))||(await c.match('/'))||Response.error();}})());return;}
+if(['script','style','worker','font','image'].includes(q.destination)){event.respondWith((async()=>{const c=await caches.open(CACHE_NAME),cached=await c.match(q);const fresh=fetch(q).then(r=>{if(r.ok&&r.type==='basic')void c.put(q,r.clone());return r;}).catch(()=>null);return cached||(await fresh)||Response.error();})());}});
