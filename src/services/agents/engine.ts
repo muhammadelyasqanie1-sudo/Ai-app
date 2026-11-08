@@ -385,6 +385,28 @@ export function kick() {
   runtime.draining = true;
   void (async () => {
     try {
+      // A process restart can leave a task in "running". Never replay a possibly
+      // billed or side-effecting step automatically: mark it interrupted and
+      // require the owner to inspect and explicitly resume it.
+      const stale = await pool!.query(
+        `UPDATE agent_tasks
+            SET status='failed',finished_at=now(),updated_at=now(),
+                error='Worker stopped before task completion. Inspect the last completed step and explicitly resume.'
+          WHERE status='running'
+            AND COALESCE(heartbeat_at,updated_at) < now() - interval '90 seconds'
+          RETURNING id`,
+      );
+      for (const row of stale.rows) {
+        await pool!.query(
+          "UPDATE agent_steps SET status='failed',error='Worker interrupted before step completion.',finished_at=now() WHERE task_id=$1 AND status='running'",
+          [row.id],
+        );
+        await pool!.query(
+          "UPDATE media_jobs SET execution_state='failed',result='{\"error\":{\"code\":\"worker_interrupted\"}}'::jsonb,completed_at=now() WHERE task_id=$1 AND execution_state='executing'",
+          [row.id],
+        );
+        await event(pool!, row.id, "worker_interrupted", null, { reason: "heartbeat_expired" });
+      }
       for (let batch = 0; batch < limits.queued; batch++) {
         const rows = await pool!.query(
           "SELECT id FROM agent_tasks WHERE status='ready' ORDER BY created_at LIMIT $1",
