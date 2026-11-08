@@ -31,10 +31,11 @@ import type { Language, AfgMessage, ChatAttachment, UserProfile, AfgCapabilityKe
 import type { AfgSystemFeatures } from './AfgCommandPalette';
 import { translations } from '../../utils/afgTranslations';
 import { getIntlLocale } from '../../utils/i18n';
+import type { ChatToolActivity } from '../../types/liveActivity';
 
 interface AfgChatViewProps {
   messages: AfgMessage[];
-  agentActivities?: Array<{id:string;name:string;label:string;detail?:string;url?:string;sources?:Array<{title:string;url:string;snippet?:string;publishedDate?:string}>;status:'running'|'completed'|'failed';startedAt?:number;durationMs?:number;timestamp:number}>;
+  agentActivities?: ChatToolActivity[];
   onSendMessage: (text: string, attachments: ChatAttachment[]) => void;
   onStop: () => void;
   onRetryMessage: (messageId: string) => void;
@@ -95,6 +96,13 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isSlowResponse, setIsSlowResponse] = useState(false);
   const [activityExpanded, setActivityExpanded] = useState(true);
+  const hasRunningActivity = agentActivities.some((item) => item.status === 'running');
+  const [activityNow, setActivityNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!hasRunningActivity) return;
+    const timer = window.setInterval(() => setActivityNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [hasRunningActivity]);
   useEffect(() => {
     if (!isLoading) { setIsSlowResponse(false); return; }
     const timer = window.setTimeout(() => setIsSlowResponse(true), 10000);
@@ -233,7 +241,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="font-semibold text-slate-800 dark:text-slate-200">{item.label}</span>
                       <span className="text-[10px] text-slate-500">{item.status === 'completed' ? (language === 'dari' ? 'انجام شد' : 'Completed') : item.status === 'failed' ? (language === 'dari' ? 'ناموفق' : 'Failed') : (language === 'dari' ? 'در حال انجام' : 'In progress')}</span>
-                      {item.durationMs !== undefined && <span className="text-[10px] tabular-nums text-slate-400">{(item.durationMs / 1000).toFixed(1)}s</span>}
+                      {(item.durationMs !== undefined || (item.status === 'running' && item.startedAt !== undefined)) && <span className="text-[10px] tabular-nums text-slate-400">{((item.durationMs ?? Math.max(0, activityNow - (item.startedAt || activityNow))) / 1000).toFixed(1)}s</span>}
                       {item.status === 'running' && <span className="text-[10px] text-cyan-600 dark:text-cyan-400">{language === 'dari' ? 'اکنون' : 'Now'}</span>}
                     </div>
                     {item.detail && <div className="mt-0.5 break-all text-[11px] text-slate-600 dark:text-slate-400">{item.detail}</div>}
