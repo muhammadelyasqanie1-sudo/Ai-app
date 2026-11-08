@@ -93,6 +93,7 @@ type Props = {
   activities: ToolActivity[];
   streaming: boolean;
   recording: boolean;
+  speaking?: boolean;
   failed: boolean;
   cancelled: boolean;
   onSetTheme: (theme: Theme) => void;
@@ -195,6 +196,7 @@ export function JarvisShell(p: Props) {
   const [voiceError, setVoiceError] = useState("");
   const coreState = resolveCoreState({
     listening: listening || p.recording,
+    speaking: p.speaking,
     active: p.activeTasks > 0 || agentRunning,
     streaming: p.streaming,
     online: status.online,
