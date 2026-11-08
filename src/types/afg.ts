@@ -3,6 +3,7 @@ export type Theme = 'dark' | 'light' | 'neon' | 'system';
 
 export type TabType = 
   | 'home'
+  | 'intelligence'
   | 'tasks'
   | 'files'
   | 'voice'

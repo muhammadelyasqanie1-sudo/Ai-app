@@ -7,6 +7,7 @@ import {
 import { AfgBrainLogo } from './AfgBrainLogo';
 import type { TabType, Language, UserProfile } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
+import { cinematicCopy } from '../cinematic/copy';
 
 interface AfgSideMenuProps {
   isOpen: boolean;
@@ -46,6 +47,7 @@ export const AfgSideMenu: React.FC<AfgSideMenuProps> = ({
 
   const mainItems = [
     { id: 'home' as TabType, label: dari ? 'نمای کلی' : 'Overview', icon: Home },
+    { id: 'intelligence' as TabType, label: cinematicCopy(language).coreTitle, icon: BrainCircuit },
     { id: 'history' as TabType, label: t.navHistory, icon: History },
   ];
   const toolItems = [

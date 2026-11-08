@@ -1,0 +1,433 @@
+.afg-core-screen {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: calc(100dvh - 76px);
+  padding: clamp(18px, 3.4vw, 46px);
+  color: var(--j-text);
+  background:
+    radial-gradient(ellipse at 18% 8%, rgba(13, 242, 255, 0.06), transparent 42%),
+    var(--j-bg);
+}
+.afg-core-screen-field {
+  z-index: 0;
+}
+.afg-core-screen-layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
+  gap: clamp(20px, 4vw, 64px);
+  align-items: center;
+  width: min(100%, 1380px);
+  min-height: calc(100dvh - 170px);
+  margin-inline: auto;
+}
+.afg-core-screen-stage {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.afg-core-screen-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--j-muted);
+  font-size: 0.66rem;
+  font-weight: 650;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.afg-core-screen-state {
+  color: var(--j-accent);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-weight: 550;
+}
+.afg-core-live-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--j-muted);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--j-muted) 10%, transparent);
+}
+.afg-core-live-dot.is-active {
+  background: var(--j-accent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--j-accent) 12%, transparent), 0 0 18px var(--j-accent);
+  animation: afg-core-signal 1.7s ease-in-out infinite;
+}
+.afg-core-screen .afg-core.is-cinematic {
+  --size: clamp(300px, 40vw, 570px);
+  height: clamp(300px, 41vw, 560px);
+  margin-block: 8px -8px;
+}
+.afg-core-screen-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 420px);
+  padding: 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--j-accent) 18%, var(--j-border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--j-panel) 76%, transparent);
+  box-shadow: 0 16px 40px #0004;
+  backdrop-filter: blur(18px);
+}
+.afg-core-screen-aperture {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--j-accent) 28%, transparent);
+  border-radius: 9px;
+  background: var(--j-accent-soft);
+}
+.afg-core-screen-aperture i {
+  display: block;
+  width: 2px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--j-accent);
+  box-shadow: 0 0 7px var(--j-accent);
+  animation: afg-core-equalize 1.2s ease-in-out infinite alternate;
+}
+.afg-core-screen-aperture i:nth-child(2) {
+  height: 17px;
+  animation-delay: -0.35s;
+}
+.afg-core-screen-aperture i:nth-child(3) {
+  height: 8px;
+  animation-delay: -0.7s;
+}
+.afg-core-screen-status > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.afg-core-screen-status small {
+  color: var(--j-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.afg-core-screen-status strong {
+  overflow: hidden;
+  color: var(--j-text);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.afg-core-screen-active {
+  margin-inline-start: auto;
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--j-accent-soft);
+  color: var(--j-accent);
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+.afg-core-screen-panel {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  padding: clamp(20px, 3vw, 34px);
+  border: 1px solid color-mix(in srgb, var(--j-border) 88%, transparent);
+  border-radius: 26px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.055), transparent 48%),
+    color-mix(in srgb, var(--j-panel) 84%, transparent);
+  box-shadow: 0 30px 100px #0005;
+  backdrop-filter: blur(24px);
+}
+.afg-core-screen-heading {
+  display: grid;
+  gap: 8px;
+}
+.afg-core-screen-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--j-accent);
+  font-size: 0.64rem;
+  font-weight: 750;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.afg-core-screen-heading h1 {
+  margin: 0;
+  color: var(--j-text);
+  font-size: clamp(1.5rem, 3vw, 2.3rem);
+  font-weight: 620;
+  letter-spacing: -0.045em;
+  line-height: 1.12;
+}
+.afg-core-screen-heading p {
+  max-width: 38rem;
+  margin: 0;
+  color: var(--j-muted);
+  font-size: 0.82rem;
+  line-height: 1.75;
+}
+.afg-core-screen-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.afg-core-screen-metrics > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 11px;
+  border: 1px solid color-mix(in srgb, var(--j-border) 70%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--j-card) 74%, transparent);
+}
+.afg-core-screen-metrics svg {
+  color: var(--j-accent);
+  opacity: 0.8;
+}
+.afg-core-screen-metrics strong {
+  overflow: hidden;
+  color: var(--j-text);
+  font-size: 1.08rem;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.afg-core-screen-metrics small {
+  overflow: hidden;
+  color: var(--j-muted);
+  font-size: 0.6rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+}
+.afg-core-screen-metrics .afg-core-screen-word {
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+.afg-core-screen-section {
+  display: grid;
+  gap: 9px;
+  padding-block-start: 15px;
+  border-block-start: 1px solid color-mix(in srgb, var(--j-border) 72%, transparent);
+}
+.afg-core-screen-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.afg-core-screen-section-head h2 {
+  margin: 0;
+  color: var(--j-text);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+.afg-core-screen-section-head button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  color: var(--j-accent);
+  font-size: 0.66rem;
+  font-weight: 650;
+}
+.afg-core-screen-count {
+  display: inline-flex;
+  min-width: 22px;
+  justify-content: center;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--j-accent-soft);
+  color: var(--j-accent);
+  font-size: 0.62rem;
+  font-weight: 750;
+}
+.afg-core-event-list,
+.afg-core-model-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.afg-core-event-list li,
+.afg-core-model-list li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--j-card) 56%, transparent);
+  animation: afg-core-row-in 280ms var(--afg-ease, ease) both;
+}
+.afg-core-event-list li[data-status="running"] {
+  border-color: color-mix(in srgb, var(--j-accent) 25%, transparent);
+}
+.afg-core-event-mark {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  color: var(--j-accent);
+  background: var(--j-accent-soft);
+}
+.afg-core-event-list li[data-status="failed"] .afg-core-event-mark {
+  color: var(--j-warning);
+  background: color-mix(in srgb, var(--j-warning) 10%, transparent);
+}
+.afg-core-event-list li > span:last-child,
+.afg-core-model-list li > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+.afg-core-event-list strong,
+.afg-core-model-list strong {
+  overflow: hidden;
+  color: var(--j-text);
+  font-size: 0.7rem;
+  font-weight: 580;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.afg-core-event-list small,
+.afg-core-model-list small {
+  overflow: hidden;
+  color: var(--j-muted);
+  font-size: 0.6rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.afg-core-model-list li > svg {
+  margin-inline-start: auto;
+  flex: 0 0 auto;
+  color: var(--j-accent);
+}
+.afg-core-model-orbit {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--j-accent) 35%, transparent);
+  border-radius: 50%;
+  box-shadow: inset 0 0 10px var(--j-accent-soft);
+}
+.afg-core-screen-empty {
+  margin: 0;
+  padding: 11px;
+  border: 1px dashed color-mix(in srgb, var(--j-border) 80%, transparent);
+  border-radius: 10px;
+  color: var(--j-muted);
+  font-size: 0.7rem;
+  line-height: 1.6;
+}
+.afg-core-screen-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-block-start: 4px;
+}
+.afg-core-screen-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 8px 13px;
+  border: 1px solid var(--j-border);
+  border-radius: 11px;
+  color: var(--j-text);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+.afg-core-screen-actions .afg-core-screen-primary {
+  border-color: transparent;
+  background: linear-gradient(110deg, var(--j-accent), #a9a2ff);
+  color: #051018;
+}
+.afg-core-screen-actions button:hover {
+  border-color: color-mix(in srgb, var(--j-accent) 45%, var(--j-border));
+}
+.afg-core-screen-footnote {
+  margin: 0;
+  color: var(--j-muted);
+  font-size: 0.62rem;
+}
+@keyframes afg-core-signal {
+  0%, 100% { opacity: 0.55; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+@keyframes afg-core-equalize {
+  from { transform: scaleY(0.55); opacity: 0.65; }
+  to { transform: scaleY(1.08); opacity: 1; }
+}
+@keyframes afg-core-row-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 980px) {
+  .afg-core-screen-layout {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+  }
+  .afg-core-screen-stage {
+    padding-block-start: 8px;
+  }
+  .afg-core-screen .afg-core.is-cinematic {
+    --size: min(66vw, 450px);
+    height: min(62vw, 430px);
+  }
+  .afg-core-screen-panel {
+    width: min(100%, 760px);
+    margin-inline: auto;
+  }
+}
+@media (max-width: 600px) {
+  .afg-core-screen {
+    padding: 12px 10px 24px;
+    min-height: auto;
+  }
+  .afg-core-screen-layout {
+    min-height: 0;
+  }
+  .afg-core-screen .afg-core.is-cinematic {
+    --size: min(82vw, 340px);
+    height: min(67vw, 300px);
+  }
+  .afg-core-screen-status {
+    width: min(100%, 340px);
+    padding: 9px 12px;
+  }
+  .afg-core-screen-panel {
+    padding: 16px;
+    border-radius: 20px;
+  }
+  .afg-core-screen-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .afg-core-screen-actions button {
+    flex: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .afg-core-screen *,
+  .afg-core-screen *::before,
+  .afg-core-screen *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

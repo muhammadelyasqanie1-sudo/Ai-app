@@ -1,0 +1,108 @@
+/* Shared cinematic atmosphere. Keep effects layered and bounded for mobile GPUs. */
+.afg-cinematic-field {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  isolation: isolate;
+  contain: strict;
+}
+.afg-cinematic-field canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0.82;
+}
+.afg-cinematic-nebula {
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(ellipse at 24% 30%, rgba(13, 242, 255, 0.14), transparent 34%),
+    radial-gradient(ellipse at 76% 66%, rgba(139, 92, 246, 0.15), transparent 36%),
+    radial-gradient(ellipse at 50% 100%, rgba(59, 130, 246, 0.1), transparent 44%);
+  filter: blur(18px);
+  animation: afg-cinematic-breathe 12s ease-in-out infinite alternate;
+}
+.afg-cinematic-grid {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(120, 210, 237, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 210, 237, 0.055) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse at center, #000 0%, #0008 52%, transparent 82%);
+  opacity: 0.68;
+}
+.afg-cinematic-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(5, 6, 10, 0.06), transparent 24%, transparent 72%, rgba(5, 6, 10, 0.5)),
+    radial-gradient(ellipse at center, transparent 40%, rgba(5, 6, 10, 0.5) 100%);
+}
+.afg-cinematic-field.is-core .afg-cinematic-grid {
+  background-size: 42px 42px;
+  opacity: 0.75;
+}
+.afg-cinematic-field.is-core .afg-cinematic-nebula {
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(13, 242, 255, 0.2), transparent 28%),
+    radial-gradient(ellipse at 68% 34%, rgba(139, 92, 246, 0.14), transparent 36%),
+    radial-gradient(ellipse at 32% 76%, rgba(37, 99, 235, 0.12), transparent 32%);
+}
+.afg-cinematic-field.is-welcome .afg-cinematic-grid {
+  mask-image: radial-gradient(ellipse at 50% 44%, #000 0%, #0009 42%, transparent 76%);
+  transform: perspective(700px) rotateX(54deg) scale(1.35);
+  transform-origin: 50% 76%;
+}
+.afg-cinematic-field.is-welcome .afg-cinematic-nebula {
+  filter: blur(26px);
+}
+.afg-cinematic-field.is-ambient .afg-cinematic-grid {
+  opacity: 0.4;
+}
+.afg-cinematic-field.is-ambient .afg-cinematic-nebula {
+  opacity: 0.72;
+}
+.jarvis-app[data-reduced="true"] .afg-cinematic-field .afg-cinematic-nebula,
+.afg-cinematic-field[data-still="true"] .afg-cinematic-nebula {
+  animation: none;
+}
+@keyframes afg-cinematic-breathe {
+  from {
+    transform: scale(0.96) translate3d(-1.5%, 1%, 0);
+    opacity: 0.72;
+  }
+  to {
+    transform: scale(1.06) translate3d(1.5%, -1%, 0);
+    opacity: 1;
+  }
+}
+@media (max-width: 760px) {
+  .afg-cinematic-field canvas {
+    opacity: 0.68;
+  }
+  .afg-cinematic-grid {
+    background-size: 38px 38px;
+  }
+  .afg-cinematic-nebula {
+    filter: blur(12px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .afg-cinematic-nebula {
+    animation: none;
+  }
+  .afg-cinematic-field canvas {
+    display: none;
+  }
+}
+html.afg-reduce-motion .afg-cinematic-nebula {
+  animation: none;
+}
+html.afg-reduce-motion .afg-cinematic-field canvas {
+  display: none;
+}

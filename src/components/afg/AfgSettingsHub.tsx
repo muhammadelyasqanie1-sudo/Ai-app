@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Search, ChevronRight, ArrowLeft, Globe, Palette, MessageSquare, Brain, Code2, Shield,
   Cpu, Smartphone, Mic, FileText, Github, Send, Server, Network, KeyRound, Router, Settings2,
-  CheckCircle2, AlertCircle, LockKeyhole, ExternalLink
+  CheckCircle2, AlertCircle, LockKeyhole, ExternalLink, UserRound
 } from 'lucide-react';
 import type { Language, Theme, UserProfile } from '../../types/afg';
 import { AfgAccountSettings } from './AfgAccountSettings';
@@ -10,6 +10,8 @@ import { AfgFileLibrary } from './AfgFileLibrary';
 import { AfgIntelligencePanel } from './AfgIntelligencePanel';
 import { AfgApiConnectorPanel } from './AfgApiConnectorPanel';
 import { getHubUi } from '../../utils/localeUi';
+import { cinematicCopy } from '../cinematic/copy';
+import './AfgSettingsHub.css';
 
 type Context = 'user' | 'admin';
 type SettingId = 'language'|'appearance'|'chat'|'memory'|'intelligence'|'coding'|'privacy'|'files'|'models'|'local'|'voice'|'github'|'telegram'|'ftp'|'mcp'|'byok'|'router'|'api-hub'|'9router';
@@ -119,7 +121,8 @@ interface Props {
 }
 
 export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLanguage,onSetTheme,onOpenShortcuts}) => {
-  const fa = language === 'dari';
+  const fa = language === 'dari' || language === 'persian';
+  const cinematic = cinematicCopy(language);
   const hubUi = getHubUi(language);
   const t = { ...copy.en, ...(fa ? copy.fa : {}), ...hubUi };
   const groupLabels = (hubUi.groups || '').split(' · ');
@@ -225,10 +228,23 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
   </section>;
 
   return <section className="afg-settings-hub mx-auto w-full max-w-3xl space-y-4 px-3 py-4 sm:px-6" dir={fa?'rtl':'ltr'}>
-    <header className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div><h1 className="text-2xl font-black text-white">{fa?'تنظیمات':'Settings'}</h1><p className="mt-1 text-xs text-slate-400">{fa?'مرکز تنظیمات AFG AI':'Manage your AFG AI experience'}</p></div>
-        <button type="button" onClick={()=>setContext('admin')} className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 px-3 py-2 text-xs font-bold text-cyan-200"><LockKeyhole className="mr-1 inline h-4 w-4"/>{t.admin}</button>
+    <header className="afg-settings-header space-y-3">
+      <div className="afg-settings-hero">
+        <div className="afg-settings-hero-glow" aria-hidden="true" />
+        <div className="afg-settings-avatar" aria-hidden="true">
+          {user.email ? user.nameEn.slice(0, 2).toUpperCase() : <UserRound size={22} />}
+        </div>
+        <div className="afg-settings-hero-copy">
+          <span>{cinematic.settingsProfile}</span>
+          <h1>{cinematic.settingsTitle}</h1>
+          <p>{cinematic.settingsSubtitle}</p>
+        </div>
+        <button type="button" onClick={()=>setContext('admin')} className="afg-settings-admin"><LockKeyhole className="h-4 w-4"/>{t.admin}</button>
+        <div className="afg-settings-identity">
+          <strong>{user.email ? (language === 'dari' || language === 'persian' ? user.name : user.nameEn) : cinematic.settingsGuest}</strong>
+          <span>{user.email ? user.email : cinematic.settingsLocal}</span>
+          <em>{user.tier}</em>
+        </div>
       </div>
       <label className="flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 focus-within:border-cyan-400"><Search className="h-5 w-5 text-slate-400"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t.search} className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"/>{query&&<button type="button" onClick={()=>setQuery('')} className="text-xs text-cyan-300">×</button>}</label>
     </header>

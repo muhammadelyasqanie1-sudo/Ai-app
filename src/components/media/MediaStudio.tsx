@@ -120,7 +120,9 @@ export default function MediaStudio({
   const [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
-    [preview, setPreview] = useState<string | null>(null);
+    [preview, setPreview] = useState<string | null>(null),
+    [dragActive, setDragActive] = useState(false),
+    [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const key = useRef(crypto.randomUUID()),
     mounted = useRef(true),
     refreshSequence = useRef(0),
@@ -204,8 +206,31 @@ export default function MediaStudio({
     } catch (err) {
       fail(err);
     } finally {
-      if (mounted.current) setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+        setUploadProgress(null);
+      }
     }
+  }
+  async function uploadFile(file: File) {
+    if (!file || file.size < 1 || file.size > 15 * 1024 * 1024) throw new Error("size");
+    setUploadProgress(0);
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        setUploadProgress(
+          Math.max(1, Math.min(99, Math.round((event.loaded / event.total) * 100))),
+        );
+      };
+      reader.onload = () => resolve(String(reader.result).split(",")[1]);
+      reader.readAsDataURL(file);
+    });
+    await request("/api/files", { name: file.name, dataBase64: base64 });
+    if (fileInput.current) fileInput.current.value = "";
+    setUploadProgress(100);
+    setNotice(t.fileSaved);
   }
   async function submit() {
     await act(async () => {
@@ -390,40 +415,62 @@ export default function MediaStudio({
               }}
             />
           </label>
-          <label>
-            {t.selectFile}
-            <input
-              ref={fileInput}
-              type="file"
-              accept=".pdf,.txt,.md,.json,.csv,.png,.jpg,.jpeg,.gif,.webp,.wav,.mp3,.ogg,.webm,.mp4"
-            />
-          </label>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() =>
-              void act(async () => {
-                const file = fileInput.current?.files?.[0];
-                if (!file || file.size < 1 || file.size > 15 * 1024 * 1024)
-                  throw new Error("size");
-                const base64 = await new Promise<string>((resolve, reject) => {
-                  const reader = new FileReader();
-                  reader.onerror = reject;
-                  reader.onload = () =>
-                    resolve(String(reader.result).split(",")[1]);
-                  reader.readAsDataURL(file);
-                });
-                await request("/api/files", {
-                  name: file.name,
-                  dataBase64: base64,
-                });
-                if (fileInput.current) fileInput.current.value = "";
-                setNotice(t.fileSaved);
-              })
-            }
+          <div
+            className={`media-upload-zone ${dragActive ? "is-dragging" : ""}`}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setDragActive(true);
+            }}
+            onDragOver={(event) => event.preventDefault()}
+            onDragLeave={(event) => {
+              if (event.currentTarget === event.target) setDragActive(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragActive(false);
+              const file = event.dataTransfer.files?.[0];
+              if (file) void act(async () => uploadFile(file));
+            }}
+            aria-label={t.dropFile}
           >
-            {t.upload}
-          </button>
+            <strong>{t.dropFile}</strong>
+            <label>
+              {t.selectFile}
+              <input
+                ref={fileInput}
+                type="file"
+                accept=".pdf,.txt,.md,.json,.csv,.png,.jpg,.jpeg,.gif,.webp,.wav,.mp3,.ogg,.webm,.mp4"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void act(async () => {
+                  const file = fileInput.current?.files?.[0];
+                  if (!file) throw new Error("size");
+                  await uploadFile(file);
+                })
+              }
+            >
+              {busy ? t.pending : t.upload}
+            </button>
+            {uploadProgress !== null && (
+              <div className="media-upload-progress" role="status" aria-live="polite">
+                <span>
+                  {uploadProgress >= 100 ? t.fileSaved : t.uploading}{" "}
+                  {uploadProgress < 100
+                    ? formatLocalizedNumber(uploadProgress, language) + "%"
+                    : ""}
+                </span>
+                <progress
+                  max={100}
+                  value={uploadProgress}
+                  aria-label={t.uploadProgress}
+                />
+              </div>
+            )}
+          </div>
           {!files.length && <p>{t.empty}</p>}
           <ul className="media-files">
             {files.map((f) => (
@@ -528,12 +575,17 @@ export default function MediaStudio({
           </nav>
         </section>
       </div>
-      <section className="media-panel" aria-labelledby="media-history">
-        <h2 id="media-history">{t.history}</h2>
+      <section className="media-panel media-history" aria-labelledby="media-history">
+        <div className="media-history-head">
+          <h2 id="media-history">{t.history}</h2>
+          <span className="media-live-label">
+            <i aria-hidden="true" /> {t.live}
+          </span>
+        </div>
         {!jobs.length && <p>{t.empty}</p>}
         <ol className="media-jobs">
           {jobs.map((j) => (
-            <li key={j.id}>
+            <li key={j.id} data-status={j.status}>
               <div>
                 <strong>{t[j.request.type as MediaCopyKey]}</strong>
                 <span className="media-status">

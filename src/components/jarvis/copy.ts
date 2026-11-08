@@ -1,6 +1,7 @@
 import type { Language } from "../../types/afg";
 export const english = {
   home: "Overview",
+  intelligence: "AI Core",
   chat: "AI Chat",
   voice: "Voice Assistant",
   automation: "Automation",
@@ -20,6 +21,7 @@ export const english = {
 const nav: Partial<Record<Language, Partial<typeof english>>> = {
   dari: {
     home: "نمای کلی",
+    intelligence: "هستهٔ هوش",
     chat: "گفت‌وگو",
     voice: "دستیار صوتی",
     automation: "خودکارسازی",
@@ -38,6 +40,7 @@ const nav: Partial<Record<Language, Partial<typeof english>>> = {
   },
   persian: {
     home: "نمای کلی",
+    intelligence: "هستهٔ هوش",
     chat: "گفت‌وگو",
     voice: "دستیار صوتی",
     automation: "خودکارسازی",
@@ -56,6 +59,7 @@ const nav: Partial<Record<Language, Partial<typeof english>>> = {
   },
   pashto: {
     home: "کتنه",
+    intelligence: "د AI هسته",
     chat: "خبرې",
     voice: "غږیز مرستیال",
     automation: "اتومات",
@@ -74,6 +78,7 @@ const nav: Partial<Record<Language, Partial<typeof english>>> = {
   },
   arabic: {
     home: "نظرة عامة",
+    intelligence: "نواة الذكاء",
     chat: "المحادثة",
     voice: "المساعد الصوتي",
     automation: "الأتمتة",

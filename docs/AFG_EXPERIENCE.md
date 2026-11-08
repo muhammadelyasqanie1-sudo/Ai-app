@@ -110,5 +110,41 @@ Owner: AFG AI command-center presentation. Status: **Incomplete as a whole**; th
 
 Next acceptance work: complete criterion 1 across the remaining legacy screens, then verify real provider streaming and microphone journeys under criteria 2 and 10 with configured services and user permissions. Physical Android packaging and testing are separate unfinished platform deliverables.
 
+## Cinematic screen layer
+
+This revision adds a shared motion and presentation layer over the existing command center. It does not replace the chat engine, provider gateway, authentication, persistence or JARVIS state resolver.
+
+| Screen | Implementation |
+| --- | --- |
+| Welcome | `AfgCinematicIntro` in the existing `.afg-experience-dialog.is-intro` stage, with the shared `CinematicField` and cinematic core |
+| AI Core | `IntelligenceCoreScreen` at the new `intelligence` tab; live state, current tool, activity, verified models, open tasks and backend/database checks |
+| Dashboard | Existing dashboard hero plus `CinematicField`, live agent activity, provider availability and recent conversations from the server or guest `afg_sessions` |
+| AI chat | Existing SSE chat with ambient layers, staggered message entrance, real response character count, receiving state and an equalizer while content is actually streaming |
+| Media Studio | Existing private files and media jobs with drag/drop selection, real local `FileReader` file-preparation progress, and live task cards driven by `/api/media/jobs` |
+| Settings/profile | Existing settings hub with an animated profile header and localized title; existing panels and permissions are unchanged |
+
+### Shared systems
+
+- `src/components/cinematic/CinematicField.tsx` and `cinematic.css`: one bounded canvas/nebula/grid field for welcome, dashboard and core. No second animation engine, WebGL or three.js.
+- `src/components/cinematic/copy.ts`: localized labels for every new surface in English, Dari/Persian, Pashto and Arabic.
+- `src/components/jarvis/IntelligenceCoreScreen.css`, `intelligence.css`, `src/components/media/media.css` and `AfgSettingsHub.css`: reduced-motion rules, mobile fallbacks, logical properties for RTL and touch-sized controls.
+- Graphics profile and reduced-motion preferences continue to come from `useExperience`; low profile skips the canvas and uses static CSS/SVG.
+- The mobile bottom navigation now includes AI Core; the existing drawer includes the same destination.
+
+### Data truth
+
+Dashboard activity, provider availability, model counts, recent conversations, open tasks, core tool state, media jobs and upload progress are derived from existing workspace state or the existing API. The new layer does not fabricate responses, tokens, percentages or provider states. The file-preparation meter comes from the browser's local file read; it is labelled as preparation and is not presented as server processing progress or as a completed upload.
+
+### Verification
+
+- `npm run lint` — passed.
+- `npm run build` — passed (existing large-chunk warnings remain).
+- `npm run i18n:check` — passed, 18 locales × 113 keys.
+- `npm run test:jarvis-command` — passed.
+- Desktop Cloud Chromium: welcome, dashboard, AI Core, chat, media and settings inspected; Arabic RTL inspected.
+- Mobile Cloud Chromium (iframe viewport 390×842): welcome, dashboard and AI Core inspected; document width 388px with no horizontal overflow; six mobile destinations available.
+
+Live provider streaming, real media processing and signed-in account journeys still require configured services. Physical Android 10 performance and native packaging remain unverified. Legacy hardcoded English in older tools/settings panels remains a known localization gap.
+
 
 <!-- /coderabbit-ai-generated:v1 -->

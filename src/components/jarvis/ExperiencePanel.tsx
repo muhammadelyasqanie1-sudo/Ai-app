@@ -54,7 +54,7 @@ export default function ExperiencePanel(p: {
   return (
     <dialog
       ref={dialog}
-      className="afg-experience-dialog"
+      className={`afg-experience-dialog ${intro ? "is-intro" : ""}`}
       aria-labelledby="afg-experience-title"
       onCancel={(event) => {
         event.preventDefault();

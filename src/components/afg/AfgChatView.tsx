@@ -29,6 +29,7 @@ import type { Language, AfgMessage, ChatAttachment, UserProfile, AfgCapabilityKe
 import type { AfgSystemFeatures } from './AfgCommandPalette';
 import { translations } from '../../utils/afgTranslations';
 import { getIntlLocale } from '../../utils/i18n';
+import { cinematicCopy } from '../cinematic/copy';
 
 interface AfgChatViewProps {
   messages: AfgMessage[];
@@ -88,7 +89,9 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   onOpenAfgAssistant,
 }) => {
   const t = translations[language];
+  const cinematic = cinematicCopy(language);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const streamingChars = messages.at(-1)?.content?.length || 0;
   const [isSlowResponse, setIsSlowResponse] = useState(false);
   useEffect(() => {
     if (!isLoading) { setIsSlowResponse(false); return; }
@@ -181,7 +184,8 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   ];
 
   return (
-    <div style={{ maxWidth: "var(--afg-chat-width, 64rem)" }} className="afg-chat-view flex h-[calc(100dvh-5.25rem)] min-h-0 flex-col mx-auto w-full px-2 sm:px-4" dir={["dari","pashto","persian","arabic","urdu"].includes(language) ? "rtl" : "ltr"}>
+    <div style={{ maxWidth: "var(--afg-chat-width, 64rem)" }} data-streaming={isLoading} className="afg-chat-view flex h-[calc(100dvh-5.25rem)] min-h-0 flex-col mx-auto w-full px-2 sm:px-4" dir={["dari","pashto","persian","arabic","urdu"].includes(language) ? "rtl" : "ltr"}>
+      <div className="afg-chat-ambient" aria-hidden="true"><span /><span /><span /></div>
       
       {/* Top Session Status Bar */}
       <div className="afg-chat-statusbar sticky top-0 z-20 flex items-center justify-between py-2 px-3 border-b border-cyan-900/30 mb-2 bg-inherit/90 backdrop-blur-xl">
@@ -239,8 +243,8 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
             </div>
 
             <div>
-              <h2 className="afg-chat-welcome-title text-2xl font-black text-white">{language === 'dari' ? 'امروز چه چیزی می‌خواهید بسازید؟' : 'What do you want to build?'}</h2>
-              <p className="text-sm text-cyan-300 font-medium mt-2">{language === 'dari' ? 'با یک ایده شروع کنید یا پروژه تازه‌ای بسازید.' : 'Start with an idea or create a new project.'}</p>
+              <h2 className="afg-chat-welcome-title text-2xl font-black text-white">{cinematic.chatWelcome}</h2>
+              <p className="text-sm text-cyan-300 font-medium mt-2">{cinematic.chatWelcomeBody}</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full text-start" dir={['dari','pashto','persian','arabic','urdu'].includes(language) ? 'rtl' : 'ltr'}>
@@ -252,7 +256,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                 >
                   <span className="flex items-center gap-2 font-semibold mb-1 group-hover:text-cyan-300">
                     {idx === 0 ? <Code2 className="h-4 w-4 text-cyan-400"/> : idx === 1 ? <FolderSearch className="h-4 w-4 text-cyan-400"/> : idx === 2 ? <Globe className="h-4 w-4 text-cyan-400"/> : <FilePlus2 className="h-4 w-4 text-cyan-400"/>}
-                    <span>{language === 'dari' ? 'پیشنهاد' : 'Try this'}</span><ChevronDown className="ms-auto h-3 w-3 -rotate-90 opacity-50"/>
+                    <span>{cinematic.chatSuggestion}</span><ChevronDown className="ms-auto h-3 w-3 -rotate-90 opacity-50"/>
                   </span>
                   <span className="line-clamp-2 text-[11px] text-slate-400">
                     {prompt}
@@ -264,16 +268,18 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
         )}
 
         {/* Message Items */}
-        {messages.filter((message) => !(message.role === 'assistant' && !message.content.trim() && message.isStreaming)).map((msg) => {
+        {messages.filter((message) => !(message.role === 'assistant' && !message.content.trim() && message.isStreaming)).map((msg, messageIndex) => {
           const isUser = msg.role === 'user';
           const isSpeaking = speakingMsgId === msg.id;
 
           return (
             <div
               key={msg.id}
-              className={`flex items-start gap-3 ${
+              data-role={msg.role}
+              style={{ '--afg-message-index': messageIndex } as React.CSSProperties}
+              className={`afg-message-row flex items-start gap-3 ${
                 isUser ? 'flex-row-reverse' : 'flex-row'
-              } animate-in fade-in duration-200`}
+              }`}
             >
               {/* Avatar */}
               <div className="shrink-0 mt-0.5">
@@ -329,6 +335,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                 {/* Main Bubble */}
                 <div
                   data-afg-message="true"
+                  data-streaming={msg.isStreaming}
                   className={`rounded-2xl px-4 py-3 text-sm sm:text-base leading-relaxed shadow-lg ${
                     isUser
                       ? 'bg-gradient-to-r from-sky-600 to-cyan-600 text-white rounded-tr-none'
@@ -437,13 +444,14 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
         })}
 
         {isLoading && (
-          <div className="flex items-center gap-3">
+          <div className="afg-chat-live-row flex items-center gap-3" role="status" aria-live="polite">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-sky-600 flex items-center justify-center p-1.5 shadow-[0_0_12px_rgba(0,229,255,0.4)]">
               <AfgBrainLogo size="sm" showBadge={false} />
             </div>
-            <div className="p-3.5 rounded-2xl bg-[#0b142c] border border-cyan-900/40 text-cyan-300 flex items-center gap-2 text-xs">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-              <span>{language === 'dari' ? (isSlowResponse ? 'هنوز در حال فکر کردن…' : 'AFG AI در حال پردازش و پاسخگویی...') : (isSlowResponse ? 'Still thinking…' : 'AFG AI is generating a thoughtful response...')}</span>
+            <div className="afg-chat-live-bubble p-3.5 rounded-2xl bg-[#0b142c] border border-cyan-900/40 text-cyan-300 flex items-center gap-2 text-xs">
+              <span className="afg-chat-equalizer" aria-hidden="true"><i /><i /><i /></span>
+              <span>{isSlowResponse ? (language === 'dari' ? 'هنوز در حال فکر کردن…' : 'Still thinking…') : cinematic.chatReceiving}</span>
+              <span className="afg-chat-live-count" aria-hidden="true">{streamingChars.toLocaleString(getIntlLocale(language))}</span>
             </div>
           </div>
         )}

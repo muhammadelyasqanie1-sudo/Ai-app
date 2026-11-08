@@ -10,6 +10,7 @@ import {
   Bell,
   BookOpen,
   Bot,
+  BrainCircuit,
   Check,
   ChevronDown,
   ChevronRight,
@@ -59,6 +60,9 @@ import {
 } from "./experience";
 import { workspaceCopy } from "./workspaceCopy";
 import { experienceCopy } from "./experienceCopy";
+import { cinematicCopy } from "../cinematic/copy";
+import { CinematicField } from "../cinematic/CinematicField";
+import { IntelligenceCoreScreen } from "./IntelligenceCoreScreen";
 import { formatLocalizedNumber, getIntlLocale } from "../../utils/i18n";
 import "./jarvis.css";
 import "./intelligence.css";
@@ -100,6 +104,7 @@ type Props = {
 };
 const navItems = [
   ["home", LayoutDashboard],
+  ["intelligence", BrainCircuit],
   ["chat", MessageSquare],
   ["voice", AudioLines],
   ["automation", Network],
@@ -116,6 +121,7 @@ const navItems = [
 ] as const;
 const localTabs = [
   "home",
+  "intelligence",
   "tasks",
   "files",
   "automation",
@@ -128,6 +134,7 @@ const localTabs = [
 export function JarvisShell(p: Props) {
   const labels = navigationCopy(p.language);
   const visual = experienceCopy(p.language);
+  const cinematic = cinematicCopy(p.language);
   const w = workspaceCopy(p.language);
   const n = (value: number) => formatLocalizedNumber(value, p.language);
   const experience = useExperience();
@@ -150,6 +157,67 @@ export function JarvisShell(p: Props) {
   };
   const status = useCommandStatus();
   const taskStore = useLocalTasks(p.user.id);
+  const [recentChats, setRecentChats] = useState<
+    Array<{ id: string; title: string; lastMessage: string; timestamp: number }>
+  >([]);
+  useEffect(() => {
+    let alive = true;
+    const readGuest = () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem("afg_sessions") || "[]");
+        if (!alive || !Array.isArray(saved)) return;
+        setRecentChats(
+          saved
+            .filter(
+              (item: any) =>
+                typeof item?.id === "string" && item.id.startsWith("chat-"),
+            )
+            .sort((a: any, b: any) => Number(b.timestamp || 0) - Number(a.timestamp || 0))
+            .slice(0, 3)
+            .map((item: any) => ({
+              id: item.id,
+              title: String(item.title || ""),
+              lastMessage: String(item.lastMessage || ""),
+              timestamp: Number(item.timestamp || 0),
+            })),
+        );
+      } catch {
+        if (alive) setRecentChats([]);
+      }
+    };
+    if (!p.user.email) {
+      readGuest();
+      window.addEventListener("storage", readGuest);
+      return () => {
+        alive = false;
+        window.removeEventListener("storage", readGuest);
+      };
+    }
+    void apiFetch("/api/conversations")
+      .then((response) => response.json())
+      .then((payload: any) => {
+        if (!alive) return;
+        const rows = Array.isArray(payload.conversations)
+          ? payload.conversations
+          : [];
+        setRecentChats(
+          rows.slice(0, 3).map((row: any) => ({
+            id: String(row.id),
+            title: String(row.title || ""),
+            lastMessage: String(row.lastMessage || ""),
+            timestamp: new Date(
+              row.updatedAt || row.createdAt || Date.now(),
+            ).getTime(),
+          })),
+        );
+      })
+      .catch(() => {
+        if (alive) setRecentChats([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [p.user.email, p.user.id]);
   const [drawer, setDrawer] = useState(false);
   const [mobile, setMobile] = useState(
     () => matchMedia("(max-width: 760px)").matches,
@@ -664,6 +732,23 @@ export function JarvisShell(p: Props) {
                 )}
               </div>
             )}
+            {p.tab === "intelligence" && (
+              <IntelligenceCoreScreen
+                language={p.language}
+                state={coreState}
+                profile={experience.profile}
+                reduced={experience.reduced}
+                activities={p.activities}
+                models={p.models}
+                activeTasks={p.activeTasks}
+                openTasks={pending}
+                backend={status.backend}
+                database={status.database}
+                onChat={() => go("chat")}
+                onSettings={() => go("settings")}
+                onHistory={() => go("history")}
+              />
+            )}
             {p.tab === "home" ? (
               <div className="j-dashboard">
                 <div className="j-page-heading">
@@ -692,6 +777,12 @@ export function JarvisShell(p: Props) {
                   </div>
                 )}
                 <section className="j-hero">
+                  <CinematicField
+                    variant="ambient"
+                    profile={experience.profile}
+                    reduced={experience.reduced}
+                    className="j-hero-field"
+                  />
                   <div className="j-hero-copy">
                     <span className="j-hero-kicker">{visual.design}</span>
                     <h1>
@@ -756,6 +847,153 @@ export function JarvisShell(p: Props) {
                     </span>
                     <ChevronRight size={15} />
                   </button>
+                </div>
+                <div className="j-cinematic-grid">
+                  <section className="j-cinematic-card j-live-activity-card">
+                    <header>
+                      <span className="j-cinematic-icon cyan">
+                        <Activity size={17} />
+                      </span>
+                      <div>
+                        <h2>{cinematic.dashboardLive}</h2>
+                        <small>
+                          {p.activities.length
+                            ? `${n(p.activities.length)} · ${visual.core}`
+                            : cinematic.dashboardLiveEmpty}
+                        </small>
+                      </div>
+                      <span
+                        className="j-cinematic-pulse"
+                        data-active={p.activities.some(
+                          (item) => item.status === "running",
+                        )}
+                        aria-hidden="true"
+                      />
+                    </header>
+                    {p.activities.length ? (
+                      <ol className="j-cinematic-events">
+                        {p.activities
+                          .slice(-4)
+                          .reverse()
+                          .map((item, index) => (
+                            <li key={`${item.name}-${index}`} data-status={item.status}>
+                              <span className="j-cinematic-event-dot" />
+                              <span>
+                                <strong>{item.label || item.name}</strong>
+                                <small>
+                                  {item.status === "running"
+                                    ? visual.executing
+                                    : item.status === "completed"
+                                      ? w("Completed")
+                                      : visual.error}
+                                </small>
+                              </span>
+                            </li>
+                          ))}
+                      </ol>
+                    ) : (
+                      <p className="j-cinematic-empty">
+                        {cinematic.dashboardLiveEmpty}
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      className="j-cinematic-link"
+                      onClick={() => go("tasks")}
+                    >
+                      {w("View tasks")} <ArrowRight size={13} />
+                    </button>
+                  </section>
+                  <section className="j-cinematic-card j-provider-card">
+                    <header>
+                      <span className="j-cinematic-icon violet">
+                        <Cpu size={17} />
+                      </span>
+                      <div>
+                        <h2>{cinematic.dashboardProviders}</h2>
+                        <small>
+                          {available.length
+                            ? w("Ready for your next idea")
+                            : cinematic.dashboardProvidersEmpty}
+                        </small>
+                      </div>
+                      <span className="j-cinematic-count">
+                        {n(available.length)}
+                      </span>
+                    </header>
+                    {p.models.length ? (
+                      <ul className="j-provider-list">
+                        {p.models.slice(0, 4).map((model) => (
+                          <li
+                            key={`${model.providerId}::${model.id}`}
+                            data-selectable={model.selectable}
+                          >
+                            <span className="j-provider-orbit" aria-hidden="true" />
+                            <span>
+                              <strong>{model.displayName}</strong>
+                              <small>{model.providerId}</small>
+                            </span>
+                            <span className="j-provider-state">
+                              {model.selectable
+                                ? cinematic.dashboardSelectable
+                                : cinematic.dashboardUnavailable}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="j-cinematic-empty">
+                        {cinematic.dashboardProvidersEmpty}
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      className="j-cinematic-link"
+                      onClick={() => go("settings")}
+                    >
+                      {cinematic.coreSettings} <ArrowRight size={13} />
+                    </button>
+                  </section>
+                </div>
+                <div className="j-section-title j-recent-title">
+                  <h2>
+                    {cinematic.dashboardRecent}{" "}
+                    <span>{n(recentChats.length)}</span>
+                  </h2>
+                  <button onClick={() => go("history")}>
+                    {cinematic.dashboardViewAll} <ArrowRight size={13} />
+                  </button>
+                </div>
+                <div className="j-recent-chat-list">
+                  {recentChats.length ? (
+                    recentChats.map((chat) => (
+                      <button
+                        key={chat.id}
+                        type="button"
+                        onClick={() => go("history")}
+                      >
+                        <span className="j-recent-chat-icon">
+                          <MessageSquare size={15} />
+                        </span>
+                        <span>
+                          <strong>{chat.title || w("New conversation")}</strong>
+                          <small>
+                            {chat.lastMessage ||
+                              new Intl.DateTimeFormat(getIntlLocale(p.language), {
+                                month: "short",
+                                day: "numeric",
+                              }).format(new Date(chat.timestamp || Date.now()))}
+                          </small>
+                        </span>
+                        <ArrowRight size={13} />
+                      </button>
+                    ))
+                  ) : (
+                    <div className="j-cinematic-empty j-recent-empty">
+                      <MessageSquare size={16} />
+                      <span>{cinematic.dashboardRecentEmpty}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="j-section-title">
                   <h2>{w("What’s on your mind?")}</h2>
@@ -979,7 +1217,7 @@ export function JarvisShell(p: Props) {
                 model={p.selectedModel}
                 onActivity={setAgentRunning}
               />
-            ) : localTabs.includes(p.tab) ? (
+            ) : localTabs.includes(p.tab) && p.tab !== "intelligence" ? (
               <section className="j-local-page">
                 <div className="j-eyebrow">
                   {labels[p.tab as keyof typeof labels]}
@@ -1036,7 +1274,7 @@ export function JarvisShell(p: Props) {
                   </button>
                 </div>
               </section>
-            ) : (
+            ) : p.tab === "intelligence" ? null : (
               <div className="j-existing-view">{p.children}</div>
             )}
           </div>
@@ -1217,7 +1455,14 @@ export function JarvisShell(p: Props) {
         </Suspense>
       )}
       <nav className="j-mobile-bottom" aria-label={w("Mobile navigation")}>
-        {(["home", "chat", "voice", "tasks", "settings"] as const).map((id) => {
+        {([
+          "home",
+          "intelligence",
+          "chat",
+          "voice",
+          "tasks",
+          "settings",
+        ] as const).map((id) => {
           const Icon =
             id === "settings"
               ? Settings2

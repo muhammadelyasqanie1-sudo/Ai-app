@@ -7,11 +7,13 @@ export default function IntelligenceCore({
   profile = "balanced",
   reduced = false,
   compact = false,
+  variant = "default",
 }: {
   state: CoreState;
   profile?: Exclude<GraphicsProfile, "auto">;
   reduced?: boolean;
   compact?: boolean;
+  variant?: "default" | "cinematic";
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [paused, setPaused] = useState(false);
@@ -37,7 +39,7 @@ export default function IntelligenceCore({
   return (
     <div
       ref={ref}
-      className={`afg-core ${compact ? "is-compact" : ""}`}
+      className={`afg-core ${compact ? "is-compact" : ""} ${variant === "cinematic" ? "is-cinematic" : ""}`}
       data-state={state}
       data-profile={profile}
       data-still={
