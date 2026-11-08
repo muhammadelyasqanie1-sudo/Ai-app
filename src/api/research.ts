@@ -20,11 +20,9 @@ const ChatWebSearchInput = z.object({
   time_range: z.enum(['day','week','month','year']).optional(),
 }).strict();
 
-export async function executeWebSearchTool(userId: string, args: unknown, parentSignal?: AbortSignal) {
-  if (!userId) throw new Error('Sign in is required to search the web.');
-  const input = ChatWebSearchInput.safeParse(args);
-  if (!input.success) throw new Error('Provide a valid web-search query and supported filters.');
+type WebSearchRuntime = { provider: 'tavily' | 'brave' | 'serpapi'; apiKey: string; integrationId: string | null };
 
+async function resolveWebSearchRuntime(): Promise<WebSearchRuntime> {
   let integrationId: string | null = null;
   if (pool) {
     const status = await pool.query("SELECT id,enabled,status,last_check_ok FROM integrations WHERE slug='web-search' LIMIT 1");
@@ -35,23 +33,36 @@ export async function executeWebSearchTool(userId: string, args: unknown, parent
       integrationId = String(status.rows[0].id);
     }
   }
-
   const runtime = await getIntegrationRuntime('web-search');
   const provider = String(runtime?.config.provider || 'tavily');
+  if (!['tavily', 'brave', 'serpapi'].includes(provider)) throw new Error('The configured Web Search provider is not supported.');
   const apiKey = runtime?.credentials.api_key || process.env.TAVILY_API_KEY || '';
   if (!apiKey) throw new Error('Web Search is not configured. Connect Tavily in Admin → Connections.');
-  if (integrationId && pool) {
-    const policy = await pool.query('SELECT requests,window_seconds FROM integration_rate_limits WHERE integration_id=$1',[integrationId]);
-    const maxRequests = Math.max(1, Number(policy.rows[0]?.requests || 12));
-    const windowSeconds = Math.max(1, Number(policy.rows[0]?.window_seconds || 60));
-    const counter = await pool.query(`INSERT INTO integration_rate_counters(integration_id,user_id,window_start,request_count)
-      VALUES($1,$2,to_timestamp((floor(extract(epoch FROM now())/$3)*$3)::double precision),1)
-      ON CONFLICT(integration_id,user_id,window_start) DO UPDATE SET request_count=integration_rate_counters.request_count+1
-      RETURNING request_count`,[integrationId,userId,windowSeconds]);
-    if (Number(counter.rows[0]?.request_count || 0) > maxRequests) {
-      throw new Error('Web Search integration rate limit reached. Please retry after the current window.');
-    }
+  return { provider: provider as WebSearchRuntime['provider'], apiKey, integrationId };
+}
+
+async function enforceWebSearchRateLimit(runtime: WebSearchRuntime, userId: string): Promise<void> {
+  if (!runtime.integrationId || !pool) return;
+  const policy = await pool.query('SELECT requests,window_seconds FROM integration_rate_limits WHERE integration_id=$1', [runtime.integrationId]);
+  const maxRequests = Math.max(1, Number(policy.rows[0]?.requests || 12));
+  const windowSeconds = Math.max(1, Number(policy.rows[0]?.window_seconds || 60));
+  const counter = await pool.query(`INSERT INTO integration_rate_counters(integration_id,user_id,window_start,request_count)
+    VALUES($1,$2,to_timestamp((floor(extract(epoch FROM now())/$3)*$3)::double precision),1)
+    ON CONFLICT(integration_id,user_id,window_start) DO UPDATE SET request_count=integration_rate_counters.request_count+1
+    RETURNING request_count`, [runtime.integrationId, userId, windowSeconds]);
+  if (Number(counter.rows[0]?.request_count || 0) > maxRequests) {
+    throw new Error('Web Search integration rate limit reached. Please retry after the current window.');
   }
+}
+
+export async function executeWebSearchTool(userId: string, args: unknown, parentSignal?: AbortSignal) {
+  if (!userId) throw new Error('Sign in is required to search the web.');
+  const input = ChatWebSearchInput.safeParse(args);
+  if (!input.success) throw new Error('Provide a valid web-search query and supported filters.');
+
+  const runtime = await resolveWebSearchRuntime();
+  const { provider, apiKey } = runtime;
+  await enforceWebSearchRateLimit(runtime, userId);
   if (activeSearches >= 3) throw new Error('Web Search is busy. Please retry shortly.');
 
   activeSearches += 1;
@@ -128,6 +139,119 @@ export async function executeWebSearchTool(userId: string, args: unknown, parent
   } catch (error) {
     if (controller.signal.aborted) {
       throw new Error(parentSignal?.aborted ? 'Web Search was cancelled.' : 'Web Search timed out after 15 seconds.');
+    }
+    throw error instanceof Error ? error : new Error('Web Search failed.');
+  } finally {
+    clearTimeout(timeout);
+    parentSignal?.removeEventListener('abort', onParentAbort);
+    activeSearches = Math.max(0, activeSearches - 1);
+  }
+}
+
+export type WebSearchSource = {
+  title: string;
+  url: string;
+  snippet: string;
+  content: string;
+  score?: number;
+  publishedDate?: string;
+};
+
+/**
+ * Content-returning search used by deep research. It shares the verified
+ * Web Search connection, rate limits and provider policy with the chat tool.
+ * Full extracted page content is returned only when the provider supplies it;
+ * it remains untrusted reference data.
+ */
+export async function searchWebSources(
+  userId: string,
+  options: { query: string; maxResults?: number; includeContent?: boolean; timeRange?: 'day' | 'week' | 'month' | 'year' },
+  parentSignal?: AbortSignal,
+): Promise<{ provider: string; query: string; sources: WebSearchSource[]; responseTimeSeconds?: number }> {
+  if (!userId) throw new Error('Sign in is required to search the web.');
+  const query = String(options.query || '').trim().slice(0, MAX_QUERY_LENGTH);
+  if (query.length < 3) throw new Error('Provide a web-search query of at least three characters.');
+  const maxResults = Math.max(1, Math.min(8, Number(options.maxResults || 8)));
+  const runtime = await resolveWebSearchRuntime();
+  const { provider, apiKey } = runtime;
+  await enforceWebSearchRateLimit(runtime, userId);
+  if (activeSearches >= 3) throw new Error('Web Search is busy. Please retry shortly.');
+
+  activeSearches += 1;
+  const controller = new AbortController();
+  const onParentAbort = () => controller.abort();
+  if (parentSignal?.aborted) controller.abort();
+  else parentSignal?.addEventListener('abort', onParentAbort, { once: true });
+  const timeout = setTimeout(() => controller.abort(), 25_000);
+  try {
+    let endpoint: string;
+    let init: RequestInit;
+    if (provider === 'brave') {
+      endpoint = 'https://api.search.brave.com/res/v1/web/search?q=' + encodeURIComponent(query) + '&count=' + maxResults;
+      init = { headers: { 'X-Subscription-Token': apiKey, Accept: 'application/json' }, signal: controller.signal, redirect: 'error' };
+    } else if (provider === 'serpapi') {
+      endpoint = 'https://serpapi.com/search.json?engine=google&q=' + encodeURIComponent(query) + '&num=' + maxResults + '&api_key=' + encodeURIComponent(apiKey);
+      init = { signal: controller.signal, redirect: 'error' };
+    } else {
+      endpoint = 'https://api.tavily.com/search';
+      init = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        signal: controller.signal,
+        redirect: 'error',
+        body: JSON.stringify({
+          api_key: apiKey,
+          query,
+          search_depth: 'advanced',
+          max_results: maxResults,
+          include_answer: false,
+          include_raw_content: options.includeContent ? 'markdown' : false,
+          ...(options.timeRange ? { time_range: options.timeRange } : {}),
+        }),
+      };
+    }
+    const upstream = await fetch(endpoint, init);
+    if (!upstream.ok) {
+      const reason = upstream.status === 401 || upstream.status === 403
+        ? 'The Web Search API key was rejected.'
+        : upstream.status === 429
+          ? 'The Web Search provider rate limit or credit quota was reached.'
+          : 'The Web Search provider returned an error (HTTP ' + upstream.status + ').';
+      throw new Error(reason);
+    }
+    const data = await upstream.json() as any;
+    const rawResults = provider === 'brave' ? data.web?.results : provider === 'serpapi' ? data.organic_results : data.results;
+    const sources: WebSearchSource[] = Array.isArray(rawResults)
+      ? rawResults.filter((item: any) => {
+          const url = item?.url || item?.link;
+          return typeof url === 'string' && /^https?:\/\//i.test(url) && typeof item.title === 'string';
+        }).slice(0, maxResults).map((item: any) => {
+          const snippet = typeof (item.content || item.description || item.snippet) === 'string'
+            ? String(item.content || item.description || item.snippet).slice(0, 1600)
+            : '';
+          const extracted = options.includeContent && typeof item.raw_content === 'string'
+            ? String(item.raw_content).slice(0, 40_000)
+            : '';
+          const published = item.published_date || item.date || item.age;
+          return {
+            title: String(item.title).slice(0, 300),
+            url: String(item.url || item.link),
+            snippet,
+            content: extracted || snippet,
+            ...(typeof item.score === 'number' ? { score: item.score } : {}),
+            ...(typeof published === 'string' ? { publishedDate: published.slice(0, 40) } : {}),
+          };
+        })
+      : [];
+    return {
+      provider,
+      query,
+      sources,
+      responseTimeSeconds: typeof data.response_time === 'number' ? data.response_time : undefined,
+    };
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(parentSignal?.aborted ? 'Web Search was cancelled.' : 'Web Search timed out.');
     }
     throw error instanceof Error ? error : new Error('Web Search failed.');
   } finally {
