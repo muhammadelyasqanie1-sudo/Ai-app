@@ -24,7 +24,7 @@ The current runtime states map to cinematic states without fabricated activity:
 - error → rose hard pulse
 - offline/cancelled → static muted state
 
-File processing and speaking are available in the visual resolver, but must only be selected when the real upload/TTS lifecycle exposes reliable signals. No fake progress is displayed.
+Speaking is connected to the real HTML audio playback lifecycle and returns to idle on pause, completion, error, preference disable, or chat unmount. File-processing visuals remain available in the resolver but are not activated because the current chat upload path does not expose a verified processing lifecycle. No fake progress is displayed.
 
 ## Introduction sequence
 
