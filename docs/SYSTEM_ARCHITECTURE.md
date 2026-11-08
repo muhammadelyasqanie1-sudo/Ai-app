@@ -136,3 +136,13 @@ Render supplies PORT. There is no Render Blueprint, Dockerfile, D1 binding, R2 b
 ## 8. Change validation
 
 Source files and documentation were updated through GitHub. No tests, type checks, builds, database migrations, workflow runs or deployments were executed. Runtime/compile status is therefore unverified.
+
+
+## Durable model routing, agent execution and file/media lifecycle
+
+- `src/services/modelRouter.ts` ranks only recently health-verified models that advertise the requested capability. It preserves provider-qualified model IDs, honors the configured fallback chain/provider order, supports cost bounds, and can prefer the local Ollama provider when `AFG_AI_PREFER_OFFLINE=true`. The existing provider gateway remains the source of truth for provider registration, health, admin enablement and capability declarations.
+- Chat Auto mode uses the model router when local preference is enabled; tool-enabled turns use capability-aware routing. Manual model selection remains pinned, and configured fallback policy is not bypassed.
+- Agent tasks continue to use the existing `agent_tasks`, `agent_steps` and `agent_events` tables and the existing worker. Migration 0052 adds progress, checkpoints, heartbeat timestamps and JSON event payloads. Owner-scoped SSE endpoints expose task updates and support `Last-Event-ID`.
+- A worker that stops heartbeating for 90 seconds is marked interrupted. Running steps and media jobs are failed with a safe interruption code. The runtime never automatically repeats an uncertain external side effect or potentially billed media request; the user must inspect and explicitly resume eligible agent tasks.
+- Private files still enter quarantine through `/api/files` and require a configured ClamAV scan before they can be used as media inputs. Media work is queued through `/api/media/jobs`, linked to the existing agent queue, and emits a real database-backed SSE snapshot at `/api/media/jobs/:id/events`. No client upload is silently sent to an external provider; explicit external-processing permission remains required.
+- `AFG_AI_PREFER_OFFLINE=true` is a preference, not a guarantee of offline operation. It can select only a verified local Ollama endpoint reachable from the AFG AI server. If no local model is healthy, Auto may choose another verified model; users who require strict offline mode must not assume network isolation from this preference alone.

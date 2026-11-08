@@ -47,11 +47,31 @@ export async function event(
   taskId: string,
   kind: string,
   stepId: string | null = null,
+  payload: Record<string, unknown> = {},
 ) {
   const record = await db.query(
-    "INSERT INTO agent_events(task_id,step_id,kind) VALUES($1,$2,$3) RETURNING request_id",
-    [taskId, stepId, kind],
+    "INSERT INTO agent_events(task_id,step_id,kind,payload) VALUES($1,$2,$3,$4::jsonb) RETURNING request_id",
+    [taskId, stepId, kind, JSON.stringify(payload)],
   );
+  if (kind === "step_completed") {
+    await db.query(
+      `UPDATE agent_tasks SET
+         progress=COALESCE((SELECT floor(count(*) FILTER (WHERE status='completed')::numeric * 100 / NULLIF(count(*),0))::int FROM agent_steps WHERE task_id=$1),progress),
+         heartbeat_at=now(),updated_at=now()
+       WHERE id=$1`,
+      [taskId],
+    );
+  } else if (["completed","failed","cancelled"].includes(kind)) {
+    await db.query(
+      "UPDATE agent_tasks SET progress=CASE WHEN $2='completed' THEN 100 ELSE progress END,finished_at=now(),heartbeat_at=now(),updated_at=now() WHERE id=$1",
+      [taskId, kind],
+    );
+  } else {
+    await db.query(
+      "UPDATE agent_tasks SET heartbeat_at=now(),updated_at=now(),started_at=CASE WHEN $2='started' THEN COALESCE(started_at,now()) ELSE started_at END WHERE id=$1",
+      [taskId, kind],
+    );
+  }
   console.info(
     "AFG_AGENT_EVENT",
     JSON.stringify({
@@ -73,10 +93,10 @@ export async function checkpointPlan(
       [taskId, i, s.agent, s.tool, JSON.stringify(s.input)],
     );
   await db.query(
-    "UPDATE agent_tasks SET plan=$2,status='ready',updated_at=now(),error=NULL WHERE id=$1 AND status='running'",
-    [taskId, JSON.stringify(plan)],
+    "UPDATE agent_tasks SET plan=$2,status='ready',progress=0,checkpoint=$3,updated_at=now(),heartbeat_at=now(),error=NULL WHERE id=$1 AND status='running'",
+    [taskId, JSON.stringify(plan), JSON.stringify({ plannedSteps: plan.steps.length })],
   );
-  await event(db, taskId, "plan_created");
+  await event(db, taskId, "plan_created", null, { plannedSteps: plan.steps.length });
 }
 async function run(taskId: string) {
   const db = await pool!.connect();
@@ -85,6 +105,7 @@ async function run(taskId: string) {
   let slot: string | null = null;
   let locked = false;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let persistedHeartbeat: ReturnType<typeof setInterval> | undefined;
   const controller = new AbortController();
   active.set(taskId, controller);
   try {
@@ -111,7 +132,7 @@ async function run(taskId: string) {
     ).rows[0];
     if (!task || task.status !== "ready") return;
     const claim = await db.query(
-      "UPDATE agent_tasks SET status='running',updated_at=now() WHERE id=$1 AND status='ready' RETURNING *",
+      "UPDATE agent_tasks SET status='running',started_at=COALESCE(started_at,now()),heartbeat_at=now(),finished_at=NULL,updated_at=now() WHERE id=$1 AND status='ready' RETURNING *",
       [taskId],
     );
     if (!claim.rowCount) return;
@@ -124,7 +145,13 @@ async function run(taskId: string) {
         })
         .catch(() => controller.abort());
     }, 500);
-    await event(db, taskId, "started");
+    persistedHeartbeat = setInterval(() => {
+      void pool!.query(
+        "UPDATE agent_tasks SET heartbeat_at=now() WHERE id=$1 AND status='running'",
+        [taskId],
+      ).catch(() => controller.abort());
+    }, 10000);
+    await event(db, taskId, "started", null, { model: task.model });
     if (!task.plan) {
       await db.query(
         "UPDATE agent_tasks SET planning_attempts=planning_attempts+1 WHERE id=$1",
@@ -305,20 +332,21 @@ async function run(taskId: string) {
       }
     }
     const completed = await db.query(
-      "UPDATE agent_tasks SET status='completed',updated_at=now(),error=NULL WHERE id=$1 AND status='running'",
+      "UPDATE agent_tasks SET status='completed',progress=100,finished_at=now(),heartbeat_at=now(),updated_at=now(),error=NULL WHERE id=$1 AND status='running'",
       [taskId],
     );
     if (completed.rowCount) await event(db, taskId, "completed");
   } catch {
     const failed = await db
       .query(
-        "UPDATE agent_tasks SET status='failed',error='Execution failed. Check provider/tool configuration or inspect the interrupted step before retrying.',updated_at=now() WHERE id=$1 AND status='running'",
+        "UPDATE agent_tasks SET status='failed',finished_at=now(),error='Execution failed. Check provider/tool configuration or inspect the interrupted step before retrying.',updated_at=now() WHERE id=$1 AND status='running'",
         [taskId],
       )
       .catch(() => null);
     if (failed?.rowCount) await event(db, taskId, "failed").catch(() => {});
   } finally {
     if (heartbeat) clearInterval(heartbeat);
+    if (persistedHeartbeat) clearInterval(persistedHeartbeat);
     if (browserUser) {
       const final = await db
         .query("SELECT status FROM agent_tasks WHERE id=$1", [taskId])
@@ -357,6 +385,28 @@ export function kick() {
   runtime.draining = true;
   void (async () => {
     try {
+      // A process restart can leave a task in "running". Never replay a possibly
+      // billed or side-effecting step automatically: mark it interrupted and
+      // require the owner to inspect and explicitly resume it.
+      const stale = await pool!.query(
+        `UPDATE agent_tasks
+            SET status='failed',finished_at=now(),updated_at=now(),
+                error='Worker stopped before task completion. Inspect the last completed step and explicitly resume.'
+          WHERE status='running'
+            AND COALESCE(heartbeat_at,updated_at) < now() - interval '90 seconds'
+          RETURNING id`,
+      );
+      for (const row of stale.rows) {
+        await pool!.query(
+          "UPDATE agent_steps SET status='failed',error='Worker interrupted before step completion.',finished_at=now() WHERE task_id=$1 AND status='running'",
+          [row.id],
+        );
+        await pool!.query(
+          "UPDATE media_jobs SET execution_state='failed',result='{\"error\":{\"code\":\"worker_interrupted\"}}'::jsonb,completed_at=now() WHERE task_id=$1 AND execution_state='executing'",
+          [row.id],
+        );
+        await event(pool!, row.id, "worker_interrupted", null, { reason: "heartbeat_expired" });
+      }
       for (let batch = 0; batch < limits.queued; batch++) {
         const rows = await pool!.query(
           "SELECT id FROM agent_tasks WHERE status='ready' ORDER BY created_at LIMIT $1",

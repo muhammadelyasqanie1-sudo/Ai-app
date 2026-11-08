@@ -167,6 +167,85 @@ export async function handleMediaApi(
         db.release();
       }
     }
+    const eventsRoute = path.match(
+      /^\/api\/media\/jobs\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/events$/i,
+    );
+    if (eventsRoute && req.method === "GET") {
+      const jobId = eventsRoute[1];
+      const owned = await pool.query(
+        "SELECT j.id FROM media_jobs j JOIN agent_tasks t ON t.id=j.task_id WHERE j.id=$1 AND j.user_id=$2 AND t.user_id=$2",
+        [jobId, user.id],
+      );
+      if (!owned.rowCount) {
+        reply(404, { error: "Media job not found." });
+        return true;
+      }
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.flushHeaders();
+      const rawLastId = Number(req.headers["last-event-id"] || 0);
+      let lastId = Number.isSafeInteger(rawLastId) && rawLastId >= 0 ? rawLastId : 0;
+      let closed = false;
+      let polling = false;
+      let lastSnapshot = "";
+      let lastKeepalive = Date.now();
+      const closeStream = () => {
+        if (closed) return;
+        closed = true;
+        clearInterval(timer);
+        if (!res.writableEnded) res.end();
+      };
+      const poll = async () => {
+        if (closed || polling) return;
+        polling = true;
+        try {
+          const fresh = await pool!.query(
+            "SELECT e.id,e.kind,e.payload,e.created_at FROM agent_events e JOIN media_jobs j ON j.task_id=e.task_id WHERE j.id=$1 AND j.user_id=$2 AND e.id>$3 ORDER BY e.id LIMIT 100",
+            [jobId, user.id, lastId],
+          );
+          for (const item of fresh.rows) {
+            lastId = Number(item.id);
+            res.write(`id: ${lastId}\nevent: task-event\ndata: ${JSON.stringify({ id: lastId, kind: item.kind, payload: item.payload, createdAt: item.created_at })}\n\n`);
+          }
+          const state = await pool!.query(
+            `SELECT j.id,j.execution_state AS "executionState",j.result,j.usage,j.duration_ms AS "durationMs",
+                    t.status,t.progress,t.error,t.updated_at AS "updatedAt"
+               FROM media_jobs j JOIN agent_tasks t ON t.id=j.task_id
+              WHERE j.id=$1 AND j.user_id=$2 AND t.user_id=$2`,
+            [jobId, user.id],
+          );
+          if (!state.rowCount) {
+            res.write("event: stream-error\ndata: {\"error\":\"Media job not found.\"}\n\n");
+            closeStream();
+            return;
+          }
+          const row = state.rows[0];
+          const snapshot = JSON.stringify(row);
+          if (snapshot !== lastSnapshot) {
+            lastSnapshot = snapshot;
+            res.write(`event: snapshot\ndata: ${snapshot}\n\n`);
+          } else if (Date.now() - lastKeepalive >= 15000) {
+            res.write(": keepalive\n\n");
+            lastKeepalive = Date.now();
+          }
+          if (["completed", "failed", "cancelled"].includes(row.status)) closeStream();
+        } catch {
+          if (!closed) {
+            res.write("event: stream-error\ndata: {\"error\":\"Media job stream temporarily unavailable.\"}\n\n");
+            closeStream();
+          }
+        } finally {
+          polling = false;
+        }
+      };
+      const timer = setInterval(() => void poll(), 1000);
+      res.on("close", closeStream);
+      void poll();
+      return true;
+    }
     const deletion = path.match(
       /^\/api\/media\/jobs\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i,
     );
