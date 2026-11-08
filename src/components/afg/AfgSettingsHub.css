@@ -30,6 +30,7 @@
 }
 .afg-settings-hero-glow {
   position: absolute;
+  pointer-events: none;
   inset-block-start: -80px;
   inset-inline-end: -40px;
   width: 210px;
@@ -151,7 +152,6 @@
 .afg-settings-hub [class*="animate-in"] {
   animation: afg-settings-content-in 320ms var(--afg-ease, cubic-bezier(0.22, 0.8, 0.24, 1)) both;
 }
-[dir="rtl"] .afg-settings-admin,
 [dir="rtl"] .afg-settings-hub .rotate-180 {
   transform: scaleX(-1);
 }
@@ -191,7 +191,9 @@
 @media (prefers-reduced-motion: reduce) {
   .afg-settings-hero,
   .afg-settings-hero-glow,
-  .afg-settings-hub [class*="animate-in"] {
+   .afg-settings-hub [class*="animate-in"],
+  .afg-settings-hub > header + div,
+  .afg-settings-hub > header + p {
     animation: none !important;
   }
 }
