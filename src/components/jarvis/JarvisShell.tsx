@@ -563,7 +563,7 @@ export function JarvisShell(p: Props) {
         <nav>
           {navItems.map(([id, Icon], index) => (
             <React.Fragment key={id}>
-              {index === 9 && (
+              {index === 10 && (
                 <div className="j-nav-label j-nav-space">{w("PERSONAL")}</div>
               )}
               <button
