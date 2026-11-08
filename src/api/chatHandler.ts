@@ -543,7 +543,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     res.write(`data: ${JSON.stringify({ type: 'meta', requestId: id, modelId: prepared.modelId })}\n\n`);
 
     let emittedContent = false;
-    const emitToolActivity = (callName:string,args:unknown,status:'running'|'completed'|'failed',observed?:unknown) => {
+    const emitToolActivity = (callName:string,args:unknown,status:'running'|'completed'|'failed',observed?:unknown,activityId?:string,startedAt?:number) => {
       const input = args && typeof args === 'object' ? args as Record<string,unknown> : {};
       const safeUrl = (value:unknown):string|undefined => {
         if (typeof value !== 'string' || value.length > 2048) return undefined;
@@ -597,7 +597,9 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         : callName.startsWith('mcp_') ? connectorToolName
         : callName.startsWith('api_') ? apiServiceName
         : (url ? new URL(url).hostname : undefined);
-      if (!res.writableEnded && !res.destroyed) res.write(`data: ${JSON.stringify({type:'activity',id:randomUUID(),name:callName,label,detail,url,sources,status,timestamp:Date.now()})}\n\n`);
+      const timestamp = Date.now();
+      const durationMs = status === 'running' || !startedAt ? undefined : Math.max(0, timestamp - startedAt);
+      if (!res.writableEnded && !res.destroyed) res.write(`data: ${JSON.stringify({type:'activity',id:activityId || randomUUID(),name:callName,label,detail,url,sources,status,startedAt:startedAt || timestamp,durationMs,timestamp})}\n\n`);
     };
     heartbeat = setInterval(() => {
       if (!res.writableEnded && !res.destroyed) res.write(': heartbeat\n\n');
@@ -640,7 +642,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
           let args:unknown;
           try { args=JSON.parse(call.function.arguments||'{}'); }
           catch { toolMessages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:JSON.stringify({error:'The model supplied invalid JSON arguments.'})});continue; }
-          emitToolActivity(call.function.name,args,'running');
+          const activityStartedAt = Date.now();
+          emitToolActivity(call.function.name,args,'running',undefined,call.id,activityStartedAt);
           try {
             const result=call.function.name === 'tavily_search'
               ? await executeWebSearchTool(requestUserId, args, abortController.signal)
@@ -656,12 +659,12 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
             const serialized=JSON.stringify(result);
             toolMessages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:serialized.slice(0,16_000)});
             estimatedInputTokens+=Math.ceil(serialized.length/4);
-            emitToolActivity(call.function.name,args,'completed',result);
+            emitToolActivity(call.function.name,args,'completed',result,call.id,activityStartedAt);
             res.write(`data: ${JSON.stringify({type:'tool_status',name:call.function.name,status:'completed'})}\n\n`);
           } catch(error) {
             const message=error instanceof Error?error.message.slice(0,300):'API tool failed.';
             toolMessages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:JSON.stringify({error:message})});
-            emitToolActivity(call.function.name,args,'failed');
+            emitToolActivity(call.function.name,args,'failed',undefined,call.id,activityStartedAt);
             res.write(`data: ${JSON.stringify({type:'tool_status',name:call.function.name,status:'failed'})}\n\n`);
           }
         }
