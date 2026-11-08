@@ -18,13 +18,15 @@ import {
   Play,
   RotateCcw,
   Network,
-  PlugZap
+  PlugZap,
+  ShieldCheck
 } from 'lucide-react';
 import type { Language, ToolSubTab } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
 import { AfgProductivityCenter } from './AfgProductivityCenter';
 import { AfgApiConnectorPanel } from './AfgApiConnectorPanel';
 import { AfgPublicApiDeveloperTools } from './AfgPublicApiDeveloperTools';
+import { AfgOsintPanel } from './AfgOsintPanel';
 
 interface AfgToolsCenterProps {
   language: Language;
@@ -246,6 +248,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
     { id: 'code-help' as ToolSubTab, title: t.toolCodeHelp, desc: language === 'dari' ? 'تولید، توضیح، اشکال‌زدایی و بهینه‌سازی کد' : 'Generate, explain, debug and optimize code', ready: Boolean(capabilities.chat), icon: Code2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
     { id: 'writing-studio' as ToolSubTab, title: language === 'dari' ? 'استودیوی نویسندگی' : 'Writing Studio', desc: language === 'dari' ? 'ایمیل، مقاله، رزومه و محتوای تبلیغاتی' : 'Emails, articles, CVs and marketing content', ready: Boolean(capabilities.chat), icon: FileText, color: 'text-fuchsia-400', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30' },
     { id: 'research' as ToolSubTab, title: language === 'dari' ? 'پژوهش وب' : 'Web Research', desc: language === 'dari' ? 'جستجوی منابع واقعی و لینک‌های اصلی' : 'Search real sources and original URLs', ready: Boolean(capabilities.research), icon: Languages, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
+    { id: 'osint' as ToolSubTab, title: 'Passive OSINT', desc: language === 'dari' ? 'تحلیل غیرفعال دامنه و IP مجاز، شواهد و گراف روابط' : 'Authorized passive domain/IP intelligence, evidence and graph', ready: true, icon: ShieldCheck, color: 'text-emerald-300', bg: 'bg-emerald-500/10', border: 'border-emerald-400/40' },
     { id: 'voice-tools' as ToolSubTab, title: t.toolVoice, desc: !voiceEnabled ? (language === 'dari' ? 'در تنظیمات غیرفعال شده' : 'Disabled in settings') : (language === 'dari' ? 'نیازمند ارائه‌دهنده صوتی سازگار' : 'Requires a compatible voice provider'), ready: Boolean(voiceSttAvailable || voiceTtsAvailable), icon: Mic, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
     { id: 'pdf-tools' as ToolSubTab, title: t.toolPdf, desc: language === 'dari' ? 'بارگذاری و استخراج متن فعال نیست' : 'Upload and text extraction are unavailable', ready: false, icon: FileText, color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/30' },
     { id: 'calculator' as ToolSubTab, title: t.toolCalc, desc: language === 'dari' ? 'محاسبه محلی' : 'Local arithmetic calculator', ready: true, icon: Calculator, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/30' },
@@ -314,6 +317,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
 
       {activeSubTab === 'productivity' && <AfgProductivityCenter language={language} onRunTool={onRunTool} />}
       {activeSubTab === 'api-hub' && <AfgApiConnectorPanel language={language}/>}
+      {activeSubTab === 'osint' && <AfgOsintPanel language={language}/> }
       {activeSubTab === 'mcp' && <div className="rounded-2xl border border-cyan-500/20 bg-slate-950/70 p-4 text-sm text-slate-300">{language==='dari'?'اتصال MCP فقط زمانی فعال می‌شود که یک runtime سازگار واقعاً متصل باشد.':'MCP tools are available only when a compatible runtime is actually connected.'}</div>}
       {activeSubTab === '9router' && <div className="rounded-2xl border border-cyan-500/20 bg-slate-950/70 p-4 text-sm text-slate-300">{language==='dari'?'مدیریت درگاه 9Router در پنل امن و جداگانه انجام می‌شود.':'9Router administration is handled in the separate authenticated control plane.'}</div>}
       {activeSubTab === 'developer-tools' && <AfgPublicApiDeveloperTools language={language}/>}
