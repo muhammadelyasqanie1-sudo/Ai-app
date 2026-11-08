@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { CoreState, GraphicsProfile } from "./experience";
-import { resolveVisual, toLegendaryState } from "../../animations/coreState";
+import { resolveVisual, toLegendaryState, mediaJobVisualState, type LegendaryCoreState } from "../../animations/coreState";
+import { apiFetch } from "../../lib/apiClient";
 import "./legendary-core.css";
 
 /** CSS 3D/SVG core with a lightweight Canvas energy field; no WebGL context or binary assets. */
@@ -18,7 +19,41 @@ export default function IntelligenceCore({
   const ref = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [paused, setPaused] = useState(false);
-  const visualState = toLegendaryState(state);
+  const [mediaState, setMediaState] = useState<LegendaryCoreState | null>(null);
+
+  // Read the signed-in owner's real media jobs; do not infer activity from UI interactions.
+  useEffect(() => {
+    let alive = true;
+    let timer: ReturnType<typeof window.setTimeout> | undefined;
+    const refreshMediaState = async () => {
+      try {
+        const response = await apiFetch("/api/media/jobs", { cache: "no-store" });
+        if (!response.ok) throw new Error("media_jobs_unavailable");
+        const payload = await response.json();
+        const jobs = Array.isArray(payload.jobs) ? payload.jobs : [];
+        const active = jobs.find((job: any) => {
+          const taskStatus = String(job.status || "");
+          const executionState = String(job.execution_state || "");
+          return ["ready", "running", "pending", "executing"].includes(taskStatus) ||
+            ["pending", "executing"].includes(executionState);
+        });
+        if (alive) setMediaState(mediaJobVisualState(active?.request?.type));
+      } catch {
+        if (alive) setMediaState(null);
+      } finally {
+        if (alive) timer = window.setTimeout(refreshMediaState, 5000);
+      }
+    };
+    void refreshMediaState();
+    return () => {
+      alive = false;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, []);
+
+  const primaryState = state === "listening" || state === "speaking" ||
+    state === "offline" || state === "cancelled" || state === "error";
+  const visualState = primaryState ? toLegendaryState(state) : (mediaState ?? toLegendaryState(state));
   const visual = resolveVisual(visualState, profile, reduced || paused || state === "offline" || state === "cancelled");
 
   useEffect(() => {
