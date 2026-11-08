@@ -135,7 +135,7 @@ export default function MediaStudio({
   const fail = (err?: unknown) => {
     const status = (err as any)?.status;
     const reason = (err as Error)?.message;
-    const detail = reason === "type" ? "Unsupported file type." : reason === "size" ? "File must be between 1 byte and 15 MB." : "";
+    const detail = reason === "type" ? t.fileTypeError : reason === "size" ? t.fileSizeError : "";
     setError(detail || (t.error + (status ? " (" + status + ")" : "")));
   };
   const identify = (history: any[]) =>
