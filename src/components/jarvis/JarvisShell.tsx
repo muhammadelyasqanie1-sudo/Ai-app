@@ -193,7 +193,7 @@ export function JarvisShell(p: Props) {
         window.removeEventListener("storage", readGuest);
       };
     }
-    void apiFetch("/api/conversations")
+    void apiFetch("/api/conversations?limit=3")
       .then((response) => response.json())
       .then((payload: any) => {
         if (!alive) return;
