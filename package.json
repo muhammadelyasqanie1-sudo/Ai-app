@@ -22,7 +22,8 @@
     "knowledge:worker": "tsx scripts/programming-knowledge-worker.ts",
     "knowledge:refresh": "tsx scripts/knowledge-refresh-worker.ts",
     "test:knowledge": "tsx scripts/test-knowledge-engine.ts",
-    "test:jarvis-command": "tsx scripts/test-jarvis-command-engine.ts"
+    "test:jarvis-command": "tsx scripts/test-jarvis-command-engine.ts",
+    "test:core-state": "tsx scripts/test-core-state.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
