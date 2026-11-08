@@ -16,20 +16,6 @@ export interface ModelRoutingPolicy {
   limit?: number;
 }
 
-function healthy(model: ModelDescriptor): boolean {
-  const checked = model.verifiedAt ? Date.parse(model.verifiedAt) : NaN;
-  return model.enabled && Number.isFinite(checked) &&
-    Date.now() - checked <= 5 * 60_000 && model.capabilities[modelRoutingCapability(model)];
-}
-
-function modelRoutingCapability(model: ModelDescriptor): RoutableCapability {
-  // The caller performs the requested capability check; this helper is only
-  // used by healthy() to ensure that descriptors have a meaningful capability.
-  return Object.keys(model.capabilities).find(
-    (key) => model.capabilities[key as RoutableCapability] === true,
-  ) as RoutableCapability || 'text';
-}
-
 function localProvider(model: ModelDescriptor): boolean {
   return model.providerId === 'ollama';
 }
