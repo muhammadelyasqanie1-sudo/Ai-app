@@ -167,3 +167,20 @@ The repository indexer stores an internal index-policy version in repository met
 When a repository is reindexed, code-index rows that no longer match the current source-selection policy are removed before the new bounded file set is written. HTML and CSS/SCSS/Sass/Less are included as source languages alongside application code. This prevents stale Markdown or workflow metadata from continuing to appear in code retrieval after the source-first index policy changes.
 
 At the beginning of each worker run, up to three existing repositories whose metadata lacks the current index-policy version are reindexed first (permissively licensed repositories before unknown-license repositories). This makes index-policy upgrades take effect even when Tavily does not rediscover those repository URLs. New GitHub API discoveries and ordinary Tavily jobs use only the remaining per-run repository budget.
+\n
+
+## Durable Agent Runtime and live task events
+
+Migration `0052_agent_runtime_events.sql` extends the existing `agent_tasks` and `agent_events` tables introduced by migrations 0049/0050. It adds durable progress, checkpoints, worker heartbeats and structured event payloads. It does not create a second queue. The existing worker detects tasks with expired heartbeats, marks them interrupted, and requires an explicit user resume; it deliberately does not replay possibly billed or side-effecting work automatically.
+
+Agent task event stream:
+- `GET /api/agents/tasks/:taskId/events`
+- Requires an authenticated owner session.
+- Sends `task-event` records with IDs (supports `Last-Event-ID`) and `snapshot` updates with task status/progress.
+
+Media job event stream:
+- `GET /api/media/jobs/:jobId/events`
+- Requires an authenticated owner session.
+- Uses the same agent event log and task progress; media jobs remain linked to the existing queue and private file library.
+
+Apply with `npm run db:migrate` after taking a database backup. This is an additive migration; do not edit already-applied migration files.
