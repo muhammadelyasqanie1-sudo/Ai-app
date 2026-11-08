@@ -134,7 +134,9 @@ export default function MediaStudio({
   const availableModels = models.filter((m) => m.tasks.includes(type));
   const fail = (err?: unknown) => {
     const status = (err as any)?.status;
-    setError(t.error + (status ? " (" + status + ")" : ""));
+    const reason = (err as Error)?.message;
+    const detail = reason === "type" ? "Unsupported file type." : reason === "size" ? "File must be between 1 byte and 15 MB." : "";
+    setError(detail || (t.error + (status ? " (" + status + ")" : "")));
   };
   const identify = (history: any[]) =>
     JSON.stringify(history.map((j) => [j.id, j.status, j.execution_state]));
@@ -213,24 +215,31 @@ export default function MediaStudio({
     }
   }
   async function uploadFile(file: File) {
-    if (!file || file.size < 1 || file.size > 15 * 1024 * 1024) throw new Error("size");
+    const allowedExtensions = new Set(["pdf", "txt", "md", "json", "csv", "png", "jpg", "jpeg", "gif", "webp", "wav", "mp3", "ogg", "webm", "mp4"]);
+    const extension = file?.name.split(".").pop()?.toLowerCase();
+    if (!file || !extension || !allowedExtensions.has(extension)) throw new Error("type");
+    if (file.size < 1 || file.size > 15 * 1024 * 1024) throw new Error("size");
     setUploadProgress(0);
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = reject;
-      reader.onprogress = (event) => {
-        if (!event.lengthComputable) return;
-        setUploadProgress(
-          Math.max(1, Math.min(99, Math.round((event.loaded / event.total) * 100))),
-        );
-      };
-      reader.onload = () => resolve(String(reader.result).split(",")[1]);
-      reader.readAsDataURL(file);
-    });
-    await request("/api/files", { name: file.name, dataBase64: base64 });
-    if (fileInput.current) fileInput.current.value = "";
-    setUploadProgress(100);
-    setNotice(t.fileSaved);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("read"));
+        reader.onprogress = (event) => {
+          if (!event.lengthComputable) return;
+          setUploadProgress(Math.max(1, Math.min(99, Math.round((event.loaded / event.total) * 100))));
+        };
+        reader.onload = () => resolve(String(reader.result).split(",")[1]);
+        reader.readAsDataURL(file);
+      });
+      await request("/api/files", { name: file.name, dataBase64: base64 });
+      if (fileInput.current) fileInput.current.value = "";
+      setUploadProgress(100);
+      setNotice(t.fileSaved);
+    } catch (error) {
+      if (fileInput.current) fileInput.current.value = "";
+      setUploadProgress(null);
+      throw error;
+    }
   }
   async function submit() {
     await act(async () => {
