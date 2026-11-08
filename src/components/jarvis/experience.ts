@@ -4,6 +4,7 @@ export type GraphicsProfile = "auto" | "high" | "balanced" | "low";
 export type CoreState =
   | "idle"
   | "listening"
+  | "speaking"
   | "thinking"
   | "generating"
   | "searching"
@@ -62,6 +63,7 @@ export function resolveGraphics(
 }
 export function resolveCoreState(input: {
   listening: boolean;
+  speaking?: boolean;
   active: boolean;
   streaming: boolean;
   online: boolean;
@@ -70,6 +72,7 @@ export function resolveCoreState(input: {
   activities: ToolActivity[];
 }): CoreState {
   if (input.listening) return "listening";
+  if (input.speaking) return "speaking";
   if (input.active) {
     const tool = input.activities.find((item) => item.status === "running");
     if (tool)
