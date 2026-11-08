@@ -26,6 +26,14 @@
   background-size: 44px 44px;
   mask-image: radial-gradient(ellipse at center, #0003, transparent 70%);
 }
+.afg-welcome > .afg-core,
+.afg-welcome-brand,
+.afg-welcome-copy,
+.afg-welcome-actions,
+.afg-welcome > [role="status"] {
+  position: relative;
+  z-index: 1;
+}
 .afg-welcome-brand {
   display: flex;
   align-self: stretch;
