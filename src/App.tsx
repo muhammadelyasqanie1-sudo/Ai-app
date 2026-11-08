@@ -93,7 +93,7 @@ export default function App() {
   // Language is detected from the device/browser; no manual language gate on startup.
   const [hasSelectedLanguage, setHasSelectedLanguage] = useState(true);
   // Open the local workspace directly; server authentication still protects account APIs.
-  const [isIntroVisible, setIsIntroVisible] = useState(false);
+  const [isIntroVisible, setIsIntroVisible] = useState(() => localStorage.getItem('afg_intro_seen_v2') !== 'true');
   const [hasEnteredApp, setHasEnteredApp] = useState(true);
   const [authCheckResolved, setAuthCheckResolved] = useState(false);
   const [isInitialChatLoading, setIsInitialChatLoading] = useState(false);
@@ -805,7 +805,7 @@ export default function App() {
   };
 
   if (isIntroVisible) {
-    return <AfgCinematicIntro language={language} onComplete={() => { localStorage.setItem('afg_intro_seen', 'true'); setIsIntroVisible(false); }} />;
+    return <AfgCinematicIntro language={language} onComplete={() => { localStorage.setItem('afg_intro_seen_v2', 'true'); setIsIntroVisible(false); }} />;
   }
 
   if (!hasSelectedLanguage) {
