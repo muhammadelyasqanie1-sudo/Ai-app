@@ -157,7 +157,7 @@ export async function handleAgentsApi(
       return true;
     }
     const match = path.match(
-      /^\/api\/agents\/tasks\/([0-9a-f-]{36})(?:\/(start|cancel|resume|approve))?$/i,
+      /^\/api\/agents\/tasks\/([0-9a-f-]{36})(?:\/(start|cancel|resume|approve|events))?$/i,
     );
     if (!match) {
       reply(404, { error: "Agent route not found." });
