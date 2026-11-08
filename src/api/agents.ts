@@ -175,6 +175,69 @@ export async function handleAgentsApi(
       reply(404, { error: "Task not found." });
       return true;
     }
+    if (req.method === "GET" && action === "events") {
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.flushHeaders();
+      const rawLastId = Number(req.headers["last-event-id"] || 0);
+      let lastId = Number.isSafeInteger(rawLastId) && rawLastId >= 0 ? rawLastId : 0;
+      let closed = false;
+      let polling = false;
+      let lastSnapshot = "";
+      let lastKeepalive = Date.now();
+      const closeStream = () => {
+        if (closed) return;
+        closed = true;
+        clearInterval(timer);
+        if (!res.writableEnded) res.end();
+      };
+      const poll = async () => {
+        if (closed || polling) return;
+        polling = true;
+        try {
+          const fresh = await pool!.query(
+            "SELECT id,kind,payload,created_at FROM agent_events WHERE task_id=$1 AND id>$2 ORDER BY id LIMIT 100",
+            [id, lastId],
+          );
+          for (const item of fresh.rows) {
+            lastId = Number(item.id);
+            res.write(`id: ${lastId}\nevent: task-event\ndata: ${JSON.stringify({ id: lastId, kind: item.kind, payload: item.payload, createdAt: item.created_at })}\n\n`);
+          }
+          const state = await pool!.query(
+            "SELECT status,progress,error,started_at,finished_at,updated_at FROM agent_tasks WHERE id=$1 AND user_id=$2",
+            [id, user.id],
+          );
+          if (!state.rowCount) {
+            res.write("event: stream-error\ndata: {\"error\":\"Task not found.\"}\n\n");
+            closeStream();
+            return;
+          }
+          const snapshot = JSON.stringify(state.rows[0]);
+          if (snapshot !== lastSnapshot) {
+            lastSnapshot = snapshot;
+            res.write(`event: snapshot\ndata: ${snapshot}\n\n`);
+          } else if (Date.now() - lastKeepalive >= 15000) {
+            res.write(": keepalive\n\n");
+            lastKeepalive = Date.now();
+          }
+          if (["completed", "failed", "cancelled"].includes(state.rows[0].status)) closeStream();
+        } catch {
+          if (!closed) {
+            res.write("event: stream-error\ndata: {\"error\":\"Task event stream temporarily unavailable.\"}\n\n");
+            closeStream();
+          }
+        } finally {
+          polling = false;
+        }
+      };
+      const timer = setInterval(() => void poll(), 1000);
+      res.on("close", closeStream);
+      void poll();
+      return true;
+    }
     if (req.method === "GET" && !action) {
       const steps = (
         await pool.query(
@@ -231,7 +294,7 @@ export async function handleAgentsApi(
           return true;
         }
         await db.query(
-          "UPDATE agent_tasks SET status='cancelled',updated_at=now() WHERE id=$1",
+          "UPDATE agent_tasks SET status='cancelled',finished_at=now(),heartbeat_at=now(),updated_at=now() WHERE id=$1",
           [id],
         );
         await db.query(
@@ -276,7 +339,7 @@ export async function handleAgentsApi(
           [id],
         );
         await db.query(
-          "UPDATE agent_tasks SET status='ready',error=NULL,updated_at=now() WHERE id=$1",
+          "UPDATE agent_tasks SET status='ready',error=NULL,finished_at=NULL,heartbeat_at=now(),updated_at=now() WHERE id=$1",
           [id],
         );
       }
