@@ -2,6 +2,7 @@ import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ArrowRight, Volume2, VolumeX } from "lucide-react";
 import type { Language } from "../../types/afg";
 import { experienceCopy } from "../jarvis/experienceCopy";
+import { CinematicField } from "../cinematic/CinematicField";
 import type { GraphicsProfile } from "../jarvis/experience";
 import "./AfgCinematicIntro.css";
 const IntelligenceCore = lazy(() => import("../jarvis/IntelligenceCore"));
@@ -78,6 +79,7 @@ export const AfgCinematicIntro: React.FC<{
       className={`afg-welcome ${embedded ? "is-embedded" : ""}`}
       data-still={reduced}
     >
+      <CinematicField variant="welcome" profile={profile} reduced={reduced} />
       <div className="afg-welcome-grid" aria-hidden="true" />
       <div className="afg-welcome-brand">
         AFG <b>AI</b>
