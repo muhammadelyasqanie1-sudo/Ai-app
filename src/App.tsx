@@ -107,7 +107,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<TabType>('home');
   const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
   const [messages, setMessages] = useState<AfgMessage[]>(INITIAL_MESSAGES);
-  const [agentActivities, setAgentActivities] = useState<Array<{id:string;name:string;label:string;detail?:string;url?:string;sources?:Array<{title:string;url:string;snippet?:string;publishedDate?:string}>;status:'running'|'completed'|'failed';timestamp:number}>>([]);
+  const [agentActivities, setAgentActivities] = useState<Array<{id:string;name:string;label:string;detail?:string;url?:string;sources?:Array<{title:string;url:string;snippet?:string;publishedDate?:string}>;status:'running'|'completed'|'failed';startedAt?:number;durationMs?:number;timestamp:number}>>([]);
   const [currentSessionId, setCurrentSessionId] = useState(() => `chat-${Date.now()}`);
   const [isLoading, setIsLoading] = useState(false);
   const [audioListening, setAudioListening] = useState(false);
