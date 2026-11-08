@@ -107,3 +107,81 @@ html.afg-reduce-motion .afg-cinematic-nebula {
 html.afg-reduce-motion .afg-cinematic-field canvas {
   display: none;
 }
+
+
+/* Cinematic atmosphere behind the complete chat surface. */
+.afg-chat-view {
+  position: relative;
+  isolation: isolate;
+}
+.afg-chat-view > .afg-chat-cinematic-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 24px;
+  opacity: 0.86;
+}
+.afg-chat-view > .afg-chat-statusbar,
+.afg-chat-view > .flex-1.overflow-y-auto,
+.afg-chat-view > .py-2 {
+  position: relative;
+  z-index: 1;
+}
+.afg-chat-view .afg-cinematic-field.is-ambient .afg-cinematic-nebula {
+  opacity: 0.94;
+}
+.afg-chat-view .afg-cinematic-field.is-ambient .afg-cinematic-grid {
+  opacity: 0.5;
+}
+.afg-chat-welcome > .relative {
+  position: relative;
+  display: grid;
+  width: 190px;
+  height: 190px;
+  place-items: center;
+  isolation: isolate;
+}
+.afg-chat-welcome > .relative::before,
+.afg-chat-welcome > .relative::after {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border: 1px solid rgba(13, 242, 255, 0.36);
+  border-radius: 50%;
+  box-shadow: 0 0 26px rgba(13, 242, 255, 0.1), inset 0 0 24px rgba(124, 77, 255, 0.08);
+  animation: afg-chat-orbit 24s linear infinite;
+  pointer-events: none;
+}
+.afg-chat-welcome > .relative::after {
+  inset: 0;
+  border-color: rgba(139, 92, 246, 0.26);
+  border-style: dashed;
+  animation-duration: 34s;
+  animation-direction: reverse;
+}
+.afg-chat-welcome > .relative > * {
+  position: relative;
+  z-index: 1;
+}
+@keyframes afg-chat-orbit {
+  from { transform: rotate(0deg) scale(0.96); }
+  to { transform: rotate(360deg) scale(1.04); }
+}
+@media (max-width: 600px) {
+  .afg-chat-welcome > .relative {
+    width: 164px;
+    height: 164px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .afg-chat-welcome > .relative::before,
+  .afg-chat-welcome > .relative::after {
+    animation: none !important;
+  }
+}
+html.afg-reduce-motion .afg-chat-welcome > .relative::before,
+html.afg-reduce-motion .afg-chat-welcome > .relative::after,
+.jarvis-app[data-reduced="true"] .afg-chat-welcome > .relative::before,
+.jarvis-app[data-reduced="true"] .afg-chat-welcome > .relative::after {
+  animation: none !important;
+}
