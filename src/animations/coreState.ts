@@ -19,7 +19,7 @@ const PARTICLES: Record<Exclude<GraphicsProfile, "auto">, number> = {
 };
 
 const STATE_MAP: Record<RuntimeCoreState, LegendaryCoreState> = {
-  idle: "idle", listening: "listening", thinking: "thinking",
+  idle: "idle", listening: "listening", speaking: "speaking", thinking: "thinking",
   generating: "generatingImage", searching: "researching",
   executing: "coding", error: "error", offline: "offline",
   cancelled: "cancelled",
