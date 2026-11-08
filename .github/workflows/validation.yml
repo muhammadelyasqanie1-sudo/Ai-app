@@ -33,6 +33,10 @@ jobs:
         run: npm run build
       - name: Offline SHA-256 regression
         run: npm run test:offline-sha
+      - name: Offline model download regression
+        run: npm run test:offline-download
+      - name: Passive OSINT scope regression
+        run: npm run test:osint
       - name: Database TLS regression
         run: npm run test:database-config
       - name: Admin RBAC regression

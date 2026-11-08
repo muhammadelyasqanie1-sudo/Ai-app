@@ -24,6 +24,7 @@ import { handlePersonalGatewayApi } from './personalGateway.ts';
 import { handleIntelligenceApi } from './intelligence.ts';
 import { handleWorldKnowledgeApi } from './worldKnowledge.ts';
 import { handleKnowledgeApi } from './knowledge.ts';
+import { handleOsintApi } from './osint.ts';
 import { handleRoutingComboApi } from './routingCombos.ts';
 import { handleApiHubApi } from './apiHub.ts';
 import { handleRemoteMcpApi } from './remoteMcp.ts';
@@ -308,6 +309,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     if (await handleAuthApi(req, res, pathname)) return;
     if (await handlePersonalGatewayApi(req, res, pathname, requestId)) return;
     if (await handleKnowledgeApi(req, res, pathname)) return;
+    if (await handleOsintApi(req, res, pathname)) return;
     if (await handleWorldKnowledgeApi(req, res, pathname)) return;
     if (await handleIntelligenceApi(req, res, pathname)) return;
     if (await handleRoutingComboApi(req, res, pathname)) return;

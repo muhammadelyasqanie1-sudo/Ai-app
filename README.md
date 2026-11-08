@@ -169,3 +169,8 @@ The following implementation changes have been merged into `main`:
 - **Administration:** the legacy in-app admin UI has been removed; user and subscription administration is handled by the separate authenticated 9Router control plane.
 
 **Release status:** these are merged source implementations, not a production-readiness claim. The web pull-request checks cover TypeScript, database configuration, admin RBAC, offline SHA-256 and the production web build. Native Android APK compilation and device permission/behavior checks require the separate manual Android workflow and a real Android device. Database migration 0034 must be reviewed and applied separately with a backup/recovery plan.
+
+
+## Passive OSINT and offline validation
+
+See [docs/OSINT.md](docs/OSINT.md) for the five prioritized OSINT references, first-party passive implementation, authorization boundaries, offline model download tests and deployment steps.

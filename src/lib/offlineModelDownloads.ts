@@ -47,7 +47,10 @@ async function downloadGGUFAndroid(options: Parameters<typeof downloadGGUF>[0]):
   const url = 'https://huggingface.co/' + options.repoId + '/resolve/' + encodeURIComponent(revision) + '/' + options.fileName.split('/').map(encodeURIComponent).join('/');
   const existing = (await AFGOfflineModels.listDownloads()).downloads.find(item => item.id === options.repoId + '/' + options.fileName);
   let downloadId: number;
-  if (existing && (existing.status === 'downloading' || existing.status === 'paused' || existing.status === 'installed')) {
+  const staleExisting = existing && (existing.revision !== revision || (options.expectedSha256 && existing.expectedSha256?.toLowerCase() !== options.expectedSha256.toLowerCase()));
+  if (existing && staleExisting) await AFGOfflineModels.deleteModel({ downloadId: existing.downloadId });
+  const reusable = existing && !staleExisting;
+  if (reusable && (existing.status === 'downloading' || existing.status === 'paused' || existing.status === 'installed')) {
     downloadId = existing.downloadId;
     if (existing.status === 'installed') return mapNativeDownload(existing);
   } else {

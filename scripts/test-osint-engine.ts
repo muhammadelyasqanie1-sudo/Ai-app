@@ -1,0 +1,5 @@
+import{classifyOsintTarget,isPublicAddress}from'../src/lib/osintIndicators.ts';
+const cases:Array<[string,string|null]>=[['example.com','domain'],['sub.example.com','domain'],['8.8.8.8','ip'],['2606:4700:4700::1111','ip'],['a'.repeat(64),'sha256'],['127.0.0.1',null],['10.0.0.1',null],['192.168.1.1',null],['169.254.1.1',null],['::1',null],['fc00::1',null],['localhost',null],['x.example.local',null],['https://example.com',null],['a@b.com',null],['bad..example.com',null]];
+for(const [input,expected]of cases){const actual=classifyOsintTarget(input)?.type||null;if(actual!==expected)throw Error(input+' expected '+expected+' got '+actual);}
+if(isPublicAddress('203.0.113.8'))throw Error('Reserved documentation range accepted.');
+process.stdout.write('OSINT scope tests passed ('+cases.length+' cases).\n');

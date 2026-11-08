@@ -184,3 +184,8 @@ Media job event stream:
 - Uses the same agent event log and task progress; media jobs remain linked to the existing queue and private file library.
 
 Apply with `npm run db:migrate` after taking a database backup. This is an additive migration; do not edit already-applied migration files.
+
+
+## Passive OSINT evidence graph
+
+Migration `0053_passive_osint_cases.sql` adds owner-scoped cases, entities, observations and graph edges, enables backend-only RLS and seeds the `osint` feature flag. Back up the database before applying with `npm run db:migrate`. All API queries are owner-scoped; no client-side or anonymous policy is added.

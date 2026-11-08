@@ -40,7 +40,8 @@ export type ToolSubTab =
   | 'api-hub'
   | 'mcp'
   | '9router'
-  | 'developer-tools';
+  | 'developer-tools'
+  | 'osint';
 
 export interface UserProfile {
   id?: string;
