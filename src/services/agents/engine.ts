@@ -10,6 +10,7 @@ import {
   type Tool,
 } from "./registry.ts";
 import { buildPersonalContextMessage } from "../intelligenceContext.ts";
+import { buildUserKnowledgeContext } from "../knowledgeBase.ts";
 
 const globalRuntime = globalThis as typeof globalThis & {
   __afgAgentRuntime?: {
@@ -145,7 +146,7 @@ async function run(taskId: string) {
         generated = await infer(
           task.user_id,
           task.model,
-          `Plan this objective: ${task.objective}\n${(await buildPersonalContextMessage(task.user_id, task.objective)) || ""}\nReturn JSON only: {"steps":[{"agent":"planning|research|coding|browser|file|personal","tool":"name","input":{},"dependsOn":[]}]} with at most 8 steps, earlier dependency indices, and a final draft step synthesizing prior results. Specialist assignments: planning=draft,memory_search; research=web_search,browser_open,browser_snapshot,draft,memory_search; coding=github tools,draft; browser=browser tools,draft; file=knowledge_read,draft; personal=memory_search,task_create,draft. Available tools: ${JSON.stringify(schemas)}. Never invent IDs, URLs or page element refs. Do not save memory automatically. If required capabilities are missing, produce a draft explaining the missing capability.`,
+          `Plan this objective: ${task.objective}\n${(await buildPersonalContextMessage(task.user_id, task.objective)) || ""}\n${(await buildUserKnowledgeContext(task.user_id, task.objective, 4)) || ""}\nReturn JSON only: {"steps":[{"agent":"planning|research|coding|browser|file|personal","tool":"name","input":{},"dependsOn":[]}]} with at most 8 steps, earlier dependency indices, and a final draft step synthesizing prior results. Specialist assignments: planning=draft,memory_search,knowledge_search; research=web_search,browser_open,browser_snapshot,draft,memory_search,knowledge_search; coding=github tools,knowledge_search,draft; browser=browser tools,draft; file=knowledge_read,knowledge_search,draft; personal=memory_search,knowledge_search,task_create,draft. Available tools: ${JSON.stringify(schemas)}. Never invent IDs, URLs or page element refs. Do not save memory automatically. If required capabilities are missing, produce a draft explaining the missing capability.`,
           controller.signal,
         );
       } finally {

@@ -1,57 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { lookup } from 'node:dns/promises';
-import { BlockList, isIP } from 'node:net';
 import Browserbase from '@browserbasehq/sdk';
 import { chromium, type Browser, type Page } from 'playwright-core';
 import { pool } from './database.ts';
 import { authenticateRequest, sendAuthJson, verifyCsrf } from './auth.ts';
+import { assertPublicHttpUrl } from '../security/publicUrl.ts';
 
 type Json = Record<string, unknown>;
 type BrowserActionContext = { page: Page; liveViewUrl: string | null; sessionId: string };
-
-const blockedAddresses = new BlockList();
-for (const [address, prefix] of [
-  ['0.0.0.0',8],['10.0.0.0',8],['100.64.0.0',10],['127.0.0.0',8],['169.254.0.0',16],
-  ['172.16.0.0',12],['192.0.0.0',24],['192.0.2.0',24],['192.168.0.0',16],['198.18.0.0',15],
-  ['198.51.100.0',24],['203.0.113.0',24],['224.0.0.0',4],['240.0.0.0',4],
-] as const) blockedAddresses.addSubnet(address,prefix,'ipv4');
-for (const [address, prefix] of [
-  ['::',128],['::1',128],['::ffff:0:0',96],['64:ff9b::',96],['100::',64],
-  ['2001:db8::',32],['fc00::',7],['fe80::',10],['ff00::',8],
-] as const) blockedAddresses.addSubnet(address,prefix,'ipv6');
-
-function isPublicAddress(address: string): boolean {
-  const family = isIP(address);
-  if (!family) return false;
-  if (family === 4) return !blockedAddresses.check(address,'ipv4');
-  const lower = address.toLowerCase();
-  if (lower.startsWith('::ffff:')) {
-    const mapped = lower.slice(7);
-    if (isIP(mapped) === 4) return !blockedAddresses.check(mapped,'ipv4');
-  }
-  return !blockedAddresses.check(address,'ipv6');
-}
-
-async function assertPublicHttpUrl(value: string): Promise<URL> {
-  let url: URL;
-  try { url = new URL(value); } catch { throw new Error('Provide a valid public website URL.'); }
-  if (!['http:','https:'].includes(url.protocol) || url.username || url.password ||
-      url.hostname === 'localhost' || url.hostname.endsWith('.localhost') ||
-      url.hostname.endsWith('.local') || url.hostname.endsWith('.internal') ||
-      url.hostname.endsWith('.test') || url.hostname.endsWith('.invalid')) {
-    throw new Error('Browser navigation is limited to public HTTP or HTTPS websites.');
-  }
-  const family = isIP(url.hostname);
-  if (family) {
-    if (!isPublicAddress(url.hostname)) throw new Error('Private or reserved network addresses are blocked.');
-  } else {
-    const records = await lookup(url.hostname,{all:true,verbatim:true});
-    if (!records.length || records.some(record => !isPublicAddress(record.address))) {
-      throw new Error('The website resolves to a private or reserved network address.');
-    }
-  }
-  return url;
-}
 
 function getBrowserbaseClient(): any {
   const apiKey = process.env.BROWSERBASE_API_KEY?.trim() || '';
@@ -83,6 +38,49 @@ export async function getBrowserAutomationStatus(userId: string | null = null) {
   } catch {
     return { configured, migrationReady: false, signedIn: Boolean(userId), active: false, lastUrl: null, lastActivityAt: null };
   }
+}
+
+/**
+ * Read one public page in a fresh, isolated Browserbase session for knowledge
+ * research. It deliberately uses no persistent user Context, so logged-in
+ * account state is never exposed to background research. The caller must
+ * still treat the returned text as untrusted data.
+ */
+export async function readPublicPageWithBrowser(value: string): Promise<{ url: string; title: string; text: string; fetchedAt: string }> {
+  const target = await assertPublicHttpUrl(value);
+  const client = getBrowserbaseClient();
+  let session: any = null;
+  let browser: Browser | null = null;
+  try {
+    session = await client.sessions.create({
+      browserSettings: { solveCaptchas: false, recordSession: false, logSession: false },
+      keepAlive: false,
+      api_timeout: 45,
+      userMetadata: { afgPurpose: 'public-knowledge-research' },
+    });
+    if (!session?.id || !session?.connectUrl) throw new Error('Browser provider did not return a usable research session.');
+    browser = await chromium.connectOverCDP(String(session.connectUrl), { timeout: 15_000 });
+    const context = browser.contexts()[0] || await browser.newContext();
+    const page = context.pages()[0] || await context.newPage();
+    await installNavigationGuard(page);
+    await page.goto(target.toString(), { waitUntil: 'domcontentloaded', timeout: 20_000 });
+    await page.waitForTimeout(1200).catch(() => undefined);
+    const title = (await page.title().catch(() => '')).slice(0, 300);
+    const text = await page.evaluate(() => String(document.body?.innerText || '').replace(/\n{3,}/g, '\n\n')).catch(() => '');
+    return {
+      url: page.url().slice(0, 2048),
+      title,
+      text: String(text).slice(0, 30_000),
+      fetchedAt: new Date().toISOString(),
+    };
+  } finally {
+    if (browser) await browser.close().catch(() => undefined);
+    if (session?.id) await client.sessions.update(String(session.id), { status: 'REQUEST_RELEASE' }).catch(() => undefined);
+  }
+}
+
+export function isBrowserResearchConfigured(): boolean {
+  return Boolean(process.env.BROWSERBASE_API_KEY?.trim());
 }
 
 const noArgs = { type: 'object', properties: {}, additionalProperties: false };

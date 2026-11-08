@@ -5,15 +5,17 @@
 AFG AI uses the existing server-side provider gateway as its model execution layer. The hybrid core adds three distinct, deliberately separated data paths:
 
 1. **Personal memory** — reuses the existing owner-scoped `user_memories` records and the existing memory-enabled preference. Only non-sensitive memories are automatically retrieved into the personal gateway context.
-2. **Private knowledge retrieval (RAG)** — stores user-owned text documents in PostgreSQL and retrieves up to four relevant documents using PostgreSQL full-text search. Retrieved text is bounded and explicitly marked as untrusted reference material.
+2. **Private knowledge retrieval (RAG)** — stores user-owned text documents in PostgreSQL, chunks them, and retrieves relevant material using PostgreSQL full-text search with an optional embeddings rerank. Deep research can add cited public sources. Retrieved text is bounded and explicitly marked as untrusted reference material.
 3. **Training-data curation** — stores prompt/ideal-answer examples only when the user explicitly consents per example. Users can list, delete and export their own examples as JSONL.
 
 ## API
 
 All routes require an authenticated session. State-changing routes require the existing CSRF token. Every database query is scoped to the authenticated user.
 
-- `GET/POST /api/intelligence/knowledge`
-- `DELETE /api/intelligence/knowledge/:id`
+- `GET/POST /api/knowledge`, `GET/PATCH/DELETE /api/knowledge/:id`
+- `GET /api/knowledge/status`, `GET /api/knowledge/search`, `GET /api/knowledge/stale`
+- `POST /api/knowledge/research`, `POST /api/knowledge/:id/refresh`, `POST /api/knowledge/ingest`
+- Legacy: `GET/POST /api/intelligence/knowledge`, `DELETE /api/intelligence/knowledge/:id`
 - `GET/POST /api/intelligence/training/examples`
 - `DELETE /api/intelligence/training/examples/:id`
 - `GET /api/intelligence/training/export`
@@ -145,3 +147,47 @@ The highest-priority new topic is `coding-agents`. It seeds focused research que
 The worker remains a bounded scheduled process, not a continuously running crawler. Each invocation seeds the enabled catalog and processes at most `AFG_KNOWLEDGE_MAX_JOBS` jobs (default 8, hard maximum 20). Tavily discovers sources; the GitHub API indexes selected public repositories, README/release/documentation material and a small bounded sample of source files. Search excerpts are explicitly marked unverified. Public repository source indexing is bounded and secret-redacted; repository license metadata is retained, but a declared license must still be reviewed before reusing code in AFG AI.
 
 **Activation:** migrations 0035–0044 are applied to the active AFG AI Supabase database. The API server includes an opt-in scheduler; set `AFG_KNOWLEDGE_WORKER_ENABLED=true` and keep `DATABASE_URL` plus `TAVILY_API_KEY` as private Railway variables. The scheduler starts the bounded worker after a short startup delay and repeats every 60 minutes by default. A PostgreSQL advisory lock prevents overlapping runs across replicas. The feature branch still needs to be deployed to the Ai-app service before chat retrieval and automatic ingestion are live. Browserbase browser control is a separate interactive browser capability; background discovery uses Tavily and GitHub's public API, not Browserbase.
+
+## Self-learning knowledge engine — milestone 11
+
+Migration `0051_self_learning_knowledge_engine.sql` extends the owner-scoped knowledge store with chunked retrieval, categories, source provenance, trust and verification labels, summaries, tags, language, content fingerprints, freshness timestamps and optional embeddings. It adds `knowledge_chunks`, `knowledge_research_runs` and `knowledge_research_sources`, with row-level security enabled on the new tables. The migration is additive and does not edit earlier migrations.
+
+**What is implemented in source**
+
+- `src/services/knowledgeEngine.ts` performs deterministic cleanup, classification, chunking, extractive summaries, key-point extraction, lexical overlap, source/trust classification, language detection, content hashing and refresh scheduling. It never calls a model to invent facts.
+- `src/services/knowledgeBase.ts` provides owner-scoped save, dedupe, quota enforcement, chunk indexing, search, chat/agent context, detail inspection, user correction, deletion, stale-source discovery and refresh. Retrieval uses PostgreSQL FTS and also builds a forgiving OR/prefix query so natural-language questions do not fail when one word differs (for example `postgres` versus `postgresql`).
+- `src/services/deepResearch.ts` runs bounded multi-source research through the existing verified Tavily/Brave/SerpAPI connection, deduplicates sources, optionally reads limited pages through a fresh isolated Browserbase session, compares sources lexically, preserves exact citation URLs, labels unread sources honestly, and saves only when requested. Reports are extractive and explicitly state that `multi_source` is lexical corroboration, not independent fact-checking.
+- `src/security/publicUrl.ts` centralizes SSRF/public-URL validation and is shared by browser research and source refresh. Internal, loopback, reserved and credential-bearing URLs are blocked, including DNS results.
+- `src/api/knowledge.ts` exposes authenticated, CSRF-protected, owner-scoped routes. `src/api/chatHandler.ts` adds automatic private-knowledge context and an explicit `afg_knowledge_search` tool. `src/services/agents/registry.ts` exposes `knowledge_search` to coding/research agents, and `src/services/agents/engine.ts` supplies planner context.
+- `src/components/afg/AfgKnowledgeEnginePanel.tsx` lets the owner add text, run cited deep research, search/filter, inspect chunks and provenance, correct, refresh and delete knowledge. The legacy duplicate private-knowledge editor was replaced by this panel.
+- `scripts/knowledge-refresh-worker.ts` (`npm run knowledge:refresh`) refreshes a bounded number of stale public sources. A host scheduler must invoke it. User-corrected documents are never overwritten; the worker records that the upstream source changed and preserves the owner's text.
+
+**Security and honesty invariants**
+
+- Web and file text is untrusted data. Retrieved references carry an explicit security notice and are never treated as system instructions.
+- Private files are accepted only through the explicit `authorized: true` ingest route, and binary/PDF bytes are rejected until a trusted extraction and scanning pipeline exists. Text-file ingestion is supported.
+- No model weights are trained, and no fake learning progress or fake embeddings are produced. `vectorSearch` is reported true only when an embedding provider is fully configured.
+- Sources are cited by their exact URLs. Unread or failed sources are listed as not read. Conflicts are surfaced as source disagreement, not silently resolved.
+
+**Optional environment variables**
+
+- `AFG_KNOWLEDGE_EMBEDDING_BASE_URL`, `AFG_KNOWLEDGE_EMBEDDING_API_KEY`, `AFG_KNOWLEDGE_EMBEDDING_MODEL` — all three are required to enable OpenAI-compatible embedding reranking. Leave them empty for pure PostgreSQL FTS.
+- `AFG_KNOWLEDGE_REFRESH_MAX` — maximum stale documents per refresh-worker run (default 5, hard maximum 20).
+- `TAVILY_API_KEY` (or an enabled/verified Web Search connection) and optional `BROWSERBASE_API_KEY` are reused from the existing integrations. Gemini is not required or defaulted.
+
+**Verification performed for this milestone**
+
+- TypeScript check (`npm run lint`) passes.
+- Production build (`npm run build`) passes.
+- Offline deterministic tests (`npx tsx scripts/test-knowledge-engine.ts`) pass.
+- The full migration chain, including 0051, was applied to a temporary local PostgreSQL 18 instance; schema, FTS, generated vectors, dedupe, constraints, provenance and cascade behavior passed.
+- Service integration checks against that database passed: save/chunk/classify, dedupe, detail, FTS and agent tool, filters, owner-scoped chat context, status, correction, cross-user isolation, stale discovery, graceful failed research when search is unconfigured, and deletion.
+- Not tested here: a live Tavily/Brave/SerpAPI call, a live Browserbase read, production database migration, and a production deployment. No production deployment or merge to `main` was performed.
+
+**Current limitations**
+
+- Embeddings are optional and provider-dependent; no bundled embedding model or vector database is added.
+- PDF/image extraction and arbitrary binary file ingestion remain disabled.
+- Browser reading is limited to deep research and a small number of pages; it uses fresh isolated sessions and does not access user browser profiles.
+- Natural-language quality for Dari/Persian/Pashto still depends on PostgreSQL tokenization and should be evaluated; the code does not claim semantic parity with embeddings.
+- Source comparison is lexical and heuristic. It is not fact-checking, peer review or a guarantee of correctness.

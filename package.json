@@ -20,6 +20,8 @@
     "test:admin-rbac": "tsx scripts/test-admin-rbac.ts",
     "terminal:worker": "tsx apps/admin-terminal/worker.ts",
     "knowledge:worker": "tsx scripts/programming-knowledge-worker.ts",
+    "knowledge:refresh": "tsx scripts/knowledge-refresh-worker.ts",
+    "test:knowledge": "tsx scripts/test-knowledge-engine.ts",
     "test:jarvis-command": "tsx scripts/test-jarvis-command-engine.ts"
   },
   "dependencies": {
