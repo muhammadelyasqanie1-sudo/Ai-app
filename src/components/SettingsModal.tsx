@@ -262,15 +262,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {activeTab === 'about' && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold text-inherit">ChatGPT Web</h2>
+              <h2 className="text-lg font-semibold text-inherit">AFG AI</h2>
               <div className="space-y-2 text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
                 <p>
-                  A faithful reproduction of the ChatGPT conversational interface designed for speed, clarity, and deep productivity.
+                  One AI. Many capabilities. One intelligent platform.
                 </p>
                 <div className="p-3 rounded-xl bg-neutral-100 dark:bg-[#171717] space-y-1">
-                  <div><strong>Version:</strong> ChatGPT 2026 Edition</div>
-                  <div><strong>Engine:</strong> OpenAI Compatible & Gemini Powered Core</div>
-                  <div><strong>Security:</strong> All chats stored locally in your browser session</div>
+                  <div><strong>Version:</strong> AFG AI</div>
+                  <div><strong>Engine:</strong> Server-side provider gateway (no default provider)</div>
+                  <div><strong>Storage:</strong> Authenticated conversations in PostgreSQL, or local guest sessions</div>
                 </div>
               </div>
             </div>

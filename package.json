@@ -20,10 +20,12 @@
     "test:admin-rbac": "tsx scripts/test-admin-rbac.ts",
     "terminal:worker": "tsx apps/admin-terminal/worker.ts",
     "knowledge:worker": "tsx scripts/programming-knowledge-worker.ts",
-    "test:jarvis-command": "tsx scripts/test-jarvis-command-engine.ts"
+    "test:jarvis-command": "tsx scripts/test-jarvis-command-engine.ts",
+    "test:afg-experience": "tsx scripts/test-afg-experience.ts",
+    "test:ui-sound": "tsx scripts/test-ui-sound.ts",
+    "test:core-copy": "tsx scripts/test-core-copy.ts"
   },
   "dependencies": {
-    "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
     "lucide-react": "^0.546.0",

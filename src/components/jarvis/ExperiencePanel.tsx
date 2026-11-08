@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { AfgCinematicIntro } from "../afg/AfgCinematicIntro";
+import { playUiSound } from "../../lib/uiSound";
 import type { Language, TabType, Theme } from "../../types/afg";
 import type { ExperiencePreferences, GraphicsProfile } from "./experience";
 import { experienceCopy } from "./experienceCopy";
@@ -172,6 +173,37 @@ export default function ExperiencePanel(p: {
               }
             />
           </label>
+          <label className="afg-motion-toggle">
+            <span>
+              {t.sound}
+              <small>{t.soundHelp}</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={p.preferences.sound}
+              onChange={(e) => {
+                p.update({ sound: e.target.checked });
+                if (e.target.checked) playUiSound('notice');
+              }}
+            />
+          </label>
+          <div className="afg-preference-row">
+            <label htmlFor="afg-sound-volume">{t.volume}</label>
+            <input
+              id="afg-sound-volume"
+              className="afg-volume-range"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={p.preferences.volume}
+              disabled={!p.preferences.sound}
+              aria-valuetext={`${Math.round(p.preferences.volume * 100)}%`}
+              onChange={(e) =>
+                p.update({ volume: Number(e.target.value) })
+              }
+            />
+          </div>
           <section className="afg-connection-card">
             <div>
               <Cpu size={19} />

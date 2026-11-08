@@ -11,12 +11,13 @@ import { AfgHomeView } from './components/afg/AfgHomeView';
 import { AfgChatView } from './components/afg/AfgChatView';
 import { AfgSideMenu } from './components/afg/AfgSideMenu';
 import { AfgLanguageModal } from './components/afg/AfgLanguageModal';
-import { AfgCinematicIntro } from './components/afg/AfgCinematicIntro';
 import { AfgCommandPalette, type AfgSystemFeatures } from './components/afg/AfgCommandPalette';
 import { AfgAuthGate } from './components/afg/AfgAuthGate';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { ErrorBoundary } from './components/afg/AfgDesignSystem';
 import { applyDocumentLocale } from './utils/i18n';
+import { coreCopy } from './utils/coreCopy';
+import { playUiSound } from './lib/uiSound';
 import { apiFetch, getCsrfToken } from './lib/apiClient';
 import { AfgAuthWebView } from '@afg-ai/capacitor-auth-deeplink';
 import { useAlwaysLiveConnection } from './hooks/useAlwaysLiveConnection';
@@ -57,6 +58,47 @@ const DEFAULT_USER: UserProfile = {
 
 const INITIAL_MESSAGES: AfgMessage[] = [];
 
+function notifyChatSendRejected(text: string, attachments: ChatAttachment[]) {
+  window.dispatchEvent(new CustomEvent('afg-chat-send-rejected', { detail: { text, attachments } }));
+}
+
+function notifyChatSendAccepted(text: string) {
+  window.dispatchEvent(new CustomEvent('afg-chat-send-accepted', { detail: { text } }));
+}
+
+const SUPPORTED_LANGUAGES: Language[] = [
+  'dari','english','pashto','persian','arabic','urdu','turkish','russian','french',
+  'spanish','german','chinese','hindi','bengali','indonesian','portuguese','japanese','korean',
+];
+
+function readStored(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // The current session keeps working when storage is unavailable.
+  }
+}
+
+function removeStored(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Nothing to clean up when storage is unavailable.
+  }
+}
+
+function persistLanguage(language: Language) {
+  writeStored('afg_language', language);
+}
+
 const detectDeviceLanguage = (): Language => {
   const preferred = (navigator.languages?.length ? navigator.languages : [navigator.language])
     .map((tag) => tag.toLowerCase());
@@ -87,11 +129,16 @@ export default function App() {
     return () => { active = false; };
   }, []);
   // App State
-  const [language, setLanguage] = useState<Language>(() => { const saved = localStorage.getItem('afg_language'); const supported: Language[] = ['dari','english','pashto','persian','arabic','urdu','turkish','russian','french','spanish','german','chinese','hindi','bengali','indonesian','portuguese','japanese','korean']; return supported.includes(saved as Language) ? saved as Language : detectDeviceLanguage(); });
-  // Language is detected from the device/browser; no manual language gate on startup.
-  const [hasSelectedLanguage, setHasSelectedLanguage] = useState(true);
-  // Open the local workspace directly; server authentication still protects account APIs.
-  const [isIntroVisible, setIsIntroVisible] = useState(false);
+  const [language, setLanguage] = useState<Language>(() => {
+    const saved = readStored('afg_language');
+    return SUPPORTED_LANGUAGES.includes(saved as Language) ? saved as Language : detectDeviceLanguage();
+  });
+  const ui = coreCopy(language);
+  // A device-detected language is a suggestion, not consent. First launch still asks.
+  const [hasSelectedLanguage, setHasSelectedLanguage] = useState(() =>
+    SUPPORTED_LANGUAGES.includes(readStored('afg_language') as Language)
+  );
+  // The workspace is guest-first; account APIs remain protected by the server.
   const [hasEnteredApp, setHasEnteredApp] = useState(true);
   const [authCheckResolved, setAuthCheckResolved] = useState(false);
   const [isInitialChatLoading, setIsInitialChatLoading] = useState(false);
@@ -99,12 +146,13 @@ export default function App() {
   const [chatLoadAttempt, setChatLoadAttempt] = useState(0);
 
   const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('afg_theme');
+    const saved = readStored('afg_theme');
     if (!saved) return 'dark';
     return (saved === 'dark' || saved === 'light' || saved === 'neon' || saved === 'system') ? saved : 'system';
   });
 
   const [currentTab, setCurrentTab] = useState<TabType>('home');
+  const previousTabRef = useRef<TabType>('home');
   const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
   const [messages, setMessages] = useState<AfgMessage[]>(INITIAL_MESSAGES);
   const [agentActivities, setAgentActivities] = useState<Array<{id:string;name:string;label:string;detail?:string;url?:string;sources?:Array<{title:string;url:string;snippet?:string;publishedDate?:string}>;status:'running'|'completed'|'failed';timestamp:number}>>([]);
@@ -136,10 +184,10 @@ export default function App() {
   });
   const [initialPromptForChat, setInitialPromptForChat] = useState<string | undefined>(undefined);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
-  const [thinkingLevel, setThinkingLevel] = useState<'minimal' | 'standard' | 'deep'>(() => (localStorage.getItem('afg_thinking_level') as any) || 'standard');
-  const [planMode, setPlanMode] = useState(() => localStorage.getItem('afg_plan_mode') === 'true');
+  const [thinkingLevel, setThinkingLevel] = useState<'minimal' | 'standard' | 'deep'>(() => (readStored('afg_thinking_level') as any) || 'standard');
+  const [planMode, setPlanMode] = useState(() => readStored('afg_plan_mode') === 'true');
   const [dualPlanning, setDualPlanning] = useState(false);
-  const [permissionLevel, setPermissionLevel] = useState<'ask' | 'guided' | 'full'>(() => (localStorage.getItem('afg_permission_level') as any) || 'guided');
+  const [permissionLevel, setPermissionLevel] = useState<'ask' | 'guided' | 'full'>(() => (readStored('afg_permission_level') as any) || 'guided');
   const [chatFindQuery, setChatFindQuery] = useState('');
   const [systemFeatures, setSystemFeatures] = useState<AfgSystemFeatures>({ voice_stt_enabled:false, terminal_exec_enabled:false, github_connected:false, web_preview_enabled:false, file_upload_enabled:false, dual_planning_enabled:false, undo_file_changes_enabled:false });
   const [announcements, setAnnouncements] = useState<Array<{id:string;title:string;body:string;created_at:string}>>([]);
@@ -171,8 +219,14 @@ export default function App() {
   useEffect(() => {
     if (!hasSelectedLanguage) return;
     applyDocumentLocale(language);
-    localStorage.setItem('afg_language', language);
+    persistLanguage(language);
   }, [language, hasSelectedLanguage]);
+
+  useEffect(() => {
+    if (previousTabRef.current === currentTab) return;
+    previousTabRef.current = currentTab;
+    playUiSound('navigate');
+  }, [currentTab]);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -185,7 +239,7 @@ export default function App() {
       document.querySelector('link[rel="icon"]')?.setAttribute('href', resolved === 'light' ? '/afg-ai-mark-light.svg' : '/afg-ai-icon.svg');
     };
     applyTheme();
-    localStorage.setItem('afg_theme', theme);
+    writeStored('afg_theme', theme);
     if (theme === 'system') media.addEventListener('change', applyTheme);
     return () => media.removeEventListener('change', applyTheme);
   }, [theme]);
@@ -199,9 +253,9 @@ export default function App() {
     return () => { active = false; };
   }, []);
 
-  useEffect(() => { localStorage.setItem('afg_thinking_level', thinkingLevel); }, [thinkingLevel]);
-  useEffect(() => { localStorage.setItem('afg_plan_mode', String(planMode)); }, [planMode]);
-  useEffect(() => { localStorage.setItem('afg_permission_level', permissionLevel); }, [permissionLevel]);
+  useEffect(() => { writeStored('afg_thinking_level', thinkingLevel); }, [thinkingLevel]);
+  useEffect(() => { writeStored('afg_plan_mode', String(planMode)); }, [planMode]);
+  useEffect(() => { writeStored('afg_permission_level', permissionLevel); }, [permissionLevel]);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/capabilities`)
@@ -290,10 +344,10 @@ export default function App() {
   useEffect(() => {
     if (user.email) return;
     try {
-      const stored = JSON.parse(localStorage.getItem('afg_sessions') || '[]');
+      const stored = JSON.parse(readStored('afg_sessions') || '[]');
       const sessions = Array.isArray(stored) ? stored : [];
       if (!messages.some((message) => message.role === 'user')) {
-        localStorage.setItem('afg_sessions', JSON.stringify(sessions.filter((item: any) => item?.id !== currentSessionId)));
+        writeStored('afg_sessions', JSON.stringify(sessions.filter((item: any) => item?.id !== currentSessionId)));
         return;
       }
       const firstUser = messages.find((message) => message.role === 'user');
@@ -308,7 +362,7 @@ export default function App() {
         timestamp: Date.now(),
         messages,
       };
-      localStorage.setItem('afg_sessions', JSON.stringify([session, ...sessions.filter((item: any) => item?.id !== currentSessionId)].slice(0, 200)));
+      writeStored('afg_sessions', JSON.stringify([session, ...sessions.filter((item: any) => item?.id !== currentSessionId)].slice(0, 200)));
     } catch { console.error('AFG_AI_LOCAL_HISTORY_SAVE_FAILED'); }
   }, [messages, currentSessionId, user.email]);
 
@@ -318,7 +372,7 @@ export default function App() {
     if (!portal) return;
     portal.opener = null;
     portal.document.title = 'AFG AI Admin';
-    portal.document.body.textContent = language === 'dari' ? 'در حال بررسی دسترسی مدیریت…' : 'Verifying administrator access…';
+    portal.document.body.textContent = ui.adminVerifying;
     fetch(API_BASE_URL + '/api/9router/status', { credentials: 'include', cache: 'no-store' })
       .then(async (response) => {
         const data = response.ok ? await response.json() : null;
@@ -326,7 +380,7 @@ export default function App() {
         if (!target || target.protocol !== 'https:' || target.pathname !== '/control-plane' || target.search || target.hash || target.username || target.password || !data?.configured || !data?.reachable) throw new Error('9Router control plane is unavailable.');
         portal.location.replace(target.toString());
       })
-      .catch(() => { try { portal.close(); } catch {} window.alert(language === 'dari' ? 'دسترسی به پنل مدیریت تأیید نشد.' : 'Administrator portal access could not be verified.'); });
+      .catch(() => { try { portal.close(); } catch {} window.alert(ui.adminDenied); });
   };
 
   const handleSelectModel = (model: string) => {
@@ -357,9 +411,9 @@ export default function App() {
           if (data?.authenticated && data.user) {
             wasAuthenticatedRef.current = true;
             setHasEnteredApp(true);
-            localStorage.setItem('afg_entry_mode', 'account');
+            writeStored('afg_entry_mode', 'account');
             setUser({ id: data.user.id, name: data.user.displayName || 'User', nameEn: data.user.displayName || 'User', email: data.user.email || '', avatar: '', isPremium: false, tier: 'Free', role: data.user.role || 'user' });
-            fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const saved=prefs?.preferences; if(saved?.appearance&&['light','dark','neon','system'].includes(saved.appearance))setTheme(saved.appearance); if(localeChangedThisSession.current){const chosen=localStorage.getItem('afg_language')||'dari';const csrf=getCsrfToken();void fetch(API_BASE_URL+'/api/account/locale',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(csrf)},body:JSON.stringify({locale:chosen})}).catch(()=>console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));} document.documentElement.style.fontSize=String(saved?.font_size||14)+'px'; const accentMap:Record<string,string>={cyan:'#00e5ff',blue:'#3b82f6',violet:'#8b5cf6',emerald:'#10b981',rose:'#f43f5e'}; document.documentElement.style.setProperty('--accent-cyan',accentMap[saved?.accent_color]||accentMap.cyan); document.documentElement.dataset.afgDensity=saved?.density||'comfortable'; document.documentElement.dataset.afgChatWidth=saved?.chat_width||'comfortable'; document.documentElement.classList.toggle('afg-reduce-motion',saved?.animations_enabled===false); localStorage.setItem('afg_voice_enabled',String(saved?.voice_enabled!==false)); window.dispatchEvent(new Event('afg-voice-preference-change')); if(saved?.auto_select_model===false){setSelectedModel('auto');return;} const model=saved?.default_model; if(typeof model==='string'&&model)setSelectedModel(model); }).catch(() => {});
+            fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const saved=prefs?.preferences; if(saved?.appearance&&['light','dark','neon','system'].includes(saved.appearance))setTheme(saved.appearance); if(localeChangedThisSession.current){const chosen=readStored('afg_language')||'english';const csrf=getCsrfToken();void fetch(API_BASE_URL+'/api/account/locale',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(csrf)},body:JSON.stringify({locale:chosen})}).catch(()=>console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));} document.documentElement.style.fontSize=String(saved?.font_size||14)+'px'; const accentMap:Record<string,string>={cyan:'#00e5ff',blue:'#3b82f6',violet:'#8b5cf6',emerald:'#10b981',rose:'#f43f5e'}; document.documentElement.style.setProperty('--accent-cyan',accentMap[saved?.accent_color]||accentMap.cyan); document.documentElement.dataset.afgDensity=saved?.density||'comfortable'; document.documentElement.dataset.afgChatWidth=saved?.chat_width||'comfortable'; document.documentElement.classList.toggle('afg-reduce-motion',saved?.animations_enabled===false); writeStored('afg_voice_enabled',String(saved?.voice_enabled!==false)); window.dispatchEvent(new Event('afg-voice-preference-change')); if(saved?.auto_select_model===false){setSelectedModel('auto');return;} const model=saved?.default_model; if(typeof model==='string'&&model)setSelectedModel(model); }).catch(() => {});
           } else {
             if (wasAuthenticatedRef.current) {
               wasAuthenticatedRef.current = false;
@@ -368,7 +422,7 @@ export default function App() {
               setCurrentSessionId(`chat-${Date.now()}`);
             }
             setUser(DEFAULT_USER);
-            localStorage.removeItem('afg_voice_enabled');
+            removeStored('afg_voice_enabled');
             window.dispatchEvent(new Event('afg-voice-preference-change'));
           }
         }).catch(() => {}).finally(() => setAuthCheckResolved(true));
@@ -382,7 +436,7 @@ export default function App() {
       setCurrentTab('chat');
       setHasEnteredApp(false);
       setAuthCheckResolved(true);
-      localStorage.removeItem('afg_entry_mode');
+      removeStored('afg_entry_mode');
     };
     window.addEventListener('afg-auth-change', syncAccount);
     window.addEventListener('afg-preferences-change', syncAccount);
@@ -425,7 +479,7 @@ export default function App() {
           serverConversationRef.current = String(latest.id);
         }
       } catch {
-        if (active) setProfileLoadError(language === 'dari' ? 'بارگذاری پروفایل یا تاریخچه ناموفق بود. لطفاً دوباره تلاش کنید.' : 'Failed to load profile. Please try again.');
+        if (active) setProfileLoadError(ui.historyLoadFailed);
       } finally {
         window.clearTimeout(timer);
         if (active) setIsInitialChatLoading(false);
@@ -507,8 +561,7 @@ export default function App() {
     localeChangedThisSession.current = true;
     setLanguage(nextLanguage);
     setHasSelectedLanguage(true);
-    setIsIntroVisible(false);
-    localStorage.setItem('afg_language', nextLanguage);
+    persistLanguage(nextLanguage);
     applyDocumentLocale(nextLanguage);
     fetch(API_BASE_URL + '/api/auth/me', { credentials: 'include' }).then((response) => response.ok ? response.json() : null).then((authData) => {
       if (!authData?.authenticated) return;
@@ -539,15 +592,18 @@ export default function App() {
     const chosenModel = modelOptions.find((item) => selectedModel === item.providerId + '::' + item.id);
     if (chosenModel?.capabilities?.imageGen) {
       if (attachments.length) {
-        window.alert(language === 'dari' ? 'ویرایش تصویر با فایل پیوست هنوز فعال نیست؛ فعلاً توضیح متنی بفرستید.' : 'Image editing with attachments is not enabled yet. Send a text prompt instead.');
+        notifyChatSendRejected(text, attachments);
+        window.alert(ui.imageEditUnavailable);
         return;
       }
       const userMessage: AfgMessage = { id: crypto.randomUUID(), role: 'user', content: text, timestamp: Date.now() };
       const assistantId = crypto.randomUUID();
-      setMessages([...baseMessages, userMessage, { id: assistantId, role: 'assistant', content: language === 'dari' ? 'در حال تولید تصویر…' : 'Generating image…', isStreaming: true, timestamp: Date.now() }]);
+      setMessages([...baseMessages, userMessage, { id: assistantId, role: 'assistant', content: ui.imageGenerating, isStreaming: true, timestamp: Date.now() }]);
+      notifyChatSendAccepted(text);
+      playUiSound('send');
       setIsLoading(true);
       try {
-        if (chosenModel.providerId !== '9router') throw new Error(language === 'dari' ? 'مسیر تولید تصویر این ارائه‌دهنده هنوز وصل نشده است.' : 'Image generation for this provider is not integrated yet.');
+        if (chosenModel.providerId !== '9router') throw new Error(ui.imageProviderUnavailable);
         const csrf = getCsrfToken();
         const response = await fetch(API_BASE_URL + '/api/9router/images/generations', {
           method: 'POST', credentials: 'include',
@@ -555,14 +611,15 @@ export default function App() {
           body: JSON.stringify({ model: chosenModel.id, prompt: text.trim(), n: 1, size: '1024x1024', quality: 'standard', response_format: 'url' }),
         });
         const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload.error || (language === 'dari' ? 'تولید تصویر ناموفق بود.' : 'Image generation failed.'));
+        if (!response.ok) throw new Error(payload.error || ui.imageGenerationFailed);
         const rows = Array.isArray(payload.data) ? payload.data : [];
         const imageUrl = rows[0]?.url;
-        if (typeof imageUrl !== 'string' || !/^https:\/\//i.test(imageUrl)) throw new Error(language === 'dari' ? 'ارائه‌دهنده لینک معتبر تصویر برنگرداند.' : 'The provider did not return a valid image URL.');
+        if (typeof imageUrl !== 'string' || !/^https:\/\//i.test(imageUrl)) throw new Error(ui.imageUrlInvalid);
         const resultText = '![Generated image](' + imageUrl + ')';
         setMessages(previous => previous.map(message => message.id === assistantId ? { ...message, content: resultText, isStreaming: false } : message));
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Image generation failed.';
+        playUiSound('error');
+        const message = error instanceof Error ? error.message : ui.imageGenerationFailed;
         setMessages(previous => previous.map(item => item.id === assistantId ? { ...item, content: message, isStreaming: false, isError: true, retryable: true } : item));
       } finally {
         setIsLoading(false);
@@ -572,10 +629,11 @@ export default function App() {
     if (attachments.length > 0) {
       const hasImage = attachments.some((attachment) => /\\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(attachment.name));
       const selectedDescriptor = modelOptions.find((item) => selectedModel.endsWith(item.id));
+      notifyChatSendRejected(text, attachments);
       if (hasImage && !selectedDescriptor?.capabilities?.vision) {
-        window.alert(language === 'dari' ? 'این مدل نمی‌تواند تصویر را بخواند. لطفاً یک مدل دارای قابلیت Vision انتخاب کنید.' : 'This model cannot read images. Please switch to a Vision model.');
+        window.alert(ui.visionUnavailable);
       } else {
-        window.alert(language === 'dari' ? 'بارگذاری فایل هنوز به ذخیره‌سازی و پردازش سرور وصل نشده است.' : 'File uploads are not connected to server storage and processing yet.');
+        window.alert(ui.fileUploadUnavailable);
       }
       return;
     }
@@ -592,7 +650,6 @@ export default function App() {
 
     const abortController = new AbortController();
     activeChatAbortRef.current = abortController;
-    setMessages(baseMessages.concat(userMessage));
     setIsLoading(true);
     let persistedConversationId: string | null = null;
     let userMessagePersisted = false;
@@ -604,12 +661,17 @@ export default function App() {
         userMessagePersisted = true;
         abortController.signal.throwIfAborted();
       } catch {
-        setProfileLoadError('Your message could not be saved to your account. Retry storage before sending.');
+        notifyChatSendRejected(text, attachments);
+        setProfileLoadError(ui.messageSaveFailed);
         activeChatAbortRef.current = null;
         setIsLoading(false);
         return;
       }
     }
+    setProfileLoadError('');
+    setMessages(baseMessages.concat(userMessage));
+    notifyChatSendAccepted(text);
+    playUiSound('send');
     const assistantId = crypto.randomUUID();
     const initialAssistantMessage: AfgMessage = {
       id: assistantId,
@@ -701,23 +763,24 @@ export default function App() {
       }
       if (persistedConversationId && userMessagePersisted && fullContent.trim()) {
         try { await persistServerMessage(persistedConversationId, 'assistant', fullContent, 'complete', assistantId); }
-        catch { setProfileLoadError('The response was received but could not be saved. Keep this page open and export the conversation before refreshing.'); }
+        catch { setProfileLoadError(ui.assistantSaveFailed); }
       }
       setMessages((previous) => previous.map((message) => message.id === assistantId ? { ...message, isStreaming: false } : message));
+      playUiSound('receive');
     } catch {
-      const supportReference = requestId ? (language === 'dari' ? `\nشناسه پیگیری: ${requestId}` : `\nRequest ID: ${requestId}`) : '';
-      const userFacingError = (language === 'dari'
-        ? 'پاسخ کامل نشد. پیام شما باقی مانده است؛ اتصال و مدل را بررسی کرده و دوباره تلاش کنید.'
-        : 'The response could not be completed. Your prompt is preserved; check the connection and model, then retry.') + supportReference;
+      const supportReference = requestId ? `\n${ui.requestIdLabel}: ${requestId}` : '';
+      const userFacingError = ui.responseIncomplete + supportReference;
 
       if (abortController.signal.aborted) {
-        const cancelledContent = fullContent.trim() || 'Generation cancelled.';
+        playUiSound('notice');
+        const cancelledContent = fullContent.trim() || ui.cancelledContent;
         setMessages(prev => prev.map(message => message.id === assistantId ? { ...message, content: cancelledContent, isStreaming: false, isError: true, isCancelled: true, retryable: true } : message));
         if (persistedConversationId && userMessagePersisted) {
           try { await persistServerMessage(persistedConversationId, 'assistant', cancelledContent, 'cancelled', assistantId); }
-          catch { setProfileLoadError('The cancelled response could not be saved.'); }
+          catch { setProfileLoadError(ui.cancelledSaveFailed); }
         }
       } else {
+        playUiSound('error');
         const failedContent = fullContent.trim() ? `${fullContent}\n\n${userFacingError}` : userFacingError;
         setMessages(prev => prev.map(m =>
           m.id === assistantId ? { ...m, content: failedContent, isStreaming: false, isError: true, retryable: true } : m
@@ -754,6 +817,7 @@ export default function App() {
 
   const handleDeleteMessage = async (messageId: string) => {
     const conversationId = serverConversationRef.current;
+    let storageDeleteFailed = false;
     if (user.email && conversationId && /^[0-9a-f-]{36}$/i.test(messageId)) {
       try {
         await apiFetch('/api/conversations/' + encodeURIComponent(conversationId) + '/messages/' + encodeURIComponent(messageId), {
@@ -761,11 +825,14 @@ export default function App() {
           headers: getCsrfHeaders(),
         });
       } catch {
+        // Local-only messages can legitimately return 404. Remove them from the
+        // current view, but never imply that account storage was changed.
+        storageDeleteFailed = true;
         console.warn('AFG_CONVERSATION_MESSAGE_DELETE_FAILED');
-        return;
       }
     }
     setMessages((previous) => previous.filter((message) => message.id !== messageId));
+    if (storageDeleteFailed) setProfileLoadError(ui.deleteStorageFailed);
   };
 
   const handleStopGeneration = () => activeChatAbortRef.current?.abort();
@@ -801,17 +868,13 @@ export default function App() {
     setCurrentTab('chat');
   };
 
-  if (isIntroVisible) {
-    return <AfgCinematicIntro language={language} onComplete={() => { localStorage.setItem('afg_intro_seen', 'true'); setIsIntroVisible(false); }} />;
-  }
-
   if (!hasSelectedLanguage) {
     return <AfgLanguageModal isOpen={true} language={null} onSelectLanguage={handleSetLanguage} />;
   }
 
   if (!hasEnteredApp) {
-    if (!authCheckResolved) return <div className="min-h-screen grid place-items-center bg-[var(--bg-main)] text-[var(--text-secondary)]" role="status" aria-live="polite">{language === 'dari' ? 'در حال بررسی ورود…' : 'Checking your session…'}</div>;
-    return <AfgAuthGate language={language} onContinueGuest={() => { localStorage.setItem('afg_entry_mode', 'guest'); setHasEnteredApp(true); }} onAuthenticated={() => { localStorage.setItem('afg_entry_mode', 'account'); setHasEnteredApp(true); window.dispatchEvent(new Event('afg-auth-change')); }} />;
+    if (!authCheckResolved) return <div className="min-h-screen grid place-items-center bg-[var(--bg-main)] text-[var(--text-secondary)]" role="status" aria-live="polite">{ui.sessionChecking}</div>;
+    return <AfgAuthGate language={language} onContinueGuest={() => { writeStored('afg_entry_mode', 'guest'); setHasEnteredApp(true); }} onAuthenticated={() => { writeStored('afg_entry_mode', 'account'); playUiSound('success'); setHasEnteredApp(true); window.dispatchEvent(new Event('afg-auth-change')); }} />;
   }
 
   return (
@@ -826,7 +889,7 @@ export default function App() {
         failed={!isLoading && !!messages.at(-1)?.isError && !messages.at(-1)?.isCancelled} cancelled={!isLoading && !!messages.at(-1)?.isCancelled} onSetTheme={setTheme} onLanguage={handleSetLanguage}>
       {profileLoadError && <div role="alert" className="mx-auto mt-2 w-[min(94%,48rem)] rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
         {profileLoadError}
-        <button type="button" className="ms-3 underline font-semibold" onClick={() => { setChatLoadAttempt((value) => value + 1); window.dispatchEvent(new Event('afg-auth-change')); }}>{language === 'dari' ? 'تلاش دوباره' : 'Retry'}</button>
+        <button type="button" className="ms-3 underline font-semibold" onClick={() => { setChatLoadAttempt((value) => value + 1); window.dispatchEvent(new Event('afg-auth-change')); }}>{ui.retry}</button>
       </div>}
       {/* Main Content Area */}
       <main className="min-h-0 flex-1 w-full overflow-y-auto pb-4 pt-2 md:ms-0">
@@ -834,7 +897,7 @@ export default function App() {
         <React.Suspense
           fallback={
             <div className="mx-auto flex min-h-[40vh] items-center justify-center text-sm text-slate-500" role="status" aria-live="polite">
-              {language === 'dari' ? 'در حال بارگذاری...' : 'Loading...'}
+              {ui.loading}
             </div>
           }
         >
@@ -937,13 +1000,13 @@ export default function App() {
       </JarvisShell>
 
       {isAfgAssistantOpen && (
-        <div className="afg-assistant-overlay fixed inset-0 z-[100] overflow-y-auto p-2 backdrop-blur-md sm:p-5" role="dialog" aria-modal="true" aria-label={language === 'dari' ? 'دستیار AFG AI' : 'AFG AI assistant'} onClick={(event) => { if (event.target === event.currentTarget) setIsAfgAssistantOpen(false); }}>
+        <div className="afg-assistant-overlay fixed inset-0 z-[100] overflow-y-auto p-2 backdrop-blur-md sm:p-5" role="dialog" aria-modal="true" aria-label={ui.assistantTitle} onClick={(event) => { if (event.target === event.currentTarget) setIsAfgAssistantOpen(false); }}>
           <div className="afg-assistant-overlay-header mx-auto mb-3 flex max-w-4xl items-center justify-between rounded-2xl border border-cyan-400/25 px-4 py-3 shadow-2xl">
             <div className="flex items-center gap-2 text-sm font-bold text-cyan-200"><span className="grid h-8 w-8 place-items-center rounded-xl border border-cyan-300/30 bg-cyan-300/10">✦</span>AFG AI</div>
-            <button type="button" onClick={() => setIsAfgAssistantOpen(false)} className="rounded-xl border border-white/15 px-3 py-2 text-sm text-slate-200 hover:bg-white/10">{language === 'dari' ? 'بستن' : 'Close'}</button>
+            <button type="button" onClick={() => setIsAfgAssistantOpen(false)} className="rounded-xl border border-white/15 px-3 py-2 text-sm text-slate-200 hover:bg-white/10">{ui.assistantClose}</button>
           </div>
           <ErrorBoundary>
-            <React.Suspense fallback={<div className="mx-auto max-w-4xl rounded-2xl border border-cyan-400/20 bg-slate-900 p-6 text-center text-sm text-cyan-200">{language === 'dari' ? 'در حال بارگذاری دستیار...' : 'Loading assistant...'}</div>}>
+            <React.Suspense fallback={<div className="mx-auto max-w-4xl rounded-2xl border border-cyan-400/20 bg-slate-900 p-6 text-center text-sm text-cyan-200">{ui.assistantLoading}</div>}>
               <LazyAfgJarvisView language={language} />
             </React.Suspense>
           </ErrorBoundary>
@@ -954,12 +1017,12 @@ export default function App() {
         <button
           type="button"
           onClick={() => setCurrentTab('terminal')}
-          aria-label={language === 'dari' ? 'باز کردن ترمینل AFG AI' : 'Open AFG AI Terminal'}
-          title={language === 'dari' ? 'ترمینل · Ctrl+Shift+T' : 'Terminal · Ctrl+Shift+T'}
+          aria-label={ui.terminalOpen}
+          title={ui.terminalShortcut}
           className="fixed z-40 bottom-[max(1.1rem,env(safe-area-inset-bottom))] end-4 inline-flex min-h-12 items-center gap-2 rounded-full border border-cyan-300/40 bg-[#07111f]/95 px-4 text-sm font-bold text-cyan-200 shadow-[0_8px_35px_rgba(6,182,212,.28)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-[#0b1b2b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300"
         >
           <TerminalIcon size={18} aria-hidden="true" />
-          <span>{language === 'dari' ? 'ترمینل' : 'Terminal'}</span>
+          <span>{ui.terminalLabel}</span>
         </button>
       )}
 
@@ -968,7 +1031,7 @@ export default function App() {
         onClose={() => setIsCommandPaletteOpen(false)}
         language={language}
         messages={messages}
-        modelName={selectedModel === 'auto' ? 'Auto model' : (modelOptions.find((item) => selectedModel.endsWith(item.id))?.displayName || selectedModel)}
+        modelName={selectedModel === 'auto' ? ui.autoModel : (modelOptions.find((item) => selectedModel.endsWith(item.id))?.displayName || selectedModel)}
         contextWindow={modelOptions.find((item) => selectedModel.endsWith(item.id))?.contextWindow || 0}
         thinkingLevel={thinkingLevel}
         onThinkingLevel={setThinkingLevel}

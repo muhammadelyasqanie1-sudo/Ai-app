@@ -18,6 +18,7 @@ AFG AI is an Android-friendly and web-based AI assistant. The current repository
 <!-- coderabbit-ai-generated-section:v1:087addacb3f2d47e54384ca29ab65dc217cd3ed25fd2cfcdb5df267549cf6405 -->
 
 - `docs/` — architecture, security, reliability, acceptance criteria and delivery/reporting rules.
+- [Onboarding, interface sound and send recovery](docs/ONBOARDING_RESILIENCE.md) — first-launch language consent, four-language shell/auth copy, draft restoration and original Web Audio cues.
 - [Multimodal setup and feature inventory](docs/MULTIMODAL-IMPLEMENTATION.md) — private media, compatible providers, scanner setup, migration0050 and verification limits.
 
 <!-- /coderabbit-ai-generated:v1 -->

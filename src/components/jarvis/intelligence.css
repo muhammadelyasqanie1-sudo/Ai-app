@@ -970,6 +970,14 @@
   color: var(--j-text);
   max-width: 50%;
 }
+.afg-experience-dialog .afg-volume-range {
+  flex: 1;
+  max-width: 50%;
+  accent-color: var(--j-accent);
+}
+.afg-experience-dialog .afg-volume-range:disabled {
+  opacity: 0.45;
+}
 .afg-experience-dialog fieldset {
   border: 0;
   padding: 0;

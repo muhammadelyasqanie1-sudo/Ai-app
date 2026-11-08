@@ -21,11 +21,15 @@ export type ExperiencePreferences = {
   graphics: GraphicsProfile;
   motion: "system" | "reduced";
   panel: boolean;
+  sound: boolean;
+  volume: number;
 };
 const defaults: ExperiencePreferences = {
   graphics: "auto",
   motion: "system",
   panel: true,
+  sound: true,
+  volume: 0.3,
 };
 export function readExperience(): ExperiencePreferences {
   try {
@@ -36,6 +40,10 @@ export function readExperience(): ExperiencePreferences {
         : "auto",
       motion: data?.motion === "reduced" ? "reduced" : "system",
       panel: typeof data?.panel === "boolean" ? data.panel : true,
+      sound: typeof data?.sound === "boolean" ? data.sound : true,
+      volume: typeof data?.volume === "number" && Number.isFinite(data.volume)
+        ? Math.max(0, Math.min(1, data.volume))
+        : 0.3,
     };
   } catch {
     return defaults;

@@ -73,15 +73,22 @@ assert.deepEqual(readExperience(), {
   graphics: "auto",
   motion: "system",
   panel: true,
+  sound: true,
+  volume: 0.3,
 });
 data.set(EXPERIENCE_KEY, "malformed");
 assert.equal(readExperience().graphics, "auto");
-data.set(EXPERIENCE_KEY, '{"graphics":"low","motion":"reduced","panel":false}');
+data.set(EXPERIENCE_KEY, '{"graphics":"low","motion":"reduced","panel":false,"sound":false,"volume":0.75}');
 assert.deepEqual(readExperience(), {
   graphics: "low",
   motion: "reduced",
   panel: false,
+  sound: false,
+  volume: 0.75,
 });
+data.set(EXPERIENCE_KEY, '{"sound":"on","volume":2}');
+assert.equal(readExperience().sound, true);
+assert.equal(readExperience().volume, 1);
 Object.defineProperty(globalThis, "localStorage", {
   get: () => {
     throw new Error("denied");
@@ -100,5 +107,5 @@ for (const language of ["dari", "pashto", "persian", "arabic"] as const) {
   assert.ok(Object.values(copy).every((value) => value.trim().length > 0));
 }
 console.log(
-  "AFG experience: activity truth, cancellation, graphics policy, storage resilience and locale coverage passed.",
+  "AFG experience: activity truth, cancellation, graphics/sound policy, storage resilience and locale coverage passed.",
 );

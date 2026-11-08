@@ -8,7 +8,7 @@
 
 This milestone extends the existing command center. It retains the Express APIs, PostgreSQL schema, provider discovery, authenticated chat, SSE reader, cancellation, memory, tools and Capacitor plugins. No runtime dependency, migration, provider protocol or environment variable was added. No production deployment was performed.
 
-The workspace now offers a skippable first-launch introduction; dismissal uses the existing `afg_intro_seen` key. Appearance settings can replay it. Signing in remains an explicit action through the existing authentication gate. The desktop sidebar and mobile bottom navigation follow the current command-center implementation and the requested design, superseding the older drawer-only design guide.
+A first launch now asks for a language before the workspace, then offers the skippable introduction; dismissal uses the existing `afg_intro_seen` key. Appearance settings can replay it. Signing in remains an explicit action through the existing authentication gate. The desktop sidebar and mobile bottom navigation follow the current command-center implementation and the requested design, superseding the older drawer-only design guide. See [Onboarding, interface sound and send recovery](ONBOARDING_RESILIENCE.md) for the language-consent, draft-recovery and original cue implementation.
 
 ## Design architecture
 
@@ -17,7 +17,7 @@ The workspace now offers a skippable first-launch introduction; dismissal uses t
 | `src/components/jarvis/intelligence.css` | Dark/light materials, typography, shared motion tokens, responsive command center, dialog and chat layout |
 | `IntelligenceCore.tsx` | Lazy-loaded CSS 3D orbits and SVG nucleus; no WebGL context or downloaded asset |
 | `experience.ts` | Validated local preferences, conservative graphics selection and activity-state resolver |
-| `ExperiencePanel.tsx` | Native modal dialog, focus management, language/theme/graphics/motion controls and real setup links |
+| `ExperiencePanel.tsx` | Native modal dialog, focus management, language/theme/graphics/motion/sound controls and real setup links |
 | `experienceCopy.ts`, `workspaceCopy.ts` | Centralized experience, dashboard, voice and local-file copy for English, Dari/Persian, Pashto and Arabic |
 | `AudioWaveform.tsx` | Actual analyser samples from an already authorized recording stream; never requests microphone permission |
 | `AfgCinematicIntro.tsx` / `.css` | Existing welcome component refactored into a user-paced introduction; optional sound starts muted |

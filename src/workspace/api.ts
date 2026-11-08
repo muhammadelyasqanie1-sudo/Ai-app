@@ -1,28 +1,21 @@
 /**
- * API boundary for the workspace UI.
+ * API boundary for the legacy workspace prototype.
  *
- * Every function here is a stub that returns mock data so the UI works on its
- * own. Replace the body of each one with a real call (for example a
- * `fetch('/api/...')` to the existing API edge in src/api/http.ts, or the
- * @google/genai SDK) when you wire the UI up. Components never call the
- * network directly, so these are the only places that need to change.
+ * This prototype is not mounted by the production application. It must never
+ * return simulated AI output: the real chat path lives in src/App.tsx and
+ * src/api/chatHandler.ts through the server-side provider gateway.
  */
 
 import type { Message } from './types';
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 /** API INJECTION POINT: chat completion. `history` includes the new user message. */
-export async function sendChatMessage(history: Message[], model: string): Promise<string> {
-  await wait(700);
-  const last = history[history.length - 1]?.content ?? '';
-  return `(${model}) Mock reply. Connect sendChatMessage() in src/workspace/api.ts to a real model.\n\nYou said: ${last}`;
+export async function sendChatMessage(_history: Message[], _model: string): Promise<string> {
+  throw new Error('The workspace prototype is not connected to the server provider gateway.');
 }
 
 /** API INJECTION POINT: run a shell command in the sandbox / device terminal. */
-export async function runTerminalCommand(command: string): Promise<string> {
-  await wait(250);
-  return `mock: ${command}\n(connect runTerminalCommand() to a real shell)`;
+export async function runTerminalCommand(_command: string): Promise<string> {
+  throw new Error('Terminal execution is unavailable until an isolated sandbox is configured.');
 }
 
 export interface FileEntry {
@@ -33,20 +26,13 @@ export interface FileEntry {
 
 /** API INJECTION POINT: list files in the active project. */
 export async function listFiles(): Promise<FileEntry[]> {
-  await wait(150);
-  return [
-    { name: 'src', kind: 'folder' },
-    { name: 'public', kind: 'folder' },
-    { name: 'package.json', kind: 'file', size: '1.5 KB' },
-    { name: 'README.md', kind: 'file', size: '7.6 KB' },
-    { name: 'server.ts', kind: 'file', size: '2.6 KB' },
-  ];
+  // The production file library is src/components/afg/AfgFileLibrary.tsx.
+  return [];
 }
 
 /** API INJECTION POINT: image / video generation. Return a URL once real. */
-export async function generateMedia(kind: 'image' | 'video', prompt: string): Promise<{ url?: string; note: string }> {
-  await wait(900);
-  return { note: `Mock ${kind} result for: ${prompt}` };
+export async function generateMedia(_kind: 'image' | 'video', _prompt: string): Promise<{ url?: string; note: string }> {
+  return { note: 'Media generation is unavailable until a verified provider capability is configured.' };
 }
 
 export interface ProviderInfo {

@@ -86,6 +86,8 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   useEffect(()=>{const sync=()=>setVoiceEnabled(localStorage.getItem('afg_voice_enabled')!=='false');window.addEventListener('afg-voice-preference-change',sync);window.addEventListener('afg-preferences-change',sync);return()=>{window.removeEventListener('afg-voice-preference-change',sync);window.removeEventListener('afg-preferences-change',sync);};},[]);
   const [voiceRecordingError, setVoiceRecordingError] = useState('');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const pendingSendRef = useRef<{ text: string; attachments: ChatAttachment[] } | null>(null);
+  const rejectedSynchronouslyRef = useRef(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [linkInputOpen, setLinkInputOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
@@ -97,6 +99,32 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // A send can be rejected before the assistant starts (for example, when
+  // account persistence fails). Restore the exact draft instead of losing it.
+  useEffect(() => {
+    const restoreRejectedSend = (event: Event) => {
+      const detail = (event as CustomEvent<{ text?: string; attachments?: ChatAttachment[] }>).detail;
+      const pending = pendingSendRef.current;
+      if (!pending) return;
+      if (typeof detail?.text === 'string' && detail.text !== pending.text) return;
+      rejectedSynchronouslyRef.current = true;
+      setInputText(pending.text);
+      setAttachments(pending.attachments);
+      pendingSendRef.current = null;
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    };
+    const acknowledgeSend = (event: Event) => {
+      const detail = (event as CustomEvent<{ text?: string }>).detail;
+      if (!detail?.text || detail.text === pendingSendRef.current?.text) pendingSendRef.current = null;
+    };
+    window.addEventListener('afg-chat-send-rejected', restoreRejectedSend);
+    window.addEventListener('afg-chat-send-accepted', acknowledgeSend);
+    return () => {
+      window.removeEventListener('afg-chat-send-rejected', restoreRejectedSend);
+      window.removeEventListener('afg-chat-send-accepted', acknowledgeSend);
+    };
+  }, []);
 
   // Dismiss composer popovers on outside touch/click and Escape.
   useEffect(() => {
@@ -203,14 +231,22 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
     if (disabled || isLoading) return;
     const trimmed = inputText.trim();
     if (!trimmed && attachments.length === 0) return;
-    onSendMessage(trimmed, attachments);
-    setInputText('');
-    setAttachments([]);
-    setIsMenuOpen(false);
-    setLinkInputOpen(false);
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
+    const submittedAttachments = [...attachments];
+    rejectedSynchronouslyRef.current = false;
+    pendingSendRef.current = { text: trimmed, attachments: submittedAttachments };
+    onSendMessage(trimmed, submittedAttachments);
+    // The parent can reject a send synchronously (disabled model, unsafe
+    // attachment). Check after its first synchronous section before clearing.
+    queueMicrotask(() => {
+      if (rejectedSynchronouslyRef.current) return;
+      setInputText('');
+      setAttachments([]);
+      setIsMenuOpen(false);
+      setLinkInputOpen(false);
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
