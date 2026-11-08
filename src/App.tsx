@@ -4,8 +4,9 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { readChatStream } from './lib/chatStream';
+import { JarvisShell } from './components/jarvis/JarvisShell';
 import { Terminal as TerminalIcon } from 'lucide-react';
-import { AfgHeader } from './components/afg/AfgHeader';
 import { AfgHomeView } from './components/afg/AfgHomeView';
 import { AfgChatView } from './components/afg/AfgChatView';
 import { AfgSideMenu } from './components/afg/AfgSideMenu';
@@ -89,9 +90,9 @@ export default function App() {
   const [language, setLanguage] = useState<Language>(() => { const saved = localStorage.getItem('afg_language'); const supported: Language[] = ['dari','english','pashto','persian','arabic','urdu','turkish','russian','french','spanish','german','chinese','hindi','bengali','indonesian','portuguese','japanese','korean']; return supported.includes(saved as Language) ? saved as Language : detectDeviceLanguage(); });
   // Language is detected from the device/browser; no manual language gate on startup.
   const [hasSelectedLanguage, setHasSelectedLanguage] = useState(true);
-  // Show the full-screen cinematic motion intro on every fresh app launch.
-  const [isIntroVisible, setIsIntroVisible] = useState(true);
-  const [hasEnteredApp, setHasEnteredApp] = useState(() => localStorage.getItem('afg_entry_mode') === 'guest');
+  // Open the local workspace directly; server authentication still protects account APIs.
+  const [isIntroVisible, setIsIntroVisible] = useState(false);
+  const [hasEnteredApp, setHasEnteredApp] = useState(true);
   const [authCheckResolved, setAuthCheckResolved] = useState(false);
   const [isInitialChatLoading, setIsInitialChatLoading] = useState(false);
   const [profileLoadError, setProfileLoadError] = useState('');
@@ -99,15 +100,17 @@ export default function App() {
 
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('afg_theme');
+    if (!saved) return 'dark';
     return (saved === 'dark' || saved === 'light' || saved === 'neon' || saved === 'system') ? saved : 'system';
   });
 
-  const [currentTab, setCurrentTab] = useState<TabType>('chat');
+  const [currentTab, setCurrentTab] = useState<TabType>('home');
   const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
   const [messages, setMessages] = useState<AfgMessage[]>(INITIAL_MESSAGES);
   const [agentActivities, setAgentActivities] = useState<Array<{id:string;name:string;label:string;detail?:string;url?:string;sources?:Array<{title:string;url:string;snippet?:string;publishedDate?:string}>;status:'running'|'completed'|'failed';timestamp:number}>>([]);
   const [currentSessionId, setCurrentSessionId] = useState(() => `chat-${Date.now()}`);
   const [isLoading, setIsLoading] = useState(false);
+  const [audioListening, setAudioListening] = useState(false);
   const activeChatAbortRef = useRef<AbortController | null>(null);
   const serverConversationRef = useRef<string | null>(null);
   const wasAuthenticatedRef = useRef(false);
@@ -178,6 +181,8 @@ export default function App() {
       document.documentElement.classList.toggle('dark', resolved === 'dark' || resolved === 'neon');
       document.documentElement.classList.toggle('light', resolved === 'light');
       document.documentElement.classList.toggle('neon', resolved === 'neon');
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolved === 'light' ? '#f2f5fb' : '#05060a');
+      document.querySelector('link[rel="icon"]')?.setAttribute('href', resolved === 'light' ? '/afg-ai-mark-light.svg' : '/afg-ai-icon.svg');
     };
     applyTheme();
     localStorage.setItem('afg_theme', theme);
@@ -209,7 +214,7 @@ export default function App() {
         setModelOptions(options);
         if (!verified) {
           setAvailableModels([]);
-          setSelectedModel('auto');
+          // Preserve selection while the catalog is unavailable.
           setCapabilitySnapshot({
             verified: false,
             models: [],
@@ -231,7 +236,7 @@ export default function App() {
           return;
         }
         setAvailableModels(data.models);
-        setSelectedModel((current) => data.models.includes(current) ? current : (data.models[0] || ''));
+        // Auto remains explicit; discovery never silently changes a manual selection.
         setCapabilitySnapshot(data as AfgCapabilitySnapshot);
         fetch(API_BASE_URL + '/api/auth/me', { credentials: 'include' })
           .then((authResponse) => authResponse.ok ? authResponse.json() : null)
@@ -247,7 +252,7 @@ export default function App() {
       .catch(() => {
         setAvailableModels([]);
         setModelOptions([]);
-        setSelectedModel('auto');
+        // Preserve selection while the catalog is unavailable.
         setCapabilitySnapshot({
           verified: false,
           models: [],
@@ -276,8 +281,7 @@ export default function App() {
       setModelOptions(options);
       setAvailableModels(Array.isArray(data.models) ? data.models : []);
       setCapabilitySnapshot(data as AfgCapabilitySnapshot);
-      setSelectedModel((current) => current === 'auto' || data.models?.includes(current)
-        ? current : (data.models?.[0] || 'auto'));
+      // Manual model identity survives catalog outages and health changes.
     };
     window.addEventListener('afg-model-catalog', onCatalog);
     return () => window.removeEventListener('afg-model-catalog', onCatalog);
@@ -354,7 +358,7 @@ export default function App() {
             wasAuthenticatedRef.current = true;
             setHasEnteredApp(true);
             localStorage.setItem('afg_entry_mode', 'account');
-            setUser({ name: data.user.displayName || 'User', nameEn: data.user.displayName || 'User', email: data.user.email || '', avatar: '', isPremium: false, tier: 'Free', role: data.user.role || 'user' });
+            setUser({ id: data.user.id, name: data.user.displayName || 'User', nameEn: data.user.displayName || 'User', email: data.user.email || '', avatar: '', isPremium: false, tier: 'Free', role: data.user.role || 'user' });
             fetch(API_BASE_URL + '/api/account/preferences', { credentials: 'include' }).then((r) => r.ok ? r.json() : null).then((prefs) => { const saved=prefs?.preferences; if(saved?.appearance&&['light','dark','neon','system'].includes(saved.appearance))setTheme(saved.appearance); if(localeChangedThisSession.current){const chosen=localStorage.getItem('afg_language')||'dari';const csrf=getCsrfToken();void fetch(API_BASE_URL+'/api/account/locale',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(csrf)},body:JSON.stringify({locale:chosen})}).catch(()=>console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));} document.documentElement.style.fontSize=String(saved?.font_size||14)+'px'; const accentMap:Record<string,string>={cyan:'#00e5ff',blue:'#3b82f6',violet:'#8b5cf6',emerald:'#10b981',rose:'#f43f5e'}; document.documentElement.style.setProperty('--accent-cyan',accentMap[saved?.accent_color]||accentMap.cyan); document.documentElement.dataset.afgDensity=saved?.density||'comfortable'; document.documentElement.dataset.afgChatWidth=saved?.chat_width||'comfortable'; document.documentElement.classList.toggle('afg-reduce-motion',saved?.animations_enabled===false); localStorage.setItem('afg_voice_enabled',String(saved?.voice_enabled!==false)); window.dispatchEvent(new Event('afg-voice-preference-change')); if(saved?.auto_select_model===false){setSelectedModel('auto');return;} const model=saved?.default_model; if(typeof model==='string'&&model)setSelectedModel(model); }).catch(() => {});
           } else {
             if (wasAuthenticatedRef.current) {
@@ -415,7 +419,7 @@ export default function App() {
           if (!active) return;
           const restored: AfgMessage[] = (Array.isArray(payload?.messages) ? payload.messages : [])
             .filter((item: any) => item?.role === 'user' || item?.role === 'assistant')
-            .map((item: any) => ({ id:String(item.id), role:item.role, content:String(item.content || ''), timestamp:item.createdAt ? new Date(item.createdAt).getTime() : Date.now(), isError:item.status === 'failed' }));
+            .map((item: any) => ({ id:String(item.id), role:item.role, content:String(item.content || ''), timestamp:item.createdAt ? new Date(item.createdAt).getTime() : Date.now(), isError:item.status === 'failed' || item.status === 'cancelled', isCancelled:item.status === 'cancelled' }));
           setMessages(restored);
           setCurrentSessionId(String(latest.id));
           serverConversationRef.current = String(latest.id);
@@ -432,6 +436,7 @@ export default function App() {
   }, [user.email, hasEnteredApp, language, chatLoadAttempt]);
 
   useEffect(() => {
+    activeChatAbortRef.current?.abort();
     serverConversationRef.current = null;
   }, [user.email]);
 
@@ -463,7 +468,7 @@ export default function App() {
     conversationId: string,
     role: 'user' | 'assistant',
     content: string,
-    status: 'complete' | 'failed' = 'complete',
+    status: 'complete' | 'failed' | 'cancelled' = 'complete',
     messageId?: string,
   ) => {
     const clientMessageId = messageId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(messageId)
@@ -529,6 +534,7 @@ export default function App() {
 
   // Chat message sending & streaming logic
   const handleSendMessage = async (text: string, attachments: ChatAttachment[], baseMessages: AfgMessage[] = messages, toolOptions: Record<string, unknown> = {}) => {
+    if (isLoading || activeChatAbortRef.current) return;
     if (!text.trim() && attachments.length === 0) return;
     const chosenModel = modelOptions.find((item) => selectedModel === item.providerId + '::' + item.id);
     if (chosenModel?.capabilities?.imageGen) {
@@ -584,6 +590,8 @@ export default function App() {
       timestamp: Date.now(),
     };
 
+    const abortController = new AbortController();
+    activeChatAbortRef.current = abortController;
     setMessages(baseMessages.concat(userMessage));
     setIsLoading(true);
     let persistedConversationId: string | null = null;
@@ -591,15 +599,17 @@ export default function App() {
     if (user.email) {
       try {
         persistedConversationId = await ensureServerConversation(text, baseMessages);
+        abortController.signal.throwIfAborted();
         await persistServerMessage(persistedConversationId, 'user', text, 'complete', userMessage.id);
         userMessagePersisted = true;
+        abortController.signal.throwIfAborted();
       } catch {
-        console.warn('AFG_CONVERSATION_USER_MESSAGE_SAVE_FAILED');
+        setProfileLoadError('Your message could not be saved to your account. Retry storage before sending.');
+        activeChatAbortRef.current = null;
+        setIsLoading(false);
+        return;
       }
     }
-    const abortController = new AbortController();
-    activeChatAbortRef.current = abortController;
-
     const assistantId = crypto.randomUUID();
     const initialAssistantMessage: AfgMessage = {
       id: assistantId,
@@ -629,6 +639,7 @@ export default function App() {
             body: JSON.stringify({
               messages: [...baseMessages, userMessage].map((m) => ({ role: m.role, content: m.content })),
               model: modelToUse,
+              no_fallback: modelToUse !== 'auto',
               language,
               ...toolOptions,
               thinking_level: thinkingLevel,
@@ -648,26 +659,10 @@ export default function App() {
             if (typeof payload.requestId === 'string') requestId = payload.requestId;
             throw Object.assign(new Error(payload.error || `HTTP ${response.status}`), { retryable: payload.retryable === true || [429,502,503,504].includes(response.status) });
           }
-          const reader = response.body?.getReader();
-          if (!reader) throw new Error('Missing response stream');
-          const decoder = new TextDecoder();
           let streamFailed = false;
           let streamRetryable = true;
           let streamErrorMessage = 'The AI returned an empty or interrupted response.';
-          let streamBuffer = '';
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            streamBuffer += decoder.decode(value, { stream: true });
-            const lines = streamBuffer.split('\n');
-            streamBuffer = lines.pop() || '';
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (!trimmed.startsWith('data: ')) continue;
-              const dataStr = trimmed.slice(6);
-              if (dataStr === '[DONE]') continue;
-              try {
-                const parsed = JSON.parse(dataStr);
+          for await (const parsed of readChatStream(response, abortController.signal)) {
                 if (parsed.type === 'meta' && typeof parsed.requestId === 'string') { requestId = parsed.requestId; }
                 else if (parsed.type === 'activity' && typeof parsed.id === 'string' && typeof parsed.label === 'string' && ['running','completed','failed'].includes(parsed.status)) {
                   const activitySources = Array.isArray(parsed.sources) ? parsed.sources.slice(0,8).filter((source: any) => source && typeof source.title === 'string' && typeof source.url === 'string' && /^https?:\/\//i.test(source.url)).map((source: any) => ({ title: source.title.slice(0,240), url: source.url, snippet: typeof source.snippet === 'string' ? source.snippet.slice(0,500) : undefined, publishedDate: typeof source.publishedDate === 'string' ? source.publishedDate.slice(0,40) : undefined })) : undefined;
@@ -678,8 +673,6 @@ export default function App() {
                   fullContent += parsed.text;
                   setMessages((previous) => previous.map((message) => message.id === assistantId ? { ...message, content: fullContent } : message));
                 } else if (parsed.type === 'error') { streamFailed = true; streamRetryable = parsed.retryable !== false; streamErrorMessage = typeof parsed.error === 'string' ? parsed.error : streamErrorMessage; }
-              } catch { /* Ignore malformed individual SSE events. */ }
-            }
           }
           if (streamFailed || !fullContent.trim()) throw Object.assign(new Error(streamErrorMessage), { retryable: streamFailed ? streamRetryable : true });
           streamCompleted = true;
@@ -689,6 +682,7 @@ export default function App() {
           await new Promise((resolve) => setTimeout(resolve, baseDelay + Math.floor(Math.random() * Math.max(1, baseDelay * 0.35))));
         }
       }
+      abortController.signal.throwIfAborted();
       if (!streamCompleted) throw new Error('The AI response could not be completed.');
       if (typeof toolOptions.productivityType === 'string' && fullContent.trim()) {
         const csrfToken = getCsrfToken();
@@ -707,7 +701,7 @@ export default function App() {
       }
       if (persistedConversationId && userMessagePersisted && fullContent.trim()) {
         try { await persistServerMessage(persistedConversationId, 'assistant', fullContent, 'complete', assistantId); }
-        catch { console.warn('AFG_CONVERSATION_ASSISTANT_MESSAGE_SAVE_FAILED'); }
+        catch { setProfileLoadError('The response was received but could not be saved. Keep this page open and export the conversation before refreshing.'); }
       }
       setMessages((previous) => previous.map((message) => message.id === assistantId ? { ...message, isStreaming: false } : message));
     } catch {
@@ -717,7 +711,12 @@ export default function App() {
         : 'The response could not be completed. Your prompt is preserved; check the connection and model, then retry.') + supportReference;
 
       if (abortController.signal.aborted) {
-        setMessages(prev => prev.filter((message) => message.id !== assistantId));
+        const cancelledContent = fullContent.trim() || 'Generation cancelled.';
+        setMessages(prev => prev.map(message => message.id === assistantId ? { ...message, content: cancelledContent, isStreaming: false, isError: true, isCancelled: true, retryable: true } : message));
+        if (persistedConversationId && userMessagePersisted) {
+          try { await persistServerMessage(persistedConversationId, 'assistant', cancelledContent, 'cancelled', assistantId); }
+          catch { setProfileLoadError('The cancelled response could not be saved.'); }
+        }
       } else {
         const failedContent = fullContent.trim() ? `${fullContent}\n\n${userFacingError}` : userFacingError;
         setMessages(prev => prev.map(m =>
@@ -795,6 +794,7 @@ export default function App() {
   };
 
   const handleNewChat = () => {
+    if (isLoading) { activeChatAbortRef.current?.abort(); return; }
     serverConversationRef.current = null;
     setCurrentSessionId(`chat-${Date.now()}`);
     setMessages([]);
@@ -817,19 +817,13 @@ export default function App() {
   return (
     <div className={`min-h-screen w-full flex flex-col transition-colors duration-200 ${(theme === 'dark' || theme === 'neon' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) ? 'bg-[#060b18] text-slate-100' : 'bg-[#f4f7fc] text-slate-900'}`}>
       
-      {/* AFG AI Header */}
-      <AfgHeader
-        language={language}
-        theme={theme}
-        user={user}
-        onToggleLanguage={handleToggleLanguage}
-        onToggleTheme={handleToggleTheme}
-        onOpenSettings={() => setCurrentTab('settings')}
-        onOpenMenu={() => setIsSideMenuOpen(true)}
-        onNewChat={handleNewChat}
-        onOpenModels={() => setCurrentTab('offline-models')}
-      />
-
+      <JarvisShell key={user.id || 'guest'} tab={currentTab} onTab={setCurrentTab} language={language} user={user}
+        capabilities={capabilitySnapshot} models={modelOptions} selectedModel={selectedModel}
+        onModel={handleSelectModel} onPrompt={handleStartChatWithPrompt} onNewChat={handleNewChat}
+        onStop={handleStopGeneration} onSignIn={() => setHasEnteredApp(false)} theme={theme} onTheme={handleToggleTheme}
+        activeTasks={isLoading ? 1 : 0} activities={agentActivities} recording={audioListening}
+        streaming={isLoading && !!messages.at(-1)?.content && !messages.at(-1)?.isError}
+        failed={!isLoading && !!messages.at(-1)?.isError && !messages.at(-1)?.isCancelled} cancelled={!isLoading && !!messages.at(-1)?.isCancelled} onSetTheme={setTheme} onLanguage={handleSetLanguage}>
       {profileLoadError && <div role="alert" className="mx-auto mt-2 w-[min(94%,48rem)] rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
         {profileLoadError}
         <button type="button" className="ms-3 underline font-semibold" onClick={() => { setChatLoadAttempt((value) => value + 1); window.dispatchEvent(new Event('afg-auth-change')); }}>{language === 'dari' ? 'تلاش دوباره' : 'Retry'}</button>
@@ -859,6 +853,7 @@ export default function App() {
           <AfgChatView
             messages={messages}
             agentActivities={agentActivities}
+            onRecordingChange={setAudioListening}
             onSendMessage={handleSendMessage}
             onStop={handleStopGeneration}
             onRetryMessage={handleRetryMessage}
@@ -903,6 +898,7 @@ export default function App() {
           <LazyAfgToolsCenter language={language} capabilities={capabilitySnapshot.capabilities} onRunTool={(prompt, options) => { setCurrentTab('chat'); void handleSendMessage(prompt, [], messages, options); }} />
         )}
 
+        {currentTab === 'jarvis' && <LazyAfgJarvisView language={language} />}
         {currentTab === 'terminal' && <LazyAfgTerminalView language={language} />}
         {currentTab === 'offline-learning' && <LazyAfgOfflineView language={language} />}
 
@@ -938,6 +934,7 @@ export default function App() {
         </React.Suspense>
         </ErrorBoundary>
       </main>
+      </JarvisShell>
 
       {isAfgAssistantOpen && (
         <div className="afg-assistant-overlay fixed inset-0 z-[100] overflow-y-auto p-2 backdrop-blur-md sm:p-5" role="dialog" aria-modal="true" aria-label={language === 'dari' ? 'دستیار AFG AI' : 'AFG AI assistant'} onClick={(event) => { if (event.target === event.currentTarget) setIsAfgAssistantOpen(false); }}>

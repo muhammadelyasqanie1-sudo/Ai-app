@@ -12,6 +12,13 @@ const SIGNATURES: Record<string, (bytes: Buffer) => boolean> = {
   '.gif': (b) => ['GIF87a', 'GIF89a'].includes(b.subarray(0, 6).toString('ascii')),
   '.webp': (b) => b.length >= 12 && b.subarray(0, 4).toString('ascii') === 'RIFF' && b.subarray(8, 12).toString('ascii') === 'WEBP',
   '.txt': (b) => !b.subarray(0, Math.min(b.length, 4096)).includes(0),
+  '.md': (b) => !b.includes(0),
+  '.json': (b) => { try { JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(b)); return true; } catch { return false; } },
+  '.wav': (b) => b.subarray(0,4).toString()==='RIFF' && b.subarray(8,12).toString()==='WAVE',
+  '.mp3': (b) => b.subarray(0,3).toString()==='ID3' || (b.length>2 && b[0]===255 && (b[1]&224)===224),
+  '.ogg': (b) => b.subarray(0,4).toString()==='OggS',
+  '.webm': (b) => b.subarray(0,4).equals(Buffer.from([0x1a,0x45,0xdf,0xa3])),
+  '.mp4': (b) => b.length>=12 && b.subarray(4,8).toString()==='ftyp',
   '.csv': (b) => !b.subarray(0, Math.min(b.length, 4096)).includes(0),
 };
 

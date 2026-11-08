@@ -1,3 +1,4 @@
+import { mimeByExtension, privateBytes, scannerConfigured, scanOwnedFile } from '../services/media/storage.ts';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createHash } from 'node:crypto';
 import { unlink } from 'node:fs/promises';
@@ -6,10 +7,7 @@ import { pool } from './database.ts';
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './auth.ts';
 import { ensureQuarantineDirectory, MAX_UPLOAD_BYTES, quarantineUpload } from '../security/upload.ts';
 
-const MIME_BY_EXTENSION: Record<string,string> = {
-  '.pdf':'application/pdf','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg',
-  '.gif':'image/gif','.webp':'image/webp','.txt':'text/plain','.csv':'text/csv',
-};
+const MIME_BY_EXTENSION = mimeByExtension;
 const MAX_ENCODED_BYTES = Math.ceil(MAX_UPLOAD_BYTES * 4 / 3) + 128_000;
 const MAX_FILES_PER_USER = 100;
 const MAX_USER_STORAGE_BYTES = 100 * 1024 * 1024;
@@ -21,7 +19,7 @@ function reply(res:ServerResponse,status:number,body:Record<string,unknown>) {
 /**
  * Private file library. Uploads are stored outside the web root and remain
  * quarantined; this API deliberately does not expose download or AI-ingestion
- * routes until a malware/content scanning service is configured.
+ * routes until a malware/content scanning service approves each file.
  */
 export async function handleFilesApi(req:IncomingMessage,res:ServerResponse,pathname:string):Promise<boolean> {
   if (pathname !== '/api/files' && !pathname.startsWith('/api/files/')) return false;
@@ -33,14 +31,17 @@ export async function handleFilesApi(req:IncomingMessage,res:ServerResponse,path
   if (pathname === '/api/files/status' && req.method === 'GET') {
     let privateStorageConfigured = false;
     try { await ensureQuarantineDirectory(); privateStorageConfigured = true; } catch { /* Keep uploads disabled until the private disk is valid. */ }
-    reply(res,200,{verified:true,privateStorageConfigured,scannerConfigured:false,aiIngestionEnabled:false,maxUploadBytes:MAX_UPLOAD_BYTES}); return true;
+    reply(res,200,{verified:true,privateStorageConfigured,scannerConfigured:scannerConfigured(),aiIngestionEnabled:false,approvedFileProcessingSupported:true,scannerState:'requires_per_file_scan',maxUploadBytes:MAX_UPLOAD_BYTES}); return true;
   }
 
   if (pathname === '/api/files' && req.method === 'GET') {
+    const url=new URL(req.url||pathname,'http://localhost');
+    const offset=Math.floor(Math.min(10000,Math.max(0,Number(url.searchParams.get('offset'))||0)));
+    const search=(url.searchParams.get('search')||'').slice(0,240);
     const result = await pool.query(
       `SELECT id,original_name AS "name",kind,mime,size_bytes AS "sizeBytes",status,created_at AS "createdAt"
-         FROM files WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100`,
-      [user.id],
+         FROM files WHERE user_id=$1 AND original_name ILIKE $2 ORDER BY created_at DESC,id DESC LIMIT 100 OFFSET $3`,
+      [user.id,'%'+search+'%',offset],
     );
     reply(res,200,{files:result.rows,limit:100,maxUploadBytes:MAX_UPLOAD_BYTES}); return true;
   }
@@ -57,7 +58,7 @@ export async function handleFilesApi(req:IncomingMessage,res:ServerResponse,path
     const extension=path.extname(name).toLowerCase();
     if (!name || name.includes('/') || name.includes('\\') || name==='.' || name==='..' ||
         !MIME_BY_EXTENSION[extension] || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded) || !encoded) {
-      reply(res,400,{error:'Choose a supported PDF, image, TXT or CSV file.'}); return true;
+      reply(res,400,{error:'Choose a supported PDF, image, text, audio or video file.'}); return true;
     }
     const estimatedBytes=Math.floor(encoded.length*3/4)-(encoded.endsWith('==')?2:encoded.endsWith('=')?1:0);
     if (estimatedBytes<1 || estimatedBytes>MAX_UPLOAD_BYTES) {
@@ -99,7 +100,28 @@ export async function handleFilesApi(req:IncomingMessage,res:ServerResponse,path
     return true;
   }
 
-  const match=pathname.match(/^\/api\/files\/([0-9a-f-]{36})$/i);
+  const mediaMatch=pathname.match(/^\/api\/files\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/(download|scan)$/i);
+  if(mediaMatch) {
+    const found=await pool.query('SELECT * FROM files WHERE id=$1 AND user_id=$2',[mediaMatch[1],user.id]);
+    if(!found.rowCount){reply(res,404,{error:'File not found.'});return true;}
+    if(mediaMatch[2]==='download'&&req.method==='GET') {
+      try {
+        const bytes=await privateBytes(found.rows[0]);
+        res.statusCode=200;res.setHeader('Content-Type',found.rows[0].mime);res.setHeader('Content-Length',bytes.length);
+        res.setHeader('Content-Disposition',"attachment; filename*=UTF-8''"+encodeURIComponent(found.rows[0].original_name));
+        res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Content-Security-Policy',"default-src 'none'; sandbox");res.setHeader('Cache-Control','private, no-store');res.end(bytes);
+      } catch {reply(res,409,{error:'File is quarantined, missing or failed integrity validation.'});}
+      return true;
+    }
+    if(mediaMatch[2]==='scan'&&req.method==='POST') {
+      try {reply(res,200,{file:await scanOwnedFile(user.id,mediaMatch[1])});}
+      catch {reply(res,503,{error:'Security scan unavailable or failed. Configure ClamAV and its current signature database; no file was approved.'});}
+      return true;
+    }
+    reply(res,405,{error:'Method not allowed.'});return true;
+  }
+
+  const match=pathname.match(/^\/api\/files\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
   if (!match) { reply(res,404,{error:'File route not found.'}); return true; }
   if (req.method==='DELETE') {
     const client=await pool.connect();
@@ -107,6 +129,7 @@ export async function handleFilesApi(req:IncomingMessage,res:ServerResponse,path
       await client.query('BEGIN');
       const found=await client.query('SELECT id,storage_key FROM files WHERE id=$1 AND user_id=$2 FOR UPDATE',[match[1],user.id]);
       if (!found.rows.length) { await client.query('ROLLBACK'); reply(res,404,{error:'File not found.'}); return true; }
+      await client.query("INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,'media.file.deleted','file',$2,'{}')",[user.id,match[1]]);
       await client.query('DELETE FROM files WHERE id=$1 AND user_id=$2',[match[1],user.id]);
       await client.query('COMMIT');
       const storageKey=String(found.rows[0].storage_key||'');
