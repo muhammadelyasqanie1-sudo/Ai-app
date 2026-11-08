@@ -39,3 +39,5 @@ jobs:
         run: npm run test:admin-rbac
       - name: JARVIS offline command regression
         run: npm run test:jarvis-command
+      - name: Intelligence core media-state regression
+        run: npm run test:core-state
