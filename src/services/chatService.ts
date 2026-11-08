@@ -2,6 +2,7 @@ import { getConfiguredFallbackModelIds, getProviderAdapter, getVerifiedModelDesc
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
 import type { ChatInput, ChatChunk, ModelDescriptor } from '../providers/providerTypes.ts';
 import { matchComboModels, resolveRoutingCombo } from './routingCombos.ts';
+import { routeVerifiedModels } from './modelRouter.ts';
 
 const HEALTH_MAX_AGE_MS = 5 * 60 * 1000;
 
@@ -228,14 +229,19 @@ export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerI
     }
     selected = comboCandidates[0];
   } else if (input.model === 'auto') {
-    const automaticId = await selectCheapestModel('text', false);
-    if (automaticId) {
-      const split = automaticId.indexOf('::');
-      const automaticProvider = split >= 0 ? automaticId.slice(0, split) : '';
-      const automaticModel = split >= 0 ? automaticId.slice(split + 2) : automaticId;
-      selected = descriptors.find((model) =>
-        model.id === automaticModel && (!automaticProvider || model.providerId === automaticProvider) && verified(model),
-      );
+    const preferOffline = process.env.AFG_AI_PREFER_OFFLINE === 'true';
+    if (preferOffline) {
+      selected = (await routeVerifiedModels({ capability: 'text', preferOffline, limit: 1 }))[0];
+    } else {
+      const automaticId = await selectCheapestModel('text', false);
+      if (automaticId) {
+        const split = automaticId.indexOf('::');
+        const automaticProvider = split >= 0 ? automaticId.slice(0, split) : '';
+        const automaticModel = split >= 0 ? automaticId.slice(split + 2) : automaticId;
+        selected = descriptors.find((model) =>
+          model.id === automaticModel && (!automaticProvider || model.providerId === automaticProvider) && verified(model),
+        );
+      }
     }
   } else {
     const separator = input.model.indexOf('::');
@@ -254,9 +260,11 @@ export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerI
   }
 
   if (input.tools?.length) {
-    const toolCapable = descriptors.filter((candidate) =>
-      verified(candidate) && candidate.capabilities.tools,
-    );
+    const toolCapable = (await routeVerifiedModels({
+      capability: 'tools',
+      preferredProvider: selected?.providerId,
+      preferOffline: process.env.AFG_AI_PREFER_OFFLINE === 'true',
+    })).filter((candidate) => candidate.capabilities.text && candidate.capabilities.streaming);
     if (comboSlug) {
       comboCandidates = comboCandidates.filter((candidate) => candidate.capabilities.tools);
       if (!comboCandidates.length) {
@@ -265,10 +273,7 @@ export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerI
       selected = comboCandidates[0];
     } else if (input.model === 'auto') {
       if (!selected?.capabilities.tools) {
-        const cost = (candidate: ModelDescriptor) =>
-          Number(candidate.pricing?.inputPerMillion ?? Number.POSITIVE_INFINITY) +
-          Number(candidate.pricing?.outputPerMillion ?? Number.POSITIVE_INFINITY);
-        selected = [...toolCapable].sort((a, b) => cost(a) - cost(b))[0];
+        selected = toolCapable[0];
       }
       if (!selected) {
         throw new ProviderAdapterError('No recently verified model with API tool-calling support is available. Connect or enable a tool-capable model.', 503, 'no_tool_capable_model');
@@ -277,16 +282,7 @@ export async function prepareVerifiedChat(input: ChatInput): Promise<{ providerI
       // An explicit integration request may use a different verified model that
       // advertises tool calling. Keep the user's chosen model for ordinary chat;
       // route only this tool-enabled turn, preferring the same provider.
-      const selectedProviderId = selected?.providerId;
-      const candidates = toolCapable.filter((candidate) => candidate.capabilities.text && candidate.capabilities.streaming);
-      const preferred = [
-        ...candidates.filter((candidate) => candidate.providerId === selectedProviderId),
-        ...candidates.filter((candidate) => candidate.providerId !== selectedProviderId),
-      ];
-      const cost = (candidate: ModelDescriptor) =>
-        Number(candidate.pricing?.inputPerMillion ?? Number.POSITIVE_INFINITY) +
-        Number(candidate.pricing?.outputPerMillion ?? Number.POSITIVE_INFINITY);
-      selected = preferred.sort((a, b) => cost(a) - cost(b))[0];
+      selected = toolCapable[0];
       if (!selected) {
         throw new ProviderAdapterError('No verified text model with API tool-calling support is available. Choose Auto or enable a tool-capable model in the provider catalog.', 503, 'no_tool_capable_model');
       }
