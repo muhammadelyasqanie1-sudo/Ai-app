@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { CinematicField } from '../cinematic/CinematicField';
 import { motion } from 'motion/react';
 import { AFG_EASE_OUT, AFG_MOTION, AFG_MOTION_VARIANTS } from '../../animations/variants';
 import { 
@@ -195,6 +196,12 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
     setExpandedThoughts(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const reducedMotion = typeof window !== 'undefined' && (
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+    document.documentElement.classList.contains('afg-reduce-motion') ||
+    !!document.querySelector('.jarvis-app[data-reduced="true"]')
+  );
+
   const promptSuggestions = [
     t.suggestPrompt1,
     t.suggestPrompt2,
@@ -204,6 +211,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
 
   return (
     <div style={{ maxWidth: "var(--afg-chat-width, 64rem)" }} className="afg-chat-view flex h-[calc(100dvh-5.25rem)] min-h-0 flex-col mx-auto w-full px-2 sm:px-4" dir={["dari","pashto","persian","arabic","urdu"].includes(language) ? "rtl" : "ltr"}>
+      <CinematicField variant="ambient" profile="balanced" reduced={reducedMotion} className="afg-chat-cinematic-bg" />
       
       {/* Top Session Status Bar */}
       <div className="afg-chat-statusbar sticky top-0 z-20 flex items-center justify-between py-2 px-3 border-b border-cyan-900/30 mb-2 bg-inherit/90 backdrop-blur-xl">
