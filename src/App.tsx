@@ -21,6 +21,8 @@ import { apiFetch, getCsrfToken } from './lib/apiClient';
 import { AfgAuthWebView } from '@afg-ai/capacitor-auth-deeplink';
 import { useAlwaysLiveConnection } from './hooks/useAlwaysLiveConnection';
 
+import type { ChatToolActivity } from './types/liveActivity';
+
 import type { 
   Language, 
   Theme, 
@@ -107,7 +109,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<TabType>('home');
   const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
   const [messages, setMessages] = useState<AfgMessage[]>(INITIAL_MESSAGES);
-  const [agentActivities, setAgentActivities] = useState<Array<{id:string;name:string;label:string;detail?:string;url?:string;sources?:Array<{title:string;url:string;snippet?:string;publishedDate?:string}>;status:'running'|'completed'|'failed';startedAt?:number;durationMs?:number;timestamp:number}>>([]);
+  const [agentActivities, setAgentActivities] = useState<ChatToolActivity[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState(() => `chat-${Date.now()}`);
   const [isLoading, setIsLoading] = useState(false);
   const [audioListening, setAudioListening] = useState(false);
@@ -667,7 +669,7 @@ export default function App() {
                 if (parsed.type === 'meta' && typeof parsed.requestId === 'string') { requestId = parsed.requestId; }
                 else if (parsed.type === 'activity' && typeof parsed.id === 'string' && typeof parsed.label === 'string' && ['running','completed','failed'].includes(parsed.status)) {
                   const activitySources = Array.isArray(parsed.sources) ? parsed.sources.slice(0,8).filter((source: any) => source && typeof source.title === 'string' && typeof source.url === 'string' && /^https?:\/\//i.test(source.url)).map((source: any) => ({ title: source.title.slice(0,240), url: source.url, snippet: typeof source.snippet === 'string' ? source.snippet.slice(0,500) : undefined, publishedDate: typeof source.publishedDate === 'string' ? source.publishedDate.slice(0,40) : undefined })) : undefined;
-                  const activity = { id: parsed.id, name: String(parsed.name || 'tool'), label: parsed.label, detail: typeof parsed.detail === 'string' ? parsed.detail : undefined, url: typeof parsed.url === 'string' ? parsed.url : undefined, sources: activitySources, status: parsed.status as 'running'|'completed'|'failed', startedAt: Number(parsed.startedAt) || undefined, durationMs: Number.isFinite(Number(parsed.durationMs)) ? Number(parsed.durationMs) : undefined, timestamp: Number(parsed.timestamp) || Date.now() };
+                  const activity: ChatToolActivity = { id: parsed.id, requestId: typeof parsed.requestId === 'string' ? parsed.requestId : requestId, name: String(parsed.name || 'tool'), label: parsed.label, detail: typeof parsed.detail === 'string' ? parsed.detail : undefined, url: typeof parsed.url === 'string' ? parsed.url : undefined, sources: activitySources, status: parsed.status as 'running'|'completed'|'failed', startedAt: Number(parsed.startedAt) || undefined, durationMs: Number.isFinite(Number(parsed.durationMs)) ? Number(parsed.durationMs) : undefined, timestamp: Number(parsed.timestamp) || Date.now() };
                   setAgentActivities(previous => { const index = previous.findIndex(item => item.id === activity.id); if (index >= 0) return previous.map((item,i) => i === index ? { ...item, ...activity, startedAt: item.startedAt || activity.startedAt } : item); return [...previous, activity].slice(-30); });
                 }
                 else if (parsed.type === 'content' && typeof parsed.text === 'string') {
