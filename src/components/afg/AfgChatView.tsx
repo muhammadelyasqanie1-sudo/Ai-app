@@ -91,7 +91,8 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   const t = translations[language];
   const cinematic = cinematicCopy(language);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const streamingChars = messages.at(-1)?.content?.length || 0;
+  const lastMessage = messages.at(-1);
+  const streamingChars = lastMessage?.role === "assistant" ? lastMessage.content.length : 0;
   const [isSlowResponse, setIsSlowResponse] = useState(false);
   useEffect(() => {
     if (!isLoading) { setIsSlowResponse(false); return; }
