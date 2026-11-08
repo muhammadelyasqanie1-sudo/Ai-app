@@ -168,7 +168,7 @@ export async function handleMediaApi(
       }
     }
     const eventsRoute = path.match(
-      /^\\/api\\/media\\/jobs\\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\/events$/i,
+      /^\/api\/media\/jobs\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/events$/i,
     );
     if (eventsRoute && req.method === "GET") {
       const jobId = eventsRoute[1];
