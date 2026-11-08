@@ -136,7 +136,7 @@ export function JarvisShell(p: Props) {
     "intro" | "settings" | null
   >(() => {
     try {
-      return localStorage.getItem("afg_intro_seen") === "true" ? null : "intro";
+      return sessionStorage.getItem("afg_intro_seen") === "true" ? null : "intro";
     } catch {
       return null;
     }
@@ -144,7 +144,7 @@ export function JarvisShell(p: Props) {
   const closeExperience = () => {
     setExperienceMode(null);
     try {
-      localStorage.setItem("afg_intro_seen", "true");
+      sessionStorage.setItem("afg_intro_seen", "true");
     } catch {
       /* In-memory dismissal remains available. */
     }
