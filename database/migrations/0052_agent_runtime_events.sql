@@ -11,8 +11,6 @@ ALTER TABLE agent_tasks
 ALTER TABLE agent_events
   ADD COLUMN IF NOT EXISTS payload jsonb NOT NULL DEFAULT '{}'::jsonb;
 
-CREATE INDEX IF NOT EXISTS agent_events_task_stream_idx
-  ON agent_events(task_id, id);
 
 CREATE INDEX IF NOT EXISTS agent_tasks_stale_runtime_idx
   ON agent_tasks(status, heartbeat_at)
