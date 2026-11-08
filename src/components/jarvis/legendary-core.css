@@ -1,0 +1,47 @@
+/* Procedural energy layer: no external textures, WebGL context, or binary assets. */
+:root {
+  --afg-core-cyan: #0DF2FF; --afg-core-blue: #168BFF;
+  --afg-core-violet: #7C4DFF; --afg-core-amber: #FFB86B;
+  --afg-core-error: #FF5C7A; --afg-core-muted: #8593AA;
+  --afg-core-glow-alpha: .42; --afg-motion-slow: 600ms;
+  --afg-ease-out: cubic-bezier(.16, 1, .3, 1);
+  --afg-ease-inout: cubic-bezier(.65, 0, .35, 1);
+  --afg-breath: 4200ms;
+}
+.light { --afg-core-glow-alpha: .18; }
+.afg-core { --energy-secondary: var(--afg-core-blue); }
+.afg-core[data-visual-state="thinking"] { --energy: var(--afg-core-violet); --energy-secondary: var(--afg-core-blue); }
+.afg-core[data-visual-state="researching"] { --energy: var(--afg-core-blue); --energy-secondary: var(--afg-core-cyan); }
+.afg-core[data-visual-state="coding"] { --energy: var(--afg-core-cyan); --energy-secondary: var(--afg-core-violet); }
+.afg-core[data-visual-state="generatingImage"] { --energy: var(--afg-core-violet); --energy-secondary: var(--afg-core-amber); }
+.afg-core[data-visual-state="processingFile"] { --energy: var(--afg-core-blue); --energy-secondary: var(--afg-core-cyan); }
+.afg-core[data-visual-state="speaking"] { --energy: var(--afg-core-cyan); --energy-secondary: var(--afg-core-blue); }
+.afg-core[data-visual-state="error"] { --energy: var(--afg-core-error); --energy-secondary: var(--afg-core-error); }
+.afg-core[data-visual-state="offline"] { --energy: var(--afg-core-muted); --energy-secondary: var(--afg-core-muted); }
+.afg-core .afg-core-energy-canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:3; }
+.afg-core[data-visual-state="thinking"] .afg-core-orbit { animation-duration:18s; }
+.afg-core[data-visual-state="researching"] .afg-core-orbit { animation-duration:8s; }
+.afg-core[data-visual-state="coding"] .afg-core-orbit { animation-duration:2s; animation-timing-function:steps(4); }
+.afg-core[data-visual-state="generatingImage"] .afg-core-halo {
+  background:radial-gradient(ellipse, color-mix(in srgb, var(--afg-core-violet) 25%, transparent), color-mix(in srgb, var(--afg-core-amber) 9%, transparent) 48%, transparent 72%);
+}
+.afg-core[data-visual-state="listening"] .afg-core-reticle { animation:afg-legendary-sonar 1.2s var(--afg-ease-out) infinite; }
+.afg-core[data-visual-state="error"] .afg-core-nucleus { animation:afg-legendary-error 600ms var(--afg-ease-out) 1; }
+.afg-core[data-visual-state="speaking"] .afg-core-nucleus { animation:afg-legendary-speak 800ms ease-in-out infinite alternate; }
+.afg-core[data-profile="low"] .afg-core-energy-canvas { display:none; }
+
+.afg-welcome:not([data-still="true"]) .afg-welcome-grid { animation:afg-grid-arrive 1.2s var(--afg-ease-out) both; }
+.afg-welcome:not([data-still="true"]) .afg-core { animation:afg-intro-core 1.2s var(--afg-ease-out) both; }
+.afg-welcome:not([data-still="true"]) .afg-welcome-brand { animation:afg-wordmark 700ms 2.35s var(--afg-ease-out) both; }
+.afg-welcome:not([data-still="true"]) .afg-welcome-copy { animation:afg-copy-reveal 600ms 2.55s var(--afg-ease-out) both; }
+.afg-welcome:not([data-still="true"]) .afg-welcome-actions { animation:afg-actions-reveal 500ms 2.9s var(--afg-ease-out) both; }
+
+@keyframes afg-legendary-sonar { 0%,100% { transform:scale(1); opacity:.55; } 50% { transform:scale(1.055); opacity:1; } }
+@keyframes afg-legendary-error { 0% { transform:rotate(-24deg) scale(1); } 30% { transform:rotate(-24deg) scale(1.12); } 100% { transform:rotate(-24deg) scale(1); } }
+@keyframes afg-legendary-speak { from { transform:rotate(-24deg) scale(.98); } to { transform:rotate(-24deg) scale(1.045); } }
+@keyframes afg-grid-arrive { from { opacity:0; transform:scale(1.04); } to { opacity:1; transform:scale(1); } }
+@keyframes afg-intro-core { from { opacity:0; transform:translateY(24px) scale(.72); filter:blur(12px); } to { opacity:1; transform:translateY(0) scale(1); filter:blur(0); } }
+@keyframes afg-wordmark { from { opacity:0; letter-spacing:.35em; filter:blur(8px); } to { opacity:1; letter-spacing:.08em; filter:blur(0); } }
+@keyframes afg-copy-reveal { from { opacity:0; transform:translateY(18px); clip-path:inset(0 0 35%); } to { opacity:1; transform:translateY(0); clip-path:inset(0); } }
+@keyframes afg-actions-reveal { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+@media (prefers-reduced-motion:reduce) { .afg-welcome *, .afg-core * { animation:none !important; transition:none !important; } }
