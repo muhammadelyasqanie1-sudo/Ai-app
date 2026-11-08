@@ -29,6 +29,16 @@ export function toLegendaryState(state: RuntimeCoreState): LegendaryCoreState {
   return STATE_MAP[state];
 }
 
+/** Maps persisted media-job types to the intelligence core's visual activity states. */
+export function mediaJobVisualState(type: unknown): LegendaryCoreState | null {
+  if (typeof type !== "string") return null;
+  if (type === "image_generate" || type === "image_edit") return "generatingImage";
+  if (["document_extract", "document_analyze", "video_analyze", "image_understand", "ocr"].includes(type)) {
+    return "processingFile";
+  }
+  return null;
+}
+
 export function resolveVisual(
   state: LegendaryCoreState,
   profile: Exclude<GraphicsProfile, "auto">,
