@@ -24,7 +24,7 @@ export default function IntelligenceCore({
   // Read the signed-in owner's real media jobs; do not infer activity from UI interactions.
   useEffect(() => {
     let alive = true;
-    let timer: ReturnType<typeof window.setTimeout> | undefined;
+    let timer: number | undefined;
     const refreshMediaState = async () => {
       try {
         const response = await apiFetch("/api/media/jobs", { cache: "no-store" });
