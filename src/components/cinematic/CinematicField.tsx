@@ -167,6 +167,7 @@ export function CinematicField({
   return (
     <div
       className={`afg-cinematic-field is-${variant} ${className}`}
+      data-still={reduced}
       aria-hidden="true"
     >
       <div className="afg-cinematic-nebula" />
