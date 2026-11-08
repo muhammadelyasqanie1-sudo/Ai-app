@@ -43,6 +43,7 @@ interface AfgChatViewProps {
   onDeleteMessage: (messageId: string) => void;
   isLoading: boolean;
   onRecordingChange?: (active: boolean) => void;
+  onSpeakingChange?: (active: boolean) => void;
   isInitialLoading?: boolean;
   language: Language;
   user: UserProfile;
@@ -72,6 +73,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   onDeleteMessage,
   isLoading,
   onRecordingChange,
+  onSpeakingChange,
   isInitialLoading = false,
   language,
   user,
@@ -104,7 +106,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   const ttsAvailable=voiceEnabled&&capabilities['text-to-speech'];
   useEffect(()=>{const sync=()=>setVoiceEnabled(localStorage.getItem('afg_voice_enabled')!=='false');window.addEventListener('afg-voice-preference-change',sync);window.addEventListener('afg-preferences-change',sync);return()=>{window.removeEventListener('afg-voice-preference-change',sync);window.removeEventListener('afg-preferences-change',sync);};},[]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  useEffect(()=>{if(!voiceEnabled){audioRef.current?.pause();audioRef.current=null;setSpeakingMsgId(null);}},[voiceEnabled]);
+  useEffect(()=>{if(!voiceEnabled){audioRef.current?.pause();audioRef.current=null;setSpeakingMsgId(null);onSpeakingChange?.(false);}},[voiceEnabled,onSpeakingChange]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedThoughts, setExpandedThoughts] = useState<Record<string, boolean>>({});
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -137,9 +139,11 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
       audioRef.current?.pause();
       audioRef.current = null;
       setSpeakingMsgId(null);
+      onSpeakingChange?.(false);
       return;
     }
     audioRef.current?.pause();
+    onSpeakingChange?.(false);
     setSpeakingMsgId(msgId);
     const cleanText = text.replace(/\x60\x60\x60[\s\S]*?\x60\x60\x60/g, 'Code block omitted.').replace(/[*#_\x60>]/g, '').trim();
     try {
@@ -155,12 +159,14 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
       }
       const audio = new Audio('data:' + data.mimeType + ';base64,' + data.audioBase64);
       audioRef.current = audio;
-      audio.onended = () => { audioRef.current = null; setSpeakingMsgId(null); };
-      audio.onerror = () => { audioRef.current = null; setSpeakingMsgId(null); };
+      audio.onended = () => { audioRef.current = null; setSpeakingMsgId(null); onSpeakingChange?.(false); };
+      audio.onerror = () => { audioRef.current = null; setSpeakingMsgId(null); onSpeakingChange?.(false); };
       await audio.play();
+      onSpeakingChange?.(true);
     } catch (error) {
       audioRef.current = null;
       setSpeakingMsgId(null);
+      onSpeakingChange?.(false);
       alert(error instanceof Error ? error.message : (language === 'dari' ? 'تولید صدا ناموفق بود.' : 'Speech synthesis failed.'));
     }
   };
