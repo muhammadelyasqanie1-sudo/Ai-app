@@ -46,3 +46,14 @@ The existing IntelligenceCore remains the sole core rendered by AfgCinematicIntr
 ## Verification status
 
 Source changes only. No tests, type-check, build, Android device run, workflow, or deployment has been initiated.
+
+
+## Live media-job state integration
+
+The IntelligenceCore reads the authenticated user's persisted media-job history from `GET /api/media/jobs` and maps active operations to visual states:
+- `image_generate` and `image_edit` → `generatingImage`
+- document extraction/analysis, video metadata analysis, image understanding and OCR → `processingFile`
+
+The signal comes from persisted task/job status (`ready`, `running`, `pending`, `executing`), not from a UI click or fabricated progress value. The core refreshes the owner-scoped job list every five seconds while mounted. Listening, speaking, offline, cancelled and error states retain priority. If the authenticated media endpoint is unavailable, the core falls back to its normal state.
+
+This closes the media-state wiring gap; it does not add WebGL or claim volumetric rendering. The existing provider/capability checks, private file quarantine, event stream and persistence remain authoritative.
