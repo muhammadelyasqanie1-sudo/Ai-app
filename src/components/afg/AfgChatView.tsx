@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { motion } from 'motion/react';
+import { AFG_EASE_OUT, AFG_MOTION, AFG_MOTION_VARIANTS } from '../../animations/variants';
 import { 
   Sparkles, 
   Volume2, 
@@ -269,11 +271,16 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
           const isSpeaking = speakingMsgId === msg.id;
 
           return (
-            <div
+            <motion.div
               key={msg.id}
+              variants={AFG_MOTION_VARIANTS.messageIn}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={{ duration: AFG_MOTION.normal, ease: AFG_EASE_OUT }}
               className={`flex items-start gap-3 ${
                 isUser ? 'flex-row-reverse' : 'flex-row'
-              } animate-in fade-in duration-200`}
+              }`}
             >
               {/* Avatar */}
               <div className="shrink-0 mt-0.5">
@@ -432,7 +439,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                 )}
 
               </div>
-            </div>
+            </motion.div>
           );
         })}
 
