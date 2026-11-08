@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import type { CoreState, GraphicsProfile, LegendaryCoreState } from "./experience";
-import { resolveVisual, toLegendaryState, mediaJobVisualState } from "../../animations/coreState";
+import type { CoreState, GraphicsProfile } from "./experience";
+import { resolveVisual, toLegendaryState, mediaJobVisualState, type LegendaryCoreState } from "../../animations/coreState";
 import { apiFetch } from "../../lib/apiClient";
 import "./legendary-core.css";
 
