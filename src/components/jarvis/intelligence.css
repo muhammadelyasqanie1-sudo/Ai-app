@@ -1455,7 +1455,8 @@
   width: 45%;
   aspect-ratio: 1;
   border-radius: 50%;
-  filter: blur(54px);
+  filter: blur(32px);
+  will-change: transform;
   opacity: 0.12;
   animation: afg-chat-aurora 16s ease-in-out infinite alternate;
 }
