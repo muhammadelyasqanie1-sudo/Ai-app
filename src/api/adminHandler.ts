@@ -3,6 +3,8 @@ import { pool } from './database.ts';
 import { z } from 'zod';
 import { BlockList, isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
 const privateNetworkBlockList = new BlockList();
 for(const [subnet,prefix] of [
@@ -133,6 +135,35 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
     if (Number(counter.rows[0]?.request_count || 0) > adminLimit) {
       res.setHeader('Retry-After',String(adminWindow));
       sendAuthJson(res,429,{error:'Admin API rate limit exceeded.'}); return true;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/admin/scrapegraph-mcp/test') {
+      if (!rootRole) { sendAuthJson(res,403,{error:'Only a root administrator can test the ScrapeGraph MCP connection.'}); return true; }
+      const apiKey = (process.env.SGAI_API_KEY || '').trim();
+      const endpointText = (process.env.SCRAPEGRAPH_MCP_URL || 'https://sgai-mcp-main.onrender.com/mcp').trim();
+      if (!apiKey) { sendAuthJson(res,503,{connected:false,error:'SGAI_API_KEY is not configured.'}); return true; }
+      let endpoint: URL;
+      try { endpoint = new URL(endpointText); } catch { sendAuthJson(res,503,{connected:false,error:'ScrapeGraph MCP URL is invalid.'}); return true; }
+      if (endpoint.protocol !== 'https:' || endpoint.hostname !== 'sgai-mcp-main.onrender.com' || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
+        sendAuthJson(res,503,{connected:false,error:'ScrapeGraph MCP endpoint is not an approved HTTPS host.'}); return true;
+      }
+      const transport = new StreamableHTTPClientTransport(endpoint, {
+        requestInit: { headers: { 'X-API-Key': apiKey }, redirect: 'error', signal: AbortSignal.timeout(20000) },
+      });
+      const client = new Client({name:'afg-ai-admin-connection-check',version:'1.0.0'});
+      try {
+        await client.connect(transport);
+        const listed = await client.listTools();
+        const tools = listed.tools.map((tool) => ({name:tool.name,description:String(tool.description || '').slice(0,240)}));
+        const hasSearch = tools.some((tool) => tool.name === 'search');
+        const hasScrape = tools.some((tool) => tool.name === 'scrape');
+        sendAuthJson(res,200,{connected:true,server:'ScrapeGraphAI MCP',tools,toolCount:tools.length,capabilities:{search:hasSearch,scrape:hasScrape},testedAt:new Date().toISOString()});
+      } catch (error) {
+        sendAuthJson(res,502,{connected:false,error:error instanceof Error ? error.message.slice(0,240) : 'MCP handshake failed.'});
+      } finally {
+        await client.close().catch(()=>{});
+      }
+      return true;
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/staff/roles') {
