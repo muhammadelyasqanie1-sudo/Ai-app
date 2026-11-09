@@ -44,7 +44,7 @@ async function resolveWebSearchRuntime(): Promise<WebSearchRuntime> {
   const provider = String(runtime?.config.provider || (nineRouterConfigured ? '9router' : 'tavily'));
   if (provider === '9router') {
     if (!nineRouterConfigured) throw new Error('9Router web search requires NINEROUTER_BASE_URL.');
-    return { provider: '9router', apiKey: '', integrationId };
+    return { provider: '9router', apiKey: runtime?.credentials.api_key || process.env.NINEROUTER_API_KEY || '', integrationId };
   }
   if (!['tavily', 'brave', 'serpapi'].includes(provider)) throw new Error('The configured Web Search provider is not supported.');
   const apiKey = runtime?.credentials.api_key || process.env.TAVILY_API_KEY || '';
@@ -96,6 +96,7 @@ export async function executeWebSearchTool(userId: string, args: unknown, parent
         language: input.data.language,
         domainFilter: input.data.domain_filter,
         signal: controller.signal,
+        apiKey,
       });
       return { provider: result.provider, query, sourceCount: result.sources.length, sources: result.sources, warnings: result.warnings, responseTimeSeconds: result.responseTimeSeconds };
     }
@@ -191,7 +192,7 @@ export async function searchWebSources(
   userId: string,
   options: { query: string; maxResults?: number; includeContent?: boolean; timeRange?: 'day' | 'week' | 'month' | 'year'; searchTypes?: NineRouterSearchType[]; country?: string; language?: string; domainFilter?: string },
   parentSignal?: AbortSignal,
-): Promise<{ provider: string; query: string; sources: WebSearchSource[]; warnings?: string[]; responseTimeSeconds?: number }> {
+): Promise<{ provider: string; query: string; sources: WebSearchSource[]; warnings?: string[]; responseTimeSeconds?: number; fetchApiKey?: string }> {
   if (!userId) throw new Error('Sign in is required to search the web.');
   const query = String(options.query || '').trim().slice(0, MAX_QUERY_LENGTH);
   if (query.length < 3) throw new Error('Provide a web-search query of at least three characters.');
@@ -218,8 +219,9 @@ export async function searchWebSources(
         language: options.language,
         domainFilter: options.domainFilter,
         signal: controller.signal,
+        apiKey,
       });
-      return { provider: result.provider, query, sources: result.sources, warnings: result.warnings, responseTimeSeconds: result.responseTimeSeconds };
+      return { provider: result.provider, query, sources: result.sources, warnings: result.warnings, responseTimeSeconds: result.responseTimeSeconds, fetchApiKey: apiKey };
     }
     let endpoint: string;
     let init: RequestInit;
@@ -398,6 +400,7 @@ export async function handleResearchApi(req: IncomingMessage, res: ServerRespons
         language: input.data.language,
         domainFilter: input.data.domain_filter,
         signal: controller.signal,
+        apiKey,
       });
       reply(res, 200, { available: true, query, provider: result.provider, sources: result.sources, sourceCount: result.sources.length, warnings: result.warnings }, requestId);
       return true;
