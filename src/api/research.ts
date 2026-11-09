@@ -321,7 +321,7 @@ export async function handleResearchApi(req: IncomingMessage, res: ServerRespons
     reply(res, 405, { error: 'Method not allowed.' }, requestId);
     return true;
   }
-  if (pool) {
+  if (pool && !process.env.NINEROUTER_BASE_URL?.trim()) {
     const integration = await pool.query("SELECT id FROM integrations WHERE slug='web-search' AND enabled=true AND status='active' AND last_check_ok=true LIMIT 1");
     if (integration.rows[0]) {
       const policy = await pool.query('SELECT requests,window_seconds FROM integration_rate_limits WHERE integration_id=$1',[integration.rows[0].id]);
