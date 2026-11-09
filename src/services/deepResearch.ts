@@ -204,14 +204,20 @@ export async function runDeepResearch(input: {
   );
   const runId = String(run.rows[0].id);
   const warnings: string[] = [];
-  const maxResults = depth === 'deep' ? 8 : 6;
-  const maxRead = depth === 'deep' ? 6 : 4;
-  const maxBrowserReads = depth === 'deep' ? 2 : 0;
+  const maxResults = depth === 'deep' ? 25 : 15;
+  const maxRead = depth === 'deep' ? 12 : 8;
+  const maxBrowserReads = depth === 'deep' ? 3 : 0;
 
   try {
     let search: Awaited<ReturnType<typeof searchWebSources>>;
     try {
-      search = await searchWebSources(userId, { query, maxResults, includeContent: true }, input.signal);
+      search = await searchWebSources(userId, {
+        query,
+        maxResults,
+        includeContent: true,
+        searchTypes: depth === 'deep' ? ['web', 'news', 'x'] : ['web', 'news'],
+      }, input.signal);
+      warnings.push(...(search.warnings || []));
     } catch (error) {
       const message = error instanceof Error ? error.message.slice(0, 240) : 'Web search failed.';
       await pool.query(
