@@ -332,8 +332,9 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
         return;
       }
       const integration = await pool.query("SELECT enabled,status,last_check_ok FROM integrations WHERE slug='web-search' LIMIT 1").catch(() => ({ rows: [] as any[] }));
-      if (integration.rows[0] && !(integration.rows[0].enabled && integration.rows[0].status === 'active' && integration.rows[0].last_check_ok === true)) {
-        sendJson(res, 503, { error: 'Web Search integration is not enabled and health-verified by an administrator.', feature: 'web-search' }, requestId);
+      const nineRouterSearchConfigured = Boolean(process.env.NINEROUTER_BASE_URL?.trim());
+      if (integration.rows[0] && !(integration.rows[0].enabled && integration.rows[0].status === 'active' && integration.rows[0].last_check_ok === true) && !nineRouterSearchConfigured) {
+        sendJson(res, 503, { error: 'Enable and verify Web Search in Admin → Connections, or configure the 9Router gateway with active web-search models.', feature: 'web-search' }, requestId);
         return;
       }
     }
