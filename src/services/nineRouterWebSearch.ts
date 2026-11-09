@@ -79,19 +79,26 @@ async function discoverModels(base: URL, signal: AbortSignal, kind: 'webSearch' 
     .map((item: any) => ({ id: item.id, kind: item.kind, owned_by: item.owned_by }));
 }
 
-function selectModel(models: WebModel[], searchType: NineRouterSearchType): WebModel | undefined {
+function selectModels(models: WebModel[], searchType: NineRouterSearchType): WebModel[] {
   const configured = (process.env.NINEROUTER_WEB_SEARCH_MODEL || '').trim();
   if (configured) {
     const exact = models.find((model) => model.id === configured);
-    if (exact && (searchType !== 'x' || /xquik/i.test((exact.owned_by || '') + ' ' + exact.id))) return exact;
+    if (exact && (searchType !== 'x' || /xquik/i.test((exact.owned_by || '') + ' ' + exact.id))) return [exact];
   }
   if (searchType === 'x') {
-    return models.find((model) => /xquik/i.test((model.owned_by || '') + ' ' + model.id));
+    return models.filter((model) => /xquik/i.test((model.owned_by || '') + ' ' + model.id));
   }
-  return models.find((model) => model.owned_by === 'combo') ||
-    models.find((model) => /search-combo/i.test(model.id)) ||
-    models.find((model) => /tavily|exa|brave|serper|searx|linkup|searchapi|youcom|perplexity/i.test((model.owned_by || '') + ' ' + model.id)) ||
-    models[0];
+
+  // Search every independently configured provider. Combos are fallback chains,
+  // not parallel fan-out, so use them only when no individual provider is listed.
+  const individual = models.filter((model) => model.owned_by !== 'combo');
+  const candidates = individual.length ? individual : models.filter((model) => model.owned_by === 'combo');
+  const unique = new Map<string, WebModel>();
+  for (const model of candidates) {
+    const owner = (model.owned_by || model.id.split('/')[0] || model.id).toLowerCase();
+    if (!unique.has(owner)) unique.set(owner, model);
+  }
+  return [...unique.values()].length ? [...unique.values()] : models.slice(0, 1);
 }
 
 function normalizeSources(data: Record<string, any>, searchType: NineRouterSearchType, maxResults: number): NineRouterSearchSource[] {
@@ -153,14 +160,18 @@ export async function searchNineRouter(options: NineRouterSearchOptions): Promis
     if (!models.length) throw new Error('9Router has no active web-search models. Enable a web-search provider or combo in the 9Router control panel.');
     const warnings: string[] = [];
     let completedChannels = 0;
-    const calls = searchTypes.map(async (searchType) => {
-      const model = selectModel(models, searchType);
-      if (!model) {
+    const requests: Array<{ searchType: NineRouterSearchType; model: WebModel }> = [];
+    for (const searchType of searchTypes) {
+      const selected = selectModels(models, searchType);
+      if (!selected.length) {
         warnings.push(searchType === 'x'
           ? 'X search was skipped because no Xquik-capable model is active in 9Router.'
           : 'No compatible 9Router web-search model is active for ' + searchType + ' search.');
-        return { provider: '9router', sources: [] as NineRouterSearchSource[], elapsed: 0 };
+      } else {
+        for (const model of selected) requests.push({ searchType, model });
       }
+    }
+    const calls = requests.map(async ({ searchType, model }) => {
       const body: Record<string, unknown> = { model: model.id, query, max_results: maxResults, search_type: searchType };
       if (options.timeRange) body.time_range = options.timeRange;
       if (options.country) body.country = options.country.slice(0, 8);
