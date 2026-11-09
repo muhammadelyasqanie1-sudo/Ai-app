@@ -207,7 +207,7 @@ export async function availableTools(userId: string): Promise<Tool[]> {
     "knowledge_read",
     "knowledge_search",
     "task_create",
-    ...(search?.credentials.api_key || process.env.TAVILY_API_KEY
+    ...(search?.credentials.api_key || process.env.TAVILY_API_KEY || process.env.NINEROUTER_BASE_URL?.trim()
       ? ["web_search" as Tool]
       : []),
     ...[...browser, ...github]
