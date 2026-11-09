@@ -3,6 +3,7 @@ import { enforceModelSubscription } from "../../api/modelAccess.ts";
 import { getVerifiedModelDescriptors } from "../providerGateway.ts";
 import { prepareVerifiedChat } from "../chatService.ts";
 import { executeWebSearchTool } from "../../api/research.ts";
+import { scrapeGraphMcpConfigured, scrapeScrapeGraph } from "../scrapeGraphMcp.ts";
 import {
   executeBrowserAutomationTool,
   getEnabledBrowserToolDefinitions,
@@ -18,6 +19,7 @@ export const specialists = {
   planning: ["draft", "memory_search", "knowledge_search"],
   research: [
     "web_search",
+    "web_scrape",
     "browser_open",
     "browser_snapshot",
     "draft",
@@ -93,6 +95,7 @@ export const inputs = {
       domain_filter: z.string().trim().max(500).optional(),
     })
     .strict(),
+  web_scrape: z.object({ url: z.url().max(2048), output_format: z.enum(["markdown", "html", "summary", "links", "images"]).optional() }).strict(),
   browser_open: z.object({ url: z.url().max(2048) }).strict(),
   browser_snapshot: z.object({}).strict(),
   browser_click: z.object({ element_ref: ref }).strict(),
@@ -217,6 +220,7 @@ export async function availableTools(userId: string): Promise<Tool[]> {
     ...(search?.credentials.api_key || process.env.TAVILY_API_KEY || process.env.NINEROUTER_BASE_URL?.trim()
       ? ["web_search" as Tool]
       : []),
+    ...(scrapeGraphMcpConfigured() ? ["web_scrape" as Tool] : []),
     ...[...browser, ...github]
       .map((t: any) => t.function.name)
       .filter((n: string) => n in inputs),
@@ -333,6 +337,7 @@ export async function executeTool(
     return { type: "task", title: input.title, content: input.content };
   }
   if (tool === "web_search") return executeWebSearchTool(userId, input, signal);
+  if (tool === "web_scrape") return scrapeScrapeGraph(input.url, input.output_format || "markdown", signal);
   if (tool.startsWith("browser_"))
     return executeBrowserAutomationTool(
       userId,
