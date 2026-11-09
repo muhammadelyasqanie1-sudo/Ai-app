@@ -5,13 +5,13 @@ AFG AI uses the existing 9Router gateway as its primary web-search and page-read
 ## How it works
 
 1. AFG AI reads the live catalogue from `GET /v1/models/web`.
-2. For ordinary web and news searches, it prefers an active 9Router combo model so 9Router can apply its configured provider fallback. If no combo is advertised, it selects an active compatible search model.
+2. For ordinary web and news searches, it fans out to every independently advertised active search provider in parallel and merges/deduplicates the results. If the catalogue exposes only combo models, it uses the available combo fallback chain. An optional exact model override can intentionally narrow the route.
 3. X search is routed only when an Xquik-capable model is actually advertised.
 4. Deep research searches web and news; deep mode also attempts X when the connected 9Router instance exposes it.
 5. When a result has too little readable text, deep research can read its public page through an active 9Router web-fetch model (fetch combo, Jina Reader, Firecrawl, Exa, Tavily, or another advertised model).
 6. Results are deduplicated by URL, retained with their source URLs, and passed to the existing source comparison and citation workflow.
 
-The web-search and web-fetch model catalogues are discovered at runtime. AFG AI does not hardcode provider model IDs or claim that a provider is available when 9Router does not advertise it.
+The web-search and web-fetch model catalogues are discovered at runtime. AFG AI does not hardcode provider model IDs or claim that a provider is available when 9Router does not advertise it. Each active provider contributes its own results; a provider failure does not discard results returned by the other providers.
 
 ## Existing deployment configuration
 
