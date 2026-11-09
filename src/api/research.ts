@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authenticateRequest } from './auth.ts';
 import { pool } from './database.ts';
 import { getIntegrationRuntime } from './connections.ts';
+import { searchNineRouter, type NineRouterSearchType } from '../services/nineRouterWebSearch.ts';
 
 const MAX_QUERY_LENGTH = 500;
 let activeSearches = 0;
@@ -16,28 +17,38 @@ function reply(res: ServerResponse, status: number, payload: unknown, requestId:
 
 const ChatWebSearchInput = z.object({
   query: z.string().trim().min(1).max(MAX_QUERY_LENGTH),
-  max_results: z.number().int().min(1).max(8).optional(),
+  max_results: z.number().int().min(1).max(50).optional(),
   time_range: z.enum(['day','week','month','year']).optional(),
+  search_type: z.enum(['web','news','x']).optional(),
+  country: z.string().trim().max(8).optional(),
+  language: z.string().trim().max(24).optional(),
+  domain_filter: z.string().trim().max(500).optional(),
 }).strict();
 
-type WebSearchRuntime = { provider: 'tavily' | 'brave' | 'serpapi'; apiKey: string; integrationId: string | null };
+type WebSearchRuntime = { provider: '9router' | 'tavily' | 'brave' | 'serpapi'; apiKey: string; integrationId: string | null };
 
 async function resolveWebSearchRuntime(): Promise<WebSearchRuntime> {
+  const nineRouterConfigured = Boolean(process.env.NINEROUTER_BASE_URL?.trim());
   let integrationId: string | null = null;
   if (pool) {
     const status = await pool.query("SELECT id,enabled,status,last_check_ok FROM integrations WHERE slug='web-search' LIMIT 1");
     if (status.rows[0]) {
-      if (!(status.rows[0].enabled && status.rows[0].status === 'active' && status.rows[0].last_check_ok === true)) {
-        throw new Error('The Web Search connection is not verified and enabled. Ask an administrator to check Admin → Connections.');
+      const verified = status.rows[0].enabled && status.rows[0].status === 'active' && status.rows[0].last_check_ok === true;
+      if (!verified && !nineRouterConfigured) {
+        throw new Error('The Web Search connection is not verified and enabled. Configure 9Router web-search models or ask an administrator to check Admin → Connections.');
       }
-      integrationId = String(status.rows[0].id);
+      if (verified) integrationId = String(status.rows[0].id);
     }
   }
   const runtime = await getIntegrationRuntime('web-search');
-  const provider = String(runtime?.config.provider || 'tavily');
+  const provider = String(runtime?.config.provider || (nineRouterConfigured ? '9router' : 'tavily'));
+  if (provider === '9router') {
+    if (!nineRouterConfigured) throw new Error('9Router web search requires NINEROUTER_BASE_URL.');
+    return { provider: '9router', apiKey: '', integrationId };
+  }
   if (!['tavily', 'brave', 'serpapi'].includes(provider)) throw new Error('The configured Web Search provider is not supported.');
   const apiKey = runtime?.credentials.api_key || process.env.TAVILY_API_KEY || '';
-  if (!apiKey) throw new Error('Web Search is not configured. Connect Tavily in Admin → Connections.');
+  if (!apiKey) throw new Error('Web Search is not configured. Connect a search provider in Admin → Connections or configure 9Router.');
   return { provider: provider as WebSearchRuntime['provider'], apiKey, integrationId };
 }
 
@@ -74,7 +85,20 @@ export async function executeWebSearchTool(userId: string, args: unknown, parent
 
   try {
     const query = input.data.query;
-    const maxResults = input.data.max_results || 6;
+    const maxResults = input.data.max_results || 20;
+    if (provider === '9router') {
+      const result = await searchNineRouter({
+        query,
+        maxResults,
+        searchTypes: [input.data.search_type || 'web'],
+        timeRange: input.data.time_range,
+        country: input.data.country,
+        language: input.data.language,
+        domainFilter: input.data.domain_filter,
+        signal: controller.signal,
+      });
+      return { provider: result.provider, query, sourceCount: result.sources.length, sources: result.sources, warnings: result.warnings, responseTimeSeconds: result.responseTimeSeconds };
+    }
     let endpoint: string;
     let init: RequestInit;
     if (provider === 'brave') {
@@ -165,13 +189,13 @@ export type WebSearchSource = {
  */
 export async function searchWebSources(
   userId: string,
-  options: { query: string; maxResults?: number; includeContent?: boolean; timeRange?: 'day' | 'week' | 'month' | 'year' },
+  options: { query: string; maxResults?: number; includeContent?: boolean; timeRange?: 'day' | 'week' | 'month' | 'year'; searchTypes?: NineRouterSearchType[]; country?: string; language?: string; domainFilter?: string },
   parentSignal?: AbortSignal,
-): Promise<{ provider: string; query: string; sources: WebSearchSource[]; responseTimeSeconds?: number }> {
+): Promise<{ provider: string; query: string; sources: WebSearchSource[]; warnings?: string[]; responseTimeSeconds?: number }> {
   if (!userId) throw new Error('Sign in is required to search the web.');
   const query = String(options.query || '').trim().slice(0, MAX_QUERY_LENGTH);
   if (query.length < 3) throw new Error('Provide a web-search query of at least three characters.');
-  const maxResults = Math.max(1, Math.min(8, Number(options.maxResults || 8)));
+  const maxResults = Math.max(1, Math.min(50, Number(options.maxResults || 20)));
   const runtime = await resolveWebSearchRuntime();
   const { provider, apiKey } = runtime;
   await enforceWebSearchRateLimit(runtime, userId);
@@ -184,6 +208,19 @@ export async function searchWebSources(
   else parentSignal?.addEventListener('abort', onParentAbort, { once: true });
   const timeout = setTimeout(() => controller.abort(), 25_000);
   try {
+    if (provider === '9router') {
+      const result = await searchNineRouter({
+        query,
+        maxResults,
+        searchTypes: options.searchTypes,
+        timeRange: options.timeRange,
+        country: options.country,
+        language: options.language,
+        domainFilter: options.domainFilter,
+        signal: controller.signal,
+      });
+      return { provider: result.provider, query, sources: result.sources, warnings: result.warnings, responseTimeSeconds: result.responseTimeSeconds };
+    }
     let endpoint: string;
     let init: RequestInit;
     if (provider === 'brave') {
@@ -297,10 +334,10 @@ export async function handleResearchApi(req: IncomingMessage, res: ServerRespons
   if (searchRate.size > 500) {
     for (const [key, value] of searchRate) if (now - value.startedAt >= 60_000) searchRate.delete(key);
   }
-  const runtime = await getIntegrationRuntime('web-search');
-  const provider = String(runtime?.config.provider || 'tavily');
-  const apiKey = runtime?.credentials.api_key || (process.env.TAVILY_API_KEY || '');
-  if (!apiKey) {
+  const runtime = await resolveWebSearchRuntime();
+  const provider = runtime.provider;
+  const apiKey = runtime.apiKey;
+  if (provider !== '9router' && !apiKey) {
     reply(res, 503, { available: false, error: 'Web Research is disabled. Configure and verify a Web Search connection in Admin → Connections.' }, requestId);
     return true;
   }
@@ -332,12 +369,34 @@ export async function handleResearchApi(req: IncomingMessage, res: ServerRespons
       reply(res, 400, { error: 'A valid JSON request is required.' }, requestId);
       return true;
     }
-    const input = z.object({query:z.string().trim().min(1).max(MAX_QUERY_LENGTH)}).strict().safeParse(body);
+    const input = z.object({
+      query: z.string().trim().min(1).max(MAX_QUERY_LENGTH),
+      max_results: z.number().int().min(1).max(50).optional(),
+      search_type: z.enum(['web','news','x']).optional(),
+      time_range: z.enum(['day','week','month','year']).optional(),
+      country: z.string().trim().max(8).optional(),
+      language: z.string().trim().max(24).optional(),
+      domain_filter: z.string().trim().max(500).optional(),
+    }).strict().safeParse(body);
     if (!input.success) {
       reply(res, 400, { error: 'Enter a research query of up to 500 characters.' }, requestId);
       return true;
     }
     const query = input.data.query;
+    if (provider === '9router') {
+      const result = await searchNineRouter({
+        query,
+        maxResults: input.data.max_results || 20,
+        searchTypes: [input.data.search_type || 'web'],
+        timeRange: input.data.time_range,
+        country: input.data.country,
+        language: input.data.language,
+        domainFilter: input.data.domain_filter,
+        signal: controller.signal,
+      });
+      reply(res, 200, { available: true, query, provider: result.provider, sources: result.sources, sourceCount: result.sources.length, warnings: result.warnings }, requestId);
+      return true;
+    }
     let endpoint: string;
     let init: RequestInit;
     if (provider === 'brave') {
@@ -367,7 +426,7 @@ export async function handleResearchApi(req: IncomingMessage, res: ServerRespons
       snippet: typeof (item.content||item.description||item.snippet) === 'string' ? (item.content||item.description||item.snippet).slice(0,1200) : '',
       score: typeof item.score === 'number' ? item.score : undefined,
     })) : [];
-    reply(res, 200, { available: true, query, sources: results, sourceCount: results.length, message: results.length ? 'Search results returned by Tavily.' : 'The search provider returned no verifiable URLs.' }, requestId);
+    reply(res, 200, { available: true, query, provider, sources: results, sourceCount: results.length, message: results.length ? 'Search results returned by ' + provider + '.' : 'The search provider returned no verifiable URLs.' }, requestId);
     return true;
   } catch (error) {
     console.error('AFG_RESEARCH_REQUEST_FAILED', JSON.stringify({ requestId, code: error instanceof Error && error.name === 'AbortError' ? 'timeout' : 'request_failed' }));
