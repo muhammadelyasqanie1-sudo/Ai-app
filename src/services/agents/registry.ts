@@ -196,7 +196,9 @@ export async function availableTools(userId: string): Promise<Tool[]> {
   const github = await getEnabledGitHubToolDefinitions(userId);
   // Search adapter rechecks actual credentials and policy at execution; listing is configuration only.
   const { getIntegrationRuntime } = await import("../../api/connections.ts");
-  const search = await getIntegrationRuntime("web-search");
+  const search = process.env.NINEROUTER_BASE_URL?.trim()
+    ? null
+    : await getIntegrationRuntime("web-search");
   const models = await getVerifiedModelDescriptors();
   const inference = models.some(
     (m) =>
