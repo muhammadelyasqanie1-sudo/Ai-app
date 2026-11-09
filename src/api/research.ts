@@ -41,10 +41,15 @@ async function resolveWebSearchRuntime(): Promise<WebSearchRuntime> {
     }
   }
   const runtime = await getIntegrationRuntime('web-search');
-  const provider = String(runtime?.config.provider || (nineRouterConfigured ? '9router' : 'tavily'));
+  // When the central 9Router gateway is configured, it is the primary search
+  // route; direct search integrations remain a compatibility fallback only.
+  const provider = nineRouterConfigured ? '9router' : String(runtime?.config.provider || 'tavily');
   if (provider === '9router') {
     if (!nineRouterConfigured) throw new Error('9Router web search requires NINEROUTER_BASE_URL.');
-    return { provider: '9router', apiKey: runtime?.credentials.api_key || process.env.NINEROUTER_API_KEY || '', integrationId };
+    const apiKey = runtime?.config.provider === '9router'
+      ? runtime.credentials.api_key || process.env.NINEROUTER_API_KEY || ''
+      : process.env.NINEROUTER_API_KEY || '';
+    return { provider: '9router', apiKey, integrationId };
   }
   if (!['tavily', 'brave', 'serpapi'].includes(provider)) throw new Error('The configured Web Search provider is not supported.');
   const apiKey = runtime?.credentials.api_key || process.env.TAVILY_API_KEY || '';
