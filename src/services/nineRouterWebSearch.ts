@@ -83,7 +83,7 @@ function selectModel(models: WebModel[], searchType: NineRouterSearchType): WebM
   const configured = (process.env.NINEROUTER_WEB_SEARCH_MODEL || '').trim();
   if (configured) {
     const exact = models.find((model) => model.id === configured);
-    if (exact) return exact;
+    if (exact && (searchType !== 'x' || /xquik/i.test((exact.owned_by || '') + ' ' + exact.id))) return exact;
   }
   if (searchType === 'x') {
     return models.find((model) => /xquik/i.test((model.owned_by || '') + ' ' + model.id));
@@ -146,6 +146,7 @@ export async function searchNineRouter(options: NineRouterSearchOptions): Promis
     const models = await discoverModels(base, controller.signal, 'webSearch', options.apiKey);
     if (!models.length) throw new Error('9Router has no active web-search models. Enable a web-search provider or combo in the 9Router control panel.');
     const warnings: string[] = [];
+    let completedChannels = 0;
     const calls = searchTypes.map(async (searchType) => {
       const model = selectModel(models, searchType);
       if (!model) {
@@ -177,6 +178,7 @@ export async function searchNineRouter(options: NineRouterSearchOptions): Promis
         throw new Error('9Router ' + searchType + ' search failed (HTTP ' + response.status + ').');
       }
       const data = await readJson(response);
+      completedChannels += 1;
       const provider = typeof data.provider === 'string' ? data.provider : model.owned_by || model.id;
       return {
         provider: '9router/' + provider,
@@ -189,6 +191,7 @@ export async function searchNineRouter(options: NineRouterSearchOptions): Promis
     for (const item of settled) {
       if (item.status === 'rejected') warnings.push('One 9Router search channel failed; successful channels were retained.');
     }
+    if (completedChannels === 0) throw new Error('9Router could not complete any requested search channel.');
     const sources = successful.flatMap((item) => item.value.sources);
     const unique = new Map<string, NineRouterSearchSource>();
     for (const source of sources) if (!unique.has(source.url)) unique.set(source.url, source);
