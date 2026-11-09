@@ -65,17 +65,16 @@ async function readJson(response: Response): Promise<Record<string, any>> {
 
 type WebModel = { id: string; kind?: string; owned_by?: string };
 
-async function discoverModels(base: URL, signal: AbortSignal): Promise<WebModel[]> {
+async function discoverModels(base: URL, signal: AbortSignal, kind: 'webSearch' | 'webFetch' = 'webSearch'): Promise<WebModel[]> {
   const response = await fetch(endpoint(base, '/models/web'), {
     headers: authHeaders(),
     redirect: 'error',
     signal,
   });
-  if (!response.ok) throw new Error('9Router web-search model discovery failed (HTTP ' + response.status + ').');
+  if (!response.ok) throw new Error('9Router web-capability model discovery failed (HTTP ' + response.status + ').');
   const data = await readJson(response);
   return (Array.isArray(data.data) ? data.data : [])
-    .filter((item: any) => item && typeof item.id === 'string' &&
-      (!item.kind || item.kind === 'webSearch'))
+    .filter((item: any) => item && typeof item.id === 'string' && item.kind === kind)
     .map((item: any) => ({ id: item.id, kind: item.kind, owned_by: item.owned_by }));
 }
 
@@ -143,7 +142,7 @@ export async function searchNineRouter(options: NineRouterSearchOptions): Promis
   const timeout = setTimeout(() => controller.abort(), 25_000);
 
   try {
-    const models = await discoverModels(base, controller.signal);
+    const models = await discoverModels(base, controller.signal, 'webSearch');
     if (!models.length) throw new Error('9Router has no active web-search models. Enable a web-search provider or combo in the 9Router control panel.');
     const warnings: string[] = [];
     const calls = searchTypes.map(async (searchType) => {
@@ -209,5 +208,73 @@ export async function searchNineRouter(options: NineRouterSearchOptions): Promis
   } finally {
     clearTimeout(timeout);
     options.signal?.removeEventListener('abort', onParentAbort);
+  }
+}
+
+
+/**
+ * Reads a public result URL through 9Router's web-fetch model catalogue
+ * (for example a fetch combo, Jina Reader, Firecrawl, Exa or Tavily).
+ */
+export async function fetchNineRouterPage(value: string, maxCharacters = 40_000, parentSignal?: AbortSignal): Promise<{
+  title: string;
+  text: string;
+  provider: string;
+}> {
+  const safeUrl = await assertPublicHttpUrl(value);
+  const base = await getBaseUrl();
+  const controller = new AbortController();
+  const onParentAbort = () => controller.abort();
+  if (parentSignal?.aborted) controller.abort();
+  else parentSignal?.addEventListener('abort', onParentAbort, { once: true });
+  const timeout = setTimeout(() => controller.abort(), 35_000);
+  try {
+    const models = await discoverModels(base, controller.signal, 'webFetch');
+    if (!models.length) throw new Error('9Router has no active web-fetch models. Enable a fetch provider or fetch combo in the 9Router control panel.');
+    const configured = (process.env.NINEROUTER_WEB_FETCH_MODEL || '').trim();
+    const model = models.find((item) => item.id === configured) ||
+      models.find((item) => item.owned_by === 'combo') ||
+      models.find((item) => /fetch-combo/i.test(item.id)) ||
+      models.find((item) => /jina|firecrawl|exa|tavily|ollama/i.test((item.owned_by || '') + ' ' + item.id)) ||
+      models[0];
+    const headers = authHeaders();
+    headers.set('Content-Type', 'application/json');
+    const response = await fetch(endpoint(base, '/web/fetch'), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: model.id,
+        url: safeUrl.toString(),
+        format: 'markdown',
+        max_characters: Math.max(1000, Math.min(120_000, Math.floor(maxCharacters))),
+      }),
+      redirect: 'error',
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error('9Router web fetch failed (HTTP ' + response.status + ').');
+    const payload = await readJson(response);
+    const data = payload.data && typeof payload.data === 'object' ? payload.data : payload;
+    const content = data.content;
+    const text = typeof content === 'string'
+      ? content
+      : content && typeof content.text === 'string'
+        ? content.text
+        : typeof data.markdown === 'string'
+          ? data.markdown
+          : typeof data.text === 'string' ? data.text : '';
+    if (!text.trim()) throw new Error('9Router web fetch returned no readable page text.');
+    return {
+      title: typeof data.title === 'string' ? data.title.slice(0, 240) : safeUrl.hostname,
+      text: text.slice(0, Math.max(1000, Math.min(120_000, Math.floor(maxCharacters)))),
+      provider: typeof payload.provider === 'string' ? payload.provider : model.owned_by || model.id,
+    };
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(parentSignal?.aborted ? 'Page reading was cancelled.' : '9Router page reading timed out.');
+    }
+    throw error instanceof Error ? error : new Error('9Router could not read this page.');
+  } finally {
+    clearTimeout(timeout);
+    parentSignal?.removeEventListener('abort', onParentAbort);
   }
 }
