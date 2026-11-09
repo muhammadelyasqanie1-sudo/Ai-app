@@ -1,6 +1,7 @@
 import { pool } from '../api/database.ts';
 import { isBrowserResearchConfigured, readPublicPageWithBrowser } from '../api/browserAutomation.ts';
 import { searchWebSources, type WebSearchSource } from '../api/research.ts';
+import { fetchNineRouterPage } from './nineRouterWebSearch.ts';
 import {
   KnowledgeError,
   enforceResearchRunRateLimit,
@@ -204,14 +205,20 @@ export async function runDeepResearch(input: {
   );
   const runId = String(run.rows[0].id);
   const warnings: string[] = [];
-  const maxResults = depth === 'deep' ? 8 : 6;
-  const maxRead = depth === 'deep' ? 6 : 4;
-  const maxBrowserReads = depth === 'deep' ? 2 : 0;
+  const maxResults = depth === 'deep' ? 25 : 15;
+  const maxRead = depth === 'deep' ? 12 : 8;
+  const maxBrowserReads = depth === 'deep' ? 3 : 0;
 
   try {
     let search: Awaited<ReturnType<typeof searchWebSources>>;
     try {
-      search = await searchWebSources(userId, { query, maxResults, includeContent: true }, input.signal);
+      search = await searchWebSources(userId, {
+        query,
+        maxResults,
+        includeContent: true,
+        searchTypes: depth === 'deep' ? ['web', 'news', 'x'] : ['web', 'news'],
+      }, input.signal);
+      warnings.push(...(search.warnings || []));
     } catch (error) {
       const message = error instanceof Error ? error.message.slice(0, 240) : 'Web search failed.';
       await pool.query(
@@ -239,6 +246,7 @@ export async function runDeepResearch(input: {
     const sources: ResearchedSource[] = [];
     const contentByCitation = new Map<number, string>();
     const browserConfigured = isBrowserResearchConfigured();
+    let nineRouterReads = 0;
     let browserReads = 0;
     for (let index = 0; index < unique.length; index += 1) {
       if (input.signal?.aborted) throw new KnowledgeError('Research was cancelled.', 499, 'research_cancelled');
@@ -248,6 +256,21 @@ export async function runDeepResearch(input: {
       let title = clean(candidate.title, 240);
       let fetchMethod: 'search' | 'browser' = 'search';
       let readError = '';
+      if (content.length < 2_000 && depth === 'deep' && search.provider.startsWith('9router') && nineRouterReads < maxBrowserReads) {
+        nineRouterReads += 1;
+        try {
+          const page = await fetchNineRouterPage(candidate.url, 40_000, input.signal, search.fetchApiKey);
+          const fetchedText = normalizeKnowledgeText(page.text, 120_000);
+          if (fetchedText.length > content.length) {
+            content = fetchedText;
+            title = clean(page.title || title, 240);
+            fetchMethod = 'browser';
+          }
+        } catch {
+          readError = 'ninerouter_fetch_failed';
+          warnings.push('9Router could not fully read ' + classification.domain + '; search-extracted text was used when available.');
+        }
+      }
       if (content.length < 400 && depth === 'deep' && browserConfigured && browserReads < maxBrowserReads) {
         browserReads += 1;
         try {
@@ -257,8 +280,9 @@ export async function runDeepResearch(input: {
             content = browserText;
             title = clean(page.title || title, 240);
             fetchMethod = 'browser';
+            readError = '';
           }
-        } catch (error) {
+        } catch {
           readError = 'browser_read_failed';
           warnings.push('Browser reading failed for ' + classification.domain + '; search-extracted text was used when available.');
         }
