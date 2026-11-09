@@ -132,10 +132,10 @@ function normalizeSources(data: Record<string, any>, searchType: NineRouterSearc
 }
 
 /**
- * Uses the live web-capability catalogue exposed by 9Router. Prefer an admin-
- * configured combo (which applies 9Router's own provider fallback), then fall
- * back to a currently advertised provider model. X search is routed only when
- * an X-capable model is actually advertised by the connected 9Router instance.
+ * Uses the live web-capability catalogue exposed by 9Router. Search requests
+ * fan out to every independently advertised provider; combos are used only
+ * when no individual providers are listed. X search is routed only when an
+ * X-capable model is actually advertised by the connected 9Router instance.
  */
 export async function searchNineRouter(options: NineRouterSearchOptions): Promise<{
   provider: string;
