@@ -30,27 +30,23 @@ type WebSearchRuntime = { provider: '9router' | 'tavily' | 'brave' | 'serpapi'; 
 async function resolveWebSearchRuntime(): Promise<WebSearchRuntime> {
   const nineRouterConfigured = Boolean(process.env.NINEROUTER_BASE_URL?.trim());
   let integrationId: string | null = null;
-  if (pool) {
+  if (pool && !nineRouterConfigured) {
     const status = await pool.query("SELECT id,enabled,status,last_check_ok FROM integrations WHERE slug='web-search' LIMIT 1");
     if (status.rows[0]) {
       const verified = status.rows[0].enabled && status.rows[0].status === 'active' && status.rows[0].last_check_ok === true;
-      if (!verified && !nineRouterConfigured) {
+      if (!verified) {
         throw new Error('The Web Search connection is not verified and enabled. Configure 9Router web-search models or ask an administrator to check Admin → Connections.');
       }
-      if (verified) integrationId = String(status.rows[0].id);
+      integrationId = String(status.rows[0].id);
     }
   }
-  const runtime = await getIntegrationRuntime('web-search');
   // When the central 9Router gateway is configured, it is the primary search
   // route; direct search integrations remain a compatibility fallback only.
-  const provider = nineRouterConfigured ? '9router' : String(runtime?.config.provider || 'tavily');
-  if (provider === '9router') {
-    if (!nineRouterConfigured) throw new Error('9Router web search requires NINEROUTER_BASE_URL.');
-    const apiKey = runtime?.config.provider === '9router'
-      ? runtime.credentials.api_key || process.env.NINEROUTER_API_KEY || ''
-      : process.env.NINEROUTER_API_KEY || '';
-    return { provider: '9router', apiKey, integrationId };
+  if (nineRouterConfigured) {
+    return { provider: '9router', apiKey: process.env.NINEROUTER_API_KEY || '', integrationId: null };
   }
+  const runtime = await getIntegrationRuntime('web-search');
+  const provider = String(runtime?.config.provider || 'tavily');
   if (!['tavily', 'brave', 'serpapi'].includes(provider)) throw new Error('The configured Web Search provider is not supported.');
   const apiKey = runtime?.credentials.api_key || process.env.TAVILY_API_KEY || '';
   if (!apiKey) throw new Error('Web Search is not configured. Connect a search provider in Admin → Connections or configure 9Router.');
