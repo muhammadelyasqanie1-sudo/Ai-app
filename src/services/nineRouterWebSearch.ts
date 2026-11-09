@@ -134,7 +134,7 @@ export async function searchNineRouter(options: NineRouterSearchOptions): Promis
   const query = String(options.query || '').trim().slice(0, 1000);
   if (query.length < 3) throw new Error('Provide a web-search query of at least three characters.');
   const maxResults = Math.max(1, Math.min(50, Math.floor(options.maxResults || 20)));
-  const searchTypes = [...new Set(options.searchTypes?.length ? options.searchTypes : ['web'])];
+  const searchTypes: NineRouterSearchType[] = [...new Set(options.searchTypes?.length ? options.searchTypes : ['web'])];
   const base = await getBaseUrl();
   const controller = new AbortController();
   const onParentAbort = () => controller.abort();
