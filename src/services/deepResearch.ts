@@ -258,7 +258,7 @@ export async function runDeepResearch(input: {
       if (content.length < 2_000 && depth === 'deep' && search.provider.startsWith('9router') && browserReads < maxBrowserReads) {
         browserReads += 1;
         try {
-          const page = await fetchNineRouterPage(candidate.url, 40_000, input.signal);
+          const page = await fetchNineRouterPage(candidate.url, 40_000, input.signal, search.fetchApiKey);
           const fetchedText = normalizeKnowledgeText(page.text, 120_000);
           if (fetchedText.length > content.length) {
             content = fetchedText;
