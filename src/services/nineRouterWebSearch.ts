@@ -99,8 +99,13 @@ function normalizeSources(data: Record<string, any>, searchType: NineRouterSearc
   const seen = new Set<string>();
   const result: NineRouterSearchSource[] = [];
   for (const item of raw) {
-    const url = typeof item?.url === 'string' ? item.url : '';
-    if (!/^https?:\/\//i.test(url) || typeof item?.title !== 'string' || seen.has(url)) continue;
+    const rawUrl = typeof item?.url === 'string' ? item.url : '';
+    let parsedUrl: URL;
+    try { parsedUrl = new URL(rawUrl); } catch { continue; }
+    if (!['http:', 'https:'].includes(parsedUrl.protocol) || parsedUrl.username || parsedUrl.password ||
+        typeof item?.title !== 'string') continue;
+    const url = parsedUrl.toString();
+    if (seen.has(url)) continue;
     seen.add(url);
     const snippet = typeof item.snippet === 'string' ? item.snippet
       : typeof item.description === 'string' ? item.description
@@ -134,7 +139,8 @@ export async function searchNineRouter(options: NineRouterSearchOptions): Promis
   const query = String(options.query || '').trim().slice(0, 1000);
   if (query.length < 3) throw new Error('Provide a web-search query of at least three characters.');
   const maxResults = Math.max(1, Math.min(50, Math.floor(options.maxResults || 20)));
-  const searchTypes: NineRouterSearchType[] = [...new Set(options.searchTypes?.length ? options.searchTypes : ['web'])];
+  const requestedTypes: NineRouterSearchType[] = options.searchTypes?.length ? options.searchTypes : ['web'];
+  const searchTypes: NineRouterSearchType[] = [...new Set(requestedTypes)];
   const base = await getBaseUrl();
   const controller = new AbortController();
   const onParentAbort = () => controller.abort();
@@ -197,7 +203,7 @@ export async function searchNineRouter(options: NineRouterSearchOptions): Promis
     for (const source of sources) if (!unique.has(source.url)) unique.set(source.url, source);
     if (!unique.size && !successful.length) throw new Error('9Router could not complete any requested search channel.');
     const providers = [...new Set(successful.map((item) => item.value.provider))];
-    const elapsed = successful.reduce((sum, item) => sum + item.value.elapsed, 0);
+    const elapsed = Math.max(0, ...successful.map((item) => item.value.elapsed));
     return {
       provider: providers.join(', ') || '9router',
       sources: [...unique.values()].slice(0, maxResults * searchTypes.length),
