@@ -173,6 +173,7 @@ export async function searchNineRouter(options: NineRouterSearchOptions): Promis
     }
     const calls = requests.map(async ({ searchType, model }) => {
       const body: Record<string, unknown> = { model: model.id, query, max_results: maxResults, search_type: searchType };
+      if (searchType === 'x') body.provider_options = { queryType: 'Latest' };
       if (options.timeRange) body.time_range = options.timeRange;
       if (options.country) body.country = options.country.slice(0, 8);
       if (options.language) body.language = options.language.slice(0, 24);
