@@ -401,10 +401,11 @@ export async function handleResearchApi(req: IncomingMessage, res: ServerRespons
       return true;
     }
     const query = input.data.query;
+    const maxResults = input.data.max_results || 20;
     if (provider === '9router') {
       const result = await searchNineRouter({
         query,
-        maxResults: input.data.max_results || 20,
+        maxResults,
         searchTypes: [input.data.search_type || 'web'],
         timeRange: input.data.time_range,
         country: input.data.country,
@@ -426,15 +427,15 @@ export async function handleResearchApi(req: IncomingMessage, res: ServerRespons
     let endpoint: string;
     let init: RequestInit;
     if (provider === 'brave') {
-      endpoint = 'https://api.search.brave.com/res/v1/web/search?q=' + encodeURIComponent(query) + '&count=8';
+      endpoint = 'https://api.search.brave.com/res/v1/web/search?q=' + encodeURIComponent(query) + '&count=' + maxResults;
       init = {headers:{'X-Subscription-Token':apiKey,Accept:'application/json'},signal:controller.signal};
     } else if (provider === 'serpapi') {
-      endpoint = 'https://serpapi.com/search.json?engine=google&q=' + encodeURIComponent(query) + '&api_key=' + encodeURIComponent(apiKey);
+      endpoint = 'https://serpapi.com/search.json?engine=google&q=' + encodeURIComponent(query) + '&num=' + maxResults + '&api_key=' + encodeURIComponent(apiKey);
       init = {signal:controller.signal};
     } else {
       endpoint = 'https://api.tavily.com/search';
       init = {method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,
-        body:JSON.stringify({api_key:apiKey,query,search_depth:'advanced',max_results:8,include_answer:false,include_raw_content:false})};
+        body:JSON.stringify({api_key:apiKey,query,search_depth:'advanced',max_results:maxResults,include_answer:false,include_raw_content:false})};
     }
     const upstream = await fetch(endpoint,init);
     if (!upstream.ok) {
