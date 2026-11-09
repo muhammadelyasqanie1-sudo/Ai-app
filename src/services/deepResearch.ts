@@ -246,6 +246,7 @@ export async function runDeepResearch(input: {
     const sources: ResearchedSource[] = [];
     const contentByCitation = new Map<number, string>();
     const browserConfigured = isBrowserResearchConfigured();
+    let nineRouterReads = 0;
     let browserReads = 0;
     for (let index = 0; index < unique.length; index += 1) {
       if (input.signal?.aborted) throw new KnowledgeError('Research was cancelled.', 499, 'research_cancelled');
@@ -255,8 +256,8 @@ export async function runDeepResearch(input: {
       let title = clean(candidate.title, 240);
       let fetchMethod: 'search' | 'browser' = 'search';
       let readError = '';
-      if (content.length < 2_000 && depth === 'deep' && search.provider.startsWith('9router') && browserReads < maxBrowserReads) {
-        browserReads += 1;
+      if (content.length < 2_000 && depth === 'deep' && search.provider.startsWith('9router') && nineRouterReads < maxBrowserReads) {
+        nineRouterReads += 1;
         try {
           const page = await fetchNineRouterPage(candidate.url, 40_000, input.signal, search.fetchApiKey);
           const fetchedText = normalizeKnowledgeText(page.text, 120_000);
@@ -279,6 +280,7 @@ export async function runDeepResearch(input: {
             content = browserText;
             title = clean(page.title || title, 240);
             fetchMethod = 'browser';
+            readError = '';
           }
         } catch {
           readError = 'browser_read_failed';
