@@ -85,7 +85,12 @@ export const inputs = {
   web_search: z
     .object({
       query: z.string().trim().min(1).max(500),
-      max_results: z.number().int().min(1).max(6).optional(),
+      max_results: z.number().int().min(1).max(50).optional(),
+      search_type: z.enum(['web', 'news', 'x']).optional(),
+      time_range: z.enum(['day', 'week', 'month', 'year']).optional(),
+      country: z.string().trim().max(8).optional(),
+      language: z.string().trim().max(24).optional(),
+      domain_filter: z.string().trim().max(500).optional(),
     })
     .strict(),
   browser_open: z.object({ url: z.url().max(2048) }).strict(),
