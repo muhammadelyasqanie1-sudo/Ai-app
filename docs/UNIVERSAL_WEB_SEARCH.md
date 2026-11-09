@@ -18,7 +18,7 @@ The web-search and web-fetch model catalogues are discovered at runtime. AFG AI 
 Use the existing server-only 9Router variables in Railway:
 
 - `NINEROUTER_BASE_URL` — public HTTPS URL of the 9Router service; the value may include or omit `/v1`.
-- `NINEROUTER_API_KEY` — required only when the 9Router instance enforces API keys. It can also be held in the encrypted Web Search integration credential.
+- `NINEROUTER_API_KEY` — required only when the 9Router instance enforces API keys. Keep it in Railway's server-side secret variables.
 - `NINEROUTER_WEB_SEARCH_MODEL` — optional exact ID from `GET /v1/models/web`; otherwise an active combo is preferred.
 - `NINEROUTER_WEB_FETCH_MODEL` — optional exact ID from `GET /v1/models/web`; otherwise an active fetch combo is preferred.
 
