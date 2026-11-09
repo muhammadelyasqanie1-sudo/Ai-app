@@ -11,6 +11,7 @@ export type NineRouterSearchOptions = {
   language?: string;
   domainFilter?: string;
   signal?: AbortSignal;
+  apiKey?: string;
 };
 
 export type NineRouterSearchSource = {
@@ -44,9 +45,9 @@ function endpoint(base: URL, path: string): URL {
   return url;
 }
 
-function authHeaders(): Headers {
+function authHeaders(override?: string): Headers {
   const headers = new Headers({ Accept: 'application/json' });
-  const key = (process.env.NINEROUTER_API_KEY || '').trim().replace(/^Bearer\s+/i, '').trim();
+  const key = (override || process.env.NINEROUTER_API_KEY || '').trim().replace(/^Bearer\s+/i, '').trim();
   if (key) headers.set('Authorization', 'Bearer ' + key);
   return headers;
 }
@@ -65,9 +66,9 @@ async function readJson(response: Response): Promise<Record<string, any>> {
 
 type WebModel = { id: string; kind?: string; owned_by?: string };
 
-async function discoverModels(base: URL, signal: AbortSignal, kind: 'webSearch' | 'webFetch' = 'webSearch'): Promise<WebModel[]> {
+async function discoverModels(base: URL, signal: AbortSignal, kind: 'webSearch' | 'webFetch' = 'webSearch', apiKey?: string): Promise<WebModel[]> {
   const response = await fetch(endpoint(base, '/models/web'), {
-    headers: authHeaders(),
+    headers: authHeaders(apiKey),
     redirect: 'error',
     signal,
   });
@@ -142,7 +143,7 @@ export async function searchNineRouter(options: NineRouterSearchOptions): Promis
   const timeout = setTimeout(() => controller.abort(), 25_000);
 
   try {
-    const models = await discoverModels(base, controller.signal, 'webSearch');
+    const models = await discoverModels(base, controller.signal, 'webSearch', options.apiKey);
     if (!models.length) throw new Error('9Router has no active web-search models. Enable a web-search provider or combo in the 9Router control panel.');
     const warnings: string[] = [];
     const calls = searchTypes.map(async (searchType) => {
@@ -159,7 +160,7 @@ export async function searchNineRouter(options: NineRouterSearchOptions): Promis
       if (options.language) body.language = options.language.slice(0, 24);
       if (options.domainFilter) body.domain_filter = options.domainFilter.slice(0, 500);
       const started = Date.now();
-      const headers = authHeaders();
+      const headers = authHeaders(options.apiKey);
       headers.set('Content-Type', 'application/json');
       const response = await fetch(endpoint(base, '/search'), {
         method: 'POST',
@@ -216,7 +217,7 @@ export async function searchNineRouter(options: NineRouterSearchOptions): Promis
  * Reads a public result URL through 9Router's web-fetch model catalogue
  * (for example a fetch combo, Jina Reader, Firecrawl, Exa or Tavily).
  */
-export async function fetchNineRouterPage(value: string, maxCharacters = 40_000, parentSignal?: AbortSignal): Promise<{
+export async function fetchNineRouterPage(value: string, maxCharacters = 40_000, parentSignal?: AbortSignal, apiKey?: string): Promise<{
   title: string;
   text: string;
   provider: string;
@@ -229,7 +230,7 @@ export async function fetchNineRouterPage(value: string, maxCharacters = 40_000,
   else parentSignal?.addEventListener('abort', onParentAbort, { once: true });
   const timeout = setTimeout(() => controller.abort(), 35_000);
   try {
-    const models = await discoverModels(base, controller.signal, 'webFetch');
+    const models = await discoverModels(base, controller.signal, 'webFetch', apiKey);
     if (!models.length) throw new Error('9Router has no active web-fetch models. Enable a fetch provider or fetch combo in the 9Router control panel.');
     const configured = (process.env.NINEROUTER_WEB_FETCH_MODEL || '').trim();
     const model = models.find((item) => item.id === configured) ||
@@ -237,7 +238,7 @@ export async function fetchNineRouterPage(value: string, maxCharacters = 40_000,
       models.find((item) => /fetch-combo/i.test(item.id)) ||
       models.find((item) => /jina|firecrawl|exa|tavily|ollama/i.test((item.owned_by || '') + ' ' + item.id)) ||
       models[0];
-    const headers = authHeaders();
+    const headers = authHeaders(apiKey);
     headers.set('Content-Type', 'application/json');
     const response = await fetch(endpoint(base, '/web/fetch'), {
       method: 'POST',
