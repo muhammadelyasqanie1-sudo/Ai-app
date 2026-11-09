@@ -334,7 +334,12 @@ export async function handleResearchApi(req: IncomingMessage, res: ServerRespons
   if (searchRate.size > 500) {
     for (const [key, value] of searchRate) if (now - value.startedAt >= 60_000) searchRate.delete(key);
   }
-  const runtime = await resolveWebSearchRuntime();
+  let runtime: WebSearchRuntime;
+  try { runtime = await resolveWebSearchRuntime(); }
+  catch (error) {
+    reply(res, 503, { available: false, error: error instanceof Error ? error.message : 'Web Search is not configured.' }, requestId);
+    return true;
+  }
   const provider = runtime.provider;
   const apiKey = runtime.apiKey;
   if (provider !== '9router' && !apiKey) {
