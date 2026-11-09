@@ -1,6 +1,7 @@
 import { pool } from '../api/database.ts';
 import { isBrowserResearchConfigured, readPublicPageWithBrowser } from '../api/browserAutomation.ts';
 import { searchWebSources, type WebSearchSource } from '../api/research.ts';
+import { fetchNineRouterPage } from './nineRouterWebSearch.ts';
 import {
   KnowledgeError,
   enforceResearchRunRateLimit,
@@ -254,6 +255,21 @@ export async function runDeepResearch(input: {
       let title = clean(candidate.title, 240);
       let fetchMethod: 'search' | 'browser' = 'search';
       let readError = '';
+      if (content.length < 2_000 && depth === 'deep' && search.provider.startsWith('9router') && browserReads < maxBrowserReads) {
+        browserReads += 1;
+        try {
+          const page = await fetchNineRouterPage(candidate.url, 40_000, input.signal);
+          const fetchedText = normalizeKnowledgeText(page.text, 120_000);
+          if (fetchedText.length > content.length) {
+            content = fetchedText;
+            title = clean(page.title || title, 240);
+            fetchMethod = 'browser';
+          }
+        } catch {
+          readError = 'ninerouter_fetch_failed';
+          warnings.push('9Router could not fully read ' + classification.domain + '; search-extracted text was used when available.');
+        }
+      }
       if (content.length < 400 && depth === 'deep' && browserConfigured && browserReads < maxBrowserReads) {
         browserReads += 1;
         try {
@@ -264,7 +280,7 @@ export async function runDeepResearch(input: {
             title = clean(page.title || title, 240);
             fetchMethod = 'browser';
           }
-        } catch (error) {
+        } catch {
           readError = 'browser_read_failed';
           warnings.push('Browser reading failed for ' + classification.domain + '; search-extracted text was used when available.');
         }
