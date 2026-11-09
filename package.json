@@ -60,7 +60,8 @@
     "@afg-ai/capacitor-offline-models": "file:plugins/capacitor-offline-models",
     "@afg-ai/capacitor-jarvis": "file:plugins/capacitor-jarvis",
     "@browserbasehq/sdk": "^2.22.0",
-    "playwright-core": "^1.65.0"
+    "playwright-core": "^1.65.0",
+    "@modelcontextprotocol/sdk": "^1.12.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
