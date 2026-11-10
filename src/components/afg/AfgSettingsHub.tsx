@@ -97,6 +97,18 @@ const copy = {
     statusError:'بررسی وضعیت سرور ناموفق بود؛ این قابلیت غیرفعال فرض می‌شود.',
     language:'ترجیحات زبان', languageHelp:'۱۸ زبان و منطقه قابل انتخاب است. ترجمه کامل رابط کاربری به‌تدریج تکمیل می‌شود و زبان‌های ترجمه‌نشده فعلاً متن انگلیسی نمایش می‌دهند.',
     adminGate:'دسترسی مدیر توسط سرور بررسی می‌شود؛ این صفحه امتیاز مدیر ایجاد نمی‌کند.',
+  },
+  ps: {
+    search:'امستنې ولټوئ',user:'د کارونکي امستنې',admin:'د مدیر امستنې',back:'امستنو ته بېرته',configured:'وصل شو',available:'شته',setup:'چمتو کولو ته اړتیا لري',disabled:'د مدیر له خوا بند شوی',checking:'حالت کتل کېږي…',save:'خوندي کول',notConfigured:'نه دی تنظیم شوی',signIn:'د شخصي امستنو لپاره ننوتل وکړئ.',
+    disabledText:'دا ځانګړنه د پلاتفورم د مدیر له خوا بنده شوې ده.',setupText:'سرور لا د دې نښلونې فعالوالی نه دی تایید کړی. له مدیر څخه د تنظیم بشپړولو غوښتنه وکړئ.',noResults:'ستاسو د لټون سره سم امستنه نشته.',groups:['شخصي کول','ستاسو مرستیال','نښلونې','ځانګړي برابرونکي'],
+    githubConnect:'GitHub حساب ونښلوئ',githubDisconnect:'GitHub اړیکه پرې کړئ',githubReady:'GitHub OAuth د پلاتفورم له خوا تنظیم شوی. د دوام لپاره خپل حساب ونښلوئ.',openAccount:'د حساب او غوره‌توبونو کنټرول',adminIntro:'نړیوال تنظیمات او د زېربنا کنټرول یوازې د مدیر د اجازې له لارې کار کوي.',
+    models:'تایید شوي ماډلونه',noModels:'اوس مهال هېڅ تایید شوی ماډل نشته.',defaultModel:'اصلي ماډل',modelSaved:'اصلي ماډل خوندي شو.',local:'نالیکي ماډلونه',voice:'غږیزې وړتیاوې',feature:'د ځانګړنې شتون',notAvailable:'تر هغه نه شته چې سرور یې فعالوالی تایید کړي.',statusError:'د سرور حالت ونه کتل شو؛ دا ځانګړنه د نه شتون په توګه وګڼئ.',language:'د ژبې غوره‌توب',languageHelp:'د رابطې څلور اصلي ژبې شته: دري، انګلیسي، پښتو او عربي.',adminGate:'د مدیر اجازه سرور تاییدوي؛ دا پاڼه د مدیر واک نه درکوي.'
+  },
+  ar: {
+    search:'البحث في الإعدادات',user:'إعدادات المستخدم',admin:'إعدادات المسؤول',back:'العودة إلى الإعدادات',configured:'متصل',available:'متاح',setup:'يتطلب الإعداد',disabled:'معطّل بواسطة المسؤول',checking:'جارٍ التحقق…',save:'حفظ',notConfigured:'غير مُعدّ',signIn:'سجّل الدخول لضبط الإعدادات الشخصية.',
+    disabledText:'هذه الميزة معطّلة من مسؤول المنصة.',setupText:'لم يؤكد الخادم تفعيل هذا الاتصال بعد. اطلب من المسؤول إكمال الإعداد.',noResults:'لا توجد إعدادات تطابق البحث.',groups:['التخصيص','مساعدك','الاتصالات','مزودون خاصون'],
+    githubConnect:'ربط حساب GitHub',githubDisconnect:'فصل GitHub',githubReady:'تم إعداد GitHub OAuth من المنصة. اربط حسابك الشخصي للمتابعة.',openAccount:'إعدادات الحساب والتفضيلات',adminIntro:'إعدادات المنصة والبنية التحتية محمية بصلاحيات المسؤول.',
+    models:'النماذج المعتمدة',noModels:'لا تتوفر حالياً نماذج تم التحقق منها.',defaultModel:'النموذج الافتراضي',modelSaved:'تم حفظ النموذج الافتراضي.',local:'النماذج المحلية',voice:'إمكانات الصوت',feature:'توفر الميزة',notAvailable:'لن تتوفر حتى يؤكد الخادم تفعيلها.',statusError:'تعذر التحقق من حالة الخادم؛ اعتبر هذه الميزة غير متاحة.',language:'تفضيل اللغة',languageHelp:'لغات الواجهة الأساسية المتاحة: الدَّرية والإنجليزية والبشتوية والعربية.',adminGate:'يتحقق الخادم من صلاحية المسؤول؛ هذه الصفحة لا تمنح صلاحيات إدارية.'
   }
 };
 
@@ -119,10 +131,40 @@ interface Props {
 }
 
 export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLanguage,onSetTheme,onOpenShortcuts}) => {
-  const fa = language === 'dari';
+  const locale = language === 'dari' || language === 'pashto' || language === 'arabic' ? language : 'english';
   const rtl = ['dari','pashto','persian','arabic','urdu'].includes(language);
+  const fa = locale === 'dari';
   const hubUi = getHubUi(language);
-  const t = { ...copy.en, ...(fa ? copy.fa : {}), ...hubUi };
+  const t = { ...copy.en, ...(locale === 'dari' ? copy.fa : locale === 'pashto' ? copy.ps : locale === 'arabic' ? copy.ar : {}), ...hubUi };
+  const extra = {
+    dari:{settings:'تنظیمات',manage:'مرکز تنظیمات AFG AI',adminLegacy:'پنل قدیمی مدیریت داخل برنامه حذف شده است. مدیریت زیرساخت و کاربران از درگاه امن و جداگانه 9Router انجام می‌شود.',gateway:'وضعیت و مدیریت درگاه 9Router از بخش مدیریت امن و جداگانه انجام می‌شود. این صفحه هیچ لینک یا وضعیت ساختگی نشان نمی‌دهد.',shortcuts:'میان‌برهای صفحه‌کلید',guest:'حساب مهمان',signedIn:'وارد شده',group:['شخصی‌سازی','دستیار هوشمند','اتصال‌ها','ارائه‌دهندگان ویژه']},
+    english:{settings:'Settings',manage:'Manage your AFG AI experience',adminLegacy:'The legacy in-app admin panel has been removed. Infrastructure and user administration are handled by the separate authenticated 9Router control plane.',gateway:'9Router gateway administration is handled through the separate authenticated control plane. This page does not display a fabricated link or status.',shortcuts:'Keyboard shortcuts',guest:'Guest account',signedIn:'SIGNED IN',group:['Personalize','Your Assistant','Connections','Special Providers']},
+    pashto:{settings:'امستنې',manage:'د AFG AI تجربه تنظیم کړئ',adminLegacy:'د اپ پخوانی مدیریتي پینل لرې شوی. د زېربنا او کاروونکو اداره د 9Router له خوندي جلا پینل څخه کېږي.',gateway:'د 9Router دروازې اداره د خوندي جلا مدیریتي پینل له لارې کېږي. دا پاڼه ناسم لینک یا حالت نه ښيي.',shortcuts:'د کیبورډ لنډلارې',guest:'د مېلمه حساب',signedIn:'ننوتل شوی',group:['شخصي کول','ستاسو مرستیال','نښلونې','ځانګړي برابرونکي']},
+    arabic:{settings:'الإعدادات',manage:'إدارة تجربة AFG AI',adminLegacy:'تمت إزالة لوحة الإدارة القديمة داخل التطبيق. تتم إدارة البنية التحتية والمستخدمين عبر لوحة 9Router منفصلة ومحمية.',gateway:'تتم إدارة بوابة 9Router عبر لوحة تحكم منفصلة ومحمية. لا تعرض هذه الصفحة رابطاً أو حالة غير حقيقية.',shortcuts:'اختصارات لوحة المفاتيح',guest:'حساب ضيف',signedIn:'تم تسجيل الدخول',group:['التخصيص','مساعدك','الاتصالات','مزودون خاصون']}
+  }[locale];
+  const itemTitles: Record<string,string> = {
+    language: locale==='dari'?'زبان برنامه':locale==='pashto'?'د اپ ژبه':locale==='arabic'?'لغة التطبيق':'App language',
+    appearance: locale==='dari'?'ظاهر برنامه':locale==='pashto'?'بڼه':locale==='arabic'?'المظهر':'Appearance',
+    chat: locale==='dari'?'تنظیمات گفتگو':locale==='pashto'?'د خبرو امستنې':locale==='arabic'?'إعدادات المحادثة':'Chat settings',
+    memory: locale==='dari'?'حافظه':locale==='pashto'?'حافظه':locale==='arabic'?'الذاكرة':'Memory',
+    intelligence: locale==='dari'?'هوش اختصاصی AFG AI':locale==='pashto'?'د AFG AI ځانګړې ځیرکتیا':locale==='arabic'?'ذكاء AFG AI':'AFG AI Intelligence',
+    coding: locale==='dari'?'برنامه‌نویسی':locale==='pashto'?'کوډ لیکنه':locale==='arabic'?'البرمجة':'Coding',
+    privacy: locale==='dari'?'حریم خصوصی و امنیت':locale==='pashto'?'محرمیت او امنیت':locale==='arabic'?'الخصوصية والأمان':'Privacy & security',
+    files: locale==='dari'?'فایل‌ها و فضای کاری':locale==='pashto'?'فایلونه او کاري ځای':locale==='arabic'?'الملفات ومساحة العمل':'Files & workspace',
+    models: locale==='dari'?'مدل‌ها و ارائه‌دهندگان':locale==='pashto'?'ماډلونه او برابرونکي':locale==='arabic'?'النماذج والمزوّدون':'Models & providers',
+    local: locale==='dari'?'مدل‌های محلی':locale==='pashto'?'ځایي ماډلونه':locale==='arabic'?'النماذج المحلية':'Local models',
+    voice: locale==='dari'?'صدا و گفتار':locale==='pashto'?'غږ او وینا':locale==='arabic'?'الصوت والكلام':'Voice & speech',
+    github: locale==='dari'?'اتصال GitHub':locale==='pashto'?'GitHub نښلول':locale==='arabic'?'ربط GitHub':'GitHub',
+    telegram: locale==='dari'?'اتصال تلگرام':locale==='pashto'?'Telegram نښلول':locale==='arabic'?'ربط Telegram':'Telegram',
+    ftp: locale==='dari'?'همگام‌سازی FTP / SFTP':locale==='pashto'?'FTP / SFTP همغږي':locale==='arabic'?'مزامنة FTP / SFTP':'FTP / SFTP sync',
+    'api-hub': locale==='dari'?'APIهای عمومی و کلیدها':locale==='pashto'?'عامه API او کیلي':locale==='arabic'?'واجهات API العامة والمفاتيح':'Public APIs & API keys',
+    mcp: locale==='dari'?'ابزارهای متصل (MCP)':locale==='pashto'?'نښتي وسایل (MCP)':locale==='arabic'?'الأدوات المتصلة (MCP)':'Connected tools (MCP)',
+    byok: locale==='dari'?'حساب‌های متصل (BYOK)':locale==='pashto'?'نښتي حسابونه (BYOK)':locale==='arabic'?'الحسابات المتصلة (BYOK)':'Connected accounts (BYOK)',
+    router: locale==='dari'?'درگاه محلی 9Router':locale==='pashto'?'ځایي 9Router دروازه':locale==='arabic'?'بوابة 9Router المحلية':'9Router / local router',
+    '9router':'9Router AI Gateway'
+  };
+  const localizedItems = ITEMS.map(item=>({...item,title:itemTitles[item.id]||item.title,group:extra.group[['Personalize','Your Assistant','Connections','Special Providers'].indexOf(item.group)]||item.group}));
+
   const groupLabels = (hubUi.groups || '').split(' · ');
   const [context,setContext] = useState<Context>('user');
   const [query,setQuery] = useState('');
@@ -177,13 +219,13 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
   };
   useEffect(()=>{void refreshStatus();},[]);
 
-  const filtered = useMemo(()=>ITEMS.filter(item=>{
+  const filtered = useMemo(()=>localizedItems.filter(item=>{
     const q=query.trim().toLowerCase();
     if(item.id==='byok' && featureFlags.byok===false) return false;
     if(item.id==='9router' && !adminAllowed) return false;
     return !q || [item.title,item.subtitle,item.group,...item.keywords].join(' ').toLowerCase().includes(q);
-  }),[query,featureFlags,adminAllowed]);
-  const groups = ['Personalize','Your Assistant','Connections','Special Providers'];
+  }),[query,featureFlags,adminAllowed,language]);
+  const groups = extra.group;
   const statusLabel=(id:SettingId)=>{
     if(statusLoading)return t.checking;
     const value=status[id];
@@ -215,20 +257,20 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
   const statusBadge=(id:SettingId)=><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${status[id]==='active'?'bg-emerald-500/15 text-emerald-300':status[id]==='disabled'?'bg-slate-700 text-slate-400':'bg-amber-500/10 text-amber-300'}`}>{statusLabel(id)}</span>;
   const row=(item:Item)=><button key={item.id} type="button" disabled={isDisabled(item.id)} onClick={()=>{setPage(item.id);setError('');setNotice('');}} className={`group flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-cyan-400/5 disabled:cursor-not-allowed disabled:opacity-50 ${rtl?'text-right':''}`}>
     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/15 bg-cyan-500/5 text-cyan-300"><item.icon className="h-5 w-5"/></span>
-    <span className="min-w-0 flex-1"><span className="block text-sm font-bold text-white">{item.id==='api-hub'&&fa?'فهرست APIها و کلیدها':item.id==='9router'&&fa?'درگاه هوش مصنوعی 9Router':item.id==='intelligence'&&fa?'هوش اختصاصی AFG AI':item.title}</span><span className="mt-0.5 block text-xs leading-5 text-slate-400">{item.id==='api-hub'&&fa?'کشف APIها، ذخیره امن کلیدهای خود و فعال‌سازی ابزارهای هوشمند.':item.id==='9router'&&fa?'مدل‌های گفتگو، تصویر، ویدیو، صدا، جستجوی وب و Embedding.':item.id==='intelligence'&&fa?'مدیریت دانش خصوصی، حافظه و آماده‌سازی داده‌های آموزشی.':item.subtitle}</span></span>
+    <span className="min-w-0 flex-1"><span className="block text-sm font-bold text-white">{item.title}</span><span className="mt-0.5 block text-xs leading-5 text-slate-400">{item.subtitle}</span></span>
     <span className="flex shrink-0 items-center gap-2">{(status[item.id]||item.id==='github')&&['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(item.id)&&statusBadge(item.id)}<ChevronRight className={`h-4 w-4 text-slate-500 ${rtl?'rotate-180':''}`}/></span>
   </button>;
 
   if(context==='admin') return <section className="afg-settings-hub mx-auto w-full max-w-[1500px] px-3 py-4 sm:px-6">
     <button onClick={()=>setContext('user')} className="mb-3 inline-flex items-center gap-2 text-sm text-cyan-300"><ArrowLeft className="h-4 w-4"/>{t.back}</button>
     <p className="mb-3 text-xs text-slate-400">{t.adminIntro}</p>
-    <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4"><h2 className="font-bold text-white">{t.admin}</h2><p className="mt-2 text-sm leading-6 text-slate-300">{fa?'پنل قدیمی مدیریت داخل برنامه حذف شده است. مدیریت زیرساخت و کاربران از درگاه امن و جداگانه 9Router انجام می‌شود.':'The legacy in-app admin panel has been removed. Infrastructure and user administration are handled by the separate authenticated 9Router control plane.'}</p></div>
+    <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4"><h2 className="font-bold text-white">{t.admin}</h2><p className="mt-2 text-sm leading-6 text-slate-300">{extra.adminLegacy}</p></div>
   </section>;
 
   return <section className="afg-settings-hub mx-auto w-full max-w-3xl space-y-4 px-3 py-4 sm:px-6" dir={rtl?'rtl':'ltr'}>
     <header className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <div><h1 className="text-2xl font-black text-white">{fa?'تنظیمات':'Settings'}</h1><p className="mt-1 text-xs text-slate-400">{fa?'مرکز تنظیمات AFG AI':'Manage your AFG AI experience'}</p></div>
+        <div><h1 className="text-2xl font-black text-white">{extra.settings}</h1><p className="mt-1 text-xs text-slate-400">{extra.manage}</p></div>
         <button type="button" onClick={()=>setContext('admin')} className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 px-3 py-2 text-xs font-bold text-cyan-200"><LockKeyhole className="mr-1 inline h-4 w-4"/>{t.admin}</button>
       </div>
       <label className="flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 focus-within:border-cyan-400"><Search className="h-5 w-5 text-slate-400"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t.search} className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"/>{query&&<button type="button" onClick={()=>setQuery('')} className="text-xs text-cyan-300">×</button>}</label>
@@ -243,7 +285,7 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
       {page==='files' && <AfgFileLibrary language={language}/>}
       {page==='intelligence' && <AfgIntelligencePanel language={language}/>}
       {page==='api-hub'&&<AfgApiConnectorPanel language={language}/>}
-      {page==='9router'&&<div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4"><h3 className="font-semibold text-white">9Router AI Gateway</h3><p className="mt-2 text-sm leading-6 text-slate-300">{fa?'وضعیت و مدیریت درگاه 9Router از بخش مدیریت امن و جداگانه انجام می‌شود. این صفحه هیچ لینک یا وضعیت ساختگی نشان نمی‌دهد.':'9Router gateway administration is handled through the separate authenticated control plane. This page does not display a fabricated link or status.'}</p></div>}
+      {page==='9router'&&<div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4"><h3 className="font-semibold text-white">9Router AI Gateway</h3><p className="mt-2 text-sm leading-6 text-slate-300">{extra.gateway}</p></div>}
       {(['appearance','language','chat','memory','coding','privacy'] as SettingId[]).includes(page) && <>
         <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-3">
           <p className="text-sm font-semibold text-cyan-100">{page==='language'?t.language:page==='appearance'?'Appearance':page==='chat'?'Chat preferences':page==='memory'?'Personal memory':page==='coding'?'Coding workspace':'Privacy & security'}</p>
@@ -281,9 +323,9 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
       </div>}
       <button type="button" onClick={()=>void refreshStatus()} className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300">Refresh backend status</button>
     </div> : <div className="space-y-5">
-      <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/20 bg-slate-950/70 p-4"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><Settings2 className="h-5 w-5"/></div><div className="min-w-0"><p className="font-bold text-white">{language==='dari'?user.name:user.nameEn}</p><p className="text-xs text-slate-400">{user.email||'Guest account'}</p></div><span className="ml-auto text-[10px] font-bold text-cyan-300">{authenticated?'SIGNED IN':'GUEST'}</span></div>
+      <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/20 bg-slate-950/70 p-4"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><Settings2 className="h-5 w-5"/></div><div className="min-w-0"><p className="font-bold text-white">{language==='english'?user.nameEn:user.name}</p><p className="text-xs text-slate-400">{user.email||extra.guest}</p></div><span className="ml-auto text-[10px] font-bold text-cyan-300">{authenticated?extra.signedIn:extra.guest}</span></div>
       {filtered.length?groups.map((group,index)=>{const rows=filtered.filter(item=>item.group===group);if(!rows.length)return null;return <section key={group} className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/75"><h2 className="px-4 pb-2 pt-4 text-[11px] font-black uppercase tracking-wider text-cyan-300">{groupLabels[index] || group}</h2><div className="divide-y divide-slate-800/80">{rows.map(row)}</div></section>}):<p className="rounded-2xl border border-slate-800 p-6 text-center text-sm text-slate-400">{t.noResults}</p>}
-      <button type="button" onClick={onOpenShortcuts} className="w-full rounded-xl border border-slate-800 px-4 py-3 text-sm text-slate-300">{language==='dari'?'میان‌برهای صفحه‌کلید':language==='pashto'?'د کیبورډ لنډلارې':language==='arabic'?'اختصارات لوحة المفاتيح':'Keyboard shortcuts'}</button>
+      <button type="button" onClick={onOpenShortcuts} className="w-full rounded-xl border border-slate-800 px-4 py-3 text-sm text-slate-300">{extra.shortcuts}</button>
     </div>}
     <div className="pb-4 text-center text-[10px] text-slate-600">AFG AI · Settings Hub</div>
   </section>;
