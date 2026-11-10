@@ -283,10 +283,45 @@ const baseTranslations = {
   }
 };
 
+
+const primaryLanguageOverrides: Partial<Record<'pashto' | 'arabic', Partial<typeof baseTranslations.english>>> = {
+  pashto: {
+    brandName:'AFG AI',brandSubtitle:'د افغانستان لپاره هوښیار مصنوعي ځیرکتیا • ستاسو ملګری',brandTagline:'ستاسو هوښیار AI مرستیال',brandMotto:'د افغانستان لپاره په ویاړ جوړ شوی 🇦🇫',serverReady:'سرور چمتو دی',online:'آنلاین',
+    greeting:'سلام!',welcomeBack:'AFG AI ته بېرته ښه راغلاست',premiumUser:'وړیا کارن',askAnythingPlaceholder:'هره پوښتنه وکړئ...',
+    navHome:'کور',navChat:'خبرې',navTools:'وسایل',navImage:'انځور جوړول',navVideo:'ویډیو جوړول',navHistory:'تاریخچه',navSettings:'امستنې',navAdmin:'مدیریت',navInvite:'ملګري راوبلئ',navProfile:'پروفایل',
+    chatTitle:'د AFG AI هوښیار مرستیال',chatSubtitle:'ستاسو پوښتنو ته په دري، پښتو، عربي او انګلیسي ځوابونه',chatPlaceholder:'پیغام ولیکئ...',send:'لېږل',recording:'ثبت روان دی...',readAloud:'په غږ یې ولولئ',stopSpeech:'غږ بند کړئ',copy:'کاپي',copied:'کاپي شو!',attachModalTitle:'ضمیمه زیاتول',attachGallery:'له ګالري انځور وټاکئ',attachCamera:'کمره – انځور واخلئ',attachFile:'فایل (PDF، DOC، TXT)',attachLink:'ویب لینک',
+    suggestPrompt1:'د مصنوعي ځیرکتیا راتلونکی په ساده ډول تشریح کړئ',suggestPrompt2:'د کابل او پامیر د ښکلا په اړه ښکلی شعر ولیکئ',suggestPrompt3:'د Tailwind په کارولو د کارن کارت لپاره React کوډ ولیکئ',suggestPrompt4:'په افغانستان کې د انلاین سوداګرۍ پنځه نظریې',
+    quickAccess:'چټک لاسرسی',seeAll:'ټول وګورئ',smartChatDesc:'هوښیارې خبرې',createArtDesc:'هنري انځور جوړول',makeVideoDesc:'ویډیو جوړول',
+    toolsCenter:'د هوښیار وسایلو مرکز',toolsSubtitle:'د مصنوعي ځیرکتیا د پروسس پیاوړي وسایل',toolChat:'له AI سره خبرې',toolChatDesc:'خبرې او پوښتنې او ځوابونه',toolImageGen:'د انځور جوړوونکی',toolImageGenDesc:'ښکلي او واقعي انځورونه جوړ کړئ',toolVideoGen:'د ویډیو جوړوونکی',toolVideoGenDesc:'له متن څخه ویډیو او خوځښت جوړ کړئ',toolCodeHelp:'د کوډ مرستیال',toolCodeHelpDesc:'کوډ ولیکئ، تېروتنې یې ومومئ او تشریح یې کړئ',toolTranslate:'د متن او غږ ژباړه',toolTranslateDesc:'دري، پښتو، انګلیسي او نورو ژبو ته ژباړه',toolPdf:'د PDF او اسنادو وسایل',toolPdfDesc:'له اسنادو متن وباسئ او لنډیز یې جوړ کړئ',toolVoice:'غږ او وینا',toolVoiceDesc:'غږ متن ته او متن غږ ته واړوئ',toolFile:'د فایلونو سمبالښت',toolFileDesc:'فایلونه تنظیم او بڼې یې واړوئ',toolCalc:'هوښیار حسابګر',toolCalcDesc:'علمي محاسبې او د اسعارو بدلون',toolQr:'د QR کوډ جوړوونکی او لوستونکی',toolQrDesc:'QR کوډونه جوړ او ولولئ',toolSummarizer:'د متن لنډیز',toolSummarizerDesc:'اوږده لیکنې په لنډو ټکو کې راټولې کړئ',
+    imgGenTitle:'د انځور جوړولو سټوډیو',imgGenSubtitle:'خپل خیالونه په زړه‌راښکونکو انځورونو بدل کړئ',imgPromptPlaceholder:'په افغانستان کې د واورو او شنې اسمان لرونکی ښکلی غر...',imgStyle:'د انځور بڼه',imgAspect:'د انځور تناسب',btnGenerateImage:'انځور جوړول 🪄',myCreations:'زما جوړ کړي انځورونه',download:'کښته کول',share:'شریکول',save:'ساتل',
+    videoGenTitle:'د ویډیو جوړولو سټوډیو',videoGenSubtitle:'له متن څخه د AI ویډیو جوړول',videoPromptPlaceholder:'د لمر لوېدو پر مهال د هندوکش پر غرونو د عقاب الوت...',btnGenerateVideo:'ویډیو جوړول 🎬',myVideos:'زما ویډیوګانې',
+    historyTitle:'د خبرو تاریخچه',historySearchPlaceholder:'خبرې ولټوئ...',emptyHistory:'تر اوسه هېڅ خبرې نه دي ثبت شوې',clearHistory:'تاریخچه پاکول',
+    settingsTitle:'د اپ امستنې',accountSecurity:'حساب او امنیت',appLanguage:'د اپ ژبه',darkMode:'تیاره بڼه',notifications:'خبرتیاوې',soundEffects:'د کلیک او خبرتیا غږونه',privacyPolicy:'محرمیت او اصول',aboutUs:'د AFG AI په اړه',helpSupport:'مرسته او ملاتړ',logout:'وتل',
+    aboutTitle:'د AFG AI په اړه',aboutVersion:'۱.۰.۰ نسخه',aboutDescription:'AFG AI د افغانستان او نړۍ کاروونکو لپاره یو هوښیار مرستیال دی چې زده‌کړه، ورځني کارونه، منځپانګه جوړول او پروګرام‌لیکنه اسانه کوي.',website:'رسمي وېبپاڼه',telegram:'د ټیلیګرام چینل',github:'په GitHub کې پروژه',madeWithLove:'د افغانستان لپاره په مینه جوړ شوی ❤️',allRightsReserved:'ټول حقوق د AFG AI خوندي دي © ۲۰۲۶',
+    adminTitle:'د سیستم د مدیر پینل',usersManage:'د کاروونکو مدیریت',servicesControl:'د خدمتونو کنټرول',providersModels:'د AI ماډلونه او برابرونکي',reportsAnalytics:'راپورونه او شمېرې',userAccessRestrictions:'د کاروونکو د لاسرسي محدودیتونه',dailyLimits:'د ورځنیو غوښتنو حد',autoModeration:'هوښیار اتومات څارنه',viewDashboard:'بشپړ ډشبورډ وګورئ'
+  },
+  arabic: {
+    brandName:'AFG AI',brandSubtitle:'ذكاء اصطناعي لأفغانستان • رفيقك الذكي',brandTagline:'مساعدك الذكي',brandMotto:'صُنع بفخر من أجل أفغانستان 🇦🇫',serverReady:'الخادم جاهز',online:'متصل',
+    greeting:'مرحباً!',welcomeBack:'مرحباً بعودتك إلى AFG AI',premiumUser:'مستخدم مجاني',askAnythingPlaceholder:'اسأل عن أي شيء...',
+    navHome:'الرئيسية',navChat:'المحادثة',navTools:'الأدوات',navImage:'إنشاء صورة',navVideo:'إنشاء فيديو',navHistory:'السجل',navSettings:'الإعدادات',navAdmin:'الإدارة',navInvite:'دعوة الأصدقاء',navProfile:'الملف الشخصي',
+    chatTitle:'مساعد AFG AI الذكي',chatSubtitle:'إجابات لأسئلتك بالدَّرية والعربية والبشتوية والإنجليزية',chatPlaceholder:'اكتب رسالة...',send:'إرسال',recording:'جارٍ التسجيل...',readAloud:'اقرأ بصوت عالٍ',stopSpeech:'إيقاف الصوت',copy:'نسخ',copied:'تم النسخ!',attachModalTitle:'إضافة مرفق',attachGallery:'اختر صورة من المعرض',attachCamera:'الكاميرا – التقط صورة',attachFile:'ملف (PDF، DOC، TXT)',attachLink:'رابط ويب',
+    suggestPrompt1:'اشرح مستقبل الذكاء الاصطناعي ببساطة',suggestPrompt2:'اكتب قصيدة جميلة عن جمال كابل وجبال پامير',suggestPrompt3:'اكتب كود React لبطاقة مستخدم حديثة باستخدام Tailwind',suggestPrompt4:'خمس أفكار لأعمال تجارية عبر الإنترنت في أفغانستان',
+    quickAccess:'الوصول السريع',seeAll:'عرض الكل',smartChatDesc:'محادثة ذكية',createArtDesc:'إنشاء عمل فني',makeVideoDesc:'إنشاء فيديو',
+    toolsCenter:'مركز الأدوات الذكية',toolsSubtitle:'مجموعة من أدوات معالجة الذكاء الاصطناعي',toolChat:'محادثة الذكاء الاصطناعي',toolChatDesc:'المحادثة والأسئلة والأجوبة',toolImageGen:'إنشاء الصور',toolImageGenDesc:'أنشئ صوراً جميلة وواقعية',toolVideoGen:'إنشاء الفيديو',toolVideoGenDesc:'إنشاء الرسوم المتحركة والفيديو من النص',toolCodeHelp:'مساعد البرمجة',toolCodeHelpDesc:'اكتب التعليمات البرمجية وصححها واشرحها',toolTranslate:'ترجمة النص والصوت',toolTranslateDesc:'الترجمة بين الدَّرية والبشتوية والإنجليزية وغيرها',toolPdf:'أدوات PDF والمستندات',toolPdfDesc:'استخراج النصوص وتلخيص المستندات',toolVoice:'الصوت والكلام',toolVoiceDesc:'تحويل الكلام إلى نص والنص إلى كلام',toolFile:'إدارة الملفات',toolFileDesc:'تنظيم الملفات وتحويل صيغها',toolCalc:'آلة حاسبة ذكية',toolCalcDesc:'الحسابات العلمية وتحويل العملات',toolQr:'قارئ ومنشئ QR',toolQrDesc:'إنشاء رموز QR ومسحها فوراً',toolSummarizer:'تلخيص النصوص',toolSummarizerDesc:'تلخيص المقالات الطويلة في نقاط موجزة',
+    imgGenTitle:'استوديو إنشاء الصور',imgGenSubtitle:'حوّل خيالك إلى صور مذهلة',imgPromptPlaceholder:'جبال أفغانستان الجميلة مع الثلوج والسماء الزرقاء...',imgStyle:'نمط الصورة',imgAspect:'نسبة العرض إلى الارتفاع',btnGenerateImage:'إنشاء صورة 🪄',myCreations:'إبداعاتي',download:'تنزيل',share:'مشاركة',save:'حفظ',
+    videoGenTitle:'استوديو إنشاء الفيديو',videoGenSubtitle:'إنشاء فيديوهات بالذكاء الاصطناعي من النص',videoPromptPlaceholder:'تحليق نسر فوق جبال هندوكوش عند غروب الشمس...',btnGenerateVideo:'إنشاء فيديو 🎬',myVideos:'فيديوهاتي',
+    historyTitle:'سجل المحادثات',historySearchPlaceholder:'ابحث في المحادثات...',emptyHistory:'لا توجد محادثات مسجلة بعد',clearHistory:'مسح السجل',
+    settingsTitle:'إعدادات التطبيق',accountSecurity:'الحساب والأمان',appLanguage:'لغة التطبيق',darkMode:'الوضع الداكن',notifications:'الإشعارات',soundEffects:'أصوات النقر والتنبيهات',privacyPolicy:'الخصوصية والشروط',aboutUs:'حول AFG AI',helpSupport:'المساعدة والدعم',logout:'تسجيل الخروج',
+    aboutTitle:'حول AFG AI',aboutVersion:'الإصدار 1.0.0',aboutDescription:'AFG AI مساعد ذكي من الجيل الجديد للمستخدمين في أفغانستان والعالم، يسهّل التعلم والمهام اليومية وإنشاء المحتوى والبرمجة.',website:'الموقع الرسمي',telegram:'قناة تيليغرام',github:'المشروع على GitHub',madeWithLove:'صُنع بحب ❤️ من أجل أفغانستان',allRightsReserved:'جميع الحقوق محفوظة لـ AFG AI © 2026',
+    adminTitle:'لوحة إدارة النظام',usersManage:'إدارة المستخدمين',servicesControl:'التحكم بالخدمات',providersModels:'نماذج ومزوّدو الذكاء الاصطناعي',reportsAnalytics:'التقارير والتحليلات',userAccessRestrictions:'قيود وصول المستخدمين',dailyLimits:'حد الطلبات اليومي',autoModeration:'الإشراف الآلي الذكي',viewDashboard:'عرض لوحة التحكم الكاملة'
+  }
+};
+
 const localized = (language: Language) => ({
   ...baseTranslations.english,
   ...getCoreUi(language),
   ...getMoreCoreUi(language),
+  ...(primaryLanguageOverrides[language as 'pashto' | 'arabic'] || {}),
 }) as typeof baseTranslations.english;
 
 export const translations = {
