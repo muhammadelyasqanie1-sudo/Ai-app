@@ -30,11 +30,11 @@ const LANGUAGE_SCREEN_COPY: Record<Language,{title:string;subtitle:string;footno
 };
 
 const LANGUAGE_OPTIONS: Array<{id:Language;name:string;native:string;region:string;rtl?:boolean}> = [
-  {id:'english',name:'English',native:'English',region:'Global'},
   {id:'dari',name:'Dari',native:'دری',region:'Afghanistan',rtl:true},
+  {id:'english',name:'English',native:'English',region:'Global'},
   {id:'pashto',name:'Pashto',native:'پښتو',region:'Afghanistan / Pakistan',rtl:true},
-  {id:'persian',name:'Persian',native:'فارسی',region:'Iran / Global',rtl:true},
   {id:'arabic',name:'Arabic',native:'العربية',region:'Middle East / Global',rtl:true},
+  {id:'persian',name:'Persian',native:'فارسی',region:'Iran / Global',rtl:true},
   {id:'urdu',name:'Urdu',native:'اردو',region:'Pakistan / India',rtl:true},
   {id:'turkish',name:'Turkish',native:'Türkçe',region:'Türkiye'},
   {id:'russian',name:'Russian',native:'Русский',region:'Eastern Europe / Central Asia'},
