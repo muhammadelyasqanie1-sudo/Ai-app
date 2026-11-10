@@ -147,7 +147,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
   ];
 
   return (
-    <div className="afg-home-view w-full max-w-6xl mx-auto px-4 py-4 sm:py-8 space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+    <div className="afg-home-view w-full max-w-6xl mx-auto px-4 py-4 sm:py-8 space-y-6 sm:space-y-8 animate-in fade-in duration-300" dir={rtl ? "rtl" : "ltr"}>
       {announcements.length > 0 && <section aria-label={c.announcements} className="space-y-2">
         {announcements.map(item => <article key={item.id} className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4 shadow-sm">
           <div className="flex items-center gap-2 text-xs font-bold text-cyan-300"><Sparkles className="h-4 w-4"/>{c.announcement}</div>
