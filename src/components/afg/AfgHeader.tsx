@@ -15,6 +15,13 @@ import { AfgBrainLogo } from './AfgBrainLogo';
 import type { Language, Theme, UserProfile } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
 
+const HEADER_COPY = {
+  dari:{menu:'بازکردن منو',newChat:'گفت‌وگوی جدید',more:'گزینه‌های بیشتر',models:'کتابخانه مدل‌ها',settings:'تنظیمات',language:'دری'},
+  english:{menu:'Open navigation menu',newChat:'New chat',more:'More options',models:'Model library',settings:'Settings',language:'English'},
+  pashto:{menu:'د لارښود مینو پرانیستل',newChat:'نوې خبرې',more:'نور انتخابونه',models:'د ماډلونو کتابتون',settings:'امستنې',language:'پښتو'},
+  arabic:{menu:'فتح قائمة التنقل',newChat:'محادثة جديدة',more:'خيارات إضافية',models:'مكتبة النماذج',settings:'الإعدادات',language:'العربية'}
+} as const;
+
 interface AfgHeaderProps {
   language: Language;
   theme: Theme;
@@ -41,6 +48,7 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
   unreadNotifications = 0,
 }) => {
   const t = translations[language];
+  const c = HEADER_COPY[language==='dari'||language==='pashto'||language==='arabic'?language:'english'];
   const [modelsMenuOpen, setModelsMenuOpen] = useState(false);
   const modelsMenuRef = useRef<HTMLDivElement>(null);
 
@@ -80,8 +88,8 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
           <button
             onClick={onOpenMenu}
             className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/60 focus:outline-none transition-colors"
-            title="Menu"
-            aria-label="Open Navigation Menu"
+            title={c.menu}
+            aria-label={c.menu}
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -107,9 +115,9 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
 
           <div className={'afg-connection-indicator hidden sm:flex ' + (connection==='live'?'is-live':connection==='offline'?'is-offline':'is-degraded')} title={connection==='live'?'API and model catalogue reachable':connection==='offline'?'No network connection':'Connection is being checked'}><span className="afg-connection-dot"/>{connection==='live'?'Live':connection==='offline'?'Offline':connection==='connecting'?'Connecting':'Degraded'}</div>
 
-          <button type="button" onClick={onNewChat} className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-800/40 bg-cyan-500/10 px-2.5 py-2 text-xs font-semibold text-cyan-200 transition-colors hover:bg-cyan-500/20" aria-label={language === 'dari' ? 'گفت‌وگوی جدید' : 'New chat'} title={language === 'dari' ? 'گفت‌وگوی جدید' : 'New chat'}>
+          <button type="button" onClick={onNewChat} className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-800/40 bg-cyan-500/10 px-2.5 py-2 text-xs font-semibold text-cyan-200 transition-colors hover:bg-cyan-500/20" aria-label={c.newChat} title={c.newChat}>
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">{language === 'dari' ? 'گفت‌وگوی جدید' : 'New chat'}</span>
+            <span className="hidden sm:inline">{c.newChat}</span>
           </button>
 
           {/* Language Switcher */}
@@ -120,7 +128,7 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
           >
             <Globe className="w-3.5 h-3.5 text-cyan-400" />
             <span className="text-xs">
-              {language === 'dari' ? 'دری' : 'English'}
+              {c.language}
             </span>
           </button>
 
@@ -139,10 +147,10 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
           </button>
 
           <div className="relative" ref={modelsMenuRef}>
-            <button type="button" onClick={() => setModelsMenuOpen(value => !value)} aria-label={language === 'dari' ? 'گزینه‌های بیشتر' : 'More options'} aria-expanded={modelsMenuOpen} aria-haspopup="menu" aria-controls="afg-header-more-menu" className="grid h-11 w-11 place-items-center rounded-full border border-slate-700/40 bg-slate-800/60 text-slate-300 transition hover:bg-slate-700/70 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400"><MoreVertical className="h-5 w-5" /></button>
+            <button type="button" onClick={() => setModelsMenuOpen(value => !value)} aria-label={c.more} aria-expanded={modelsMenuOpen} aria-haspopup="menu" aria-controls="afg-header-more-menu" className="grid h-11 w-11 place-items-center rounded-full border border-slate-700/40 bg-slate-800/60 text-slate-300 transition hover:bg-slate-700/70 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400"><MoreVertical className="h-5 w-5" /></button>
             {modelsMenuOpen && <div id="afg-header-more-menu" role="menu" className="absolute end-0 top-12 z-[100] min-w-48 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#101d32]">
-              <button type="button" role="menuitem" onClick={() => { setModelsMenuOpen(false); onOpenModels?.(); }} className="flex min-h-11 w-full items-center rounded-xl px-3 text-start text-sm font-semibold text-slate-800 transition hover:bg-cyan-500/10 dark:text-cyan-100">{language === 'dari' ? 'کتابخانه مدل‌ها' : 'Model library'}</button>
-              <button type="button" role="menuitem" onClick={() => { setModelsMenuOpen(false); onOpenSettings(); }} className="flex min-h-11 w-full items-center rounded-xl px-3 text-start text-sm font-semibold text-slate-800 transition hover:bg-cyan-500/10 dark:text-cyan-100">{language === 'dari' ? 'تنظیمات' : 'Settings'}</button>
+              <button type="button" role="menuitem" onClick={() => { setModelsMenuOpen(false); onOpenModels?.(); }} className="flex min-h-11 w-full items-center rounded-xl px-3 text-start text-sm font-semibold text-slate-800 transition hover:bg-cyan-500/10 dark:text-cyan-100">{c.models}</button>
+              <button type="button" role="menuitem" onClick={() => { setModelsMenuOpen(false); onOpenSettings(); }} className="flex min-h-11 w-full items-center rounded-xl px-3 text-start text-sm font-semibold text-slate-800 transition hover:bg-cyan-500/10 dark:text-cyan-100">{c.settings}</button>
             </div>}
           </div>
 
