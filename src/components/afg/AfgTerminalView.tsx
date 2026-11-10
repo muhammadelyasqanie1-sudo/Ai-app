@@ -147,7 +147,7 @@ export function AfgTerminalView({ language }: { language: Language }) {
       const snapshot: WorkspaceSnapshot = { fs, cwd, history: history.slice(-120), entries: entries.slice(-120) };
       localStorage.setItem(storageKey, JSON.stringify(snapshot));
     } catch { setError(text.storageError); }
-  }, [ready, storageKey, fs, cwd, history, entries, dari]);
+  }, [ready, storageKey, fs, cwd, history, entries, locale]);
 
   const loadAudit = useCallback(async (id: string) => {
     if (!id) return;
@@ -180,13 +180,13 @@ export function AfgTerminalView({ language }: { language: Language }) {
     if (showTokens && signedIn && serverAvailable) {
       void loadTokens().catch(() => setError(text.tokensError));
     }
-  }, [showTokens, signedIn, serverAvailable, loadTokens, dari]);
+  }, [showTokens, signedIn, serverAvailable, loadTokens, locale]);
 
   useEffect(() => {
     if (session && serverAvailable) {
       void loadAudit(session).catch(() => setError(text.historyError));
     }
-  }, [session, serverAvailable, loadAudit, dari]);
+  }, [session, serverAvailable, loadAudit, locale]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
