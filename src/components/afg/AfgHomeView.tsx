@@ -49,6 +49,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
 }) => {
   const t = translations[language];
   const c = HOME_COPY[(language === 'dari' || language === 'pashto' || language === 'arabic') ? language : 'english'];
+  const rtl = ['dari','pashto','persian','arabic','urdu'].includes(language);
   const [quickQuery, setQuickQuery] = useState('');
 
   const handleQuickAsk = (e: React.FormEvent) => {
@@ -192,7 +193,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                  {language === 'dari' ? user.name : user.nameEn}
+                  {language === 'english' ? user.nameEn : user.name}
                 </h1>
                 <span className="text-sm">👋</span>
               </div>
@@ -206,7 +207,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
                 </span>
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-[11px] font-bold text-amber-300">
                   <Crown className="w-3 h-3 text-amber-400 fill-amber-400" />
-                  {c.guestFree}
+                  {user.email ? user.tier : c.guestFree}
                 </span>
               </div>
             </div>
@@ -249,7 +250,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
             className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1"
           >
             <span>{t.seeAll}</span>
-            <ArrowRight className={`w-3.5 h-3.5 ${language === 'dari' ? 'rotate-180' : ''}`} />
+            <ArrowRight className={`w-3.5 h-3.5 ${rtl ? 'rotate-180' : ''}`} />
           </button>
         </div>
 
@@ -356,7 +357,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
           <Zap className="w-5 h-5 text-cyan-400 shrink-0" />
           <div>
             <h4 className="text-xs font-bold text-white">{c.providerStatus}</h4>
-            <p className="text-[10px] text-slate-400">{capabilities.chat ? (language === 'dari' ? 'گفت‌وگو تأیید شده' : 'Chat verified') : (c.notVerified)}</p>
+            <p className="text-[10px] text-slate-400">{capabilities.chat ? c.chatVerified : c.notVerified}</p>
           </div>
         </div>
 
