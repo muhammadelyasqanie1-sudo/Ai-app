@@ -103,7 +103,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
 
   const copy = locale === 'dari' ? {
     title: 'مرکز هوش مصنوعی آفلاین', subtitle: 'مدل را یک‌بار دانلود کن و در همین دستگاه، بدون اینترنت از آن استفاده کن.',
-    runtime: 'وضعیت موتور محلی', compatible: 'این دستگاه از WebGPU پشتیبانی می‌کند.', unsupported: 'WebGPU در این مرورگر در دسترس نیست. می‌توانی مدل‌ها را ببینی و دانلود کنی؛ برای اجرای آفلاین بومی از APK اندروید استفاده کن.',
+    runtime: 'وضعیت موتور محلی', compatible: 'این دستگاه از WebGPU پشتیبانی می‌کند.', unsupported: 'WebGPU در این مرورگر در دسترس نیست. در کمپیوتر به موتور محلی llama.cpp وصل شو؛ در اندروید از APK بومی استفاده کن.',
     checking: 'در حال بررسی سخت‌افزار…', catalog: 'مدل‌های سازگار', search: 'جست‌وجوی مدل…', unknown: 'نامشخص', unknownCompatibility: 'سازگاری در وب نامشخص است؛ مشخصات دقیق RAM/GPU در مرورگر در دسترس نیست.', install: 'دانلود و نصب', installed: 'ذخیره‌شده در دستگاه', downloading: 'در حال دانلود مدل…',
     minMemory: 'حداقل حافظه گرافیکی', downloadSize: 'حجم تقریبی مخزن مدل', unknownSize: 'اندازه دقیق در دسترس نیست', storage: 'فضای ذخیره‌سازی دستگاه',
     chat: 'گفت‌وگوی آفلاین', chatHint: 'مدل نصب‌شده را بارگذاری کن و بدون اتصال به سرور پیام بده.', choose: 'یک مدل انتخاب کن', load: 'بارگذاری مدل', send: 'ارسال', input: 'پیام خود را بنویس…',
@@ -114,7 +114,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     deviceTitle: 'اسکن هوشمند دستگاه', deviceUnknown: 'در حال بررسی مشخصات…', deviceRam: 'حافظه RAM کل', deviceAvailableRam: 'RAM آزاد فعلی', deviceCpu: 'هسته‌های پردازنده', deviceGpu: 'پردازنده گرافیکی', deviceStorage: 'فضای قابل استفاده', devicePlatform: 'سیستم و دستگاه', recommended: 'پیشنهادشده', limited: 'با محدودیت', incompatible: 'ناسازگار', allModels: 'همه', privacyScan: 'اسکن فقط مشخصات سخت‌افزاری و قابلیت‌های مرورگر را بررسی می‌کند.', rescan: 'اسکن دوباره',
   } : locale === 'pashto' ? {
     title:'نالیکي AI مرکز',subtitle:'ماډل یو ځل ښکته کړئ او بیا یې په همدې وسیله بې له انټرنېټه وکاروئ.',
-    runtime:'د ځایي انجن حالت',compatible:'دا وسیله د WebGPU ملاتړ کوي.',unsupported:'په دې براوزر کې WebGPU نشته. ماډلونه کتل او ښکته کولای شئ؛ د اصلي نالیکي اجرا لپاره د Android APK وکاروئ.',
+    runtime:'د ځایي انجن حالت',compatible:'دا وسیله د WebGPU ملاتړ کوي.',unsupported:'په دې براوزر کې WebGPU نشته. په کمپیوټر کې ځايي llama.cpp انجن سره وصل شئ؛ په Android کې اصلي APK وکاروئ.',
     checking:'د وسیلې وړتیاوې کتل کېږي…',catalog:'جوړېدونکي ماډلونه',search:'ماډلونه ولټوئ…',unknown:'ناڅرګند',unknownCompatibility:'په وېب کې سازګاري نه ده معلومه؛ براوزر د RAM/GPU کره معلومات نه ښيي.',install:'ښکته کول او نصب',installed:'په وسیله کې نصب شوی',downloading:'ماډل ښکته کېږي…',
     minMemory:'لږ تر لږه د GPU حافظه',downloadSize:'د ماډل د زېرمتون اټکلي اندازه',unknownSize:'کره اندازه نشته',storage:'د وسیلې زېرمه',
     chat:'نالیکي خبرې',chatHint:'نصب شوی ماډل پورته کړئ او له سرور پرته خبرې وکړئ.',choose:'ماډل وټاکئ',load:'ماډل پورته کول',send:'لېږل',input:'پیغام ولیکئ…',
@@ -125,7 +125,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     deviceTitle:'د وسیلې هوښیار سکین',deviceUnknown:'د وسیلې معلومات کتل کېږي…',deviceRam:'ټوله RAM',deviceAvailableRam:'اوسنۍ آزاده RAM',deviceCpu:'د CPU هستې',deviceGpu:'ګرافیکي پروسسګر',deviceStorage:'شته زېرمه',devicePlatform:'سیسټم او وسیله',recommended:'سپارښتل شوی',limited:'له محدودیت سره',incompatible:'ناسازګار',allModels:'ټول',privacyScan:'سکین یوازې د هارډویر او براوزر وړتیاوې ګوري.',rescan:'بیا سکین'
   } : locale === 'arabic' ? {
     title:'مركز الذكاء الاصطناعي دون اتصال',subtitle:'نزّل النموذج مرة واحدة ثم استخدمه على هذا الجهاز دون إنترنت.',
-    runtime:'حالة محرك التشغيل المحلي',compatible:'يدعم هذا الجهاز WebGPU.',unsupported:'WebGPU غير متاح في هذا المتصفح. يمكنك تصفح النماذج وتنزيلها؛ استخدم تطبيق Android للتشغيل المحلي الأصلي.',
+    runtime:'حالة محرك التشغيل المحلي',compatible:'يدعم هذا الجهاز WebGPU.',unsupported:'WebGPU غير متاح في هذا المتصفح. على الكمبيوتر اتصل بمحرك llama.cpp المحلي؛ وعلى Android استخدم تطبيق APK الأصلي.',
     checking:'جارٍ فحص إمكانات الجهاز…',catalog:'النماذج المتوافقة',search:'ابحث عن النماذج…',unknown:'غير معروف',unknownCompatibility:'التوافق غير معروف على الويب؛ لا يعرض المتصفح تفاصيل RAM/GPU الدقيقة.',install:'تنزيل وتثبيت',installed:'مثبّت على الجهاز',downloading:'جارٍ تنزيل النموذج…',
     minMemory:'الحد الأدنى لذاكرة GPU',downloadSize:'الحجم التقريبي لمستودع النموذج',unknownSize:'الحجم الدقيق غير متاح',storage:'مساحة تخزين الجهاز',
     chat:'محادثة دون اتصال',chatHint:'حمّل نموذجاً مثبتاً وتحدث دون إرسال طلبات إلى الخادم.',choose:'اختر نموذجاً',load:'تحميل النموذج',send:'إرسال',input:'اكتب رسالة…',
@@ -136,7 +136,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     deviceTitle:'فحص ذكي للجهاز',deviceUnknown:'جارٍ التحقق من تفاصيل الجهاز…',deviceRam:'إجمالي RAM',deviceAvailableRam:'RAM المتاحة حالياً',deviceCpu:'أنوية المعالج',deviceGpu:'معالج الرسومات',deviceStorage:'مساحة التخزين المتاحة',devicePlatform:'النظام والجهاز',recommended:'موصى به',limited:'بقيود',incompatible:'غير متوافق',allModels:'الكل',privacyScan:'يفحص الاختبار قدرات الأجهزة ومعلومات المتصفح فقط.',rescan:'إعادة الفحص'
   } : {
     title: 'Offline AI Hub', subtitle: 'Download a model once, then use it on this device without an internet connection.',
-    runtime: 'Local runtime status', compatible: 'This device supports WebGPU.', unsupported: 'WebGPU is unavailable in this browser. You can still browse and download models; use the Android APK for native offline inference.',
+    runtime: 'Local runtime status', compatible: 'This device supports WebGPU.', unsupported: 'WebGPU is unavailable in this browser. On desktop, connect a local llama.cpp engine; on Android, use the native APK.',
     checking: 'Checking device capabilities…', catalog: 'Compatible models', search: 'Search models…', unknown: 'Unknown', unknownCompatibility: 'Compatibility is unknown for Web; this browser does not expose exact RAM/GPU details.', install: 'Download & install', installed: 'Installed locally', downloading: 'Downloading model…',
     minMemory: 'Minimum GPU memory', downloadSize: 'Approx. repository size', unknownSize: 'Exact size unavailable', storage: 'Device storage',
     chat: 'Offline chat', chatHint: 'Load an installed model and chat without sending requests to a server.', choose: 'Choose a model', load: 'Load model', send: 'Send', input: 'Write a message…',
@@ -186,7 +186,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       'GGUF files are stored locally, but the native llama.cpp runtime is unavailable in this app build or on this device.':'GGUF فایلونه ځایي خوندي دي، خو په دې نسخه یا وسیله کې د llama.cpp اصلي انجن نشته.',
       'Downloaded':'ښکته شوی','hash verified':'هش تایید شو','hash calculated; source not verified':'هش محاسبه شو؛ سرچینه تایید نه ده',
       'Resume':'دوام ورکول','Waiting for network; auto-resumes':'شبکې ته انتظار؛ په خپله دوام کوي','Load model':'ماډل بارول',
-      'Native runtime unavailable in this build':'په دې نسخه کې اصلي انجن نشته'
+      'Native runtime unavailable in this build':'په دې نسخه کې اصلي انجن نشته',
+      'Windows local AI engine':'د کمپیوټر ځايي AI انجن','Use a llama.cpp server running locally on this PC. No cloud API is used.':'په همدې کمپیوټر کې ځايي llama.cpp سرور وچلوئ؛ کلاوډ API نه کارېږي.','Fixed endpoint: 127.0.0.1:8080. Start a llama-server with a GGUF model and allow only your AFG AI origin in CORS.':'ثابت پته 127.0.0.1:8080 ده. llama-server د GGUF ماډل سره وچلوئ او یوازې د AFG AI پته په CORS کې اجازه کړئ.','Connect local model':'ځايي ماډل سره نښلول','Connecting…':'نښلېږي…','Detected':'وموندل شو','Not connected':'نه دی نښلول شوی','Detected model:':'موندل شوی ماډل:','Local desktop runtime connected; prompts stay on this computer.':'ځايي انجن ونښلول شو؛ پیغامونه له کمپیوټر نه وځي.'
     };
     const ar:Record<string,string>={
       'Not enough estimated browser storage. Free up space before downloading.':'مساحة التخزين المقدّرة غير كافية. أفرغ مساحة قبل التنزيل.',
@@ -224,7 +225,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       'GGUF files are stored locally, but the native llama.cpp runtime is unavailable in this app build or on this device.':'ملفات GGUF محفوظة محلياً، لكن محرك llama.cpp الأصلي غير متاح في هذا الإصدار أو على الجهاز.',
       'Downloaded':'تم التنزيل','hash verified':'تم التحقق من البصمة','hash calculated; source not verified':'تم حساب البصمة؛ المصدر غير موثّق',
       'Resume':'استئناف','Waiting for network; auto-resumes':'بانتظار الشبكة؛ سيُستأنف تلقائياً','Load model':'تحميل النموذج',
-      'Native runtime unavailable in this build':'محرك التشغيل الأصلي غير متاح في هذا الإصدار'
+      'Native runtime unavailable in this build':'محرك التشغيل الأصلي غير متاح في هذا الإصدار',
+      'Windows local AI engine':'محرك الذكاء الاصطناعي المحلي للكمبيوتر','Use a llama.cpp server running locally on this PC. No cloud API is used.':'شغّل خادم llama.cpp محلياً على هذا الكمبيوتر؛ لا تُستخدم واجهة سحابية.','Fixed endpoint: 127.0.0.1:8080. Start a llama-server with a GGUF model and allow only your AFG AI origin in CORS.':'العنوان الثابت 127.0.0.1:8080. شغّل llama-server مع نموذج GGUF واسمح فقط بعنوان AFG AI في CORS.','Connect local model':'اتصال بالنموذج المحلي','Connecting…':'جارٍ الاتصال…','Detected':'متصل','Not connected':'غير متصل','Detected model:':'النموذج المكتشف:','Local desktop runtime connected; prompts stay on this computer.':'تم الاتصال بالمحرك المحلي؛ تبقى الرسائل على هذا الكمبيوتر.'
     };
     return locale === 'pashto' ? (ps[englishText] || englishText) : locale === 'arabic' ? (ar[englishText] || englishText) : englishText;
   };
