@@ -193,32 +193,32 @@ export const AfgCommandPalette: React.FC<AfgCommandPaletteProps> = (props) => {
               <>
                 <div className="afg-command-group">
                   <div className="afg-command-section">{paletteText('دسترسی سریع','QUICK OPEN')}</div>
-                  {action(<FolderOpen size={18}/>,dari?'باز کردن فضای کاری':'Quick open',dari?'مرور گفتگوها و فایل‌های ذخیره‌شده':'Browse conversation history and saved work',()=>{onOpenHistory();onClose();})}
-                  {action(<Search size={18}/>,dari?'جستجوی پروژه':'Search project',dari?'جستجو در تاریخچه پروژه':'Search workspace and chat history',()=>{onOpenHistory();onClose();})}
-                  {action(<Command size={18}/>,dari?'پالت دستورات':'Command runner',dari?'اجرای دستورات سریع با /':'Run supported slash commands',()=>{setQuery('');setSubmenu('commands');})}
+                  {action(<FolderOpen size={18}/>,paletteText('باز کردن فضای کاری','Quick open'),paletteText('مرور گفتگوها و فایل‌های ذخیره‌شده','Browse conversation history and saved work'),()=>{onOpenHistory();onClose();})}
+                  {action(<Search size={18}/>,paletteText('جستجوی پروژه','Search project'),paletteText('جستجو در تاریخچه پروژه','Search workspace and chat history'),()=>{onOpenHistory();onClose();})}
+                  {action(<Command size={18}/>,paletteText('پالت دستورات','Command runner'),paletteText('اجرای دستورات سریع با /','Run supported slash commands'),()=>{setQuery('');setSubmenu('commands');})}
                 </div>
                 <div className="afg-command-group">
-                  <div className="afg-command-section">{dari?'ابزارها و حالت‌ها':'TOOLS & MODES'}</div>
+                  <div className="afg-command-section">{paletteText('ابزارها و حالت‌ها','TOOLS & MODES')}</div>
                   {action(<Sparkles size={18}/>, 'AFG AI', paletteText('دستیار دستگاه، فرمان صوتی و مدل محلی','Device assistant, voice commands and local AI'), () => { onOpenAfgAssistant(); onClose(); })}
-                  {action(<Github size={18}/>,'GitHub',features.github_connected?(dari?'متصل و تأییدشده':'Connected and health-verified'):(dari?'برای اتصال، تنظیمات را باز کنید':'Not connected — open Connections in Settings'),()=>{onOpenSettings();onClose();},features.github_connected?<Check size={17}/>:<ChevronRight size={16}/>)}
-                  {action(<ListChecks size={18}/>,dari?'حالت برنامه‌ریزی':'Plan mode',planMode?(dari?'فعال':'Enabled'):(dari?'ابتدا طرح مرحله‌ای':'Plan before implementation'),()=>onPlanMode(!planMode),planMode?<Check size={17}/>:<span className="afg-command-switch"/> )}
-                  {action(<Layers size={18}/>,dari?'برنامه‌ریزی دوگانه':'Dual planning',features.dual_planning_enabled?(dualPlanning?'Enabled':'Available'):(dari?'پشتیبانی سرور فعال نیست':'Not supported by this backend'),()=>onDualPlanning(!dualPlanning),features.dual_planning_enabled?<Check size={17}/>:<Lock size={15}/>,!features.dual_planning_enabled)}
-                  {action(<Brain size={18}/>,dari?'سطح تفکر':'Thinking level',thinkingLevel.toUpperCase(),()=>{setQuery('');setSubmenu('thinking');})}
-                  {action(<Shield size={18}/>,dari?'سطح دسترسی':'Permission level',permissionLevel.toUpperCase(),()=>{setQuery('');setSubmenu('permission');})}
-                  {action(<Search size={18}/>,dari?'جستجو در گفتگو':'Find in chat',dari?'جستجوی متن همین گفتگو':'Search text in this conversation',()=>{setQuery('');setSubmenu('find');})}
-                  <div className="afg-command-action" aria-live="polite"><span className="afg-command-icon"><MessageSquare size={18}/></span><span className="afg-command-label"><b>{dari?'زمینه و محدودیت‌ها':'Context & limits'}</b><small>{contextWindow>0?`${tokenCount.toLocaleString()} / ${contextWindow.toLocaleString()} tokens · ${contextPercent}%`:`${tokenCount.toLocaleString()} estimated tokens · model limit unavailable`}</small></span><span className="afg-command-meter"><i style={{width:contextPercent+'%'}}/></span></div>
+                  {action(<Github size={18}/>,'GitHub',features.github_connected?(paletteText('متصل و تأییدشده','Connected and health-verified')):(paletteText('برای اتصال، تنظیمات را باز کنید','Not connected — open Connections in Settings')),()=>{onOpenSettings();onClose();},features.github_connected?<Check size={17}/>:<ChevronRight size={16}/>)}
+                  {action(<ListChecks size={18}/>,paletteText('حالت برنامه‌ریزی','Plan mode'),planMode?(paletteText('فعال','Enabled')):(paletteText('ابتدا طرح مرحله‌ای','Plan before implementation')),()=>onPlanMode(!planMode),planMode?<Check size={17}/>:<span className="afg-command-switch"/> )}
+                  {action(<Layers size={18}/>,paletteText('برنامه‌ریزی دوگانه','Dual planning'),features.dual_planning_enabled?(dualPlanning?'Enabled':'Available'):(paletteText('پشتیبانی سرور فعال نیست','Not supported by this backend')),()=>onDualPlanning(!dualPlanning),features.dual_planning_enabled?<Check size={17}/>:<Lock size={15}/>,!features.dual_planning_enabled)}
+                  {action(<Brain size={18}/>,paletteText('سطح تفکر','Thinking level'),thinkingLevel.toUpperCase(),()=>{setQuery('');setSubmenu('thinking');})}
+                  {action(<Shield size={18}/>,paletteText('سطح دسترسی','Permission level'),permissionLevel.toUpperCase(),()=>{setQuery('');setSubmenu('permission');})}
+                  {action(<Search size={18}/>,paletteText('جستجو در گفتگو','Find in chat'),paletteText('جستجوی متن همین گفتگو','Search text in this conversation'),()=>{setQuery('');setSubmenu('find');})}
+                  <div className="afg-command-action" aria-live="polite"><span className="afg-command-icon"><MessageSquare size={18}/></span><span className="afg-command-label"><b>{paletteText('زمینه و محدودیت‌ها','Context & limits')}</b><small>{contextWindow>0?`${tokenCount.toLocaleString()} / ${contextWindow.toLocaleString()} tokens · ${contextPercent}%`:`${tokenCount.toLocaleString()} estimated tokens · model limit unavailable`}</small></span><span className="afg-command-meter"><i style={{width:contextPercent+'%'}}/></span></div>
                 </div>
                 <div className="afg-command-group">
-                  <div className="afg-command-section">{dari?'ابزارهای توسعه':'DEVELOPER TOOLS'}</div>
-                  {features.terminal_exec_enabled && action(<Terminal size={18}/>,dari?'ترمینل':'Terminal',dari?'ترمینل فقط‌خواندنی فعال‌شده توسط مدیر':'Admin-enabled read-only terminal',()=>{onOpenTerminal();onClose();})}
-                  {action(<Undo2 size={18}/>,dari?'بازگردانی تغییرات فایل':'Undo file changes',features.undo_file_changes_enabled?'Restore last AI file edit':(dari?'در این گفتگو تغییری در فایل ثبت نشده':'No reversible AI file edits in this session'),()=>{},<Lock size={15}/>,!features.undo_file_changes_enabled)}
+                  <div className="afg-command-section">{paletteText('ابزارهای توسعه','DEVELOPER TOOLS')}</div>
+                  {features.terminal_exec_enabled && action(<Terminal size={18}/>,paletteText('ترمینل','Terminal'),paletteText('ترمینل فقط‌خواندنی فعال‌شده توسط مدیر','Admin-enabled read-only terminal'),()=>{onOpenTerminal();onClose();})}
+                  {action(<Undo2 size={18}/>,paletteText('بازگردانی تغییرات فایل','Undo file changes'),features.undo_file_changes_enabled?'Restore last AI file edit':(paletteText('در این گفتگو تغییری در فایل ثبت نشده','No reversible AI file edits in this session')),()=>{},<Lock size={15}/>,!features.undo_file_changes_enabled)}
                 </div>
                 <div className="afg-command-group afg-command-bottom">
-                  {action(<History size={18}/>,dari?'تاریخچه':'History',dari?'گفتگوهای قبلی':'Previous conversations',()=>{onOpenHistory();onClose();})}
-                  {action(<Settings size={18}/>,dari?'تنظیمات':'Settings',dari?'تنظیمات و اتصال‌ها':'Preferences and integrations',()=>{onOpenSettings();onClose();})}
-                  {action(<Download size={18}/>,dari?'خروجی گفتگو':'Export chat',dari?'دانلود فایل Markdown':'Download a Markdown transcript',exportChat)}
-                  {action(<Trash2 size={18}/>,dari?'پاک کردن گفتگو':'Clear chat',dari?'حذف پیام‌های همین گفتگو':'Remove messages from this conversation',()=>{if(window.confirm(dari?'گفتگو پاک شود؟':'Clear this conversation?')){onClearChat();onClose();}})}
-                  {action(<Plus size={18}/>,dari?'منوی ناوبری':'Navigation menu',dari?'همه بخش‌های برنامه':'All app sections',()=>{onOpenNavigation();onClose();})}
+                  {action(<History size={18}/>,paletteText('تاریخچه','History'),paletteText('گفتگوهای قبلی','Previous conversations'),()=>{onOpenHistory();onClose();})}
+                  {action(<Settings size={18}/>,paletteText('تنظیمات','Settings'),paletteText('تنظیمات و اتصال‌ها','Preferences and integrations'),()=>{onOpenSettings();onClose();})}
+                  {action(<Download size={18}/>,paletteText('خروجی گفتگو','Export chat'),paletteText('دانلود فایل Markdown','Download a Markdown transcript'),exportChat)}
+                  {action(<Trash2 size={18}/>,paletteText('پاک کردن گفتگو','Clear chat'),paletteText('حذف پیام‌های همین گفتگو','Remove messages from this conversation'),()=>{if(window.confirm(paletteText('گفتگو پاک شود؟','Clear this conversation?'))){onClearChat();onClose();}})}
+                  {action(<Plus size={18}/>,paletteText('منوی ناوبری','Navigation menu'),paletteText('همه بخش‌های برنامه','All app sections'),()=>{onOpenNavigation();onClose();})}
                 </div>
               </>
             )}
