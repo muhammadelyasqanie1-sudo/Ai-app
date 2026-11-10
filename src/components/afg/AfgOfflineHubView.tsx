@@ -187,7 +187,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       'Downloaded':'ښکته شوی','hash verified':'هش تایید شو','hash calculated; source not verified':'هش محاسبه شو؛ سرچینه تایید نه ده',
       'Resume':'دوام ورکول','Waiting for network; auto-resumes':'شبکې ته انتظار؛ په خپله دوام کوي','Load model':'ماډل بارول',
       'Native runtime unavailable in this build':'په دې نسخه کې اصلي انجن نشته',
-      'Windows local AI engine':'د کمپیوټر ځايي AI انجن','Use a llama.cpp server running locally on this PC. No cloud API is used.':'په همدې کمپیوټر کې ځايي llama.cpp سرور وچلوئ؛ کلاوډ API نه کارېږي.','Fixed endpoint: 127.0.0.1:8080. Start a llama-server with a GGUF model and allow only your AFG AI origin in CORS.':'ثابت پته 127.0.0.1:8080 ده. llama-server د GGUF ماډل سره وچلوئ او یوازې د AFG AI پته په CORS کې اجازه کړئ.','Connect local model':'ځايي ماډل سره نښلول','Connecting…':'نښلېږي…','Detected':'وموندل شو','Not connected':'نه دی نښلول شوی','Detected model:':'موندل شوی ماډل:','Local desktop runtime connected; prompts stay on this computer.':'ځايي انجن ونښلول شو؛ پیغامونه له کمپیوټر نه وځي.'
+      'Desktop local AI engine':'د کمپیوټر ځايي AI انجن','Use a llama.cpp server running locally on this PC. No cloud API is used.':'په همدې کمپیوټر کې ځايي llama.cpp سرور وچلوئ؛ کلاوډ API نه کارېږي.','Fixed endpoint: 127.0.0.1:8080. Start a llama-server with a GGUF model and allow only your AFG AI origin in CORS.':'ثابت پته 127.0.0.1:8080 ده. llama-server د GGUF ماډل سره وچلوئ او یوازې د AFG AI پته په CORS کې اجازه کړئ.','Connect local model':'ځايي ماډل سره نښلول','Connecting…':'نښلېږي…','Detected':'وموندل شو','Not connected':'نه دی نښلول شوی','Detected model:':'موندل شوی ماډل:','Local desktop runtime connected; prompts stay on this computer.':'ځايي انجن ونښلول شو؛ پیغامونه له کمپیوټر نه وځي.'
     };
     const ar:Record<string,string>={
       'Not enough estimated browser storage. Free up space before downloading.':'مساحة التخزين المقدّرة غير كافية. أفرغ مساحة قبل التنزيل.',
@@ -226,7 +226,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       'Downloaded':'تم التنزيل','hash verified':'تم التحقق من البصمة','hash calculated; source not verified':'تم حساب البصمة؛ المصدر غير موثّق',
       'Resume':'استئناف','Waiting for network; auto-resumes':'بانتظار الشبكة؛ سيُستأنف تلقائياً','Load model':'تحميل النموذج',
       'Native runtime unavailable in this build':'محرك التشغيل الأصلي غير متاح في هذا الإصدار',
-      'Windows local AI engine':'محرك الذكاء الاصطناعي المحلي للكمبيوتر','Use a llama.cpp server running locally on this PC. No cloud API is used.':'شغّل خادم llama.cpp محلياً على هذا الكمبيوتر؛ لا تُستخدم واجهة سحابية.','Fixed endpoint: 127.0.0.1:8080. Start a llama-server with a GGUF model and allow only your AFG AI origin in CORS.':'العنوان الثابت 127.0.0.1:8080. شغّل llama-server مع نموذج GGUF واسمح فقط بعنوان AFG AI في CORS.','Connect local model':'اتصال بالنموذج المحلي','Connecting…':'جارٍ الاتصال…','Detected':'متصل','Not connected':'غير متصل','Detected model:':'النموذج المكتشف:','Local desktop runtime connected; prompts stay on this computer.':'تم الاتصال بالمحرك المحلي؛ تبقى الرسائل على هذا الكمبيوتر.'
+      'Desktop local AI engine':'محرك الذكاء الاصطناعي المحلي للكمبيوتر','Use a llama.cpp server running locally on this PC. No cloud API is used.':'شغّل خادم llama.cpp محلياً على هذا الكمبيوتر؛ لا تُستخدم واجهة سحابية.','Fixed endpoint: 127.0.0.1:8080. Start a llama-server with a GGUF model and allow only your AFG AI origin in CORS.':'العنوان الثابت 127.0.0.1:8080. شغّل llama-server مع نموذج GGUF واسمح فقط بعنوان AFG AI في CORS.','Connect local model':'اتصال بالنموذج المحلي','Connecting…':'جارٍ الاتصال…','Detected':'متصل','Not connected':'غير متصل','Detected model:':'النموذج المكتشف:','Local desktop runtime connected; prompts stay on this computer.':'تم الاتصال بالمحرك المحلي؛ تبقى الرسائل على هذا الكمبيوتر.'
     };
     return locale === 'pashto' ? (ps[englishText] || englishText) : locale === 'arabic' ? (ar[englishText] || englishText) : englishText;
   };
@@ -245,7 +245,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       if (!active) return;
       const nativeMessage = locale === 'dari' ? 'موتور بومی llama.cpp آماده است؛ مدل‌های GGUF روی همین دستگاه اجرا می‌شوند.' : 'Native llama.cpp CPU runtime is ready for local GGUF inference.';
       let desktopAvailable = false;
-      if (!nativeAvailable) {
+      const desktopBrowser = /Windows NT|Win32|Macintosh|X11|Linux x86_64/i.test((navigator.userAgent || '') + ' ' + (navigator.platform || '')) && !/Android|iPhone|iPad/i.test(navigator.userAgent || '');
+      if (!nativeAvailable && desktopBrowser) {
         const desktopInfo = await getDesktopLocalRuntimeInfo();
         desktopAvailable = desktopInfo.available;
         if (active) { setDesktopRuntimeAvailable(desktopAvailable); setDesktopModelId(desktopInfo.models[0]?.id || ''); }
@@ -519,6 +520,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       const info = await getDesktopLocalRuntimeInfo();
       if (!info.available || !info.models.length) throw new Error(info.reason || 'No local model is loaded.');
       const modelId = info.models[0].id;
+      if (engineRef.current) await engineRef.current.unload().catch(() => undefined);
       engineRef.current = {
         chat: { completions: { create: async (request: { messages: Array<{ role: string; content: string }>; max_tokens?: number }) => ({ choices: [{ message: { content: await generateDesktopLocalResponse(modelId, request.messages, request.max_tokens || 384) } }] }) } },
         unload: async () => undefined,
@@ -584,7 +586,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     </header>
 
     {device?.platform === 'desktop' && <section className="space-y-3 rounded-[24px] border border-cyan-400/25 bg-cyan-400/5 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><h2 className="font-bold">{offlineText('موتور آفلاین ویندوز','Windows local AI engine')}</h2><p className="mt-1 text-xs opacity-70">{offlineText('از llama.cpp server روی همین کمپیوتر استفاده کن.','Use a llama.cpp server running locally on this PC. No cloud API is used.')}</p></div><span className={'rounded-full px-2 py-1 text-[10px] font-semibold ' + (desktopRuntimeAvailable ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-700')}>{desktopRuntimeAvailable ? offlineText('موجود','Detected') : offlineText('قطع','Not connected')}</span></div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><h2 className="font-bold">{offlineText('موتور آفلاین کمپیوتر','Desktop local AI engine')}</h2><p className="mt-1 text-xs opacity-70">{offlineText('از llama.cpp server روی همین کمپیوتر استفاده کن.','Use a llama.cpp server running locally on this PC. No cloud API is used.')}</p></div><span className={'rounded-full px-2 py-1 text-[10px] font-semibold ' + (desktopRuntimeAvailable ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-700')}>{desktopRuntimeAvailable ? offlineText('موجود','Detected') : offlineText('قطع','Not connected')}</span></div>
       <p className="text-xs opacity-65">{offlineText('آدرس ثابت: 127.0.0.1:8080. llama-server را با مدل GGUF اجرا کن و CORS را فقط برای نشانی AFG AI اجازه بده.','Fixed endpoint: 127.0.0.1:8080. Start llama-server with a GGUF model and allow only your AFG AI origin in CORS.')}</p>
       <button type="button" onClick={() => void connectDesktopRuntime()} disabled={desktopConnectBusy} className="rounded-xl bg-cyan-500 px-4 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-50">{desktopConnectBusy ? offlineText('در حال اتصال…','Connecting…') : offlineText('اتصال به مدل محلی','Connect local model')}</button>
       {desktopRuntimeAvailable && desktopModelId && <p className="text-xs text-emerald-600">{offlineText('مدل شناسایی‌شده:','Detected model:')} {desktopModelId}</p>}
