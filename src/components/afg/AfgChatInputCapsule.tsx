@@ -272,7 +272,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   const tokenEstimate = Math.ceil(charCount / 4);
 
   return (
-    <div className="afg-composer-shell w-full max-w-4xl mx-auto relative px-2 sm:px-4">
+    <div dir={rtl?"rtl":"ltr"} className="afg-composer-shell w-full max-w-4xl mx-auto relative px-2 sm:px-4">
       
       {/* Hidden File Inputs */}
       <input
