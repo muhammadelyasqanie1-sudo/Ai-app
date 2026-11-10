@@ -43,6 +43,7 @@ function getHuggingFaceRepo(model: CatalogModel): string | null {
 export function AfgOfflineHubView({ language, initialView = 'chat' }: { language: Language; initialView?: 'models' | 'chat' }) {
   const locale = language === 'dari' || language === 'pashto' || language === 'arabic' ? language : 'english';
   const rtl = ['dari','pashto','persian','arabic','urdu'].includes(language);
+  const dari = locale === 'dari';
   const [viewMode, setViewMode] = useState<'models' | 'chat'>(initialView);
   const [models, setModels] = useState<CatalogModel[]>([]);
   const [hfModels, setHfModels] = useState<HuggingFaceModel[]>([]);
@@ -461,7 +462,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const ggufRuntimeBlocked = usesNativeOfflineDownloads() && !nativeRuntimeAvailable;
   const ggufPreflightBlocked = !selectedGgufFile || !selectedGgufFile.size || ggufStorageUnknown || ggufStorageBlocked || ggufRamBlocked || ggufGated || ggufRuntimeBlocked;
 
-  return <section className="afg-offline-hub mx-auto w-full max-w-5xl space-y-5 px-3 py-4 text-slate-900 sm:px-6 sm:py-6 dark:text-slate-100" dir={dari ? 'rtl' : 'ltr'}>
+  return <section className="afg-offline-hub mx-auto w-full max-w-5xl space-y-5 px-3 py-4 text-slate-900 sm:px-6 sm:py-6 dark:text-slate-100" dir={rtl ? 'rtl' : 'ltr'}>
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div><div className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-600"><WifiOff size={14}/>{dari ? 'بدون وابستگی به سرور' : 'Server-independent'}</div><h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{viewMode === 'models' ? (dari ? 'مدل‌های آفلاین' : 'Offline Models') : copy.title}</h1><p className="mt-2 max-w-2xl text-sm opacity-70">{viewMode === 'models' ? (dari ? 'مدل‌ها را جست‌وجو، بررسی، دانلود و مدیریت کن.' : 'Discover, inspect, download and manage local AI models.') : copy.subtitle}</p></div>
       <div className="rounded-2xl border p-3 text-end"><div className="flex items-center gap-2 text-xs opacity-70"><HardDrive size={15}/>{copy.storage}</div><div className="mt-1 text-sm font-bold">{formatBytes(storage.usage)} / {formatBytes(storage.quota)}</div></div>
