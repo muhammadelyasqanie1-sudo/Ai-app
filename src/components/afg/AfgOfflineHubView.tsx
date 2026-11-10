@@ -41,7 +41,8 @@ function getHuggingFaceRepo(model: CatalogModel): string | null {
 }
 
 export function AfgOfflineHubView({ language, initialView = 'chat' }: { language: Language; initialView?: 'models' | 'chat' }) {
-  const dari = language === 'dari';
+  const locale = language === 'dari' || language === 'pashto' || language === 'arabic' ? language : 'english';
+  const rtl = ['dari','pashto','persian','arabic','urdu'].includes(language);
   const [viewMode, setViewMode] = useState<'models' | 'chat'>(initialView);
   const [models, setModels] = useState<CatalogModel[]>([]);
   const [hfModels, setHfModels] = useState<HuggingFaceModel[]>([]);
@@ -95,7 +96,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
 
   useEffect(() => () => { const engine = engineRef.current; engineRef.current = null; engineModelIdRef.current = ''; if (engine) void engine.unload().catch(() => undefined); }, []);
 
-  const copy = dari ? {
+  const copy = locale === 'dari' ? {
     title: 'مرکز هوش مصنوعی آفلاین', subtitle: 'مدل را یک‌بار دانلود کن و در همین دستگاه، بدون اینترنت از آن استفاده کن.',
     runtime: 'وضعیت موتور محلی', compatible: 'این دستگاه از WebGPU پشتیبانی می‌کند.', unsupported: 'WebGPU در این مرورگر در دسترس نیست. می‌توانی مدل‌ها را ببینی و دانلود کنی؛ برای اجرای آفلاین بومی از APK اندروید استفاده کن.',
     checking: 'در حال بررسی سخت‌افزار…', catalog: 'مدل‌های سازگار', search: 'جست‌وجوی مدل…', unknown: 'نامشخص', unknownCompatibility: 'سازگاری در وب نامشخص است؛ مشخصات دقیق RAM/GPU در مرورگر در دسترس نیست.', install: 'دانلود و نصب', installed: 'ذخیره‌شده در دستگاه', downloading: 'در حال دانلود مدل…',
@@ -106,6 +107,28 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     source: 'منبع مدل: MLC / WebLLM', limitation: 'این فهرست، مدل‌های از پیش تبدیل‌شده و سازگار با WebLLM را نشان می‌دهد؛ همه فایل‌های GGUF یا همه مدل‌های Hugging Face قابل اجرا نیستند.',
     onlineNeeded: 'برای دانلود اولیه به اینترنت نیاز است. پس از ذخیره موفق، اجرای مدل می‌تواند آفلاین باشد.',
     deviceTitle: 'اسکن هوشمند دستگاه', deviceUnknown: 'در حال بررسی مشخصات…', deviceRam: 'حافظه RAM کل', deviceAvailableRam: 'RAM آزاد فعلی', deviceCpu: 'هسته‌های پردازنده', deviceGpu: 'پردازنده گرافیکی', deviceStorage: 'فضای قابل استفاده', devicePlatform: 'سیستم و دستگاه', recommended: 'پیشنهادشده', limited: 'با محدودیت', incompatible: 'ناسازگار', allModels: 'همه', privacyScan: 'اسکن فقط مشخصات سخت‌افزاری و قابلیت‌های مرورگر را بررسی می‌کند.', rescan: 'اسکن دوباره',
+  } : locale === 'pashto' ? {
+    title:'نالیکي AI مرکز',subtitle:'ماډل یو ځل ښکته کړئ او بیا یې په همدې وسیله بې له انټرنېټه وکاروئ.',
+    runtime:'د ځایي انجن حالت',compatible:'دا وسیله د WebGPU ملاتړ کوي.',unsupported:'په دې براوزر کې WebGPU نشته. ماډلونه کتل او ښکته کولای شئ؛ د اصلي نالیکي اجرا لپاره د Android APK وکاروئ.',
+    checking:'د وسیلې وړتیاوې کتل کېږي…',catalog:'جوړېدونکي ماډلونه',search:'ماډلونه ولټوئ…',unknown:'ناڅرګند',unknownCompatibility:'په وېب کې سازګاري نه ده معلومه؛ براوزر د RAM/GPU کره معلومات نه ښيي.',install:'ښکته کول او نصب',installed:'په وسیله کې نصب شوی',downloading:'ماډل ښکته کېږي…',
+    minMemory:'لږ تر لږه د GPU حافظه',downloadSize:'د ماډل د زېرمتون اټکلي اندازه',unknownSize:'کره اندازه نشته',storage:'د وسیلې زېرمه',
+    chat:'نالیکي خبرې',chatHint:'نصب شوی ماډل پورته کړئ او له سرور پرته خبرې وکړئ.',choose:'ماډل وټاکئ',load:'ماډل پورته کول',send:'لېږل',input:'پیغام ولیکئ…',
+    noModels:'سازګار ماډل ونه موندل شو.',noInstalled:'تر اوسه ماډل نه دی نصب شوی.',noOfflineModel:'نالیکي ماډل نشته. د ماډلونو له برخې یو ماډل ښکته کړئ.',ggufRuntimeUnavailable:'د GGUF فایل خوندي دی، خو په دې جوړښت کې یې د اجرا انجن نشته.',loadGgufHint:'د ماډلونو برخې ته لاړ شئ او Load model ووهئ.',loading:'ماډل پورته کېږي…',ready:'ماډل چمتو دی؛ پیغامونه یوازې په همدې وسیله پروسس کېږي.',
+    failed:'عملیات ناکام شول. تشه زېرمه او د وسیلې سازګاري وګورئ.',remove:'ماډل هېرول',privacy:'محرمیت: د خبرو متن د AFG AI سرورونو ته نه لېږل کېږي.',
+    source:'د ماډل سرچینه: MLC / WebLLM',limitation:'دا کتلاګ له WebLLM سره سازګار مخکې بدل شوي ماډلونه ښيي؛ ټول GGUF یا Hugging Face ماډلونه دلته نه چلېږي.',
+    onlineNeeded:'د لومړي ښکته کولو لپاره انټرنېټ ته اړتیا ده. له خوندي کېدو وروسته ماډل نالیکي چلېدای شي.',
+    deviceTitle:'د وسیلې هوښیار سکین',deviceUnknown:'د وسیلې معلومات کتل کېږي…',deviceRam:'ټوله RAM',deviceAvailableRam:'اوسنۍ آزاده RAM',deviceCpu:'د CPU هستې',deviceGpu:'ګرافیکي پروسسګر',deviceStorage:'شته زېرمه',devicePlatform:'سیسټم او وسیله',recommended:'سپارښتل شوی',limited:'له محدودیت سره',incompatible:'ناسازګار',allModels:'ټول',privacyScan:'سکین یوازې د هارډویر او براوزر وړتیاوې ګوري.',rescan:'بیا سکین'
+  } : locale === 'arabic' ? {
+    title:'مركز الذكاء الاصطناعي دون اتصال',subtitle:'نزّل النموذج مرة واحدة ثم استخدمه على هذا الجهاز دون إنترنت.',
+    runtime:'حالة محرك التشغيل المحلي',compatible:'يدعم هذا الجهاز WebGPU.',unsupported:'WebGPU غير متاح في هذا المتصفح. يمكنك تصفح النماذج وتنزيلها؛ استخدم تطبيق Android للتشغيل المحلي الأصلي.',
+    checking:'جارٍ فحص إمكانات الجهاز…',catalog:'النماذج المتوافقة',search:'ابحث عن النماذج…',unknown:'غير معروف',unknownCompatibility:'التوافق غير معروف على الويب؛ لا يعرض المتصفح تفاصيل RAM/GPU الدقيقة.',install:'تنزيل وتثبيت',installed:'مثبّت على الجهاز',downloading:'جارٍ تنزيل النموذج…',
+    minMemory:'الحد الأدنى لذاكرة GPU',downloadSize:'الحجم التقريبي لمستودع النموذج',unknownSize:'الحجم الدقيق غير متاح',storage:'مساحة تخزين الجهاز',
+    chat:'محادثة دون اتصال',chatHint:'حمّل نموذجاً مثبتاً وتحدث دون إرسال طلبات إلى الخادم.',choose:'اختر نموذجاً',load:'تحميل النموذج',send:'إرسال',input:'اكتب رسالة…',
+    noModels:'لم يتم العثور على نماذج متوافقة.',noInstalled:'لم يتم تثبيت أي نموذج بعد.',noOfflineModel:'لا يوجد نموذج دون اتصال. نزّل نموذجاً من قسم النماذج.',ggufRuntimeUnavailable:'ملف GGUF محفوظ محلياً لكن محرك تشغيله غير متاح في هذا الإصدار.',loadGgufHint:'افتح قسم النماذج واضغط Load model لتشغيل GGUF محلياً.',loading:'جارٍ تحميل النموذج…',ready:'النموذج جاهز. تتم معالجة الرسائل على هذا الجهاز فقط.',
+    failed:'فشلت العملية. تحقق من مساحة التخزين وتوافق الجهاز.',remove:'إزالة النموذج',privacy:'الخصوصية: لا يُرسل نص المحادثة إلى خوادم AFG AI.',
+    source:'مصدر النموذج: MLC / WebLLM',limitation:'يعرض هذا الفهرس النماذج المحوّلة مسبقاً والمتوافقة مع WebLLM؛ لا يمكن تشغيل كل ملفات GGUF أو نماذج Hugging Face.',
+    onlineNeeded:'يلزم الاتصال بالإنترنت للتنزيل الأول. بعد حفظ النموذج يمكن تشغيله دون اتصال.',
+    deviceTitle:'فحص ذكي للجهاز',deviceUnknown:'جارٍ التحقق من تفاصيل الجهاز…',deviceRam:'إجمالي RAM',deviceAvailableRam:'RAM المتاحة حالياً',deviceCpu:'أنوية المعالج',deviceGpu:'معالج الرسومات',deviceStorage:'مساحة التخزين المتاحة',devicePlatform:'النظام والجهاز',recommended:'موصى به',limited:'بقيود',incompatible:'غير متوافق',allModels:'الكل',privacyScan:'يفحص الاختبار قدرات الأجهزة ومعلومات المتصفح فقط.',rescan:'إعادة الفحص'
   } : {
     title: 'Offline AI Hub', subtitle: 'Download a model once, then use it on this device without an internet connection.',
     runtime: 'Local runtime status', compatible: 'This device supports WebGPU.', unsupported: 'WebGPU is unavailable in this browser. You can still browse and download models; use the Android APK for native offline inference.',
@@ -131,7 +154,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
         if (active) setNativeRuntimeAvailable(nativeAvailable);
       } catch { if (active) setNativeRuntimeAvailable(false); }
       if (!active) return;
-      const nativeMessage = dari ? 'موتور بومی llama.cpp آماده است؛ مدل‌های GGUF روی همین دستگاه اجرا می‌شوند.' : 'Native llama.cpp CPU runtime is ready for local GGUF inference.';
+      const nativeMessage = locale === 'dari' ? 'موتور بومی llama.cpp آماده است؛ مدل‌های GGUF روی همین دستگاه اجرا می‌شوند.' : 'Native llama.cpp CPU runtime is ready for local GGUF inference.';
       const { prebuiltAppConfig } = await import('@mlc-ai/web-llm');
       if (!active) return;
       const catalog = (prebuiltAppConfig.model_list || []) as CatalogModel[];
@@ -165,7 +188,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       if (navigator.storage?.estimate) { const estimate = await navigator.storage.estimate(); if (active) setStorage({ usage: estimate.usage, quota: estimate.quota }); }
     })();
     return () => { active = false; };
-  }, [copy.compatible, copy.unsupported, dari]);
+  }, [copy.compatible, copy.unsupported, locale]);
 
   useEffect(() => {
     localStorage.setItem(INSTALLED_KEY, JSON.stringify(installed));
