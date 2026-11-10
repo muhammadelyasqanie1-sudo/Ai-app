@@ -1,12 +1,12 @@
 // Trigger the repository's Android APK build workflow; no runtime behavior change.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownToLine, Cpu, HardDrive, MessageSquare, Search, ShieldCheck, Sparkles, WifiOff, X } from 'lucide-react';
+import { ArrowDownToLine, Cpu, FolderOpen, HardDrive, MessageSquare, Search, ShieldCheck, Sparkles, WifiOff, X } from 'lucide-react';
 import type { Language } from '../../types/afg';
 import { searchHuggingFaceGGUF, getHuggingFaceRepository, getPrimaryGgufFile, formatModelCategory, type HuggingFaceModel, type HuggingFaceRepository } from '../../lib/huggingFaceOfflineCatalog';
 import { assessOfflineModelFit, scanOfflineDevice, type OfflineDeviceProfile, type ModelFit } from '../../lib/offlineDevice';
 import { downloadGGUF, listOfflineDownloads, pauseGGUFDownload, removeOfflineModel, usesNativeOfflineDownloads, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
 import { clearOfflineChatMessages, loadOfflineChatMessages, saveOfflineChatMessages, type OfflineChatMessage } from '../../lib/offlineChatStorage';
-import { generateNativeLlamaResponse, getNativeLlamaRuntimeInfo, loadNativeLlamaModel, unloadNativeLlamaModel } from '../../lib/offlineLlamaRuntime';
+import { generateNativeLlamaResponse, getNativeLlamaRuntimeInfo, loadNativeLlamaModel, pickNativeGgufModel, unloadNativeLlamaModel } from '../../lib/offlineLlamaRuntime';
 import { generateDesktopLocalResponse, getDesktopLocalRuntimeInfo } from '../../lib/offlineDesktopRuntime';
 
 type CatalogModel = {
@@ -79,6 +79,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const [desktopRuntimeAvailable, setDesktopRuntimeAvailable] = useState(false);
   const [desktopModelId, setDesktopModelId] = useState('');
   const [desktopConnectBusy, setDesktopConnectBusy] = useState(false);
+  const [pickedModelFile, setPickedModelFile] = useState<{ path: string; fileName: string; sizeBytes: number } | null>(null);
+  const [filePickerBusy, setFilePickerBusy] = useState(false);
   const [activeOfflineModelLabel, setActiveOfflineModelLabel] = useState('');
   const [runtimeMessage, setRuntimeMessage] = useState('');
   const [storage, setStorage] = useState<{ usage?: number; quota?: number }>({});
@@ -492,6 +494,28 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     } finally { setBusy(false); setProgress(0); setProgressText(''); }
   }, [busy, runtime, webGpuAvailable, copy, dari, models, device, modelSizes, storage]);
 
+  const browseNativeGgufModel = async () => {
+    if (filePickerBusy || busy) return;
+    setFilePickerBusy(true);
+    try {
+      const selected = await pickNativeGgufModel();
+      setPickedModelFile(selected);
+      setRuntimeMessage(offlineText('فایل انتخاب شد. اکنون «فعال‌سازی مدل» را بزن.','File selected. Press “Activate model” to load it.'));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : copy.failed;
+      if (!message.toLowerCase().includes('cancel')) setRuntimeMessage(message);
+    } finally { setFilePickerBusy(false); }
+  };
+
+  const activatePickedModel = async () => {
+    if (!pickedModelFile || busy) return;
+    await loadNativeGgufModel({
+      id: 'local-import/' + pickedModelFile.fileName, repoId: 'local-import', fileName: pickedModelFile.fileName,
+      revision: 'local', url: '', expectedBytes: pickedModelFile.sizeBytes, downloadedBytes: pickedModelFile.sizeBytes,
+      expectedSha256: null, localPath: pickedModelFile.path, status: 'installed', updatedAt: Date.now(),
+    });
+  };
+
   const loadNativeGgufModel = async (task: OfflineDownloadState) => {
     if (!nativeRuntimeAvailable || !task.localPath || busy || task.status !== 'installed') return;
     setBusy(true); setProgressText(offlineText('در حال بارگذاری مدل GGUF…','Loading local GGUF model…'));
@@ -584,6 +608,13 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       <div><div className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-600"><WifiOff size={14}/>{offlineText('بدون وابستگی به سرور','Server-independent')}</div><h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{viewMode === 'models' ? (offlineText('مدل‌های آفلاین','Offline Models')) : copy.title}</h1><p className="mt-2 max-w-2xl text-sm opacity-70">{viewMode === 'models' ? (offlineText('مدل‌ها را جست‌وجو، بررسی، دانلود و مدیریت کن.','Discover, inspect, download and manage local AI models.')) : copy.subtitle}</p></div>
       <div className="rounded-2xl border p-3 text-end"><div className="flex items-center gap-2 text-xs opacity-70"><HardDrive size={15}/>{copy.storage}</div><div className="mt-1 text-sm font-bold">{formatBytes(storage.usage)} / {formatBytes(storage.quota)}</div></div>
     </header>
+
+    {device?.platform === 'android' && <section className="space-y-3 rounded-[24px] border border-cyan-400/25 bg-cyan-400/5 p-4">
+      <div><h2 className="font-bold">{offlineText('انتخاب مدل از حافظه گوشی','Browse model files')}</h2><p className="mt-1 text-xs opacity-70">{offlineText('فایل GGUF را از حافظه داخلی، پوشه دانلودها یا کارت حافظه انتخاب کن. فایل به فضای خصوصی AFG AI کاپی می‌شود.','Choose a GGUF file from internal storage, Downloads or SD card. A copy is imported into AFG AI private storage.')}</p></div>
+      <button type="button" onClick={() => void browseNativeGgufModel()} disabled={filePickerBusy || busy || !nativeRuntimeAvailable} className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/40 px-4 py-2.5 text-sm font-bold disabled:opacity-50"><FolderOpen size={16}/>{filePickerBusy ? offlineText('در حال بازکردن فایل‌ها…','Opening files…') : offlineText('مرور و انتخاب فایل GGUF','Browse GGUF file')}</button>
+      {pickedModelFile && <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3"><p className="break-all text-sm font-semibold">{pickedModelFile.fileName}</p><p className="mt-1 text-xs opacity-70">{formatBytes(pickedModelFile.sizeBytes)} · {offlineText('آماده فعال‌سازی','Ready to activate')}</p><button type="button" onClick={() => void activatePickedModel()} disabled={busy || !nativeRuntimeAvailable} className="mt-3 rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50">{busy ? offlineText('در حال بارگذاری…','Loading…') : offlineText('فعال‌سازی مدل','Activate model')}</button></div>}
+      {!nativeRuntimeAvailable && <p className="text-xs text-amber-600">{offlineText('موتور بومی llama.cpp در این APK موجود نیست.','The native llama.cpp engine is not included in this APK build.')}</p>}
+    </section>}
 
     {device?.platform === 'desktop' && <section className="space-y-3 rounded-[24px] border border-cyan-400/25 bg-cyan-400/5 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><h2 className="font-bold">{offlineText('موتور آفلاین کمپیوتر','Desktop local AI engine')}</h2><p className="mt-1 text-xs opacity-70">{offlineText('از llama.cpp server روی همین کمپیوتر استفاده کن.','Use a llama.cpp server running locally on this PC. No cloud API is used.')}</p></div><span className={'rounded-full px-2 py-1 text-[10px] font-semibold ' + (desktopRuntimeAvailable ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-700')}>{desktopRuntimeAvailable ? offlineText('موجود','Detected') : offlineText('قطع','Not connected')}</span></div>
