@@ -272,7 +272,7 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
       setNotice(t.modelSaved);
     }catch(e){setError(e instanceof Error?e.message:'Could not save the default model.');}
   };
-  const selected = page ? ITEMS.find(item=>item.id===page) : null;
+  const selected = page ? localizedItems.find(item=>item.id===page) : null;
   const statusBadge=(id:SettingId)=><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${status[id]==='active'?'bg-emerald-500/15 text-emerald-300':status[id]==='disabled'?'bg-slate-700 text-slate-400':'bg-amber-500/10 text-amber-300'}`}>{statusLabel(id)}</span>;
   const row=(item:Item)=><button key={item.id} type="button" disabled={isDisabled(item.id)} onClick={()=>{setPage(item.id);setError('');setNotice('');}} className={`group flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-cyan-400/5 disabled:cursor-not-allowed disabled:opacity-50 ${rtl?'text-right':''}`}>
     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/15 bg-cyan-500/5 text-cyan-300"><item.icon className="h-5 w-5"/></span>
@@ -340,7 +340,7 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
         {page==='byok'&&<p className="text-xs text-slate-400">{pageCopy.byok}</p>}
         {page==='router'&&<p className="text-xs text-slate-400">{pageCopy.router}</p>}
       </div>}
-      <button type="button" onClick={()=>void refreshStatus()} className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300"{pageCopy.refresh}</button>
+      <button type="button" onClick={()=>void refreshStatus()} className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300">{pageCopy.refresh}</button>
     </div> : <div className="space-y-5">
       <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/20 bg-slate-950/70 p-4"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><Settings2 className="h-5 w-5"/></div><div className="min-w-0"><p className="font-bold text-white">{language==='english'?user.nameEn:user.name}</p><p className="text-xs text-slate-400">{user.email||extra.guest}</p></div><span className="ml-auto text-[10px] font-bold text-cyan-300">{authenticated?extra.signedIn:extra.guest}</span></div>
       {filtered.length?groups.map((group,index)=>{const rows=filtered.filter(item=>item.group===group);if(!rows.length)return null;return <section key={group} className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/75"><h2 className="px-4 pb-2 pt-4 text-[11px] font-black uppercase tracking-wider text-cyan-300">{groupLabels[index] || group}</h2><div className="divide-y divide-slate-800/80">{rows.map(row)}</div></section>}):<p className="rounded-2xl border border-slate-800 p-6 text-center text-sm text-slate-400">{t.noResults}</p>}
