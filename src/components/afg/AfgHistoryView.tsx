@@ -208,7 +208,7 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-3 sm:px-6 py-4 space-y-6 animate-in fade-in duration-300">
+    <div dir={['dari','pashto','persian','arabic','urdu'].includes(language) ? "rtl" : "ltr"} className="w-full max-w-4xl mx-auto px-3 sm:px-6 py-4 space-y-6 animate-in fade-in duration-300">
       
       {/* Header */}
       <div className="flex items-center justify-between">
