@@ -16,6 +16,11 @@ export async function getNativeLlamaRuntimeInfo(): Promise<NativeLlamaRuntimeInf
   return AFGOfflineModels.getRuntimeInfo();
 }
 
+export async function pickNativeGgufModel(): Promise<{ path: string; fileName: string; sizeBytes: number }> {
+  if (Capacitor.getPlatform() !== 'android') throw new Error('The native file picker is available in the Android app.');
+  return AFGOfflineModels.pickModelFile();
+}
+
 export async function loadNativeLlamaModel(path: string, contextSize = 2048, threads = 4): Promise<void> {
   if (Capacitor.getPlatform() !== 'android') throw new Error('Native llama.cpp is only available in the Android app.');
   await AFGOfflineModels.loadModel({ path, contextSize, threads });
