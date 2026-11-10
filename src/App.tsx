@@ -719,9 +719,7 @@ export default function App() {
       setMessages((previous) => previous.map((message) => message.id === assistantId ? { ...message, isStreaming: false } : message));
     } catch {
       const supportReference = requestId ? (language === 'dari' ? `\nشناسه پیگیری: ${requestId}` : `\nRequest ID: ${requestId}`) : '';
-      const userFacingError = (language === 'dari'
-        ? 'پاسخ کامل نشد. پیام شما باقی مانده است؛ اتصال و مدل را بررسی کرده و دوباره تلاش کنید.'
-        : 'The response could not be completed. Your prompt is preserved; check the connection and model, then retry.') + supportReference;
+      const userFacingError = appText.responseError + supportReference;
 
       if (abortController.signal.aborted) {
         const cancelledContent = fullContent.trim() || 'Generation cancelled.';
