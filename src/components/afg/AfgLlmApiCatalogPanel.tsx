@@ -60,7 +60,7 @@ export const AfgLlmApiCatalogPanel:React.FC<{language:Language}>=({language})=>{
   registration:label('Account required','ثبت‌نام لازم'),
   unknown:label('Not confirmed','تأیید نشده'),
  }[value]||value);
- return <section className="space-y-3 rounded-2xl border border-violet-500/20 bg-violet-500/[0.04] p-4 sm:p-5">
+ return <section dir={rtl?'rtl':'ltr'} className="space-y-3 rounded-2xl border border-violet-500/20 bg-violet-500/[0.04] p-4 sm:p-5">
   <div className="flex flex-wrap items-start justify-between gap-3">
    <div className="flex items-start gap-3">
     <div className="rounded-xl border border-violet-400/30 bg-slate-950 p-2"><Activity className="h-5 w-5 text-violet-300"/></div>
