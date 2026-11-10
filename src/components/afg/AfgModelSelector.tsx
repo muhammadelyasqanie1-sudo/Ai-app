@@ -12,10 +12,10 @@ type Props = {
   loading?: boolean;
 };
 const MODEL_COPY = {
-  dari:{free:'رایگان',paid:'پولی',premium:'ویژه',unknownPrice:'قیمت نامشخص',auto:'انتخاب خودکار مدل',select:'انتخاب مدل',providers:'ارائه‌دهنده',search:'جستجوی مدل یا ارائه‌دهنده',available:'مدل موجود',notConfigured:'هنوز پیکربندی نشده',none:'هیچ ارائه‌دهنده فعالی موجود نیست',all:'همه ارائه‌دهندگان',autoDesc:'انتخاب خودکار مدل سالم',context:'زمینه',chat:'مدل گفتگو',notFound:'مدلی پیدا نشد',pricing:'هزینه‌ها و دسترسی بر اساس اطلاعات تأییدشده ارائه‌دهنده نمایش داده می‌شود.',notChat:'این مدل برای چت مستقیم نیست',premiumRequired:'اشتراک ویژه لازم است',restricted:'این مدل در دسترس نیست',notSelectable:'این مدل در گروه قابلیت خودش نمایش داده می‌شود و از ورودی چت قابل اجرا نیست.',upgrade:'برای استفاده از این مدل، طرح',disabled:'مدیر دسترسی این مدل را غیرفعال کرده است.',gotIt:'متوجه شدم'},
-  english:{free:'Free',paid:'Paid',premium:'Premium',unknownPrice:'Pricing unknown',auto:'Auto model',select:'Select model',providers:'providers',search:'Search models or providers',available:'available models',notConfigured:'Not configured yet',none:'No active providers available',all:'All providers',autoDesc:'Choose the healthiest eligible model',context:'context',chat:'Chat model',notFound:'No models found',pricing:'Pricing and access are shown only when confirmed by the provider.',notChat:'This is not a chat model',premiumRequired:'Premium subscription required',restricted:'Model access restricted',notSelectable:'This model appears in its capability group and cannot run as a chat completion.',upgrade:'Upgrade to the',disabled:'This model is disabled by the administrator.',gotIt:'Got it'},
-  pashto:{free:'وړیا',paid:'پولي',premium:'ځانګړی',unknownPrice:'بیه معلومه نه ده',auto:'اتومات ماډل',select:'ماډل وټاکئ',providers:'برابرونکي',search:'ماډل یا برابرونکی ولټوئ',available:'شته ماډلونه',notConfigured:'لا نه دی تنظیم شوی',none:'فعال برابرونکی نشته',all:'ټول برابرونکي',autoDesc:'تر ټولو روغ او مناسب ماډل په خپله وټاکئ',context:'د متن ظرفیت',chat:'د خبرو ماډل',notFound:'ماډل ونه موندل شو',pricing:'بیه او لاسرسی یوازې د برابرونکي د تایید شوو معلوماتو له مخې ښودل کېږي.',notChat:'دا د مستقیمو خبرو ماډل نه دی',premiumRequired:'ځانګړي ګډون ته اړتیا ده',restricted:'دې ماډل ته لاسرسی محدود دی',notSelectable:'دا ماډل د خپلې وړتیا په ډله کې ښودل کېږي او د چټ د ځواب لپاره نه چلېږي.',upgrade:'د دې ماډل لپاره دا ګډون لوړ کړئ:',disabled:'مدیر دې ماډل ته لاسرسی بند کړی دی.',gotIt:'پوه شوم'},
-  arabic:{free:'مجاني',paid:'مدفوع',premium:'مميز',unknownPrice:'السعر غير معروف',auto:'النموذج التلقائي',select:'اختر نموذجاً',providers:'المزوّدون',search:'ابحث عن نموذج أو مزوّد',available:'نماذج متاحة',notConfigured:'لم يتم الإعداد بعد',none:'لا يوجد مزوّد نشط',all:'جميع المزوّدين',autoDesc:'اختر النموذج المؤهل والأكثر استقراراً تلقائياً',context:'سياق',chat:'نموذج محادثة',notFound:'لم يتم العثور على نماذج',pricing:'يتم عرض السعر وإمكانية الوصول فقط عند تأكيدهما من المزوّد.',notChat:'هذا ليس نموذجاً للمحادثة المباشرة',premiumRequired:'يتطلب اشتراكاً مميزاً',restricted:'الوصول إلى النموذج مقيّد',notSelectable:'يظهر هذا النموذج ضمن فئة قدراته ولا يعمل كإكمال للمحادثة.',upgrade:'قم بترقية خطتك إلى',disabled:'قام المسؤول بتعطيل الوصول إلى هذا النموذج.',gotIt:'حسناً'}
+  dari:{free:'رایگان',paid:'پولی',premium:'ویژه',unknownPrice:'قیمت نامشخص',auto:'انتخاب خودکار مدل',select:'انتخاب مدل',providers:'ارائه‌دهنده',search:'جستجوی مدل یا ارائه‌دهنده',available:'مدل موجود',notConfigured:'هنوز پیکربندی نشده',none:'هیچ ارائه‌دهنده فعالی موجود نیست',all:'همه ارائه‌دهندگان',autoDesc:'انتخاب خودکار مدل سالم',context:'زمینه',chat:'مدل گفتگو',notFound:'مدلی پیدا نشد',pricing:'هزینه‌ها و دسترسی بر اساس اطلاعات تأییدشده ارائه‌دهنده نمایش داده می‌شود.',notChat:'این مدل برای چت مستقیم نیست',premiumRequired:'اشتراک ویژه لازم است',restricted:'این مدل در دسترس نیست',notSelectable:'این مدل در گروه قابلیت خودش نمایش داده می‌شود و از ورودی چت قابل اجرا نیست.',upgrade:'برای استفاده از این مدل، طرح',disabled:'مدیر دسترسی این مدل را غیرفعال کرده است.',gotIt:'متوجه شدم',close:'بستن'},
+  english:{free:'Free',paid:'Paid',premium:'Premium',unknownPrice:'Pricing unknown',auto:'Auto model',select:'Select model',providers:'providers',search:'Search models or providers',available:'available models',notConfigured:'Not configured yet',none:'No active providers available',all:'All providers',autoDesc:'Choose the healthiest eligible model',context:'context',chat:'Chat model',notFound:'No models found',pricing:'Pricing and access are shown only when confirmed by the provider.',notChat:'This is not a chat model',premiumRequired:'Premium subscription required',restricted:'Model access restricted',notSelectable:'This model appears in its capability group and cannot run as a chat completion.',upgrade:'Upgrade to the',disabled:'This model is disabled by the administrator.',gotIt:'Got it',close:'Close'},
+  pashto:{free:'وړیا',paid:'پولي',premium:'ځانګړی',unknownPrice:'بیه معلومه نه ده',auto:'اتومات ماډل',select:'ماډل وټاکئ',providers:'برابرونکي',search:'ماډل یا برابرونکی ولټوئ',available:'شته ماډلونه',notConfigured:'لا نه دی تنظیم شوی',none:'فعال برابرونکی نشته',all:'ټول برابرونکي',autoDesc:'تر ټولو روغ او مناسب ماډل په خپله وټاکئ',context:'د متن ظرفیت',chat:'د خبرو ماډل',notFound:'ماډل ونه موندل شو',pricing:'بیه او لاسرسی یوازې د برابرونکي د تایید شوو معلوماتو له مخې ښودل کېږي.',notChat:'دا د مستقیمو خبرو ماډل نه دی',premiumRequired:'ځانګړي ګډون ته اړتیا ده',restricted:'دې ماډل ته لاسرسی محدود دی',notSelectable:'دا ماډل د خپلې وړتیا په ډله کې ښودل کېږي او د چټ د ځواب لپاره نه چلېږي.',upgrade:'د دې ماډل لپاره دا ګډون لوړ کړئ:',disabled:'مدیر دې ماډل ته لاسرسی بند کړی دی.',gotIt:'پوه شوم',close:'بندول'},
+  arabic:{free:'مجاني',paid:'مدفوع',premium:'مميز',unknownPrice:'السعر غير معروف',auto:'النموذج التلقائي',select:'اختر نموذجاً',providers:'المزوّدون',search:'ابحث عن نموذج أو مزوّد',available:'نماذج متاحة',notConfigured:'لم يتم الإعداد بعد',none:'لا يوجد مزوّد نشط',all:'جميع المزوّدين',autoDesc:'اختر النموذج المؤهل والأكثر استقراراً تلقائياً',context:'سياق',chat:'نموذج محادثة',notFound:'لم يتم العثور على نماذج',pricing:'يتم عرض السعر وإمكانية الوصول فقط عند تأكيدهما من المزوّد.',notChat:'هذا ليس نموذجاً للمحادثة المباشرة',premiumRequired:'يتطلب اشتراكاً مميزاً',restricted:'الوصول إلى النموذج مقيّد',notSelectable:'يظهر هذا النموذج ضمن فئة قدراته ولا يعمل كإكمال للمحادثة.',upgrade:'قم بترقية خطتك إلى',disabled:'قام المسؤول بتعطيل الوصول إلى هذا النموذج.',gotIt:'حسناً',close:'إغلاق'}
 } as const;
 
 const priceLabel = (model: AfgModelOption, language: Language) => {
@@ -46,6 +46,13 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
   const locale = language === 'dari' || language === 'pashto' || language === 'arabic' ? language : 'english';
   const rtl = ['dari','pashto','persian','arabic','urdu'].includes(language);
   const c = MODEL_COPY[locale];
+  const dari = locale === 'dari';
+  const categories = {
+    dari:{chat:'مدل‌های چت',coding:'مدل‌های کدنویسی',image:'مدل‌های تصویر',video:'مدل‌های ویدیو',audio:'مدل‌های صوتی',vision:'درک تصویر',web:'مدل‌های وب',embedding:'مدل‌های برداری',other:'سایر مدل‌ها'},
+    english:{chat:'Chat models',coding:'Coding models',image:'Image models',video:'Video models',audio:'Audio models',vision:'Image understanding',web:'Web models',embedding:'Embedding models',other:'Other models'},
+    pashto:{chat:'د خبرو ماډلونه',coding:'د کوډ لیکلو ماډلونه',image:'د انځور ماډلونه',video:'د ویډیو ماډلونه',audio:'غږیز ماډلونه',vision:'د انځور پېژندنه',web:'وېب ماډلونه',embedding:'د ویکتور ماډلونه',other:'نور ماډلونه'},
+    arabic:{chat:'نماذج المحادثة',coding:'نماذج البرمجة',image:'نماذج الصور',video:'نماذج الفيديو',audio:'النماذج الصوتية',vision:'فهم الصور',web:'نماذج الويب',embedding:'نماذج التضمين',other:'نماذج أخرى'}
+  }[locale];
   const selected = models.find(m => selectedModel === m.providerId + '::' + m.id);
   const providerEntries = useMemo(() => {
     const ids = Array.from(new Set(models.map((model) => model.providerId)));
@@ -84,9 +91,7 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
       return 'other';
     };
     const order = ['chat','coding','image','video','audio','vision','web','embedding','other'];
-    const labels: Record<string,string> = dari
-      ? {chat:'مدل‌های چت',coding:'مدل‌های کدنویسی',image:'مدل‌های تصویر',video:'مدل‌های ویدیو',audio:'مدل‌های صوتی',vision:'درک تصویر',web:'مدل‌های وب',embedding:'مدل‌های برداری',other:'سایر مدل‌ها'}
-      : {chat:'Chat models',coding:'Coding models',image:'Image models',video:'Video models',audio:'Audio models',vision:'Image understanding',web:'Web models',embedding:'Embedding models',other:'Other models'};
+    const labels: Record<string,string> = categories;
     return order.map(category => ({
       category,
       label: labels[category],
@@ -105,18 +110,18 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
   };
   return <>
     <button type="button" disabled={loading} onClick={() => { setSelectedProvider(null); setQuery(''); setOpen(true); }} aria-haspopup="dialog" aria-expanded={open}
-      className="afg-model-trigger flex min-w-0 items-center gap-2 rounded-full border px-3 py-2 text-sm">
+      dir={rtl?"rtl":"ltr"} className="afg-model-trigger flex min-w-0 items-center gap-2 rounded-full border px-3 py-2 text-sm">
       {selected ? <ProviderIcon provider={selected.providerId} model={selected.id} /> : <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-200 text-slate-700">✦</span>}
       <span className="min-w-0 truncate font-semibold">{selected?.displayName || (c.auto)}</span>
       <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
     </button>
     {open && <div className="afg-model-sheet-root" role="presentation" onClick={e => { if(e.target===e.currentTarget){setOpen(false);setShowUpgrade(null);} }}>
-      <section className="afg-model-sheet" role="dialog" aria-modal="true" aria-label={c.select}>
+      <section dir={rtl?"rtl":"ltr"} className="afg-model-sheet" role="dialog" aria-modal="true" aria-label={c.select}>
         <header className="flex items-center justify-between border-b px-4 py-4">
           <div><h2 className="text-base font-semibold">{c.select}</h2><p className="mt-1 text-xs opacity-60">{selectedProvider ? providerLabel(selectedProvider) + ' · ' + models.filter((model) => model.providerId === selectedProvider).length : providerEntries.length + ' ' + c.providers}</p></div>
-          <button className="rounded-full p-2 hover:bg-black/5" onClick={()=>setOpen(false)} aria-label="Close"><X size={19}/></button>
+          <button className="rounded-full p-2 hover:bg-black/5" onClick={()=>setOpen(false)} aria-label={c.close}><X size={19}/></button>
         </header>
-        {selectedProvider && <div className="px-4 pt-3"><label className="afg-model-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={dari?'جستجوی مدل یا ارائه‌دهنده':'Search models or providers'}/></label></div>}
+        {selectedProvider && <div className="px-4 pt-3"><label className="afg-model-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={c.search}/></label></div>}
         {!selectedProvider ? <div className="afg-provider-list">
           {providerEntries.map((provider) => <button key={provider.id} type="button" disabled={!provider.available} className="afg-provider-card" onClick={() => { setSelectedProvider(provider.id); setQuery(''); }}>
             <ProviderIcon provider={provider.id} />
@@ -128,19 +133,19 @@ export const AfgModelSelector: React.FC<Props> = ({ models, selectedModel, onSel
         <div className="afg-provider-back"><button type="button" onClick={() => { setSelectedProvider(null); setQuery(''); }}>← {c.all}</button><strong>{providerLabel(selectedProvider)}</strong></div>
         <div className="afg-model-list">
           <button className={'afg-model-row '+(!selected?'is-selected':'')} onClick={()=>{onSelect('auto');setOpen(false);}}>
-            <span className="afg-brand-mark bg-slate-800 text-white">✦</span><span className="min-w-0 flex-1"><strong>Auto</strong><small>{c.autoDesc}</small></span><span className="text-xs opacity-60">AUTO</span>{!selected&&<Check size={18}/>}
+            <span className="afg-brand-mark bg-slate-800 text-white">✦</span><span className="min-w-0 flex-1"><strong>{c.auto}</strong><small>{c.autoDesc}</small></span><span className="text-xs opacity-60">AUTO</span>{!selected&&<Check size={18}/>}
           </button>
           {groups.map(group=><div key={group.category}><div className="afg-model-group-title">{group.label}</div>{group.items.map(model=>{const active=selectedModel===model.providerId+'::'+model.id;const supportedInChat=Boolean(model.capabilities?.imageGen||(model.capabilities?.text&&model.capabilities?.streaming));const disabled=!model.selectable||!supportedInChat;return <button key={model.providerId+'::'+model.id} className={'afg-model-row '+(active?'is-selected ':'')+(disabled?'is-disabled':'')} onClick={()=>choose(model)} aria-disabled={disabled}>
             <ProviderIcon provider={model.providerId} model={model.id} /><span className="min-w-0 flex-1 text-start"><strong>{model.displayName}</strong><small>{model.disabledReason || (model.contextWindow ? model.contextWindow.toLocaleString()+' '+c.context : (c.chat))}</small></span>
-            <span className="afg-model-cost">{model.requiresSubscription ? <span className="afg-premium-badge">Premium</span> : priceLabel(model)}</span>{disabled?<Lock size={16}/>:active?<Check size={18}/>:null}
+            <span className="afg-model-cost">{model.requiresSubscription ? <span className="afg-premium-badge">{c.premium}</span> : priceLabel(model,language)}</span>{disabled?<Lock size={16}/>:active?<Check size={18}/>:null}
           </button>;})}</div>)}
           {!groups.length&&<p className="p-6 text-center text-sm opacity-60">{c.notFound}</p>}
         </div></>}
         <footer className="border-t px-4 py-3 text-xs opacity-60">{c.pricing}</footer>
       </section>
     </div>}
-    {showUpgrade&&<div className="afg-model-sheet-root" onClick={e=>{if(e.target===e.currentTarget){setShowUpgrade(null);setOpen(false);}}}><section className="afg-model-paywall" role="dialog" aria-modal="true">
-      <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-amber-100 text-amber-700"><Lock/></div><h3 className="text-lg font-semibold">{showUpgrade.selectable && !showUpgrade.capabilities?.imageGen && !(showUpgrade.capabilities?.text && showUpgrade.capabilities?.streaming) ? (c.notChat) : showUpgrade.requiresSubscription ? (c.premiumRequired) : (c.restricted)}</h3><p className="mt-2 text-sm opacity-70">{showUpgrade.selectable && !showUpgrade.capabilities?.imageGen && !(showUpgrade.capabilities?.text && showUpgrade.capabilities?.streaming) ? (c.notSelectable) : showUpgrade.requiresSubscription ? (dari ? 'برای استفاده از این مدل، طرح '+String(showUpgrade.accessTier||'Pro').toUpperCase()+' را فعال کنید.' : 'Upgrade to the '+String(showUpgrade.accessTier||'Pro').toUpperCase()+' plan to use this model.') : (showUpgrade.disabledReason || (c.disabled))}</p><button className="afg-model-close mt-5 w-full" onClick={()=>{setShowUpgrade(null);setOpen(false);}}>{c.gotIt}</button>
+    {showUpgrade&&<div className="afg-model-sheet-root" onClick={e=>{if(e.target===e.currentTarget){setShowUpgrade(null);setOpen(false);}}}><section dir={rtl?"rtl":"ltr"} className="afg-model-paywall" role="dialog" aria-modal="true">
+      <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-amber-100 text-amber-700"><Lock/></div><h3 className="text-lg font-semibold">{showUpgrade.selectable && !showUpgrade.capabilities?.imageGen && !(showUpgrade.capabilities?.text && showUpgrade.capabilities?.streaming) ? (c.notChat) : showUpgrade.requiresSubscription ? (c.premiumRequired) : (c.restricted)}</h3><p className="mt-2 text-sm opacity-70">{showUpgrade.selectable && !showUpgrade.capabilities?.imageGen && !(showUpgrade.capabilities?.text && showUpgrade.capabilities?.streaming) ? (c.notSelectable) : showUpgrade.requiresSubscription ? (locale==='dari' ? 'برای استفاده از این مدل، طرح '+String(showUpgrade.accessTier||'Pro').toUpperCase()+' را فعال کنید.' : locale==='pashto' ? 'د دې ماډل لپاره د '+String(showUpgrade.accessTier||'Pro').toUpperCase()+' ګډون فعال کړئ.' : locale==='arabic' ? 'فعّل خطة '+String(showUpgrade.accessTier||'Pro').toUpperCase()+' لاستخدام هذا النموذج.' : 'Upgrade to the '+String(showUpgrade.accessTier||'Pro').toUpperCase()+' plan to use this model.') : (showUpgrade.disabledReason || (c.disabled))}</p><button className="afg-model-close mt-5 w-full" onClick={()=>{setShowUpgrade(null);setOpen(false);}}>{c.gotIt}</button>
     </section></div>}
   </>;
 };
