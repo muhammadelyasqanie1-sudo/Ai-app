@@ -110,7 +110,7 @@ export const AfgAuthGate: React.FC<Props> = ({ language, onContinueGuest, onAuth
     finally { setBusy(false); }
   };
   const rtl=language==='dari';
-  return <main className="afg-auth-screen" dir={rtl?'rtl':'ltr'} lang={rtl?'fa-AF':'en'}>
+  return <main className="afg-auth-screen" dir={rtl?'rtl':'ltr'} lang={language==='dari'?'fa-AF':language==='pashto'?'ps-AF':language==='arabic'?'ar':'en-US'}>
     <div className="afg-auth-aurora" aria-hidden="true"><i/><i/><i/></div>
     <div className="afg-auth-grid" aria-hidden="true"/>
     <section className="afg-auth-card">
