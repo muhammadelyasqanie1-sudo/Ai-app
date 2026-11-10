@@ -7,6 +7,7 @@ import { assessOfflineModelFit, scanOfflineDevice, type OfflineDeviceProfile, ty
 import { downloadGGUF, listOfflineDownloads, pauseGGUFDownload, removeOfflineModel, usesNativeOfflineDownloads, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
 import { clearOfflineChatMessages, loadOfflineChatMessages, saveOfflineChatMessages, type OfflineChatMessage } from '../../lib/offlineChatStorage';
 import { generateNativeLlamaResponse, getNativeLlamaRuntimeInfo, loadNativeLlamaModel, unloadNativeLlamaModel } from '../../lib/offlineLlamaRuntime';
+import { generateDesktopLocalResponse, getDesktopLocalRuntimeInfo } from '../../lib/offlineDesktopRuntime';
 
 type CatalogModel = {
   model_id: string;
@@ -75,6 +76,9 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const [webGpuAvailable, setWebGpuAvailable] = useState(false);
   const [runtimeBannerDismissed, setRuntimeBannerDismissed] = useState(false);
   const [nativeRuntimeAvailable, setNativeRuntimeAvailable] = useState(false);
+  const [desktopRuntimeAvailable, setDesktopRuntimeAvailable] = useState(false);
+  const [desktopModelId, setDesktopModelId] = useState('');
+  const [desktopConnectBusy, setDesktopConnectBusy] = useState(false);
   const [activeOfflineModelLabel, setActiveOfflineModelLabel] = useState('');
   const [runtimeMessage, setRuntimeMessage] = useState('');
   const [storage, setStorage] = useState<{ usage?: number; quota?: number }>({});
@@ -238,6 +242,13 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       } catch { if (active) setNativeRuntimeAvailable(false); }
       if (!active) return;
       const nativeMessage = locale === 'dari' ? 'موتور بومی llama.cpp آماده است؛ مدل‌های GGUF روی همین دستگاه اجرا می‌شوند.' : 'Native llama.cpp CPU runtime is ready for local GGUF inference.';
+      let desktopAvailable = false;
+      if (!nativeAvailable) {
+        const desktopInfo = await getDesktopLocalRuntimeInfo();
+        desktopAvailable = desktopInfo.available;
+        if (active) { setDesktopRuntimeAvailable(desktopAvailable); setDesktopModelId(desktopInfo.models[0]?.id || ''); }
+      }
+      const desktopMessage = locale === 'dari' ? 'موتور محلی ویندوز شناسایی شد؛ گفتگو روی همین کمپیوتر اجرا می‌شود.' : 'A local Windows llama.cpp server was detected on this computer.';
       const { prebuiltAppConfig } = await import('@mlc-ai/web-llm');
       if (!active) return;
       const catalog = (prebuiltAppConfig.model_list || []) as CatalogModel[];
@@ -246,8 +257,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       const gpu = (navigator as unknown as { gpu?: { requestAdapter: () => Promise<unknown> } }).gpu;
       if (!gpu) {
         setWebGpuAvailable(false);
-        setRuntime(nativeAvailable ? 'ready' : 'unsupported');
-        setRuntimeMessage(nativeAvailable ? nativeMessage : copy.unsupported);
+        setRuntime(nativeAvailable || desktopAvailable ? 'ready' : 'unsupported');
+        setRuntimeMessage(nativeAvailable ? nativeMessage : desktopAvailable ? desktopMessage : copy.unsupported);
         if (navigator.storage?.estimate) { const estimate = await navigator.storage.estimate(); if (active) setStorage({ usage: estimate.usage, quota: estimate.quota }); }
         return;
       }
@@ -256,17 +267,17 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
         if (!active) return;
         if (!adapter) {
           setWebGpuAvailable(false);
-          setRuntime(nativeAvailable ? 'ready' : 'unsupported');
-          setRuntimeMessage(nativeAvailable ? nativeMessage : copy.unsupported);
+          setRuntime(nativeAvailable || desktopAvailable ? 'ready' : 'unsupported');
+          setRuntimeMessage(nativeAvailable ? nativeMessage : desktopAvailable ? desktopMessage : copy.unsupported);
           return;
         }
         setWebGpuAvailable(true);
         setRuntime('ready');
-        setRuntimeMessage(nativeAvailable ? nativeMessage + ' WebGPU is also available.' : copy.compatible);
+        setRuntimeMessage(nativeAvailable ? nativeMessage + ' WebGPU is also available.' : desktopAvailable ? desktopMessage + ' WebGPU is also available.' : copy.compatible);
       } catch {
         setWebGpuAvailable(false);
-        setRuntime(nativeAvailable ? 'ready' : 'unsupported');
-        setRuntimeMessage(nativeAvailable ? nativeMessage : copy.unsupported);
+        setRuntime(nativeAvailable || desktopAvailable ? 'ready' : 'unsupported');
+        setRuntimeMessage(nativeAvailable ? nativeMessage : desktopAvailable ? desktopMessage : copy.unsupported);
       }
       if (navigator.storage?.estimate) { const estimate = await navigator.storage.estimate(); if (active) setStorage({ usage: estimate.usage, quota: estimate.quota }); }
     })();
@@ -499,6 +510,26 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     } catch (error) { setRuntimeMessage(error instanceof Error ? error.message : copy.failed); }
     finally { setBusy(false); setProgressText(''); }
   };
+  const connectDesktopRuntime = async () => {
+    if (desktopConnectBusy) return;
+    setDesktopConnectBusy(true);
+    try {
+      const info = await getDesktopLocalRuntimeInfo();
+      if (!info.available || !info.models.length) throw new Error(info.reason || 'No local model is loaded.');
+      const modelId = info.models[0].id;
+      engineRef.current = {
+        chat: { completions: { create: async (request: { messages: Array<{ role: string; content: string }>; max_tokens?: number }) => ({ choices: [{ message: { content: await generateDesktopLocalResponse(modelId, request.messages, request.max_tokens || 384) } }] }) } },
+        unload: async () => undefined,
+      };
+      engineModelIdRef.current = 'desktop-local:' + modelId;
+      setDesktopRuntimeAvailable(true); setDesktopModelId(modelId); setSelectedId('desktop-local:' + modelId);
+      setActiveOfflineModelLabel('Windows local · ' + modelId); setRuntime('ready');
+      setRuntimeMessage(offlineText('موتور محلی وصل شد؛ پیام‌ها از کمپیوتر خارج نمی‌شوند.','Local desktop runtime connected; prompts stay on this computer.'));
+      setViewMode('chat');
+    } catch (error) { setDesktopRuntimeAvailable(false); setRuntimeMessage(error instanceof Error ? error.message : copy.failed); }
+    finally { setDesktopConnectBusy(false); }
+  };
+
   const clearCurrentOfflineChat = async () => {
     setMessages([]);
     await clearOfflineChatMessages(selectedId).catch(() => undefined);
@@ -549,6 +580,13 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       <div><div className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-600"><WifiOff size={14}/>{offlineText('بدون وابستگی به سرور','Server-independent')}</div><h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{viewMode === 'models' ? (offlineText('مدل‌های آفلاین','Offline Models')) : copy.title}</h1><p className="mt-2 max-w-2xl text-sm opacity-70">{viewMode === 'models' ? (offlineText('مدل‌ها را جست‌وجو، بررسی، دانلود و مدیریت کن.','Discover, inspect, download and manage local AI models.')) : copy.subtitle}</p></div>
       <div className="rounded-2xl border p-3 text-end"><div className="flex items-center gap-2 text-xs opacity-70"><HardDrive size={15}/>{copy.storage}</div><div className="mt-1 text-sm font-bold">{formatBytes(storage.usage)} / {formatBytes(storage.quota)}</div></div>
     </header>
+
+    {device?.platform === 'desktop' && <section className="space-y-3 rounded-[24px] border border-cyan-400/25 bg-cyan-400/5 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><h2 className="font-bold">{offlineText('موتور آفلاین ویندوز','Windows local AI engine')}</h2><p className="mt-1 text-xs opacity-70">{offlineText('از llama.cpp server روی همین کمپیوتر استفاده کن.','Use a llama.cpp server running locally on this PC. No cloud API is used.')}</p></div><span className={'rounded-full px-2 py-1 text-[10px] font-semibold ' + (desktopRuntimeAvailable ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-700')}>{desktopRuntimeAvailable ? offlineText('موجود','Detected') : offlineText('قطع','Not connected')}</span></div>
+      <p className="text-xs opacity-65">{offlineText('آدرس ثابت: 127.0.0.1:8080. llama-server را با مدل GGUF اجرا کن و CORS را فقط برای نشانی AFG AI اجازه بده.','Fixed endpoint: 127.0.0.1:8080. Start llama-server with a GGUF model and allow only your AFG AI origin in CORS.')}</p>
+      <button type="button" onClick={() => void connectDesktopRuntime()} disabled={desktopConnectBusy} className="rounded-xl bg-cyan-500 px-4 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-50">{desktopConnectBusy ? offlineText('در حال اتصال…','Connecting…') : offlineText('اتصال به مدل محلی','Connect local model')}</button>
+      {desktopRuntimeAvailable && desktopModelId && <p className="text-xs text-emerald-600">{offlineText('مدل شناسایی‌شده:','Detected model:')} {desktopModelId}</p>}
+    </section>}
 
     <nav className="flex gap-2 rounded-xl border p-1" aria-label={offlineText("بخش‌های آفلاین","Offline sections")}><button type="button" onClick={() => setViewMode("chat")} className={"flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold " + (viewMode === "chat" ? "bg-cyan-500 text-slate-950" : "opacity-65")}>{offlineText("گفت‌وگوی آفلاین","Offline Chat")}</button><button type="button" onClick={() => setViewMode("models")} className={"flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold " + (viewMode === "models" ? "bg-cyan-500 text-slate-950" : "opacity-65")}>{offlineText("مدیریت مدل‌ها","Models")}</button></nav>
 
