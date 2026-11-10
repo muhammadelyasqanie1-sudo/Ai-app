@@ -70,7 +70,7 @@ export const AfgFileLibrary:React.FC<{language:Language}>=({language})=>{
     }catch(e){setError(e instanceof Error?e.message:'Delete failed.');}
     finally{setBusy(false);}
   };
-  return <div className="space-y-4">
+  return <div dir={['dari','pashto','persian','arabic','urdu'].includes(language) ? "rtl" : "ltr"} className="space-y-4">
     <div className="rounded-2xl border border-cyan-500/25 bg-cyan-950/20 p-4 space-y-2">
       <div className="flex items-center gap-2 text-cyan-200"><ShieldCheck className="h-5 w-5"/><strong>{c.title}</strong></div>
       <p className="text-xs leading-5 text-slate-300">{c.privacy}</p>
