@@ -22,6 +22,7 @@ export const AfgCinematicIntro: React.FC<{
   reduced = false,
 }) => {
   const t = experienceCopy(language);
+  const rtl = ['dari','pashto','persian','arabic','urdu'].includes(language);
   const audio = useRef<AudioContext | null>(null);
   const [sound, setSound] = useState(false);
   const [soundError, setSoundError] = useState(false);
@@ -76,6 +77,7 @@ export const AfgCinematicIntro: React.FC<{
   };
   return (
     <section
+      dir={rtl ? "rtl" : "ltr"}
       className={`afg-welcome ${embedded ? "is-embedded" : ""}`}
       data-still={reduced}
     >

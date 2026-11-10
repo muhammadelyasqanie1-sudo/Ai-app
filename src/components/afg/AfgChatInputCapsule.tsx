@@ -39,6 +39,13 @@ interface AfgChatInputCapsuleProps {
   permissionLevel?: 'ask' | 'guided' | 'full';
 }
 
+const CHAT_INPUT_COPY={
+ dari:{recordFailed:'ضبط صدا ناموفق بود.',mic:'دسترسی به میکروفون ممکن نیست.',uploads:'بارگذاری فایل، تصویر و لینک هنوز به سرور وصل نیست؛ فعلاً فقط پیام متنی ارسال می‌شود.',model:'مدل',plan:'برنامه‌ریزی',fileAdmin:'بارگذاری فایل هنوز توسط مدیر فعال نشده است',voiceDisabled:'قابلیت صوتی در تنظیمات غیرفعال است',noStt:'ارائه‌دهنده گفتار به متن در دسترس نیست',stopGen:'توقف تولید',stop:'توقف',uploadStorage:'بارگذاری فایل تا زمان فعال‌سازی ذخیره‌سازی سرور غیرفعال است.',noModel:'مدل تأییدشده موجود نیست',voice:'ورودی صوتی'},
+ english:{recordFailed:'Audio recording failed.',mic:'Microphone access is unavailable.',uploads:'File, image, and link uploads are not connected to the server yet. Text messages only are supported.',model:'Model',plan:'Plan mode',fileAdmin:'File uploads are not enabled by the administrator',voiceDisabled:'Voice is disabled in settings',noStt:'No verified speech-to-text provider is available',stopGen:'Stop generation',stop:'Stop',uploadStorage:'File uploads are unavailable until server storage is enabled.',noModel:'No verified model available',voice:'Voice input'},
+ pashto:{recordFailed:'د غږ ثبتول ناکام شول.',mic:'مایکروفون ته لاسرسی نشته.',uploads:'د فایل، انځور او لینک پورته کول لا سرور ته نه دي نښلول شوي؛ اوس یوازې متني پیغامونه لېږل کېږي.',model:'ماډل',plan:'د پلان حالت',fileAdmin:'د مدیر له خوا د فایل پورته کول نه دي فعال شوي',voiceDisabled:'غږیزه وړتیا په امستنو کې بنده ده',noStt:'د وینا متن ته اړولو تایید شوی برابرونکی نشته',stopGen:'تولید درول',stop:'درول',uploadStorage:'د سرور زېرمه تر فعالېدو پورې د فایل پورته کول بند دي.',noModel:'تایید شوی ماډل نشته',voice:'غږیز داخلول'},
+ arabic:{recordFailed:'فشل تسجيل الصوت.',mic:'الوصول إلى الميكروفون غير متاح.',uploads:'لم يتم ربط رفع الملفات والصور والروابط بالخادم بعد؛ الرسائل النصية فقط مدعومة حالياً.',model:'النموذج',plan:'وضع التخطيط',fileAdmin:'رفع الملفات غير مفعّل من المسؤول',voiceDisabled:'الصوت معطّل في الإعدادات',noStt:'لا يتوفر مزوّد موثّق لتحويل الكلام إلى نص',stopGen:'إيقاف التوليد',stop:'إيقاف',uploadStorage:'رفع الملفات غير متاح حتى تفعيل تخزين الخادم.',noModel:'لا يتوفر نموذج تم التحقق منه',voice:'إدخال صوتي'}
+} as const;
+
 export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   onSendMessage,
   disabled = false,
@@ -58,6 +65,9 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   permissionLevel = 'guided',
 }) => {
   const t = translations[language];
+  const locale = language === 'dari' || language === 'pashto' || language === 'arabic' ? language : 'english';
+  const rtl = ['dari','pashto','persian','arabic','urdu'].includes(language);
+  const c = CHAT_INPUT_COPY[locale];
   // Keep an unsent draft on this device so navigation, reloads or a temporary
   // network interruption do not silently erase what the user was writing.
   const [inputText, setInputText] = useState(() => {
@@ -159,7 +169,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
         consent.transcribe = false;
         stream.getTracks().forEach(track => track.stop());
         mediaStreamRef.current = null;
-        setVoiceRecordingError(language === 'dari' ? 'ضبط صدا ناموفق بود.' : 'Audio recording failed.');
+        setVoiceRecordingError(c.recordFailed);
         setIsRecording(false);
       };
       recorder.onstop = () => {
@@ -178,7 +188,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
               method: 'POST',
               credentials: 'include',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ mimeType: blob.type || 'audio/webm', audioBase64: dataUrl.split(',')[1] || '', language: language === 'dari' ? 'fa' : 'en' }),
+              body: JSON.stringify({ mimeType: blob.type || 'audio/webm', audioBase64: dataUrl.split(',')[1] || '', language: language === 'dari' ? 'fa' : language === 'pashto' ? 'ps' : language === 'arabic' ? 'ar' : 'en' }),
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Speech recognition failed.');
@@ -194,7 +204,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
     } catch {
       mediaStreamRef.current?.getTracks().forEach(track => track.stop());
       mediaStreamRef.current = null;
-      setVoiceRecordingError(language === 'dari' ? 'دسترسی به میکروفون ممکن نیست.' : 'Microphone access is unavailable.');
+      setVoiceRecordingError(c.mic);
       setIsRecording(false);
     }
   };
@@ -262,7 +272,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
   const tokenEstimate = Math.ceil(charCount / 4);
 
   return (
-    <div className="afg-composer-shell w-full max-w-4xl mx-auto relative px-2 sm:px-4">
+    <div dir={rtl?"rtl":"ltr"} className="afg-composer-shell w-full max-w-4xl mx-auto relative px-2 sm:px-4">
       
       {/* Hidden File Inputs */}
       <input
@@ -285,7 +295,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
       {isMenuOpen && (
         <div ref={menuRef} className="absolute -top-24 right-4 z-50 w-72 rounded-2xl bg-[#091126]/95 border border-amber-500/40 p-4 shadow-xl">
           <p className="text-xs leading-6 text-amber-100">
-            {language === 'dari' ? 'بارگذاری فایل، تصویر و لینک هنوز به سرور وصل نیست؛ فعلاً فقط پیام متنی ارسال می‌شود.' : 'File, image, and link uploads are not connected to the server yet. Text messages only are supported.'}
+            {c.uploads}
           </p>
         </div>
       )}
@@ -331,7 +341,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
 
       {/* Compact Claude-inspired model trigger with grouped bottom sheet. */}
       <div className="afg-model-chip flex items-center justify-between gap-2 px-3 py-1.5 mb-2 rounded-full border">
-        <div className="flex min-w-0 flex-wrap items-center gap-2"><span className="text-xs font-semibold">{language === 'dari' ? 'مدل' : 'Model'}</span>{(planMode || thinkingLevel !== 'standard') && <span className="rounded-full border px-2 py-1 text-[9px] font-semibold">{planMode ? (language === 'dari' ? 'برنامه‌ریزی' : 'Plan mode') : '🧠 ' + thinkingLevel}</span>}</div>
+        <div className="flex min-w-0 flex-wrap items-center gap-2"><span className="text-xs font-semibold">{c.model}</span>{(planMode || thinkingLevel !== 'standard') && <span className="rounded-full border px-2 py-1 text-[9px] font-semibold">{planMode ? (c.plan) : '🧠 ' + thinkingLevel}</span>}</div>
         <AfgModelSelector models={modelOptions} selectedModel={selectedModel} onSelect={onSelectModel} language={language} loading={modelsLoading} />
       </div>
 
@@ -350,7 +360,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
               ? 'bg-gradient-to-tr from-cyan-400 to-sky-300 text-slate-950 rotate-45 shadow-[0_0_20px_#00e5ff]'
               : fileUploadEnabled ? 'bg-gradient-to-b from-[#00b4d8] to-[#0077b6] text-white hover:from-[#48cae4] hover:to-[#0096c7] shadow-[0_4px_15px_rgba(0,180,216,0.5)] active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50'
           }`}
-          title={fileUploadEnabled ? t.attachModalTitle : (language === 'dari' ? 'بارگذاری فایل هنوز توسط مدیر فعال نشده است' : 'File uploads are not enabled by the administrator')}
+          title={fileUploadEnabled ? t.attachModalTitle : (c.fileAdmin)}
           aria-label="Add Attachment"
         >
           <Plus className="w-6 h-6 stroke-[2.5]" />
@@ -398,7 +408,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
               ? 'bg-red-500/20 text-red-400 animate-pulse ring-2 ring-red-400'
               : voiceAvailable ? 'text-slate-400 hover:text-cyan-300' : 'text-slate-700 cursor-not-allowed opacity-40'
           }`}
-          title={!voiceEnabled ? (language === 'dari' ? 'قابلیت صوتی در تنظیمات غیرفعال است' : 'Voice is disabled in settings') : (!speechToTextAvailable ? (language === 'dari' ? 'ارائه‌دهنده گفتار به متن در دسترس نیست' : 'No verified speech-to-text provider is available') : (isRecording ? t.recording : 'Voice input'))}
+          title={!voiceEnabled ? (c.voiceDisabled) : (!speechToTextAvailable ? (c.noStt) : (isRecording ? t.recording : 'Voice input'))}
           aria-label="Voice input"
         >
           {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
@@ -415,18 +425,18 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
               ? 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'
               : 'gradient-btn-cyan hover:scale-103 active:scale-97 cursor-pointer'
           }`}
-          title={isLoading ? (language === 'dari' ? 'توقف تولید' : 'Stop generation') : t.send}
+          title={isLoading ? (c.stopGen) : t.send}
           aria-label={isLoading ? 'Stop generation' : 'Send Message'}
         >
-          {isLoading ? <Square className="w-4 h-4 sm:w-5 sm:h-5 fill-current" /> : <Send className={`w-4 h-4 sm:w-5 sm:h-5 ${language === 'dari' ? 'rotate-180' : ''}`} />}
-          <span className="font-extrabold tracking-wide">{isLoading ? (language === 'dari' ? 'توقف' : 'Stop') : t.send}</span>
+          {isLoading ? <Square className="w-4 h-4 sm:w-5 sm:h-5 fill-current" /> : <Send className={`w-4 h-4 sm:w-5 sm:h-5 ${rtl ? 'rotate-180' : ''}`} />}
+          <span className="font-extrabold tracking-wide">{isLoading ? (c.stop) : t.send}</span>
         </button>
 
       </div>
 
       {isRecording && <AudioWaveform stream={mediaStreamRef.current} language={language}/>}
       {/* Transparent Character & Token Counter (fulfills user request #8) */}
-      {!fileUploadEnabled && <p className="px-4 mt-1 text-[10px] text-slate-500">{language === 'dari' ? 'بارگذاری فایل تا زمان فعال‌سازی ذخیره‌سازی سرور غیرفعال است.' : 'File uploads are unavailable until server storage is enabled.'}</p>}
+      {!fileUploadEnabled && <p className="px-4 mt-1 text-[10px] text-slate-500">{c.uploadStorage}</p>}
       <div className="flex items-center justify-between px-4 mt-1.5 text-[11px] text-slate-400">
         <div className="flex items-center gap-2">
           <span>{charCount} chars</span>
@@ -434,7 +444,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
           <span>~{tokenEstimate} tokens</span>
         </div>
         <div className="text-[10px] text-cyan-400/70 font-medium">
-          {selectedModel || (language === 'dari' ? 'مدل تأییدشده موجود نیست' : 'No verified model available')}
+          {selectedModel || (c.noModel)}
         </div>
       </div>
 

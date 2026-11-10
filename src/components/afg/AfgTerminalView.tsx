@@ -56,7 +56,8 @@ function parseSnapshot(value: unknown): WorkspaceSnapshot {
 }
 
 export function AfgTerminalView({ language }: { language: Language }) {
-  const dari = language === 'dari';
+  const locale = language === 'dari' || language === 'pashto' || language === 'arabic' ? language : 'english';
+  const rtl = ['dari','pashto','persian','arabic','urdu'].includes(language);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [signedIn, setSignedIn] = useState(false);
   const [serverAvailable, setServerAvailable] = useState(false);
@@ -145,8 +146,8 @@ export function AfgTerminalView({ language }: { language: Language }) {
     try {
       const snapshot: WorkspaceSnapshot = { fs, cwd, history: history.slice(-120), entries: entries.slice(-120) };
       localStorage.setItem(storageKey, JSON.stringify(snapshot));
-    } catch { setError(dari ? 'حافظه محلی پر شده است؛ چند فایل یا خروجی قدیمی را پاک کنید.' : 'Local storage is full. Remove some files or old terminal output.'); }
-  }, [ready, storageKey, fs, cwd, history, entries, dari]);
+    } catch { setError(text.storageError); }
+  }, [ready, storageKey, fs, cwd, history, entries, locale]);
 
   const loadAudit = useCallback(async (id: string) => {
     if (!id) return;
@@ -177,15 +178,15 @@ export function AfgTerminalView({ language }: { language: Language }) {
 
   useEffect(() => {
     if (showTokens && signedIn && serverAvailable) {
-      void loadTokens().catch(() => setError(dari ? 'فهرست توکن‌ها بارگذاری نشد.' : 'Could not load CLI tokens.'));
+      void loadTokens().catch(() => setError(text.tokensError));
     }
-  }, [showTokens, signedIn, serverAvailable, loadTokens, dari]);
+  }, [showTokens, signedIn, serverAvailable, loadTokens, locale]);
 
   useEffect(() => {
     if (session && serverAvailable) {
-      void loadAudit(session).catch(() => setError(dari ? 'تاریخچه نشست بارگذاری نشد.' : 'Could not load session history.'));
+      void loadAudit(session).catch(() => setError(text.historyError));
     }
-  }, [session, serverAvailable, loadAudit, dari]);
+  }, [session, serverAvailable, loadAudit, locale]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
@@ -210,8 +211,8 @@ export function AfgTerminalView({ language }: { language: Language }) {
   }
 
   async function executeAfgCommand(value: string): Promise<{ output: string; exitCode: number; requestId: string; durationMs: number }> {
-    if (!signedIn) throw new Error(dari ? 'برای فرمان‌های حساب AFG AI ابتدا وارد حساب شوید.' : 'Sign in to use account-level AFG AI commands.');
-    if (!session || !serverAvailable) throw new Error(dari ? 'سرویس فرمان‌های حساب موقتاً در دسترس نیست.' : 'The account command service is temporarily unavailable.');
+    if (!signedIn) throw new Error(text.signInError);
+    if (!session || !serverAvailable) throw new Error(text.serviceError);
     const startedAt = Date.now();
     const response = await fetch(apiUrl('/api/terminal/sessions/' + session + '/commands'), {
       method: 'POST', credentials: 'include', headers: postHeaders(),
@@ -340,7 +341,7 @@ export function AfgTerminalView({ language }: { language: Language }) {
   }
 
   async function revokeToken(id: string) {
-    if (!window.confirm(dari ? 'این توکن لغو شود؟' : 'Revoke this CLI token?')) return;
+    if (!window.confirm(text.revokeConfirm)) return;
     try {
       const response = await fetch(apiUrl('/api/terminal/tokens/' + id), { method: 'DELETE', credentials: 'include', headers: postHeaders() });
       const data = await response.json().catch(() => ({}));
@@ -351,14 +352,14 @@ export function AfgTerminalView({ language }: { language: Language }) {
 
   async function copy(value: string) {
     try { await navigator.clipboard.writeText(value); }
-    catch { setError(dari ? 'دسترسی به کلیپ‌بورد ممکن نشد.' : 'Clipboard access is unavailable.'); }
+    catch { setError(text.clipboardError); }
   }
 
   async function uploadLocalFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    if (file.size > 48_000) { setError(dari ? 'حداکثر اندازه هر فایل ۴۸ کیلوبایت است.' : 'Each local text file is limited to 48 KB.'); return; }
+    if (file.size > 48_000) { setError(text.fileLimit); return; }
     const name = file.name.replace(/[^a-zA-Z0-9._ -]/g, '_').slice(0, 100) || 'uploaded.txt';
     try {
       const text = await file.text();
@@ -369,81 +370,25 @@ export function AfgTerminalView({ language }: { language: Language }) {
         id: makeId(), command: 'upload ' + name, output: 'Saved locally to ' + path,
         exitCode: 0, durationMs: 0, requestId: '', createdAt: new Date().toISOString(),
       }].slice(-120));
-    } catch { setError(dari ? 'بارگذاری فایل متنی انجام نشد.' : 'Could not read that text file.'); }
+    } catch { setError(text.fileError); }
   }
 
   const filteredEntries = useMemo(() => entries.filter((item) =>
     !search || (item.command + ' ' + item.output + ' ' + item.requestId).toLowerCase().includes(search.toLowerCase())
   ), [entries, search]);
   const fileCount = Object.keys(fs.files).length;
-  const dariText = {
-    title: 'ترمینل پیشرفته AFG AI',
-    subtitle: 'محیط کاری مجازی، مدیریت فایل‌ها و فرمان‌های حساب کاربری',
-    workspace: 'فضای کاری محلی',
-    local: 'محلی و ایزوله',
-    account: signedIn ? 'حساب متصل' : 'حالت مهمان',
-    shellNotice: 'امنیت: این ترمینل به سیستم‌عامل یا فایل‌های سرور دسترسی ندارد. فایل‌های فضای کاری فقط در همین مرورگر ذخیره می‌شوند؛ اجرای مستقیم Bash، Python و Node تا زمان اتصال sandbox ایزوله فعال نیست.',
-    sessions: 'نشست‌ها',
-    newSession: 'نشست جدید',
-    upload: 'افزودن فایل',
-    run: 'اجرا',
-    placeholder: 'فرمان را بنویسید؛ مثلاً mkdir projects',
-    search: 'جستجو در خروجی',
-    empty: 'هنوز فرمانی اجرا نشده است. برای دیدن راهنما help را وارد کنید.',
-    help: 'راهنمای فرمان‌ها',
-    files: 'فایل‌ها',
-    history: 'تاریخچه',
-    tokens: 'توکن‌های CLI',
-    tokenName: 'نام توکن',
-    createToken: 'ساخت توکن',
-    revoke: 'لغو',
-    tokenWarning: 'این توکن فقط یک بار نمایش داده می‌شود. آن را در جای امن نگه دارید.',
-    copy: 'کپی',
-    clear: 'پاک‌سازی صفحه',
-    status: 'وضعیت',
-    prompt: 'فرمان',
-    output: 'خروجی',
-    duration: 'زمان اجرا',
-    commandExamples: 'فرمان‌های سریع',
-    loginHint: 'برای فرمان‌های حساب AFG AI مانند afg models list وارد حساب شوید. محیط فایل محلی بدون ورود هم قابل استفاده است.',
+  const terminalCopy = {
+    dari:{title:'ترمینل پیشرفته AFG AI',subtitle:'محیط کاری مجازی، مدیریت فایل‌ها و فرمان‌های حساب کاربری',workspace:'فضای کاری محلی',local:'محلی و ایزوله',account:signedIn?'حساب متصل':'حالت مهمان',shellNotice:'امنیت: این ترمینل به سیستم‌عامل یا فایل‌های سرور دسترسی ندارد. فایل‌های فضای کاری فقط در همین مرورگر ذخیره می‌شوند؛ اجرای مستقیم Bash، Python و Node تا زمان اتصال sandbox ایزوله فعال نیست.',sessions:'نشست‌ها',newSession:'نشست جدید',upload:'افزودن فایل',run:'اجرا',placeholder:'فرمان را بنویسید؛ مثلاً mkdir projects',search:'جستجو در خروجی',empty:'هنوز فرمانی اجرا نشده است. برای دیدن راهنما help را وارد کنید.',help:'راهنمای فرمان‌ها',files:'فایل‌ها',history:'تاریخچه',tokens:'توکن‌های CLI',tokenName:'نام توکن',createToken:'ساخت توکن',revoke:'لغو',tokenWarning:'این توکن فقط یک بار نمایش داده می‌شود. آن را در جای امن نگه دارید.',copy:'کپی',clear:'پاک‌سازی صفحه',status:'وضعیت',prompt:'فرمان',output:'خروجی',duration:'زمان اجرا',commandExamples:'فرمان‌های سریع',loginHint:'برای فرمان‌های حساب AFG AI مانند afg models list وارد حساب شوید. محیط فایل محلی بدون ورود هم قابل استفاده است.',storageError:'حافظه محلی پر شده است؛ چند فایل یا خروجی قدیمی را پاک کنید.',tokensError:'فهرست توکن‌ها بارگذاری نشد.',historyError:'تاریخچه نشست بارگذاری نشد.',signInError:'برای فرمان‌های حساب AFG AI ابتدا وارد حساب شوید.',serviceError:'سرویس فرمان‌های حساب موقتاً در دسترس نیست.',revokeConfirm:'این توکن لغو شود؟',clipboardError:'دسترسی به کلیپ‌بورد ممکن نشد.',fileLimit:'حداکثر اندازه هر فایل ۴۸ کیلوبایت است.',fileError:'بارگذاری فایل متنی انجام نشد.'},
+    english:{title:'AFG AI Advanced Terminal',subtitle:'Virtual workspace, file tools and account-level commands',workspace:'Local workspace',local:'Local & isolated',account:signedIn?'Account connected':'Guest mode',shellNotice:'Security: this terminal cannot access the host operating system or server files. Workspace files stay in this browser. Direct Bash, Python and Node execution remain disabled until an isolated sandbox runner is connected.',sessions:'Sessions',newSession:'New session',upload:'Upload file',run:'Run',placeholder:'Enter a command, e.g. mkdir projects',search:'Search output',empty:'No commands yet. Type help to see the command guide.',help:'Command guide',files:'Files',history:'History',tokens:'CLI tokens',tokenName:'Token name',createToken:'Create token',revoke:'Revoke',tokenWarning:'This token is shown only once. Store it securely.',copy:'Copy',clear:'Clear screen',status:'Status',prompt:'Command',output:'Output',duration:'Duration',commandExamples:'Quick commands',loginHint:'Sign in for AFG AI account commands such as afg models list. The local file workspace also works as a guest.',storageError:'Local storage is full. Remove some files or old terminal output.',tokensError:'Could not load CLI tokens.',historyError:'Could not load session history.',signInError:'Sign in to use account-level AFG AI commands.',serviceError:'The account command service is temporarily unavailable.',revokeConfirm:'Revoke this CLI token?',clipboardError:'Clipboard access is unavailable.',fileLimit:'Each local text file is limited to 48 KB.',fileError:'Could not read that text file.'},
+    pashto:{title:'د AFG AI پرمختللی ټرمینل',subtitle:'مجازی کاري چاپېریال، د فایلونو وسایل او د حساب فرمانونه',workspace:'ځایي کاري ځای',local:'ځایي او جلا',account:signedIn?'حساب نښلول شوی':'د مېلمه حالت',shellNotice:'امنیت: دا ټرمینل عملیاتي سیسټم یا د سرور فایلونو ته لاسرسی نه لري. فایلونه یوازې په همدې براوزر کې ساتل کېږي؛ Bash، Python او Node تر جلا sandbox پورې نه چلېږي.',sessions:'ناستې',newSession:'نوې ناسته',upload:'فایل پورته کول',run:'چلول',placeholder:'فرمان ولیکئ، لکه mkdir projects',search:'وتۍ ولټوئ',empty:'تر اوسه فرمان نشته. د لارښود لپاره help ولیکئ.',help:'د فرمانونو لارښود',files:'فایلونه',history:'تاریخچه',tokens:'د CLI ټوکنونه',tokenName:'د ټوکن نوم',createToken:'ټوکن جوړول',revoke:'لغوه کول',tokenWarning:'دا ټوکن یوازې یو ځل ښودل کېږي. په خوندي ځای کې یې وساتئ.',copy:'کاپي',clear:'پاڼه پاکول',status:'حالت',prompt:'فرمان',output:'وتۍ',duration:'د اجرا موده',commandExamples:'چټک فرمانونه',loginHint:'د afg models list په څېر د حساب فرمانونو لپاره ننوتل وکړئ. ځایي فایلونه د مېلمه په توګه هم کار کوي.',storageError:'ځایي زېرمه ډکه ده. ځینې فایلونه یا زړې وتۍ پاکې کړئ.',tokensError:'د CLI ټوکنونه بار نه شول.',historyError:'د ناستې تاریخچه بار نه شوه.',signInError:'د AFG AI د حساب فرمانونو لپاره ننوتل وکړئ.',serviceError:'د حساب د فرمانونو خدمت لنډمهاله شتون نه لري.',revokeConfirm:'دا CLI ټوکن لغوه شي؟',clipboardError:'کلیپ‌بورد ته لاسرسی نشته.',fileLimit:'د هر ځایي متن فایل حد ۴۸ کیلوبایټه دی.',fileError:'متني فایل ولوستل نه شو.'},
+    arabic:{title:'طرفية AFG AI المتقدمة',subtitle:'مساحة عمل افتراضية وأدوات ملفات وأوامر الحساب',workspace:'مساحة العمل المحلية',local:'محلي ومعزول',account:signedIn?'الحساب متصل':'وضع الضيف',shellNotice:'الأمان: لا تصل هذه الطرفية إلى نظام التشغيل أو ملفات الخادم. تُحفظ ملفات مساحة العمل في هذا المتصفح فقط؛ يظل تشغيل Bash وPython وNode معطلاً حتى ربط بيئة معزولة.',sessions:'الجلسات',newSession:'جلسة جديدة',upload:'رفع ملف',run:'تشغيل',placeholder:'أدخل أمراً، مثل mkdir projects',search:'البحث في المخرجات',empty:'لا توجد أوامر بعد. اكتب help لعرض الدليل.',help:'دليل الأوامر',files:'الملفات',history:'السجل',tokens:'رموز CLI',tokenName:'اسم الرمز',createToken:'إنشاء رمز',revoke:'إلغاء',tokenWarning:'يظهر هذا الرمز مرة واحدة فقط. احتفظ به في مكان آمن.',copy:'نسخ',clear:'مسح الشاشة',status:'الحالة',prompt:'الأمر',output:'المخرجات',duration:'مدة التنفيذ',commandExamples:'أوامر سريعة',loginHint:'سجّل الدخول لاستخدام أوامر الحساب مثل afg models list. تعمل مساحة الملفات المحلية كضيف أيضاً.',storageError:'مساحة التخزين المحلية ممتلئة. احذف بعض الملفات أو المخرجات القديمة.',tokensError:'تعذر تحميل رموز CLI.',historyError:'تعذر تحميل سجل الجلسة.',signInError:'سجّل الدخول لاستخدام أوامر حساب AFG AI.',serviceError:'خدمة أوامر الحساب غير متاحة مؤقتاً.',revokeConfirm:'هل تريد إلغاء رمز CLI هذا؟',clipboardError:'الوصول إلى الحافظة غير متاح.',fileLimit:'الحد الأقصى لكل ملف نصي محلي 48 كيلوبايت.',fileError:'تعذرت قراءة الملف النصي.'}
   };
-  const englishText = {
-    title: 'AFG AI Advanced Terminal',
-    subtitle: 'Virtual workspace, file tools and account-level commands',
-    workspace: 'Local workspace',
-    local: 'Local & isolated',
-    account: signedIn ? 'Account connected' : 'Guest mode',
-    shellNotice: 'Security: this terminal cannot access the host operating system or server files. Workspace files stay in this browser. Direct Bash, Python and Node execution remain disabled until an isolated sandbox runner is connected.',
-    sessions: 'Sessions',
-    newSession: 'New session',
-    upload: 'Upload file',
-    run: 'Run',
-    placeholder: 'Enter a command, e.g. mkdir projects',
-    search: 'Search output',
-    empty: 'No commands yet. Type help to see the command guide.',
-    help: 'Command guide',
-    files: 'Files',
-    history: 'History',
-    tokens: 'CLI tokens',
-    tokenName: 'Token name',
-    createToken: 'Create token',
-    revoke: 'Revoke',
-    tokenWarning: 'This token is shown only once. Store it securely.',
-    copy: 'Copy',
-    clear: 'Clear screen',
-    status: 'Status',
-    prompt: 'Command',
-    output: 'Output',
-    duration: 'Duration',
-    commandExamples: 'Quick commands',
-    loginHint: 'Sign in for AFG AI account commands such as afg models list. The local file workspace also works as a guest.',
-  };
-  const text = dari ? dariText : englishText;
+  const text = terminalCopy[locale];
   const workspaceLabel = cwd === '/home/user' ? '~' : cwd.replace('/home/user', '~');
   const outputText = entries.map((item) => (item.command ? '$ ' + item.command + '\n' : '') + item.output).join('\n\n');
 
   return (
-    <main className="mx-auto flex min-h-[calc(100dvh-5rem)] w-full max-w-[1500px] flex-col gap-4 p-3 pb-8 sm:p-5">
+    <main dir={rtl ? 'rtl' : 'ltr'} className="mx-auto flex min-h-[calc(100dvh-5rem)] w-full max-w-[1500px] flex-col gap-4 p-3 pb-8 sm:p-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="grid h-12 w-12 place-items-center rounded-2xl border border-cyan-400/30 bg-cyan-400/10 text-cyan-300 shadow-[0_0_28px_rgba(34,211,238,.12)]">

@@ -76,7 +76,7 @@ const copy = {
     local:'Offline model runtime', voice:'Voice capabilities', feature:'Feature availability',
     notAvailable:'Not available until the backend reports it as enabled.',
     statusError:'Could not verify backend status. Treat this feature as unavailable.',
-    language:'Language preference', languageHelp:'18 language and regional locales are selectable. Full interface translations are being rolled out; unreviewed languages currently fall back to English UI text.',
+    language:'Language preference', languageHelp:'Four primary interface languages are available: Dari, English, Pashto and Arabic.',
     adminGate:'Admin access is verified by the server; this view does not grant admin privileges.',
   },
   fa: {
@@ -97,19 +97,26 @@ const copy = {
     statusError:'بررسی وضعیت سرور ناموفق بود؛ این قابلیت غیرفعال فرض می‌شود.',
     language:'ترجیحات زبان', languageHelp:'۱۸ زبان و منطقه قابل انتخاب است. ترجمه کامل رابط کاربری به‌تدریج تکمیل می‌شود و زبان‌های ترجمه‌نشده فعلاً متن انگلیسی نمایش می‌دهند.',
     adminGate:'دسترسی مدیر توسط سرور بررسی می‌شود؛ این صفحه امتیاز مدیر ایجاد نمی‌کند.',
+  },
+  ps: {
+    search:'امستنې ولټوئ',user:'د کارونکي امستنې',admin:'د مدیر امستنې',back:'امستنو ته بېرته',configured:'وصل شو',available:'شته',setup:'چمتو کولو ته اړتیا لري',disabled:'د مدیر له خوا بند شوی',checking:'حالت کتل کېږي…',save:'خوندي کول',notConfigured:'نه دی تنظیم شوی',signIn:'د شخصي امستنو لپاره ننوتل وکړئ.',
+    disabledText:'دا ځانګړنه د پلاتفورم د مدیر له خوا بنده شوې ده.',setupText:'سرور لا د دې نښلونې فعالوالی نه دی تایید کړی. له مدیر څخه د تنظیم بشپړولو غوښتنه وکړئ.',noResults:'ستاسو د لټون سره سم امستنه نشته.',groups:['شخصي کول','ستاسو مرستیال','نښلونې','ځانګړي برابرونکي'],
+    githubConnect:'GitHub حساب ونښلوئ',githubDisconnect:'GitHub اړیکه پرې کړئ',githubReady:'GitHub OAuth د پلاتفورم له خوا تنظیم شوی. د دوام لپاره خپل حساب ونښلوئ.',openAccount:'د حساب او غوره‌توبونو کنټرول',adminIntro:'نړیوال تنظیمات او د زېربنا کنټرول یوازې د مدیر د اجازې له لارې کار کوي.',
+    models:'تایید شوي ماډلونه',noModels:'اوس مهال هېڅ تایید شوی ماډل نشته.',defaultModel:'اصلي ماډل',modelSaved:'اصلي ماډل خوندي شو.',local:'نالیکي ماډلونه',voice:'غږیزې وړتیاوې',feature:'د ځانګړنې شتون',notAvailable:'تر هغه نه شته چې سرور یې فعالوالی تایید کړي.',statusError:'د سرور حالت ونه کتل شو؛ دا ځانګړنه د نه شتون په توګه وګڼئ.',language:'د ژبې غوره‌توب',languageHelp:'د رابطې څلور اصلي ژبې شته: دري، انګلیسي، پښتو او عربي.',adminGate:'د مدیر اجازه سرور تاییدوي؛ دا پاڼه د مدیر واک نه درکوي.'
+  },
+  ar: {
+    search:'البحث في الإعدادات',user:'إعدادات المستخدم',admin:'إعدادات المسؤول',back:'العودة إلى الإعدادات',configured:'متصل',available:'متاح',setup:'يتطلب الإعداد',disabled:'معطّل بواسطة المسؤول',checking:'جارٍ التحقق…',save:'حفظ',notConfigured:'غير مُعدّ',signIn:'سجّل الدخول لضبط الإعدادات الشخصية.',
+    disabledText:'هذه الميزة معطّلة من مسؤول المنصة.',setupText:'لم يؤكد الخادم تفعيل هذا الاتصال بعد. اطلب من المسؤول إكمال الإعداد.',noResults:'لا توجد إعدادات تطابق البحث.',groups:['التخصيص','مساعدك','الاتصالات','مزودون خاصون'],
+    githubConnect:'ربط حساب GitHub',githubDisconnect:'فصل GitHub',githubReady:'تم إعداد GitHub OAuth من المنصة. اربط حسابك الشخصي للمتابعة.',openAccount:'إعدادات الحساب والتفضيلات',adminIntro:'إعدادات المنصة والبنية التحتية محمية بصلاحيات المسؤول.',
+    models:'النماذج المعتمدة',noModels:'لا تتوفر حالياً نماذج تم التحقق منها.',defaultModel:'النموذج الافتراضي',modelSaved:'تم حفظ النموذج الافتراضي.',local:'النماذج المحلية',voice:'إمكانات الصوت',feature:'توفر الميزة',notAvailable:'لن تتوفر حتى يؤكد الخادم تفعيلها.',statusError:'تعذر التحقق من حالة الخادم؛ اعتبر هذه الميزة غير متاحة.',language:'تفضيل اللغة',languageHelp:'لغات الواجهة الأساسية المتاحة: الدَّرية والإنجليزية والبشتوية والعربية.',adminGate:'يتحقق الخادم من صلاحية المسؤول؛ هذه الصفحة لا تمنح صلاحيات إدارية.'
   }
 };
 
 const LANGUAGE_OPTIONS: Array<{id:Language;label:string;native:string}> = [
-  {id:'english',label:'English',native:'English'},{id:'dari',label:'Dari',native:'دری'},
-  {id:'pashto',label:'Pashto',native:'پښتو'},{id:'persian',label:'Persian',native:'فارسی'},
-  {id:'arabic',label:'Arabic',native:'العربية'},{id:'urdu',label:'Urdu',native:'اردو'},
-  {id:'turkish',label:'Turkish',native:'Türkçe'},{id:'russian',label:'Russian',native:'Русский'},
-  {id:'french',label:'French',native:'Français'},{id:'spanish',label:'Spanish',native:'Español'},
-  {id:'german',label:'German',native:'Deutsch'},{id:'chinese',label:'Chinese (Simplified)',native:'简体中文'},
-  {id:'hindi',label:'Hindi',native:'हिन्दी'},{id:'bengali',label:'Bengali',native:'বাংলা'},
-  {id:'indonesian',label:'Indonesian',native:'Bahasa Indonesia'},{id:'portuguese',label:'Portuguese',native:'Português'},
-  {id:'japanese',label:'Japanese',native:'日本語'},{id:'korean',label:'Korean',native:'한국어'},
+  {id:'dari',label:'Dari',native:'دری'},
+  {id:'english',label:'English',native:'English'},
+  {id:'pashto',label:'Pashto',native:'پښتو'},
+  {id:'arabic',label:'Arabic',native:'العربية'},
 ];
 
 interface Props {
@@ -119,9 +126,66 @@ interface Props {
 }
 
 export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLanguage,onSetTheme,onOpenShortcuts}) => {
-  const fa = language === 'dari';
+  const locale = language === 'dari' || language === 'pashto' || language === 'arabic' ? language : 'english';
+  const rtl = ['dari','pashto','persian','arabic','urdu'].includes(language);
   const hubUi = getHubUi(language);
-  const t = { ...copy.en, ...(fa ? copy.fa : {}), ...hubUi };
+  const t = { ...copy.en, ...(locale === 'dari' ? copy.fa : locale === 'pashto' ? copy.ps : locale === 'arabic' ? copy.ar : {}), ...hubUi };
+  const extra = {
+    dari:{settings:'تنظیمات',manage:'مرکز تنظیمات AFG AI',adminLegacy:'پنل قدیمی مدیریت داخل برنامه حذف شده است. مدیریت زیرساخت و کاربران از درگاه امن و جداگانه 9Router انجام می‌شود.',gateway:'وضعیت و مدیریت درگاه 9Router از بخش مدیریت امن و جداگانه انجام می‌شود. این صفحه هیچ لینک یا وضعیت ساختگی نشان نمی‌دهد.',shortcuts:'میان‌برهای صفحه‌کلید',guest:'حساب مهمان',signedIn:'وارد شده',group:['شخصی‌سازی','دستیار هوشمند','اتصال‌ها','ارائه‌دهندگان ویژه']},
+    english:{settings:'Settings',manage:'Manage your AFG AI experience',adminLegacy:'The legacy in-app admin panel has been removed. Infrastructure and user administration are handled by the separate authenticated 9Router control plane.',gateway:'9Router gateway administration is handled through the separate authenticated control plane. This page does not display a fabricated link or status.',shortcuts:'Keyboard shortcuts',guest:'Guest account',signedIn:'SIGNED IN',group:['Personalize','Your Assistant','Connections','Special Providers']},
+    pashto:{settings:'امستنې',manage:'د AFG AI تجربه تنظیم کړئ',adminLegacy:'د اپ پخوانی مدیریتي پینل لرې شوی. د زېربنا او کاروونکو اداره د 9Router له خوندي جلا پینل څخه کېږي.',gateway:'د 9Router دروازې اداره د خوندي جلا مدیریتي پینل له لارې کېږي. دا پاڼه ناسم لینک یا حالت نه ښيي.',shortcuts:'د کیبورډ لنډلارې',guest:'د مېلمه حساب',signedIn:'ننوتل شوی',group:['شخصي کول','ستاسو مرستیال','نښلونې','ځانګړي برابرونکي']},
+    arabic:{settings:'الإعدادات',manage:'إدارة تجربة AFG AI',adminLegacy:'تمت إزالة لوحة الإدارة القديمة داخل التطبيق. تتم إدارة البنية التحتية والمستخدمين عبر لوحة 9Router منفصلة ومحمية.',gateway:'تتم إدارة بوابة 9Router عبر لوحة تحكم منفصلة ومحمية. لا تعرض هذه الصفحة رابطاً أو حالة غير حقيقية.',shortcuts:'اختصارات لوحة المفاتيح',guest:'حساب ضيف',signedIn:'تم تسجيل الدخول',group:['التخصيص','مساعدك','الاتصالات','مزودون خاصون']}
+  }[locale];
+  const itemTitles: Record<string,string> = {
+    language: locale==='dari'?'زبان برنامه':locale==='pashto'?'د اپ ژبه':locale==='arabic'?'لغة التطبيق':'App language',
+    appearance: locale==='dari'?'ظاهر برنامه':locale==='pashto'?'بڼه':locale==='arabic'?'المظهر':'Appearance',
+    chat: locale==='dari'?'تنظیمات گفتگو':locale==='pashto'?'د خبرو امستنې':locale==='arabic'?'إعدادات المحادثة':'Chat settings',
+    memory: locale==='dari'?'حافظه':locale==='pashto'?'حافظه':locale==='arabic'?'الذاكرة':'Memory',
+    intelligence: locale==='dari'?'هوش اختصاصی AFG AI':locale==='pashto'?'د AFG AI ځانګړې ځیرکتیا':locale==='arabic'?'ذكاء AFG AI':'AFG AI Intelligence',
+    coding: locale==='dari'?'برنامه‌نویسی':locale==='pashto'?'کوډ لیکنه':locale==='arabic'?'البرمجة':'Coding',
+    privacy: locale==='dari'?'حریم خصوصی و امنیت':locale==='pashto'?'محرمیت او امنیت':locale==='arabic'?'الخصوصية والأمان':'Privacy & security',
+    files: locale==='dari'?'فایل‌ها و فضای کاری':locale==='pashto'?'فایلونه او کاري ځای':locale==='arabic'?'الملفات ومساحة العمل':'Files & workspace',
+    models: locale==='dari'?'مدل‌ها و ارائه‌دهندگان':locale==='pashto'?'ماډلونه او برابرونکي':locale==='arabic'?'النماذج والمزوّدون':'Models & providers',
+    local: locale==='dari'?'مدل‌های محلی':locale==='pashto'?'ځایي ماډلونه':locale==='arabic'?'النماذج المحلية':'Local models',
+    voice: locale==='dari'?'صدا و گفتار':locale==='pashto'?'غږ او وینا':locale==='arabic'?'الصوت والكلام':'Voice & speech',
+    github: locale==='dari'?'اتصال GitHub':locale==='pashto'?'GitHub نښلول':locale==='arabic'?'ربط GitHub':'GitHub',
+    telegram: locale==='dari'?'اتصال تلگرام':locale==='pashto'?'Telegram نښلول':locale==='arabic'?'ربط Telegram':'Telegram',
+    ftp: locale==='dari'?'همگام‌سازی FTP / SFTP':locale==='pashto'?'FTP / SFTP همغږي':locale==='arabic'?'مزامنة FTP / SFTP':'FTP / SFTP sync',
+    'api-hub': locale==='dari'?'APIهای عمومی و کلیدها':locale==='pashto'?'عامه API او کیلي':locale==='arabic'?'واجهات API العامة والمفاتيح':'Public APIs & API keys',
+    mcp: locale==='dari'?'ابزارهای متصل (MCP)':locale==='pashto'?'نښتي وسایل (MCP)':locale==='arabic'?'الأدوات المتصلة (MCP)':'Connected tools (MCP)',
+    byok: locale==='dari'?'حساب‌های متصل (BYOK)':locale==='pashto'?'نښتي حسابونه (BYOK)':locale==='arabic'?'الحسابات المتصلة (BYOK)':'Connected accounts (BYOK)',
+    router: locale==='dari'?'درگاه محلی 9Router':locale==='pashto'?'ځایي 9Router دروازه':locale==='arabic'?'بوابة 9Router المحلية':'9Router / local router',
+    '9router':locale==='dari'?'درگاه هوش مصنوعی 9Router':locale==='pashto'?'د 9Router AI دروازه':locale==='arabic'?'بوابة 9Router للذكاء الاصطناعي':'9Router AI Gateway'
+  };
+  const pageCopy = {
+    dari:{appearance:'ظاهر برنامه',chat:'تنظیمات گفتگو',memory:'حافظه شخصی',coding:'محیط برنامه‌نویسی',privacy:'حریم خصوصی و امنیت',memoryHelp:'رضایت حافظه، موارد ذخیره‌شده و دسترسی حافظه را از تنظیمات حساب مدیریت کنید.',privacyHelp:'امنیت حساب، نشست‌های فعال، خروجی گرفتن و حذف حساب را مدیریت کنید.',codingHelp:'ترمینل و اجرای کد تا زمان فعال‌شدن محیط امن تأییدشده غیرفعال می‌ماند.',chatHelp:'سبک پاسخ، طول، خلاقیت، زبان پیش‌فرض و ترجیحات مدل را تنظیم کنید.',guestHelp:'این تنظیمات در حساب شما ذخیره می‌شوند؛ تغییرات مهمان فقط در همین دستگاه می‌مانند.',githubLinked:'حساب GitHub وصل است:',githubNotConfigured:'اتصال GitHub توسط مدیر تنظیم نشده است.',githubSignIn:'برای اتصال GitHub وارد حساب شوید.',telegram:'اتصال ربات تلگرام تا زمان تنظیم ربات پلتفرم و API جفت‌سازی در دسترس نیست.',ftp:'اطلاعات ورود از راه دور تا فعال‌شدن API رمزگذاری‌شده شخصی FTP/SFTP پذیرفته نمی‌شود.',mcp:'کشف runtime ابزارهای MCP فقط هنگام اتصال یک عامل دسکتاپ پشتیبانی‌شده در دسترس است.',byok:'BYOK تا زمان فعال‌سازی توسط مدیر و راه‌اندازی خزانه امن کلید، غیرفعال می‌ماند.',router:'روتر محلی به پل ارتباطی روی دستگاه نیاز دارد؛ localhost سرور همان گوشی شما نیست.',refresh:'تازه‌سازی وضعیت سرور',date:'تاریخ، عدد و قالب منطقه‌ای بر اساس زبان انتخاب‌شده تنظیم می‌شود.'},
+    english:{appearance:'Appearance',chat:'Chat preferences',memory:'Personal memory',coding:'Coding workspace',privacy:'Privacy & security',memoryHelp:'Manage memory consent, saved items and memory availability in account controls below.',privacyHelp:'Manage account security, active sessions, export and account deletion below.',codingHelp:'Terminal and code execution stay unavailable until an administrator enables a verified sandbox.',chatHelp:'Configure response style, length, creativity, default language and model preferences below.',guestHelp:'These controls are stored in your account when signed in; guest changes remain local to this device.',githubLinked:'GitHub account linked:',githubNotConfigured:'GitHub integration is not configured by the administrator.',githubSignIn:'Sign in to connect GitHub.',telegram:'Telegram pairing is unavailable until the platform bot and pairing API are configured.',ftp:'Remote credentials are not accepted until the encrypted personal FTP/SFTP API is enabled.',mcp:'MCP runtime discovery is available only when a supported desktop agent is connected.',byok:'BYOK remains hidden from active use until the administrator enables the feature and secure key vault.',router:'A local router requires a device-side bridge; localhost on the server is not your phone.',refresh:'Refresh backend status',date:'Date, number and regional formatting follow the selected language.'},
+    pashto:{appearance:'بڼه',chat:'د خبرو امستنې',memory:'شخصي حافظه',coding:'د کوډ کاري چاپېریال',privacy:'محرمیت او امنیت',memoryHelp:'د حافظې اجازه، خوندي شوي توکي او د حافظې شتون د حساب له امستنو اداره کړئ.',privacyHelp:'د حساب امنیت، فعالې ناستې، د معلوماتو ایستل او د حساب ړنګول اداره کړئ.',codingHelp:'ټرمینل او د کوډ اجرا تر هغه بند وي چې مدیر تایید شوی خوندي چاپېریال فعال کړي.',chatHelp:'د ځواب سبک، اوږدوالی، نوښت، اصلي ژبه او د ماډل غوره‌توبونه تنظیم کړئ.',guestHelp:'د ننوتلو پر مهال امستنې په حساب کې ساتل کېږي؛ د مېلمه بدلونونه یوازې په همدې وسیله پاتې کېږي.',githubLinked:'GitHub حساب وصل دی:',githubNotConfigured:'GitHub نښلونې د مدیر له خوا نه ده تنظیم شوې.',githubSignIn:'د GitHub نښلولو لپاره ننوتل وکړئ.',telegram:'د Telegram جوړه کول تر هغه نه شته چې د پلاتفورم بوټ او د جوړه کولو API تنظیم شي.',ftp:'د لرې لاسرسي معلومات تر خوندي شخصي FTP/SFTP API پورې نه منل کېږي.',mcp:'د MCP runtime کشف یوازې د ملاتړ شوي ډیسکتاپ عامل په نښلېدو شونی دی.',byok:'BYOK تر هغه فعال نه دی چې مدیر یې او د کیلي خوندي خزانه فعاله کړي.',router:'ځایي روټر د وسیلې دننه پل ته اړتیا لري؛ د سرور localhost ستاسو موبایل نه دی.',refresh:'د سرور حالت تازه کول',date:'نېټه، شمېرې او سیمه‌ییزه بڼه د ټاکل شوې ژبې له مخې بدلېږي.'},
+    arabic:{appearance:'المظهر',chat:'تفضيلات المحادثة',memory:'الذاكرة الشخصية',coding:'بيئة البرمجة',privacy:'الخصوصية والأمان',memoryHelp:'أدر الموافقة على الذاكرة والعناصر المحفوظة وتوفر الذاكرة من إعدادات الحساب.',privacyHelp:'أدر أمان الحساب والجلسات النشطة والتصدير وحذف الحساب.',codingHelp:'تبقى الطرفية وتنفيذ التعليمات البرمجية غير متاحين حتى يفعّل المسؤول بيئة معزولة موثوقة.',chatHelp:'اضبط أسلوب الرد وطوله وإبداعه واللغة الافتراضية وتفضيلات النموذج.',guestHelp:'تُحفظ هذه الإعدادات في حسابك عند تسجيل الدخول؛ وتبقى تغييرات الضيف على هذا الجهاز.',githubLinked:'حساب GitHub مرتبط:',githubNotConfigured:'لم يضبط المسؤول تكامل GitHub.',githubSignIn:'سجّل الدخول لربط GitHub.',telegram:'لا يتوفر إقران Telegram حتى إعداد روبوت المنصة وواجهة الإقران.',ftp:'لا تُقبل بيانات الدخول البعيدة حتى تفعيل واجهة FTP/SFTP الشخصية المشفرة.',mcp:'لا يتوفر اكتشاف تشغيل MCP إلا عند اتصال وكيل سطح مكتب مدعوم.',byok:'يبقى BYOK غير نشط حتى يفعّل المسؤول الميزة وخزنة المفاتيح الآمنة.',router:'يتطلب الموجّه المحلي جسراً على الجهاز؛ فـ localhost على الخادم ليس هاتفك.',refresh:'تحديث حالة الخادم',date:'يتبع تنسيق التاريخ والأرقام والمنطقة اللغة المحددة.'}
+  }[locale];
+  const itemDescriptions:Record<string,string> = {
+    language:locale==='dari'?'زبان تمام بخش‌های برنامه را انتخاب کنید.':locale==='pashto'?'د ټول اپ ژبه وټاکئ.':locale==='arabic'?'اختر لغة جميع أجزاء التطبيق.':'Choose the language used across the app.',
+    appearance:locale==='dari'?'رنگ و ظاهر برنامه را تنظیم کنید.':locale==='pashto'?'د اپ رنګونه او بڼه تنظیم کړئ.':locale==='arabic'?'اضبط ألوان التطبيق ومظهره.':'Configure the app theme and appearance.',
+    chat:locale==='dari'?'رفتار پاسخ‌گویی و مدل گفتگو را تنظیم کنید.':locale==='pashto'?'د ځواب ورکولو او خبرو ماډل تنظیم کړئ.':locale==='arabic'?'اضبط أسلوب الرد ونموذج المحادثة.':'Configure response behavior and chat preferences.',
+    memory:locale==='dari'?'حافظه و اطلاعات ذخیره‌شده حساب را مدیریت کنید.':locale==='pashto'?'د حساب حافظه او خوندي شوي معلومات اداره کړئ.':locale==='arabic'?'أدر الذاكرة والمعلومات المحفوظة في الحساب.':'Manage account memory and saved information.',
+    files:locale==='dari'?'فایل‌های خصوصی و فضای کاری را مدیریت کنید.':locale==='pashto'?'شخصي فایلونه او کاري ځای اداره کړئ.':locale==='arabic'?'أدر الملفات الخاصة ومساحة العمل.':'Manage private files and workspace.',
+    models:locale==='dari'?'مدل‌های تأییدشده و مدل پیش‌فرض را انتخاب کنید.':locale==='pashto'?'تایید شوي ماډلونه او اصلي ماډل وټاکئ.':locale==='arabic'?'اختر النماذج المعتمدة والنموذج الافتراضي.':'Choose verified models and your default model.',
+    github:locale==='dari'?'حساب GitHub خود را به برنامه وصل کنید.':locale==='pashto'?'خپل GitHub حساب له اپ سره ونښلوئ.':locale==='arabic'?'اربط حساب GitHub بالتطبيق.':'Connect your GitHub account to the app.',
+    local:locale==='dari'?'اجرای مدل‌ها روی همین دستگاه.':locale==='pashto'?'ماډلونه په همدې وسیله وچلوئ.':locale==='arabic'?'شغّل النماذج على هذا الجهاز.':'Run models on this device.',
+    voice:locale==='dari'?'ورودی و خروجی گفتار را تنظیم کنید.':locale==='pashto'?'د وینا داخلول او وتل تنظیم کړئ.':locale==='arabic'?'اضبط إدخال الكلام وإخراجه.':'Configure speech input and output.',
+    'api-hub':locale==='dari'?'APIهای عمومی و ابزارهای هوشمند را مدیریت کنید.':locale==='pashto'?'عامه API او هوښیار وسایل اداره کړئ.':locale==='arabic'?'أدر واجهات API العامة والأدوات الذكية.':'Manage public APIs and intelligent tools.',
+    intelligence:locale==='dari'?'دانش و حافظه اختصاصی AFG AI را مدیریت کنید.':locale==='pashto'?'د AFG AI ځانګړې پوهه او حافظه اداره کړئ.':locale==='arabic'?'أدر معرفة AFG AI وذاكرته الخاصة.':'Manage AFG AI private knowledge and memory.',
+    coding:locale==='dari'?'ابزارهای برنامه‌نویسی و اجرای امن کد.':locale==='pashto'?'د کوډ لیکلو او خوندي اجرا وسایل.':locale==='arabic'?'أدوات البرمجة والتنفيذ الآمن للكود.':'Coding tools and safe code execution.',
+    privacy:locale==='dari'?'امنیت حساب و داده‌های شخصی خود را مدیریت کنید.':locale==='pashto'?'د حساب امنیت او شخصي معلومات اداره کړئ.':locale==='arabic'?'أدر أمان الحساب والبيانات الشخصية.':'Manage account security and personal data.',
+    telegram:locale==='dari'?'اتصال ربات و اعلان‌های تلگرام.':locale==='pashto'?'د Telegram بوټ او خبرتیاوې ونښلوئ.':locale==='arabic'?'ربط روبوت Telegram والإشعارات.':'Connect a Telegram bot and notifications.',
+    ftp:locale==='dari'?'اتصال امن فضای FTP و SFTP.':locale==='pashto'?'د FTP او SFTP خوندي نښلونې.':locale==='arabic'?'اتصالات FTP وSFTP الآمنة.':'Secure FTP and SFTP connections.',
+    mcp:locale==='dari'?'اتصال ابزارها و سرورهای MCP.':locale==='pashto'?'د MCP وسایل او سرورونه ونښلوئ.':locale==='arabic'?'ربط أدوات وخوادم MCP.':'Connect MCP tools and servers.',
+    byok:locale==='dari'?'کلید API خود را به‌صورت امن متصل کنید.':locale==='pashto'?'خپله API کیلي په خوندي ډول ونښلوئ.':locale==='arabic'?'اربط مفتاح API الخاص بك بأمان.':'Connect your own API keys securely.',
+    router:locale==='dari'?'درگاه محلی برای مدل‌ها و سرویس‌ها.':locale==='pashto'?'د ماډلونو او خدمتونو لپاره ځایي دروازه.':locale==='arabic'?'بوابة محلية للنماذج والخدمات.':'Local gateway for models and services.',
+    '9router':locale==='dari'?'مدیریت مسیرهای مدل و درگاه.':locale==='pashto'?'د ماډلونو لارې او دروازه اداره کړئ.':locale==='arabic'?'إدارة مسارات النماذج والبوابة.':'Manage model routes and gateway.'
+  };
+  const localizedItems = ITEMS.map(item=>({...item,title:itemTitles[item.id]||item.title,subtitle:itemDescriptions[item.id]||item.subtitle,group:extra.group[['Personalize','Your Assistant','Connections','Special Providers'].indexOf(item.group)]||item.group}));
+
   const groupLabels = (hubUi.groups || '').split(' · ');
   const [context,setContext] = useState<Context>('user');
   const [query,setQuery] = useState('');
@@ -176,13 +240,13 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
   };
   useEffect(()=>{void refreshStatus();},[]);
 
-  const filtered = useMemo(()=>ITEMS.filter(item=>{
+  const filtered = useMemo(()=>localizedItems.filter(item=>{
     const q=query.trim().toLowerCase();
     if(item.id==='byok' && featureFlags.byok===false) return false;
     if(item.id==='9router' && !adminAllowed) return false;
     return !q || [item.title,item.subtitle,item.group,...item.keywords].join(' ').toLowerCase().includes(q);
-  }),[query,featureFlags,adminAllowed]);
-  const groups = ['Personalize','Your Assistant','Connections','Special Providers'];
+  }),[query,featureFlags,adminAllowed,language]);
+  const groups = extra.group;
   const statusLabel=(id:SettingId)=>{
     if(statusLoading)return t.checking;
     const value=status[id];
@@ -210,24 +274,24 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
       setNotice(t.modelSaved);
     }catch(e){setError(e instanceof Error?e.message:'Could not save the default model.');}
   };
-  const selected = page ? ITEMS.find(item=>item.id===page) : null;
+  const selected = page ? localizedItems.find(item=>item.id===page) : null;
   const statusBadge=(id:SettingId)=><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${status[id]==='active'?'bg-emerald-500/15 text-emerald-300':status[id]==='disabled'?'bg-slate-700 text-slate-400':'bg-amber-500/10 text-amber-300'}`}>{statusLabel(id)}</span>;
-  const row=(item:Item)=><button key={item.id} type="button" disabled={isDisabled(item.id)} onClick={()=>{setPage(item.id);setError('');setNotice('');}} className={`group flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-cyan-400/5 disabled:cursor-not-allowed disabled:opacity-50 ${fa?'text-right':''}`}>
+  const row=(item:Item)=><button key={item.id} type="button" disabled={isDisabled(item.id)} onClick={()=>{setPage(item.id);setError('');setNotice('');}} className={`group flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-cyan-400/5 disabled:cursor-not-allowed disabled:opacity-50 ${rtl?'text-right':''}`}>
     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/15 bg-cyan-500/5 text-cyan-300"><item.icon className="h-5 w-5"/></span>
-    <span className="min-w-0 flex-1"><span className="block text-sm font-bold text-white">{item.id==='api-hub'&&fa?'فهرست APIها و کلیدها':item.id==='9router'&&fa?'درگاه هوش مصنوعی 9Router':item.id==='intelligence'&&fa?'هوش اختصاصی AFG AI':item.title}</span><span className="mt-0.5 block text-xs leading-5 text-slate-400">{item.id==='api-hub'&&fa?'کشف APIها، ذخیره امن کلیدهای خود و فعال‌سازی ابزارهای هوشمند.':item.id==='9router'&&fa?'مدل‌های گفتگو، تصویر، ویدیو، صدا، جستجوی وب و Embedding.':item.id==='intelligence'&&fa?'مدیریت دانش خصوصی، حافظه و آماده‌سازی داده‌های آموزشی.':item.subtitle}</span></span>
-    <span className="flex shrink-0 items-center gap-2">{(status[item.id]||item.id==='github')&&['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(item.id)&&statusBadge(item.id)}<ChevronRight className={`h-4 w-4 text-slate-500 ${fa?'rotate-180':''}`}/></span>
+    <span className="min-w-0 flex-1"><span className="block text-sm font-bold text-white">{item.title}</span><span className="mt-0.5 block text-xs leading-5 text-slate-400">{item.subtitle}</span></span>
+    <span className="flex shrink-0 items-center gap-2">{(status[item.id]||item.id==='github')&&['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(item.id)&&statusBadge(item.id)}<ChevronRight className={`h-4 w-4 text-slate-500 ${rtl?'rotate-180':''}`}/></span>
   </button>;
 
   if(context==='admin') return <section className="afg-settings-hub mx-auto w-full max-w-[1500px] px-3 py-4 sm:px-6">
     <button onClick={()=>setContext('user')} className="mb-3 inline-flex items-center gap-2 text-sm text-cyan-300"><ArrowLeft className="h-4 w-4"/>{t.back}</button>
     <p className="mb-3 text-xs text-slate-400">{t.adminIntro}</p>
-    <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4"><h2 className="font-bold text-white">{t.admin}</h2><p className="mt-2 text-sm leading-6 text-slate-300">{fa?'پنل قدیمی مدیریت داخل برنامه حذف شده است. مدیریت زیرساخت و کاربران از درگاه امن و جداگانه 9Router انجام می‌شود.':'The legacy in-app admin panel has been removed. Infrastructure and user administration are handled by the separate authenticated 9Router control plane.'}</p></div>
+    <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4"><h2 className="font-bold text-white">{t.admin}</h2><p className="mt-2 text-sm leading-6 text-slate-300">{extra.adminLegacy}</p></div>
   </section>;
 
-  return <section className="afg-settings-hub mx-auto w-full max-w-3xl space-y-4 px-3 py-4 sm:px-6" dir={fa?'rtl':'ltr'}>
+  return <section className="afg-settings-hub mx-auto w-full max-w-3xl space-y-4 px-3 py-4 sm:px-6" dir={rtl?'rtl':'ltr'}>
     <header className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <div><h1 className="text-2xl font-black text-white">{fa?'تنظیمات':'Settings'}</h1><p className="mt-1 text-xs text-slate-400">{fa?'مرکز تنظیمات AFG AI':'Manage your AFG AI experience'}</p></div>
+        <div><h1 className="text-2xl font-black text-white">{extra.settings}</h1><p className="mt-1 text-xs text-slate-400">{extra.manage}</p></div>
         <button type="button" onClick={()=>setContext('admin')} className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 px-3 py-2 text-xs font-bold text-cyan-200"><LockKeyhole className="mr-1 inline h-4 w-4"/>{t.admin}</button>
       </div>
       <label className="flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 focus-within:border-cyan-400"><Search className="h-5 w-5 text-slate-400"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t.search} className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"/>{query&&<button type="button" onClick={()=>setQuery('')} className="text-xs text-cyan-300">×</button>}</label>
@@ -235,26 +299,26 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
     {error&&<p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{error}</p>}
     {notice&&<p role="status" className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-300">{notice}</p>}
     {page&&selected ? <div className="space-y-4 animate-in slide-in-from-right-2">
-      <button type="button" onClick={()=>setPage(null)} className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-300"><ArrowLeft className={`h-4 w-4 ${fa?'rotate-180':''}`}/>{t.back}</button>
+      <button type="button" onClick={()=>setPage(null)} className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-300"><ArrowLeft className={`h-4 w-4 ${rtl?'rotate-180':''}`}/>{t.back}</button>
       <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
-        <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><selected.icon className="h-5 w-5"/></span><div className="min-w-0 flex-1"><h2 className="font-black text-white">{selected.id==='api-hub'&&fa?'فهرست APIها و کلیدها':selected.id==='9router'&&fa?'درگاه هوش مصنوعی 9Router':selected.id==='intelligence'&&fa?'هوش اختصاصی AFG AI':selected.title}</h2><p className="text-xs text-slate-400">{selected.id==='intelligence'&&fa?'مدیریت دانش خصوصی و داده‌های آموزشی':selected.subtitle}</p></div>{['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(page)&&statusBadge(page)}</div>
+        <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><selected.icon className="h-5 w-5"/></span><div className="min-w-0 flex-1"><h2 className="font-black text-white">{selected.title}</h2><p className="text-xs text-slate-400">{selected.subtitle}</p></div>{['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(page)&&statusBadge(page)}</div>
       </div>
       {page==='files' && <AfgFileLibrary language={language}/>}
       {page==='intelligence' && <AfgIntelligencePanel language={language}/>}
       {page==='api-hub'&&<AfgApiConnectorPanel language={language}/>}
-      {page==='9router'&&<div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4"><h3 className="font-semibold text-white">9Router AI Gateway</h3><p className="mt-2 text-sm leading-6 text-slate-300">{fa?'وضعیت و مدیریت درگاه 9Router از بخش مدیریت امن و جداگانه انجام می‌شود. این صفحه هیچ لینک یا وضعیت ساختگی نشان نمی‌دهد.':'9Router gateway administration is handled through the separate authenticated control plane. This page does not display a fabricated link or status.'}</p></div>}
+      {page==='9router'&&<div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4"><h3 className="font-semibold text-white">9Router AI Gateway</h3><p className="mt-2 text-sm leading-6 text-slate-300">{extra.gateway}</p></div>}
       {(['appearance','language','chat','memory','coding','privacy'] as SettingId[]).includes(page) && <>
         <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-3">
-          <p className="text-sm font-semibold text-cyan-100">{page==='language'?t.language:page==='appearance'?'Appearance':page==='chat'?'Chat preferences':page==='memory'?'Personal memory':page==='coding'?'Coding workspace':'Privacy & security'}</p>
-          <p className="mt-1 text-xs leading-5 text-slate-400">{page==='language'?t.languageHelp:page==='memory'?'Manage memory consent, saved items and memory availability in the account controls below.':page==='privacy'?'Manage account security, active sessions, export and account deletion below.':page==='coding'?'Terminal and code execution stay unavailable until an administrator enables a verified sandbox.':page==='chat'?'Configure response style, length, creativity, default language and model preferences below.':'These controls are stored in your account when signed in; guest changes remain local to this device.'}</p>
+          <p className="text-sm font-semibold text-cyan-100">{page==='language'?t.language:page==='appearance'?pageCopy.appearance:page==='chat'?pageCopy.chat:page==='memory'?pageCopy.memory:page==='coding'?pageCopy.coding:pageCopy.privacy}</p>
+          <p className="mt-1 text-xs leading-5 text-slate-400">{page==='language'?t.languageHelp:page==='memory'?pageCopy.memoryHelp:page==='privacy'?pageCopy.privacyHelp:page==='coding'?pageCopy.codingHelp:page==='chat'?pageCopy.chatHelp:pageCopy.guestHelp}</p>
         </div>
         {page==='language' && <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 space-y-3">
-          <label className="block text-sm font-semibold text-white">Application language
+          <label className="block text-sm font-semibold text-white">{t.language}
             <select value={language} onChange={e=>onSetLanguage(e.target.value as Language)} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-white">
               {LANGUAGE_OPTIONS.map(option=><option key={option.id} value={option.id}>{option.native} — {option.label}</option>)}
             </select>
           </label>
-          <p className="text-xs leading-5 text-slate-400">Date, number and regional formatting follow the selected language. Complete native translations are being rolled out; languages without a reviewed translation currently use English interface text.</p>
+          <p className="text-xs leading-5 text-slate-400">{pageCopy.date}</p>
         </div>}
         <AfgAccountSettings language={language} theme={theme} onTheme={onSetTheme} onLanguage={onSetLanguage}/>
       </>}
@@ -264,25 +328,25 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
         <p className="text-xs text-slate-500">{status[page]==='ready'?t.available:t.setupText}</p>
       </div>}
       {page==='github'&&<div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 space-y-3">
-        <p className="text-sm text-slate-300">{github.linked?'GitHub account linked: @'+github.username:github.configured?t.githubReady:t.setupText}</p>
-        {!github.configured && <p id="github-not-configured" className="text-xs text-rose-300" role="status">GitHub integration is not configured by the administrator.</p>}
-        {github.linked?<button onClick={()=>void unlinkGithub()} className="rounded-xl border border-rose-500/30 px-4 py-2 text-sm text-rose-300">{t.githubDisconnect}</button>:<button disabled={!github.configured||!authenticated} title={!github.configured ? 'GitHub integration is not configured by the administrator.' : !authenticated ? 'Sign in to connect GitHub.' : t.githubConnect} aria-describedby={!github.configured ? 'github-not-configured' : undefined} onClick={()=>void openGithub()} className="rounded-xl bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">{t.githubConnect}</button>}
+        <p className="text-sm text-slate-300">{github.linked?pageCopy.githubLinked+' @'+github.username:github.configured?t.githubReady:t.setupText}</p>
+        {!github.configured && <p id="github-not-configured" className="text-xs text-rose-300" role="status">{pageCopy.githubNotConfigured}</p>}
+        {github.linked?<button onClick={()=>void unlinkGithub()} className="rounded-xl border border-rose-500/30 px-4 py-2 text-sm text-rose-300">{t.githubDisconnect}</button>:<button disabled={!github.configured||!authenticated} title={!github.configured ? pageCopy.githubNotConfigured : !authenticated ? pageCopy.githubSignIn : t.githubConnect} aria-describedby={!github.configured ? 'github-not-configured' : undefined} onClick={()=>void openGithub()} className="rounded-xl bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">{t.githubConnect}</button>}
       </div>}
       {(['local','voice','telegram','ftp','mcp','byok','router'] as SettingId[]).includes(page)&&<div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 space-y-2">
         <p className="text-sm font-semibold text-slate-200">{status[page]==='disabled'?t.disabledText:status[page]==='ready'||status[page]==='active'?t.available:t.setupText}</p>
         {page==='voice'&&<p className="text-xs text-slate-400">{t.notAvailable}</p>}
         {page==='local'&&<p className="text-xs text-slate-400">{t.notAvailable}</p>}
-        {page==='telegram'&&<p className="text-xs text-slate-400">Telegram pairing is unavailable until the platform bot and pairing API are configured.</p>}
-        {page==='ftp'&&<p className="text-xs text-slate-400">Remote credentials are not accepted until the encrypted personal FTP/SFTP API is enabled.</p>}
-        {page==='mcp'&&<p className="text-xs text-slate-400">MCP runtime discovery is available only when a supported desktop agent is connected.</p>}
-        {page==='byok'&&<p className="text-xs text-slate-400">BYOK remains hidden from active use until the administrator enables the feature and secure key vault.</p>}
-        {page==='router'&&<p className="text-xs text-slate-400">A local router requires a device-side bridge; localhost on the server is not your phone.</p>}
+        {page==='telegram'&&<p className="text-xs text-slate-400">{pageCopy.telegram}</p>}
+        {page==='ftp'&&<p className="text-xs text-slate-400">{pageCopy.ftp}</p>}
+        {page==='mcp'&&<p className="text-xs text-slate-400">{pageCopy.mcp}</p>}
+        {page==='byok'&&<p className="text-xs text-slate-400">{pageCopy.byok}</p>}
+        {page==='router'&&<p className="text-xs text-slate-400">{pageCopy.router}</p>}
       </div>}
-      <button type="button" onClick={()=>void refreshStatus()} className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300">Refresh backend status</button>
+      <button type="button" onClick={()=>void refreshStatus()} className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300">{pageCopy.refresh}</button>
     </div> : <div className="space-y-5">
-      <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/20 bg-slate-950/70 p-4"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><Settings2 className="h-5 w-5"/></div><div className="min-w-0"><p className="font-bold text-white">{language==='dari'?user.name:user.nameEn}</p><p className="text-xs text-slate-400">{user.email||'Guest account'}</p></div><span className="ml-auto text-[10px] font-bold text-cyan-300">{authenticated?'SIGNED IN':'GUEST'}</span></div>
+      <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/20 bg-slate-950/70 p-4"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><Settings2 className="h-5 w-5"/></div><div className="min-w-0"><p className="font-bold text-white">{language==='english'?user.nameEn:user.name}</p><p className="text-xs text-slate-400">{user.email||extra.guest}</p></div><span className="ml-auto text-[10px] font-bold text-cyan-300">{authenticated?extra.signedIn:extra.guest}</span></div>
       {filtered.length?groups.map((group,index)=>{const rows=filtered.filter(item=>item.group===group);if(!rows.length)return null;return <section key={group} className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/75"><h2 className="px-4 pb-2 pt-4 text-[11px] font-black uppercase tracking-wider text-cyan-300">{groupLabels[index] || group}</h2><div className="divide-y divide-slate-800/80">{rows.map(row)}</div></section>}):<p className="rounded-2xl border border-slate-800 p-6 text-center text-sm text-slate-400">{t.noResults}</p>}
-      <button type="button" onClick={onOpenShortcuts} className="w-full rounded-xl border border-slate-800 px-4 py-3 text-sm text-slate-300">Keyboard shortcuts</button>
+      <button type="button" onClick={onOpenShortcuts} className="w-full rounded-xl border border-slate-800 px-4 py-3 text-sm text-slate-300">{extra.shortcuts}</button>
     </div>}
     <div className="pb-4 text-center text-[10px] text-slate-600">AFG AI · Settings Hub</div>
   </section>;

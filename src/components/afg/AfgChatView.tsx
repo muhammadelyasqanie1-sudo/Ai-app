@@ -34,6 +34,14 @@ import { translations } from '../../utils/afgTranslations';
 import { getIntlLocale } from '../../utils/i18n';
 import type { ChatToolActivity } from '../../types/liveActivity';
 
+
+const CHAT_COPY: Record<'dari'|'english'|'pashto'|'arabic', Record<string,string>> = {
+  dari:{speechLocale:'fa-AF',thinking:'هنوز در حال فکر کردن…',speechFailed:'تولید صدا ناموفق بود.',planMode:'برنامه‌ریزی',quickMenu:'منوی سریع',stop:'توقف',activity:'فعالیت زنده هوش مصنوعی',working:'در حال اجرا',activityLog:'گزارش فعالیت',completed:'انجام شد',failed:'ناموفق',inProgress:'در حال انجام',now:'اکنون',loading:'در حال بارگذاری گفتگو',build:'امروز چه چیزی می‌خواهید بسازید؟',start:'با یک ایده شروع کنید یا پروژه تازه‌ای بسازید.',tryThis:'پیشنهاد',reasoning:'فرایند تفکر هوش مصنوعی',editResend:'ویرایش و ارسال',cancel:'لغو',edit:'ویرایش',branch:'شاخه جدید',delete:'حذف',retry:'تلاش دوباره',regenerate:'تولید دوباره',branchLabel:'شاخه',noTts:'ارائه‌دهنده متن به گفتار تأیید نشده است',slow:'AFG AI در حال پردازش و پاسخگویی...'},
+  english:{speechLocale:'en-US',thinking:'Still thinking…',speechFailed:'Speech synthesis failed.',planMode:'Plan mode',quickMenu:'Quick menu',stop:'Stop',activity:'Live AI activity',working:'Working',activityLog:'Activity log',completed:'Completed',failed:'Failed',inProgress:'In progress',now:'Now',loading:'Loading conversation',build:'What do you want to build?',start:'Start with an idea or create a new project.',tryThis:'Try this',reasoning:'Reasoning Process',editResend:'Edit & resend',cancel:'Cancel',edit:'Edit',branch:'Branch',delete:'Delete',retry:'Retry',regenerate:'Regenerate',branchLabel:'Branch',noTts:'No verified text-to-speech provider is available',slow:'AFG AI is processing your request...'},
+  pashto:{speechLocale:'ps-AF',thinking:'لا هم فکر کوي…',speechFailed:'د غږ جوړول بریالي نه شول.',planMode:'د پلان حالت',quickMenu:'چټک مېنو',stop:'درول',activity:'د AI ژوندۍ کړنې',working:'کار روان دی',activityLog:'د کړنو راپور',completed:'بشپړ شو',failed:'ناکام شو',inProgress:'تر کار لاندې',now:'اوس',loading:'خبرې بارېږي',build:'نن څه جوړول غواړئ؟',start:'له یوې مفکورې پیل وکړئ یا نوې پروژه جوړه کړئ.',tryThis:'دا وازمویئ',reasoning:'د AI د فکر بهیر',editResend:'سمون او بیا لېږل',cancel:'لغوه کول',edit:'سمون',branch:'نوې څانګه',delete:'ړنګول',retry:'بیا هڅه',regenerate:'بیا جوړول',branchLabel:'څانګه',noTts:'د متن غږ ته اړولو تایید شوی برابرونکی نشته',slow:'AFG AI ستاسو غوښتنه پروسس کوي...'},
+  arabic:{speechLocale:'ar',thinking:'لا يزال يفكّر…',speechFailed:'فشل إنشاء الصوت.',planMode:'وضع التخطيط',quickMenu:'القائمة السريعة',stop:'إيقاف',activity:'نشاط الذكاء الاصطناعي المباشر',working:'جارٍ العمل',activityLog:'سجل النشاط',completed:'اكتمل',failed:'فشل',inProgress:'قيد التنفيذ',now:'الآن',loading:'جارٍ تحميل المحادثة',build:'ماذا تريد أن تنشئ اليوم؟',start:'ابدأ بفكرة أو أنشئ مشروعاً جديداً.',tryThis:'جرّب هذا',reasoning:'عملية الاستدلال',editResend:'تعديل وإعادة الإرسال',cancel:'إلغاء',edit:'تعديل',branch:'فرع جديد',delete:'حذف',retry:'إعادة المحاولة',regenerate:'إنشاء من جديد',branchLabel:'فرع',noTts:'لا يتوفر مزوّد موثّق لتحويل النص إلى كلام',slow:'يعالج AFG AI طلبك...'}
+};
+
 interface AfgChatViewProps {
   messages: AfgMessage[];
   agentActivities?: ChatToolActivity[];
@@ -94,6 +102,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
   onOpenAfgAssistant,
 }) => {
   const t = translations[language];
+  const c = CHAT_COPY[(language === 'dari' || language === 'pashto' || language === 'arabic') ? language : 'english'];
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isSlowResponse, setIsSlowResponse] = useState(false);
   const [activityExpanded, setActivityExpanded] = useState(true);
@@ -166,7 +175,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: cleanText.slice(0, 5000), language: language === 'dari' ? 'fa' : 'en' }),
+        body: JSON.stringify({ text: cleanText.slice(0, 5000), language: c.speechLocale }),
       });
       const data = await response.json();
       if (!response.ok || typeof data.audioBase64 !== 'string' || typeof data.mimeType !== 'string') {
@@ -182,7 +191,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
       audioRef.current = null;
       setSpeakingMsgId(null);
       onSpeakingChange?.(false);
-      alert(error instanceof Error ? error.message : (language === 'dari' ? 'تولید صدا ناموفق بود.' : 'Speech synthesis failed.'));
+      alert(error instanceof Error ? error.message : (c.speechFailed));
     }
   };
 
@@ -229,17 +238,17 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">{(planMode || thinkingLevel !== 'standard') && <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-1 text-[9px] font-semibold text-cyan-200 animate-pulse">{planMode ? (language === 'dari' ? 'برنامه‌ریزی' : 'Plan mode') : '🧠 ' + thinkingLevel}</span>}<button type="button" onClick={onOpenAfgAssistant} className="rounded-lg border border-violet-400/35 bg-gradient-to-r from-cyan-500/15 via-violet-500/15 to-fuchsia-500/15 px-2.5 py-2 text-[10px] font-bold text-cyan-100 shadow-[0_0_18px_rgba(124,77,255,.12)] hover:border-cyan-300/60">✦ AFG AI</button><button type="button" onClick={onOpenCommandPalette} className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-2 text-[10px] font-semibold text-cyan-200 hover:bg-cyan-500/20">{language === 'dari' ? 'منوی سریع' : 'Quick menu'} <span className="opacity-60">⌘K</span></button></div>
-        {isLoading && <button onClick={onStop} className="flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300"><Square className="w-3 h-3" />{language === 'dari' ? 'توقف' : 'Stop'}</button>}
+        <div className="flex items-center gap-1.5">{(planMode || thinkingLevel !== 'standard') && <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-1 text-[9px] font-semibold text-cyan-200 animate-pulse">{planMode ? (c.planMode) : '🧠 ' + thinkingLevel}</span>}<button type="button" onClick={onOpenAfgAssistant} className="rounded-lg border border-violet-400/35 bg-gradient-to-r from-cyan-500/15 via-violet-500/15 to-fuchsia-500/15 px-2.5 py-2 text-[10px] font-bold text-cyan-100 shadow-[0_0_18px_rgba(124,77,255,.12)] hover:border-cyan-300/60">✦ AFG AI</button><button type="button" onClick={onOpenCommandPalette} className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-2 text-[10px] font-semibold text-cyan-200 hover:bg-cyan-500/20">{c.quickMenu} <span className="opacity-60">⌘K</span></button></div>
+        {isLoading && <button onClick={onStop} className="flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300"><Square className="w-3 h-3" />{c.stop}</button>}
       </div>
 
       {/* Messages Scroll Area */}
       <div className="flex-1 overflow-y-auto px-1 sm:px-3 py-4 space-y-5">
         {agentActivities.length > 0 && (
-          <section className="mx-auto w-full max-w-3xl rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-lg dark:border-cyan-800/40 dark:bg-slate-950/70" aria-live="polite" aria-label={language === 'dari' ? 'فعالیت زنده هوش مصنوعی' : 'Live AI activity'}>
+          <section className="mx-auto w-full max-w-3xl rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-lg dark:border-cyan-800/40 dark:bg-slate-950/70" aria-live="polite" aria-label={c.activity}>
             <button type="button" onClick={() => setActivityExpanded(value => !value)} aria-expanded={activityExpanded} className="mb-2 flex w-full items-center justify-between gap-3 rounded-xl px-1 py-1 text-start hover:bg-cyan-500/5">
-              <span className="flex min-w-0 items-center gap-2 text-xs font-bold text-cyan-700 dark:text-cyan-200"><Globe className="h-4 w-4 shrink-0" /><span>{language === 'dari' ? 'فعالیت زنده هوش مصنوعی' : language === 'persian' ? 'فعالیت زنده هوش مصنوعی' : language === 'pashto' ? 'د AI ژوندۍ کړنې' : language === 'arabic' ? 'نشاط الذكاء الاصطناعي المباشر' : 'Live AI activity'}</span></span>
-              <span className="flex shrink-0 items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400"><span>{agentActivities.filter(item => item.status === 'running').length ? (language === 'dari' ? 'در حال اجرا' : 'Working') : (language === 'dari' ? 'گزارش فعالیت' : 'Activity log')} · {agentActivities.length}</span>{activityExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</span>
+              <span className="flex min-w-0 items-center gap-2 text-xs font-bold text-cyan-700 dark:text-cyan-200"><Globe className="h-4 w-4 shrink-0" /><span>{c.activity}</span></span>
+              <span className="flex shrink-0 items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400"><span>{agentActivities.filter(item => item.status === 'running').length ? (c.working) : (c.activityLog)} · {agentActivities.length}</span>{activityExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</span>
             </button>
             {activityExpanded && <ol className="space-y-2">
               {agentActivities.map((item) => (
@@ -248,9 +257,9 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="font-semibold text-slate-800 dark:text-slate-200">{item.label}</span>
-                      <span className="text-[10px] text-slate-500">{item.status === 'completed' ? (language === 'dari' ? 'انجام شد' : 'Completed') : item.status === 'failed' ? (language === 'dari' ? 'ناموفق' : 'Failed') : (language === 'dari' ? 'در حال انجام' : 'In progress')}</span>
+                      <span className="text-[10px] text-slate-500">{item.status === 'completed' ? (c.completed) : item.status === 'failed' ? (c.failed) : (c.inProgress)}</span>
                       {(item.durationMs !== undefined || (item.status === 'running' && item.startedAt !== undefined)) && <span className="text-[10px] tabular-nums text-slate-400">{((item.durationMs ?? Math.max(0, activityNow - (item.startedAt || activityNow))) / 1000).toFixed(1)}s</span>}
-                      {item.status === 'running' && <span className="text-[10px] text-cyan-600 dark:text-cyan-400">{language === 'dari' ? 'اکنون' : 'Now'}</span>}
+                      {item.status === 'running' && <span className="text-[10px] text-cyan-600 dark:text-cyan-400">{c.now}</span>}
                     </div>
                     {item.detail && <div className="mt-0.5 break-all text-[11px] text-slate-600 dark:text-slate-400">{item.detail}</div>}
                     {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-block break-all text-[11px] text-cyan-700 underline dark:text-cyan-400 underline-offset-2">{item.url}</a>}
@@ -262,7 +271,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
           </section>
         )}
         
-        {isInitialLoading && <div className="mx-auto w-full max-w-2xl space-y-5 py-8" aria-label={language === 'dari' ? 'در حال بارگذاری گفتگو' : 'Loading conversation'} role="status"><div className="h-7 w-2/3 rounded-lg afg-skeleton-line"/><div className="h-24 w-full rounded-2xl afg-skeleton-line"/><div className="ms-auto h-20 w-4/5 rounded-2xl afg-skeleton-line"/><div className="h-28 w-full rounded-2xl afg-skeleton-line"/></div>}
+        {isInitialLoading && <div className="mx-auto w-full max-w-2xl space-y-5 py-8" aria-label={c.loading} role="status"><div className="h-7 w-2/3 rounded-lg afg-skeleton-line"/><div className="h-24 w-full rounded-2xl afg-skeleton-line"/><div className="ms-auto h-20 w-4/5 rounded-2xl afg-skeleton-line"/><div className="h-28 w-full rounded-2xl afg-skeleton-line"/></div>}
         {/* If no messages yet, show welcome prompt cards. */}
         {!isInitialLoading && messages.length === 0 && (
           <div className="afg-chat-welcome flex flex-col items-center justify-center min-h-[60vh] text-center max-w-2xl mx-auto space-y-6 animate-in fade-in duration-500">
@@ -271,8 +280,8 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
             </div>
 
             <div>
-              <h2 className="afg-chat-welcome-title text-2xl font-black text-white">{language === 'dari' ? 'امروز چه چیزی می‌خواهید بسازید؟' : 'What do you want to build?'}</h2>
-              <p className="text-sm text-cyan-300 font-medium mt-2">{language === 'dari' ? 'با یک ایده شروع کنید یا پروژه تازه‌ای بسازید.' : 'Start with an idea or create a new project.'}</p>
+              <h2 className="afg-chat-welcome-title text-2xl font-black text-white">{c.build}</h2>
+              <p className="text-sm text-cyan-300 font-medium mt-2">{c.start}</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full text-start" dir={['dari','pashto','persian','arabic','urdu'].includes(language) ? 'rtl' : 'ltr'}>
@@ -284,7 +293,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                 >
                   <span className="flex items-center gap-2 font-semibold mb-1 group-hover:text-cyan-300">
                     {idx === 0 ? <Code2 className="h-4 w-4 text-cyan-400"/> : idx === 1 ? <FolderSearch className="h-4 w-4 text-cyan-400"/> : idx === 2 ? <Globe className="h-4 w-4 text-cyan-400"/> : <FilePlus2 className="h-4 w-4 text-cyan-400"/>}
-                    <span>{language === 'dari' ? 'پیشنهاد' : 'Try this'}</span><ChevronDown className="ms-auto h-3 w-3 -rotate-90 opacity-50"/>
+                    <span>{c.tryThis}</span><ChevronDown className="ms-auto h-3 w-3 -rotate-90 opacity-50"/>
                   </span>
                   <span className="line-clamp-2 text-[11px] text-slate-400">
                     {prompt}
@@ -336,7 +345,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                 {/* User/Model Name & Timestamp */}
                 <div className="flex items-center gap-2 mb-1 px-1 text-[11px] text-slate-400">
                   <span className="font-semibold text-slate-300">
-                    {isUser ? (language === 'dari' ? user.name : user.nameEn) : 'AFG AI'}
+                    {isUser ? (language === 'english' ? user.nameEn : user.name) : 'AFG AI'}
                   </span>
                   <span>•</span>
                   <span>
@@ -352,7 +361,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                       className="flex items-center gap-1.5 text-xs text-cyan-400 bg-cyan-950/30 border border-cyan-800/40 px-2.5 py-1 rounded-lg hover:bg-cyan-900/30 transition-colors"
                     >
                       <BrainCircuit className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>{language === 'dari' ? 'فرایند تفکر هوش مصنوعی' : 'Reasoning Process'}</span>
+                      <span>{c.reasoning}</span>
                       {expandedThoughts[msg.id] ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                     </button>
                     {expandedThoughts[msg.id] && (
@@ -405,15 +414,15 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                       <div className="space-y-2">
                         <textarea value={editDraft} onChange={(event) => setEditDraft(event.target.value)} rows={3} className="w-full rounded-xl border border-cyan-700 bg-slate-950 p-3 text-sm text-white" />
                         <div className="flex gap-2">
-                          <button onClick={() => { onEditMessage(msg.id, editDraft); setEditingMessageId(null); }} className="rounded-lg bg-cyan-500 px-3 py-1.5 text-xs font-bold text-slate-950">{language === 'dari' ? 'ویرایش و ارسال' : 'Edit & resend'}</button>
-                          <button onClick={() => setEditingMessageId(null)} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300">{language === 'dari' ? 'لغو' : 'Cancel'}</button>
+                          <button onClick={() => { onEditMessage(msg.id, editDraft); setEditingMessageId(null); }} className="rounded-lg bg-cyan-500 px-3 py-1.5 text-xs font-bold text-slate-950">{c.editResend}</button>
+                          <button onClick={() => setEditingMessageId(null)} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300">{c.cancel}</button>
                         </div>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 px-1 text-[11px] text-slate-500">
-                        <button onClick={() => { setEditingMessageId(msg.id); setEditDraft(msg.content); }} className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-slate-800 hover:text-cyan-300"><Pencil className="h-3 w-3" />{language === 'dari' ? 'ویرایش' : 'Edit'}</button>
-                        <button onClick={() => onBranchMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-slate-800 hover:text-cyan-300"><GitBranch className="h-3 w-3" />{language === 'dari' ? 'شاخه جدید' : 'Branch'}</button>
-                        <button onClick={() => onDeleteMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-red-500/10 hover:text-red-300"><Trash2 className="h-3 w-3" />{language === 'dari' ? 'حذف' : 'Delete'}</button>
+                        <button onClick={() => { setEditingMessageId(msg.id); setEditDraft(msg.content); }} className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-slate-800 hover:text-cyan-300"><Pencil className="h-3 w-3" />{c.edit}</button>
+                        <button onClick={() => onBranchMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-slate-800 hover:text-cyan-300"><GitBranch className="h-3 w-3" />{c.branch}</button>
+                        <button onClick={() => onDeleteMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-red-500/10 hover:text-red-300"><Trash2 className="h-3 w-3" />{c.delete}</button>
                       </div>
                     )}
                   </div>
@@ -422,9 +431,9 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                 {/* Message Actions Bar (Read Aloud, Copy) */}
                 {!isUser && !msg.isStreaming && (
                   <div className="flex items-center gap-2 mt-1.5 px-1 text-slate-400">
-                    <button onClick={() => onRetryMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-amber-300 hover:bg-amber-500/10"><RefreshCw className="w-3.5 h-3.5" />{msg.retryable ? (language === 'dari' ? 'تلاش دوباره' : 'Retry') : (language === 'dari' ? 'تولید دوباره' : 'Regenerate')}</button>
-                    <button onClick={() => onBranchMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-800"><GitBranch className="w-3.5 h-3.5" />{language === 'dari' ? 'شاخه' : 'Branch'}</button>
-                    <button onClick={() => onDeleteMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-red-500/10 hover:text-red-300"><Trash2 className="w-3.5 h-3.5" />{language === 'dari' ? 'حذف' : 'Delete'}</button>
+                    <button onClick={() => onRetryMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-amber-300 hover:bg-amber-500/10"><RefreshCw className="w-3.5 h-3.5" />{msg.retryable ? (c.retry) : (c.regenerate)}</button>
+                    <button onClick={() => onBranchMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-800"><GitBranch className="w-3.5 h-3.5" />{c.branchLabel}</button>
+                    <button onClick={() => onDeleteMessage(msg.id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-red-500/10 hover:text-red-300"><Trash2 className="w-3.5 h-3.5" />{c.delete}</button>
                     {/* Read Aloud Button (User Request #7) */}
                     <button
                       disabled={!ttsAvailable}
@@ -432,7 +441,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
                       className={`flex items-center gap-1 text-[11px] p-1 px-2 rounded-md hover:bg-slate-800 transition-colors ${
                         isSpeaking ? 'text-cyan-400 bg-cyan-950/40' : ttsAvailable ? 'hover:text-slate-200' : 'opacity-30 cursor-not-allowed'
                       }`}
-                      title={!ttsAvailable ? (language === 'dari' ? 'ارائه‌دهنده متن به گفتار تأیید نشده است' : 'No verified text-to-speech provider is available') : (isSpeaking ? t.stopSpeech : t.readAloud)}
+                      title={!ttsAvailable ? (c.noTts) : (isSpeaking ? t.stopSpeech : t.readAloud)}
                     >
                       {isSpeaking ? (
                         <>
@@ -480,7 +489,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
             </div>
             <div className="p-3.5 rounded-2xl bg-[#0b142c] border border-cyan-900/40 text-cyan-300 flex items-center gap-2 text-xs">
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-              <span>{language === 'dari' ? (isSlowResponse ? 'هنوز در حال فکر کردن…' : 'AFG AI در حال پردازش و پاسخگویی...') : (isSlowResponse ? 'Still thinking…' : 'AFG AI is generating a thoughtful response...')}</span>
+              <span>{isSlowResponse ? c.thinking : c.slow}</span>
             </div>
           </div>
         )}
