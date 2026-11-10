@@ -76,7 +76,7 @@ const copy = {
     local:'Offline model runtime', voice:'Voice capabilities', feature:'Feature availability',
     notAvailable:'Not available until the backend reports it as enabled.',
     statusError:'Could not verify backend status. Treat this feature as unavailable.',
-    language:'Language preference', languageHelp:'18 language and regional locales are selectable. Full interface translations are being rolled out; unreviewed languages currently fall back to English UI text.',
+    language:'Language preference', languageHelp:'Four primary interface languages are available: Dari, English, Pashto and Arabic.',
     adminGate:'Admin access is verified by the server; this view does not grant admin privileges.',
   },
   fa: {
@@ -120,6 +120,7 @@ interface Props {
 
 export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLanguage,onSetTheme,onOpenShortcuts}) => {
   const fa = language === 'dari';
+  const rtl = ['dari','pashto','persian','arabic','urdu'].includes(language);
   const hubUi = getHubUi(language);
   const t = { ...copy.en, ...(fa ? copy.fa : {}), ...hubUi };
   const groupLabels = (hubUi.groups || '').split(' · ');
@@ -212,10 +213,10 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
   };
   const selected = page ? ITEMS.find(item=>item.id===page) : null;
   const statusBadge=(id:SettingId)=><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${status[id]==='active'?'bg-emerald-500/15 text-emerald-300':status[id]==='disabled'?'bg-slate-700 text-slate-400':'bg-amber-500/10 text-amber-300'}`}>{statusLabel(id)}</span>;
-  const row=(item:Item)=><button key={item.id} type="button" disabled={isDisabled(item.id)} onClick={()=>{setPage(item.id);setError('');setNotice('');}} className={`group flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-cyan-400/5 disabled:cursor-not-allowed disabled:opacity-50 ${fa?'text-right':''}`}>
+  const row=(item:Item)=><button key={item.id} type="button" disabled={isDisabled(item.id)} onClick={()=>{setPage(item.id);setError('');setNotice('');}} className={`group flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-cyan-400/5 disabled:cursor-not-allowed disabled:opacity-50 ${rtl?'text-right':''}`}>
     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/15 bg-cyan-500/5 text-cyan-300"><item.icon className="h-5 w-5"/></span>
     <span className="min-w-0 flex-1"><span className="block text-sm font-bold text-white">{item.id==='api-hub'&&fa?'فهرست APIها و کلیدها':item.id==='9router'&&fa?'درگاه هوش مصنوعی 9Router':item.id==='intelligence'&&fa?'هوش اختصاصی AFG AI':item.title}</span><span className="mt-0.5 block text-xs leading-5 text-slate-400">{item.id==='api-hub'&&fa?'کشف APIها، ذخیره امن کلیدهای خود و فعال‌سازی ابزارهای هوشمند.':item.id==='9router'&&fa?'مدل‌های گفتگو، تصویر، ویدیو، صدا، جستجوی وب و Embedding.':item.id==='intelligence'&&fa?'مدیریت دانش خصوصی، حافظه و آماده‌سازی داده‌های آموزشی.':item.subtitle}</span></span>
-    <span className="flex shrink-0 items-center gap-2">{(status[item.id]||item.id==='github')&&['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(item.id)&&statusBadge(item.id)}<ChevronRight className={`h-4 w-4 text-slate-500 ${fa?'rotate-180':''}`}/></span>
+    <span className="flex shrink-0 items-center gap-2">{(status[item.id]||item.id==='github')&&['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(item.id)&&statusBadge(item.id)}<ChevronRight className={`h-4 w-4 text-slate-500 ${rtl?'rotate-180':''}`}/></span>
   </button>;
 
   if(context==='admin') return <section className="afg-settings-hub mx-auto w-full max-w-[1500px] px-3 py-4 sm:px-6">
@@ -224,7 +225,7 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
     <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4"><h2 className="font-bold text-white">{t.admin}</h2><p className="mt-2 text-sm leading-6 text-slate-300">{fa?'پنل قدیمی مدیریت داخل برنامه حذف شده است. مدیریت زیرساخت و کاربران از درگاه امن و جداگانه 9Router انجام می‌شود.':'The legacy in-app admin panel has been removed. Infrastructure and user administration are handled by the separate authenticated 9Router control plane.'}</p></div>
   </section>;
 
-  return <section className="afg-settings-hub mx-auto w-full max-w-3xl space-y-4 px-3 py-4 sm:px-6" dir={fa?'rtl':'ltr'}>
+  return <section className="afg-settings-hub mx-auto w-full max-w-3xl space-y-4 px-3 py-4 sm:px-6" dir={rtl?'rtl':'ltr'}>
     <header className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div><h1 className="text-2xl font-black text-white">{fa?'تنظیمات':'Settings'}</h1><p className="mt-1 text-xs text-slate-400">{fa?'مرکز تنظیمات AFG AI':'Manage your AFG AI experience'}</p></div>
@@ -235,7 +236,7 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
     {error&&<p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{error}</p>}
     {notice&&<p role="status" className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-300">{notice}</p>}
     {page&&selected ? <div className="space-y-4 animate-in slide-in-from-right-2">
-      <button type="button" onClick={()=>setPage(null)} className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-300"><ArrowLeft className={`h-4 w-4 ${fa?'rotate-180':''}`}/>{t.back}</button>
+      <button type="button" onClick={()=>setPage(null)} className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-300"><ArrowLeft className={`h-4 w-4 ${rtl?'rotate-180':''}`}/>{t.back}</button>
       <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
         <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><selected.icon className="h-5 w-5"/></span><div className="min-w-0 flex-1"><h2 className="font-black text-white">{selected.id==='api-hub'&&fa?'فهرست APIها و کلیدها':selected.id==='9router'&&fa?'درگاه هوش مصنوعی 9Router':selected.id==='intelligence'&&fa?'هوش اختصاصی AFG AI':selected.title}</h2><p className="text-xs text-slate-400">{selected.id==='intelligence'&&fa?'مدیریت دانش خصوصی و داده‌های آموزشی':selected.subtitle}</p></div>{['github','models','local','voice','telegram','ftp','mcp','byok','router'].includes(page)&&statusBadge(page)}</div>
       </div>
@@ -249,12 +250,12 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
           <p className="mt-1 text-xs leading-5 text-slate-400">{page==='language'?t.languageHelp:page==='memory'?'Manage memory consent, saved items and memory availability in the account controls below.':page==='privacy'?'Manage account security, active sessions, export and account deletion below.':page==='coding'?'Terminal and code execution stay unavailable until an administrator enables a verified sandbox.':page==='chat'?'Configure response style, length, creativity, default language and model preferences below.':'These controls are stored in your account when signed in; guest changes remain local to this device.'}</p>
         </div>
         {page==='language' && <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 space-y-3">
-          <label className="block text-sm font-semibold text-white">Application language
+          <label className="block text-sm font-semibold text-white">{t.language}
             <select value={language} onChange={e=>onSetLanguage(e.target.value as Language)} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-white">
               {LANGUAGE_OPTIONS.map(option=><option key={option.id} value={option.id}>{option.native} — {option.label}</option>)}
             </select>
           </label>
-          <p className="text-xs leading-5 text-slate-400">Date, number and regional formatting follow the selected language. Complete native translations are being rolled out; languages without a reviewed translation currently use English interface text.</p>
+          <p className="text-xs leading-5 text-slate-400">Date, number and regional formatting follow the selected language.</p>
         </div>}
         <AfgAccountSettings language={language} theme={theme} onTheme={onSetTheme} onLanguage={onSetLanguage}/>
       </>}
@@ -282,7 +283,7 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
     </div> : <div className="space-y-5">
       <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/20 bg-slate-950/70 p-4"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><Settings2 className="h-5 w-5"/></div><div className="min-w-0"><p className="font-bold text-white">{language==='dari'?user.name:user.nameEn}</p><p className="text-xs text-slate-400">{user.email||'Guest account'}</p></div><span className="ml-auto text-[10px] font-bold text-cyan-300">{authenticated?'SIGNED IN':'GUEST'}</span></div>
       {filtered.length?groups.map((group,index)=>{const rows=filtered.filter(item=>item.group===group);if(!rows.length)return null;return <section key={group} className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/75"><h2 className="px-4 pb-2 pt-4 text-[11px] font-black uppercase tracking-wider text-cyan-300">{groupLabels[index] || group}</h2><div className="divide-y divide-slate-800/80">{rows.map(row)}</div></section>}):<p className="rounded-2xl border border-slate-800 p-6 text-center text-sm text-slate-400">{t.noResults}</p>}
-      <button type="button" onClick={onOpenShortcuts} className="w-full rounded-xl border border-slate-800 px-4 py-3 text-sm text-slate-300">Keyboard shortcuts</button>
+      <button type="button" onClick={onOpenShortcuts} className="w-full rounded-xl border border-slate-800 px-4 py-3 text-sm text-slate-300">{language==='dari'?'میان‌برهای صفحه‌کلید':language==='pashto'?'د کیبورډ لنډلارې':language==='arabic'?'اختصارات لوحة المفاتيح':'Keyboard shortcuts'}</button>
     </div>}
     <div className="pb-4 text-center text-[10px] text-slate-600">AFG AI · Settings Hub</div>
   </section>;
