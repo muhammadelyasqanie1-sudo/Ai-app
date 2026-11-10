@@ -133,7 +133,6 @@ interface Props {
 export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLanguage,onSetTheme,onOpenShortcuts}) => {
   const locale = language === 'dari' || language === 'pashto' || language === 'arabic' ? language : 'english';
   const rtl = ['dari','pashto','persian','arabic','urdu'].includes(language);
-  const fa = locale === 'dari';
   const hubUi = getHubUi(language);
   const t = { ...copy.en, ...(locale === 'dari' ? copy.fa : locale === 'pashto' ? copy.ps : locale === 'arabic' ? copy.ar : {}), ...hubUi };
   const extra = {
@@ -161,7 +160,7 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
     mcp: locale==='dari'?'ابزارهای متصل (MCP)':locale==='pashto'?'نښتي وسایل (MCP)':locale==='arabic'?'الأدوات المتصلة (MCP)':'Connected tools (MCP)',
     byok: locale==='dari'?'حساب‌های متصل (BYOK)':locale==='pashto'?'نښتي حسابونه (BYOK)':locale==='arabic'?'الحسابات المتصلة (BYOK)':'Connected accounts (BYOK)',
     router: locale==='dari'?'درگاه محلی 9Router':locale==='pashto'?'ځایي 9Router دروازه':locale==='arabic'?'بوابة 9Router المحلية':'9Router / local router',
-    '9router':'9Router AI Gateway'
+    '9router':locale==='dari'?'درگاه هوش مصنوعی 9Router':locale==='pashto'?'د 9Router AI دروازه':locale==='arabic'?'بوابة 9Router للذكاء الاصطناعي':'9Router AI Gateway'
   };
   const pageCopy = {
     dari:{appearance:'ظاهر برنامه',chat:'تنظیمات گفتگو',memory:'حافظه شخصی',coding:'محیط برنامه‌نویسی',privacy:'حریم خصوصی و امنیت',memoryHelp:'رضایت حافظه، موارد ذخیره‌شده و دسترسی حافظه را از تنظیمات حساب مدیریت کنید.',privacyHelp:'امنیت حساب، نشست‌های فعال، خروجی گرفتن و حذف حساب را مدیریت کنید.',codingHelp:'ترمینل و اجرای کد تا زمان فعال‌شدن محیط امن تأییدشده غیرفعال می‌ماند.',chatHelp:'سبک پاسخ، طول، خلاقیت، زبان پیش‌فرض و ترجیحات مدل را تنظیم کنید.',guestHelp:'این تنظیمات در حساب شما ذخیره می‌شوند؛ تغییرات مهمان فقط در همین دستگاه می‌مانند.',githubLinked:'حساب GitHub وصل است:',githubNotConfigured:'اتصال GitHub توسط مدیر تنظیم نشده است.',githubSignIn:'برای اتصال GitHub وارد حساب شوید.',telegram:'اتصال ربات تلگرام تا زمان تنظیم ربات پلتفرم و API جفت‌سازی در دسترس نیست.',ftp:'اطلاعات ورود از راه دور تا فعال‌شدن API رمزگذاری‌شده شخصی FTP/SFTP پذیرفته نمی‌شود.',mcp:'کشف runtime ابزارهای MCP فقط هنگام اتصال یک عامل دسکتاپ پشتیبانی‌شده در دسترس است.',byok:'BYOK تا زمان فعال‌سازی توسط مدیر و راه‌اندازی خزانه امن کلید، غیرفعال می‌ماند.',router:'روتر محلی به پل ارتباطی روی دستگاه نیاز دارد؛ localhost سرور همان گوشی شما نیست.',refresh:'تازه‌سازی وضعیت سرور',date:'تاریخ، عدد و قالب منطقه‌ای بر اساس زبان انتخاب‌شده تنظیم می‌شود.'},
@@ -180,7 +179,15 @@ export const AfgSettingsHub: React.FC<Props> = ({language,theme,user,onSetLangua
     local:locale==='dari'?'اجرای مدل‌ها روی همین دستگاه.':locale==='pashto'?'ماډلونه په همدې وسیله وچلوئ.':locale==='arabic'?'شغّل النماذج على هذا الجهاز.':'Run models on this device.',
     voice:locale==='dari'?'ورودی و خروجی گفتار را تنظیم کنید.':locale==='pashto'?'د وینا داخلول او وتل تنظیم کړئ.':locale==='arabic'?'اضبط إدخال الكلام وإخراجه.':'Configure speech input and output.',
     'api-hub':locale==='dari'?'APIهای عمومی و ابزارهای هوشمند را مدیریت کنید.':locale==='pashto'?'عامه API او هوښیار وسایل اداره کړئ.':locale==='arabic'?'أدر واجهات API العامة والأدوات الذكية.':'Manage public APIs and intelligent tools.',
-    intelligence:locale==='dari'?'دانش و حافظه اختصاصی AFG AI را مدیریت کنید.':locale==='pashto'?'د AFG AI ځانګړې پوهه او حافظه اداره کړئ.':locale==='arabic'?'أدر معرفة AFG AI وذاكرته الخاصة.':'Manage AFG AI private knowledge and memory.'
+    intelligence:locale==='dari'?'دانش و حافظه اختصاصی AFG AI را مدیریت کنید.':locale==='pashto'?'د AFG AI ځانګړې پوهه او حافظه اداره کړئ.':locale==='arabic'?'أدر معرفة AFG AI وذاكرته الخاصة.':'Manage AFG AI private knowledge and memory.',
+    coding:locale==='dari'?'ابزارهای برنامه‌نویسی و اجرای امن کد.':locale==='pashto'?'د کوډ لیکلو او خوندي اجرا وسایل.':locale==='arabic'?'أدوات البرمجة والتنفيذ الآمن للكود.':'Coding tools and safe code execution.',
+    privacy:locale==='dari'?'امنیت حساب و داده‌های شخصی خود را مدیریت کنید.':locale==='pashto'?'د حساب امنیت او شخصي معلومات اداره کړئ.':locale==='arabic'?'أدر أمان الحساب والبيانات الشخصية.':'Manage account security and personal data.',
+    telegram:locale==='dari'?'اتصال ربات و اعلان‌های تلگرام.':locale==='pashto'?'د Telegram بوټ او خبرتیاوې ونښلوئ.':locale==='arabic'?'ربط روبوت Telegram والإشعارات.':'Connect a Telegram bot and notifications.',
+    ftp:locale==='dari'?'اتصال امن فضای FTP و SFTP.':locale==='pashto'?'د FTP او SFTP خوندي نښلونې.':locale==='arabic'?'اتصالات FTP وSFTP الآمنة.':'Secure FTP and SFTP connections.',
+    mcp:locale==='dari'?'اتصال ابزارها و سرورهای MCP.':locale==='pashto'?'د MCP وسایل او سرورونه ونښلوئ.':locale==='arabic'?'ربط أدوات وخوادم MCP.':'Connect MCP tools and servers.',
+    byok:locale==='dari'?'کلید API خود را به‌صورت امن متصل کنید.':locale==='pashto'?'خپله API کیلي په خوندي ډول ونښلوئ.':locale==='arabic'?'اربط مفتاح API الخاص بك بأمان.':'Connect your own API keys securely.',
+    router:locale==='dari'?'درگاه محلی برای مدل‌ها و سرویس‌ها.':locale==='pashto'?'د ماډلونو او خدمتونو لپاره ځایي دروازه.':locale==='arabic'?'بوابة محلية للنماذج والخدمات.':'Local gateway for models and services.',
+    '9router':locale==='dari'?'مدیریت مسیرهای مدل و درگاه.':locale==='pashto'?'د ماډلونو لارې او دروازه اداره کړئ.':locale==='arabic'?'إدارة مسارات النماذج والبوابة.':'Manage model routes and gateway.'
   };
   const localizedItems = ITEMS.map(item=>({...item,title:itemTitles[item.id]||item.title,subtitle:itemDescriptions[item.id]||item.subtitle,group:extra.group[['Personalize','Your Assistant','Connections','Special Providers'].indexOf(item.group)]||item.group}));
 
