@@ -113,15 +113,10 @@ const copy = {
 };
 
 const LANGUAGE_OPTIONS: Array<{id:Language;label:string;native:string}> = [
-  {id:'english',label:'English',native:'English'},{id:'dari',label:'Dari',native:'دری'},
-  {id:'pashto',label:'Pashto',native:'پښتو'},{id:'persian',label:'Persian',native:'فارسی'},
-  {id:'arabic',label:'Arabic',native:'العربية'},{id:'urdu',label:'Urdu',native:'اردو'},
-  {id:'turkish',label:'Turkish',native:'Türkçe'},{id:'russian',label:'Russian',native:'Русский'},
-  {id:'french',label:'French',native:'Français'},{id:'spanish',label:'Spanish',native:'Español'},
-  {id:'german',label:'German',native:'Deutsch'},{id:'chinese',label:'Chinese (Simplified)',native:'简体中文'},
-  {id:'hindi',label:'Hindi',native:'हिन्दी'},{id:'bengali',label:'Bengali',native:'বাংলা'},
-  {id:'indonesian',label:'Indonesian',native:'Bahasa Indonesia'},{id:'portuguese',label:'Portuguese',native:'Português'},
-  {id:'japanese',label:'Japanese',native:'日本語'},{id:'korean',label:'Korean',native:'한국어'},
+  {id:'dari',label:'Dari',native:'دری'},
+  {id:'english',label:'English',native:'English'},
+  {id:'pashto',label:'Pashto',native:'پښتو'},
+  {id:'arabic',label:'Arabic',native:'العربية'},
 ];
 
 interface Props {
