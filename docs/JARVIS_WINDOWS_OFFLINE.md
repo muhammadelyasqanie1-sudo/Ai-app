@@ -14,7 +14,7 @@ This bridge is an inference path, not a Windows device-control agent. It does no
 4. Start the local server with loopback binding only. Example (replace the model path and allowed origin):
 
 ```bat
-llama-server.exe -m "C:\\AFG-AI\\models\\assistant.gguf" --host 127.0.0.1 --port 8080 --cors-allow-origin "https://YOUR-AFG-AI-ORIGIN"
+llama-server.exe -m "C:\\AFG-AI\\models\\assistant.gguf" --host 127.0.0.1 --port 8080 --cors-origins "https://YOUR-AFG-AI-ORIGIN"
 ```
 
 Use the exact origin shown in the browser address bar (scheme + host + optional port). Do not use `*` for CORS. Do not bind the server to `0.0.0.0` or expose port 8080 to the LAN/Internet. If the installed llama.cpp build uses a different CORS flag, consult that build's own `--help`; do not disable browser security to make it work.
