@@ -30,24 +30,10 @@ const LANGUAGE_SCREEN_COPY: Record<Language,{title:string;subtitle:string;footno
 };
 
 const LANGUAGE_OPTIONS: Array<{id:Language;name:string;native:string;region:string;rtl?:boolean}> = [
-  {id:'dari',name:'Dari',native:'دری',region:'Afghanistan',rtl:true},
+  {id:'dari',name:'Dari',native:'دری',region:'افغانستان',rtl:true},
   {id:'english',name:'English',native:'English',region:'Global'},
-  {id:'pashto',name:'Pashto',native:'پښتو',region:'Afghanistan / Pakistan',rtl:true},
-  {id:'arabic',name:'Arabic',native:'العربية',region:'Middle East / Global',rtl:true},
-  {id:'persian',name:'Persian',native:'فارسی',region:'Iran / Global',rtl:true},
-  {id:'urdu',name:'Urdu',native:'اردو',region:'Pakistan / India',rtl:true},
-  {id:'turkish',name:'Turkish',native:'Türkçe',region:'Türkiye'},
-  {id:'russian',name:'Russian',native:'Русский',region:'Eastern Europe / Central Asia'},
-  {id:'french',name:'French',native:'Français',region:'Global'},
-  {id:'spanish',name:'Spanish',native:'Español',region:'Global'},
-  {id:'german',name:'German',native:'Deutsch',region:'Europe'},
-  {id:'chinese',name:'Chinese (Simplified)',native:'简体中文',region:'China'},
-  {id:'hindi',name:'Hindi',native:'हिन्दी',region:'India'},
-  {id:'bengali',name:'Bengali',native:'বাংলা',region:'Bangladesh / India'},
-  {id:'indonesian',name:'Indonesian',native:'Bahasa Indonesia',region:'Indonesia'},
-  {id:'portuguese',name:'Portuguese',native:'Português',region:'Brazil / Portugal'},
-  {id:'japanese',name:'Japanese',native:'日本語',region:'Japan'},
-  {id:'korean',name:'Korean',native:'한국어',region:'South Korea'},
+  {id:'pashto',name:'Pashto',native:'پښتو',region:'افغانستان / پاکستان',rtl:true},
+  {id:'arabic',name:'Arabic',native:'العربية',region:'العالم العربي',rtl:true},
 ];
 
 export const AfgLanguageModal: React.FC<AfgLanguageModalProps> = ({ isOpen, language, onSelectLanguage }) => {
