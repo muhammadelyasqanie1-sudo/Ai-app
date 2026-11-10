@@ -22,6 +22,7 @@ export interface StartNativeDownloadOptions {
   expectedSha256?: string | null;
 }
 export interface AFGOfflineModelsPlugin {
+  pickModelFile(): Promise<{ path: string; fileName: string; sizeBytes: number }>;
   startDownload(options: StartNativeDownloadOptions): Promise<{ downloadId: number; id: string }>;
   getDownloadStatus(options: { downloadId: number }): Promise<NativeOfflineDownload>;
   listDownloads(): Promise<{ downloads: NativeOfflineDownload[] }>;
