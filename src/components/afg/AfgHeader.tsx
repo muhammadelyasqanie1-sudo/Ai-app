@@ -16,10 +16,10 @@ import type { Language, Theme, UserProfile } from '../../types/afg';
 import { translations } from '../../utils/afgTranslations';
 
 const HEADER_COPY = {
-  dari:{menu:'بازکردن منو',newChat:'گفت‌وگوی جدید',more:'گزینه‌های بیشتر',models:'کتابخانه مدل‌ها',settings:'تنظیمات',language:'دری'},
-  english:{menu:'Open navigation menu',newChat:'New chat',more:'More options',models:'Model library',settings:'Settings',language:'English'},
-  pashto:{menu:'د لارښود مینو پرانیستل',newChat:'نوې خبرې',more:'نور انتخابونه',models:'د ماډلونو کتابتون',settings:'امستنې',language:'پښتو'},
-  arabic:{menu:'فتح قائمة التنقل',newChat:'محادثة جديدة',more:'خيارات إضافية',models:'مكتبة النماذج',settings:'الإعدادات',language:'العربية'}
+  dari:{menu:'بازکردن منو',newChat:'گفت‌وگوی جدید',more:'گزینه‌های بیشتر',models:'کتابخانه مدل‌ها',settings:'تنظیمات',language:'دری',live:'برخط',offline:'بدون اتصال',connecting:'در حال اتصال',degraded:'اتصال ناپایدار',liveTitle:'API و فهرست مدل‌ها در دسترس است',offlineTitle:'اتصال اینترنت وجود ندارد',connectingTitle:'وضعیت اتصال در حال بررسی است'},
+  english:{menu:'Open navigation menu',newChat:'New chat',more:'More options',models:'Model library',settings:'Settings',language:'English',live:'Live',offline:'Offline',connecting:'Connecting',degraded:'Degraded',liveTitle:'API and model catalogue reachable',offlineTitle:'No network connection',connectingTitle:'Connection is being checked'},
+  pashto:{menu:'د لارښود مینو پرانیستل',newChat:'نوې خبرې',more:'نور انتخابونه',models:'د ماډلونو کتابتون',settings:'امستنې',language:'پښتو',live:'آنلاین',offline:'نالیکي',connecting:'نښلېږي',degraded:'کمزورې اړیکه',liveTitle:'API او د ماډلونو کتلاګ ته لاسرسی شته',offlineTitle:'انټرنېټي اړیکه نشته',connectingTitle:'د اړیکې حالت کتل کېږي'},
+  arabic:{menu:'فتح قائمة التنقل',newChat:'محادثة جديدة',more:'خيارات إضافية',models:'مكتبة النماذج',settings:'الإعدادات',language:'العربية',live:'مباشر',offline:'دون اتصال',connecting:'جارٍ الاتصال',degraded:'اتصال ضعيف',liveTitle:'واجهة API وفهرس النماذج متاحان',offlineTitle:'لا يوجد اتصال بالشبكة',connectingTitle:'جارٍ التحقق من حالة الاتصال'}
 } as const;
 
 interface AfgHeaderProps {
@@ -113,7 +113,7 @@ export const AfgHeader: React.FC<AfgHeaderProps> = ({
         {/* Right Section: Language Switch, Theme, Notifications & User Avatar */}
         <div className="flex items-center gap-1.5 sm:gap-2.5">
 
-          <div className={'afg-connection-indicator hidden sm:flex ' + (connection==='live'?'is-live':connection==='offline'?'is-offline':'is-degraded')} title={connection==='live'?'API and model catalogue reachable':connection==='offline'?'No network connection':'Connection is being checked'}><span className="afg-connection-dot"/>{connection==='live'?'Live':connection==='offline'?'Offline':connection==='connecting'?'Connecting':'Degraded'}</div>
+          <div className={'afg-connection-indicator hidden sm:flex ' + (connection==='live'?'is-live':connection==='offline'?'is-offline':'is-degraded')} title={connection==='live'?c.liveTitle:connection==='offline'?c.offlineTitle:c.connectingTitle}><span className="afg-connection-dot"/>{connection==='live'?c.live:connection==='offline'?c.offline:connection==='connecting'?c.connecting:c.degraded}</div>
 
           <button type="button" onClick={onNewChat} className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-800/40 bg-cyan-500/10 px-2.5 py-2 text-xs font-semibold text-cyan-200 transition-colors hover:bg-cyan-500/20" aria-label={c.newChat} title={c.newChat}>
             <Plus className="h-4 w-4" />
