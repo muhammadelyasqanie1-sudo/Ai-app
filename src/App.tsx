@@ -59,6 +59,13 @@ const DEFAULT_USER: UserProfile = {
 
 const INITIAL_MESSAGES: AfgMessage[] = [];
 
+const APP_COPY = {
+  dari:{adminCheck:'در حال بررسی دسترسی مدیریت…',adminDenied:'دسترسی به پنل مدیریت تأیید نشد.',profileError:'بارگذاری پروفایل یا تاریخچه ناموفق بود. لطفاً دوباره تلاش کنید.',imageEdit:'ویرایش تصویر با فایل پیوست هنوز فعال نیست؛ فعلاً توضیح متنی بفرستید.',generatingImage:'در حال تولید تصویر…',imageRoute:'مسیر تولید تصویر این ارائه‌دهنده هنوز وصل نشده است.',imageFailed:'تولید تصویر ناموفق بود.',imageUrl:'ارائه‌دهنده لینک معتبر تصویر برنگرداند.',vision:'این مدل نمی‌تواند تصویر را بخواند. لطفاً یک مدل دارای قابلیت Vision انتخاب کنید.',upload:'بارگذاری فایل هنوز به ذخیره‌سازی و پردازش سرور وصل نشده است.',requestId:'شناسه پیگیری',responseError:'پاسخ کامل نشد. پیام شما باقی مانده است؛ اتصال و مدل را بررسی کرده و دوباره تلاش کنید.',checking:'در حال بررسی ورود…',retry:'تلاش دوباره',loading:'در حال بارگذاری...',assistant:'دستیار AFG AI',close:'بستن',loadingAssistant:'در حال بارگذاری دستیار...',terminal:'ترمینل',openTerminal:'باز کردن ترمینل AFG AI'},
+  english:{adminCheck:'Verifying administrator access…',adminDenied:'Administrator portal access could not be verified.',profileError:'Failed to load profile or history. Please try again.',imageEdit:'Image editing with attachments is not enabled yet. Send a text prompt instead.',generatingImage:'Generating image…',imageRoute:'Image generation for this provider is not integrated yet.',imageFailed:'Image generation failed.',imageUrl:'The provider did not return a valid image URL.',vision:'This model cannot read images. Please switch to a Vision model.',upload:'File uploads are not connected to server storage and processing yet.',requestId:'Request ID',responseError:'The response could not be completed. Your prompt is preserved; check the connection and model, then retry.',checking:'Checking your session…',retry:'Retry',loading:'Loading...',assistant:'AFG AI assistant',close:'Close',loadingAssistant:'Loading assistant...',terminal:'Terminal',openTerminal:'Open AFG AI Terminal'},
+  pashto:{adminCheck:'د مدیر اجازه کتل کېږي…',adminDenied:'د مدیر پینل ته لاسرسی تایید نه شو.',profileError:'پروفایل یا تاریخچه بار نه شوه. بیا هڅه وکړئ.',imageEdit:'د ضمیمه شوي فایل له لارې د انځور سمون لا فعال نه دی؛ اوسنی وخت کې متني غوښتنه واستوئ.',generatingImage:'انځور جوړېږي…',imageRoute:'د دې برابرونکي د انځور جوړولو لاره لا نه ده نښلول شوې.',imageFailed:'د انځور جوړول ناکام شول.',imageUrl:'برابرونکي د انځور باوري لینک بېرته ورنه کړ.',vision:'دا ماډل انځورونه نه شي لوستلای. د Vision وړتیا لرونکی ماډل وټاکئ.',upload:'د فایل پورته کول لا د سرور له زېرمه او پروسس سره نه دي نښلول شوي.',requestId:'د تعقیب پېژند',responseError:'ځواب بشپړ نه شو. ستاسو غوښتنه ساتل شوې؛ اړیکه او ماډل وګورئ او بیا هڅه وکړئ.',checking:'ستاسو ناسته کتل کېږي…',retry:'بیا هڅه',loading:'بارېږي...',assistant:'د AFG AI مرستیال',close:'بندول',loadingAssistant:'مرستیال بارېږي...',terminal:'ټرمینل',openTerminal:'د AFG AI ټرمینل پرانیستل'},
+  arabic:{adminCheck:'جارٍ التحقق من صلاحية المسؤول…',adminDenied:'تعذر التحقق من صلاحية الوصول إلى لوحة المسؤول.',profileError:'تعذر تحميل الملف الشخصي أو السجل. حاول مرة أخرى.',imageEdit:'تحرير الصور بالمرفقات غير مفعّل بعد؛ أرسل وصفاً نصياً حالياً.',generatingImage:'جارٍ إنشاء الصورة…',imageRoute:'تكامل إنشاء الصور لهذا المزوّد غير متاح بعد.',imageFailed:'فشل إنشاء الصورة.',imageUrl:'لم يُرجع المزوّد رابط صورة صالحاً.',vision:'لا يستطيع هذا النموذج قراءة الصور. اختر نموذجاً يدعم الرؤية.',upload:'لم يتم ربط رفع الملفات بتخزين الخادم ومعالجتها بعد.',requestId:'معرّف الطلب',responseError:'تعذر إكمال الرد. تم الاحتفاظ بطلبك؛ تحقق من الاتصال والنموذج ثم أعد المحاولة.',checking:'جارٍ التحقق من جلستك…',retry:'إعادة المحاولة',loading:'جارٍ التحميل...',assistant:'مساعد AFG AI',close:'إغلاق',loadingAssistant:'جارٍ تحميل المساعد...',terminal:'الطرفية',openTerminal:'فتح طرفية AFG AI'}
+};
+
 const detectDeviceLanguage = (): Language => {
   const preferred = (navigator.languages?.length ? navigator.languages : [navigator.language])
     .map((tag) => tag.toLowerCase());
@@ -90,6 +97,8 @@ export default function App() {
   }, []);
   // App State
   const [language, setLanguage] = useState<Language>(() => { const saved = localStorage.getItem('afg_language'); const supported: Language[] = ['dari','english','pashto','persian','arabic','urdu','turkish','russian','french','spanish','german','chinese','hindi','bengali','indonesian','portuguese','japanese','korean']; return supported.includes(saved as Language) ? saved as Language : detectDeviceLanguage(); });
+  const appLocale = language === 'dari' || language === 'pashto' || language === 'arabic' ? language : 'english';
+  const appText = APP_COPY[appLocale];
   // Language is detected from the device/browser; no manual language gate on startup.
   const [hasSelectedLanguage, setHasSelectedLanguage] = useState(true);
   // Open the local workspace directly; server authentication still protects account APIs.
@@ -321,7 +330,7 @@ export default function App() {
     if (!portal) return;
     portal.opener = null;
     portal.document.title = 'AFG AI Admin';
-    portal.document.body.textContent = language === 'dari' ? 'در حال بررسی دسترسی مدیریت…' : 'Verifying administrator access…';
+    portal.document.body.textContent = appText.adminCheck;
     fetch(API_BASE_URL + '/api/9router/status', { credentials: 'include', cache: 'no-store' })
       .then(async (response) => {
         const data = response.ok ? await response.json() : null;
@@ -329,7 +338,7 @@ export default function App() {
         if (!target || target.protocol !== 'https:' || target.pathname !== '/control-plane' || target.search || target.hash || target.username || target.password || !data?.configured || !data?.reachable) throw new Error('9Router control plane is unavailable.');
         portal.location.replace(target.toString());
       })
-      .catch(() => { try { portal.close(); } catch {} window.alert(language === 'dari' ? 'دسترسی به پنل مدیریت تأیید نشد.' : 'Administrator portal access could not be verified.'); });
+      .catch(() => { try { portal.close(); } catch {} window.alert(appText.adminDenied); });
   };
 
   const handleSelectModel = (model: string) => {
@@ -428,7 +437,7 @@ export default function App() {
           serverConversationRef.current = String(latest.id);
         }
       } catch {
-        if (active) setProfileLoadError(language === 'dari' ? 'بارگذاری پروفایل یا تاریخچه ناموفق بود. لطفاً دوباره تلاش کنید.' : 'Failed to load profile. Please try again.');
+        if (active) setProfileLoadError(appText.profileError);
       } finally {
         window.clearTimeout(timer);
         if (active) setIsInitialChatLoading(false);
@@ -543,15 +552,15 @@ export default function App() {
     const chosenModel = modelOptions.find((item) => selectedModel === item.providerId + '::' + item.id);
     if (chosenModel?.capabilities?.imageGen) {
       if (attachments.length) {
-        window.alert(language === 'dari' ? 'ویرایش تصویر با فایل پیوست هنوز فعال نیست؛ فعلاً توضیح متنی بفرستید.' : 'Image editing with attachments is not enabled yet. Send a text prompt instead.');
+        window.alert(appText.imageEdit);
         return;
       }
       const userMessage: AfgMessage = { id: crypto.randomUUID(), role: 'user', content: text, timestamp: Date.now() };
       const assistantId = crypto.randomUUID();
-      setMessages([...baseMessages, userMessage, { id: assistantId, role: 'assistant', content: language === 'dari' ? 'در حال تولید تصویر…' : 'Generating image…', isStreaming: true, timestamp: Date.now() }]);
+      setMessages([...baseMessages, userMessage, { id: assistantId, role: 'assistant', content: appText.generatingImage, isStreaming: true, timestamp: Date.now() }]);
       setIsLoading(true);
       try {
-        if (chosenModel.providerId !== '9router') throw new Error(language === 'dari' ? 'مسیر تولید تصویر این ارائه‌دهنده هنوز وصل نشده است.' : 'Image generation for this provider is not integrated yet.');
+        if (chosenModel.providerId !== '9router') throw new Error(appText.imageRoute);
         const csrf = getCsrfToken();
         const response = await fetch(API_BASE_URL + '/api/9router/images/generations', {
           method: 'POST', credentials: 'include',
@@ -559,10 +568,10 @@ export default function App() {
           body: JSON.stringify({ model: chosenModel.id, prompt: text.trim(), n: 1, size: '1024x1024', quality: 'standard', response_format: 'url' }),
         });
         const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload.error || (language === 'dari' ? 'تولید تصویر ناموفق بود.' : 'Image generation failed.'));
+        if (!response.ok) throw new Error(payload.error || (appText.imageFailed));
         const rows = Array.isArray(payload.data) ? payload.data : [];
         const imageUrl = rows[0]?.url;
-        if (typeof imageUrl !== 'string' || !/^https:\/\//i.test(imageUrl)) throw new Error(language === 'dari' ? 'ارائه‌دهنده لینک معتبر تصویر برنگرداند.' : 'The provider did not return a valid image URL.');
+        if (typeof imageUrl !== 'string' || !/^https:\/\//i.test(imageUrl)) throw new Error(appText.imageUrl);
         const resultText = '![Generated image](' + imageUrl + ')';
         setMessages(previous => previous.map(message => message.id === assistantId ? { ...message, content: resultText, isStreaming: false } : message));
       } catch (error) {
@@ -577,9 +586,9 @@ export default function App() {
       const hasImage = attachments.some((attachment) => /\\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(attachment.name));
       const selectedDescriptor = modelOptions.find((item) => selectedModel.endsWith(item.id));
       if (hasImage && !selectedDescriptor?.capabilities?.vision) {
-        window.alert(language === 'dari' ? 'این مدل نمی‌تواند تصویر را بخواند. لطفاً یک مدل دارای قابلیت Vision انتخاب کنید.' : 'This model cannot read images. Please switch to a Vision model.');
+        window.alert(appText.vision);
       } else {
-        window.alert(language === 'dari' ? 'بارگذاری فایل هنوز به ذخیره‌سازی و پردازش سرور وصل نشده است.' : 'File uploads are not connected to server storage and processing yet.');
+        window.alert(appText.upload);
       }
       return;
     }
@@ -814,7 +823,7 @@ export default function App() {
   }
 
   if (!hasEnteredApp) {
-    if (!authCheckResolved) return <div className="min-h-screen grid place-items-center bg-[var(--bg-main)] text-[var(--text-secondary)]" role="status" aria-live="polite">{language === 'dari' ? 'در حال بررسی ورود…' : 'Checking your session…'}</div>;
+    if (!authCheckResolved) return <div className="min-h-screen grid place-items-center bg-[var(--bg-main)] text-[var(--text-secondary)]" role="status" aria-live="polite">{appText.checking}</div>;
     return <AfgAuthGate language={language} onContinueGuest={() => { localStorage.setItem('afg_entry_mode', 'guest'); setHasEnteredApp(true); }} onAuthenticated={() => { localStorage.setItem('afg_entry_mode', 'account'); setHasEnteredApp(true); window.dispatchEvent(new Event('afg-auth-change')); }} />;
   }
 
@@ -830,7 +839,7 @@ export default function App() {
         failed={!isLoading && !!messages.at(-1)?.isError && !messages.at(-1)?.isCancelled} cancelled={!isLoading && !!messages.at(-1)?.isCancelled} onSetTheme={setTheme} onLanguage={handleSetLanguage}>
       {profileLoadError && <div role="alert" className="mx-auto mt-2 w-[min(94%,48rem)] rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
         {profileLoadError}
-        <button type="button" className="ms-3 underline font-semibold" onClick={() => { setChatLoadAttempt((value) => value + 1); window.dispatchEvent(new Event('afg-auth-change')); }}>{language === 'dari' ? 'تلاش دوباره' : 'Retry'}</button>
+        <button type="button" className="ms-3 underline font-semibold" onClick={() => { setChatLoadAttempt((value) => value + 1); window.dispatchEvent(new Event('afg-auth-change')); }}>{appText.retry}</button>
       </div>}
       {/* Main Content Area */}
       <main className="min-h-0 flex-1 w-full overflow-y-auto pb-4 pt-2 md:ms-0">
@@ -838,7 +847,7 @@ export default function App() {
         <React.Suspense
           fallback={
             <div className="mx-auto flex min-h-[40vh] items-center justify-center text-sm text-slate-500" role="status" aria-live="polite">
-              {language === 'dari' ? 'در حال بارگذاری...' : 'Loading...'}
+              {appText.loading}
             </div>
           }
         >
@@ -942,13 +951,13 @@ export default function App() {
       </JarvisShell>
 
       {isAfgAssistantOpen && (
-        <div className="afg-assistant-overlay fixed inset-0 z-[100] overflow-y-auto p-2 backdrop-blur-md sm:p-5" role="dialog" aria-modal="true" aria-label={language === 'dari' ? 'دستیار AFG AI' : 'AFG AI assistant'} onClick={(event) => { if (event.target === event.currentTarget) setIsAfgAssistantOpen(false); }}>
+        <div className="afg-assistant-overlay fixed inset-0 z-[100] overflow-y-auto p-2 backdrop-blur-md sm:p-5" role="dialog" aria-modal="true" aria-label={appText.assistant} onClick={(event) => { if (event.target === event.currentTarget) setIsAfgAssistantOpen(false); }}>
           <div className="afg-assistant-overlay-header mx-auto mb-3 flex max-w-4xl items-center justify-between rounded-2xl border border-cyan-400/25 px-4 py-3 shadow-2xl">
             <div className="flex items-center gap-2 text-sm font-bold text-cyan-200"><span className="grid h-8 w-8 place-items-center rounded-xl border border-cyan-300/30 bg-cyan-300/10">✦</span>AFG AI</div>
-            <button type="button" onClick={() => setIsAfgAssistantOpen(false)} className="rounded-xl border border-white/15 px-3 py-2 text-sm text-slate-200 hover:bg-white/10">{language === 'dari' ? 'بستن' : 'Close'}</button>
+            <button type="button" onClick={() => setIsAfgAssistantOpen(false)} className="rounded-xl border border-white/15 px-3 py-2 text-sm text-slate-200 hover:bg-white/10">{appText.close}</button>
           </div>
           <ErrorBoundary>
-            <React.Suspense fallback={<div className="mx-auto max-w-4xl rounded-2xl border border-cyan-400/20 bg-slate-900 p-6 text-center text-sm text-cyan-200">{language === 'dari' ? 'در حال بارگذاری دستیار...' : 'Loading assistant...'}</div>}>
+            <React.Suspense fallback={<div className="mx-auto max-w-4xl rounded-2xl border border-cyan-400/20 bg-slate-900 p-6 text-center text-sm text-cyan-200">{appText.loadingAssistant}</div>}>
               <LazyAfgJarvisView language={language} />
             </React.Suspense>
           </ErrorBoundary>
@@ -959,12 +968,12 @@ export default function App() {
         <button
           type="button"
           onClick={() => setCurrentTab('terminal')}
-          aria-label={language === 'dari' ? 'باز کردن ترمینل AFG AI' : 'Open AFG AI Terminal'}
-          title={language === 'dari' ? 'ترمینل · Ctrl+Shift+T' : 'Terminal · Ctrl+Shift+T'}
+          aria-label={appText.openTerminal}
+          title={`${appText.terminal} · Ctrl+Shift+T`}
           className="fixed z-40 bottom-[max(1.1rem,env(safe-area-inset-bottom))] end-4 inline-flex min-h-12 items-center gap-2 rounded-full border border-cyan-300/40 bg-[#07111f]/95 px-4 text-sm font-bold text-cyan-200 shadow-[0_8px_35px_rgba(6,182,212,.28)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-[#0b1b2b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300"
         >
           <TerminalIcon size={18} aria-hidden="true" />
-          <span>{language === 'dari' ? 'ترمینل' : 'Terminal'}</span>
+          <span>{appText.terminal}</span>
         </button>
       )}
 
