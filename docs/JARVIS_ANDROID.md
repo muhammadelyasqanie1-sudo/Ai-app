@@ -125,3 +125,16 @@ Source changes are prepared for CI validation. The Android workflow must success
 
 
 The local device toolkit does not require root access. Android runtime permissions are requested only when the user invokes the corresponding feature; the operating system remains responsible for granting or denying each permission.
+
+
+## Browse and activate a GGUF file from phone storage
+
+The Offline AI Hub includes a **Browse GGUF file** action on Android:
+
+1. Download a `.gguf` model yourself, or copy it to Downloads / internal storage / an SD card.
+2. Open **AFG AI → Offline AI Hub** and tap **Browse GGUF file**.
+3. Choose the model in Android's system file picker.
+4. AFG AI copies the selected file into its private `afg-ai-models` directory and displays its name and size.
+5. Tap **Activate model**. The native llama.cpp runtime loads the imported file for local chat.
+
+The picker accepts only files whose displayed filename ends in `.gguf`. The app imports a copy; the original file is not deleted or modified. The copy consumes additional storage, so keep enough free space for both the source and imported model. Large models can take time to copy and load. The feature requires an APK built with the native arm64 llama.cpp runtime; a web browser cannot invoke this Android picker.
