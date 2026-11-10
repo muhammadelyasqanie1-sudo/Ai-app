@@ -524,7 +524,8 @@ export default function App() {
     }).catch(() => console.warn('AFG_LOCALE_PREFERENCE_SAVE_FAILED'));
   };
 
-  const handleToggleLanguage = () => handleSetLanguage(language === 'dari' ? 'english' : 'dari');
+  const primaryLanguages: Language[] = ['dari','english','pashto','arabic'];
+  const handleToggleLanguage = () => { const index = primaryLanguages.indexOf(language); handleSetLanguage(primaryLanguages[(index + 1) % primaryLanguages.length]); };
 
   const handleToggleTheme = () => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
