@@ -71,7 +71,6 @@ const detectDeviceLanguage = (): Language => {
     .map((tag) => tag.toLowerCase());
   const first = preferred[0] || 'fa';
   if (first.startsWith('fa-af') || first.startsWith('prs')) return 'dari';
-  if (first.startsWith('fa-ir')) return 'persian';
   const code = first.split('-')[0];
   const languageMap: Record<string, Language> = {
     en:'english', fa:'dari', prs:'dari', ps:'pashto', ar:'arabic', ur:'urdu',
@@ -96,7 +95,7 @@ export default function App() {
     return () => { active = false; };
   }, []);
   // App State
-  const [language, setLanguage] = useState<Language>(() => { const saved = localStorage.getItem('afg_language'); const supported: Language[] = ['dari','english','pashto','persian','arabic','urdu','turkish','russian','french','spanish','german','chinese','hindi','bengali','indonesian','portuguese','japanese','korean']; return supported.includes(saved as Language) ? saved as Language : detectDeviceLanguage(); });
+  const [language, setLanguage] = useState<Language>(() => { const saved = localStorage.getItem('afg_language'); const supported: Language[] = ['dari','english','pashto','arabic']; return saved === 'persian' ? 'dari' : supported.includes(saved as Language) ? saved as Language : detectDeviceLanguage(); });
   const appLocale = language === 'dari' || language === 'pashto' || language === 'arabic' ? language : 'english';
   const appText = APP_COPY[appLocale];
   // Language is detected from the device/browser; no manual language gate on startup.
