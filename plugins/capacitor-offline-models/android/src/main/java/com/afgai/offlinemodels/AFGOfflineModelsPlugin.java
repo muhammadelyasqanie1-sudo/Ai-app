@@ -1,11 +1,18 @@
 package com.afgai.offlinemodels;
 
+import android.app.Activity;
 import android.app.DownloadManager;
-import android.content.Context;
+import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Environment;
 import android.os.Build;
+import android.provider.OpenableColumns;
+import com.getcapacitor.ActivityResult;
+import com.getcapacitor.annotation.ActivityCallback;
+import java.io.InputStream;
+import java.io.FileOutputStream;
+import android.content.Context;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -271,6 +278,71 @@ public class AFGOfflineModelsPlugin extends Plugin {
         result.put("reset", true);
         result.put("modelMemoryReleased", false);
         call.resolve(result);
+    }
+
+    @PluginMethod
+    public void pickModelFile(PluginCall call) {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/octet-stream", "application/x-gguf", "*/*"});
+        startActivityForResult(call, intent, "pickModelFileResult");
+    }
+
+    @ActivityCallback
+    private void pickModelFileResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) {
+            call.reject("Model file selection was cancelled.");
+            return;
+        }
+        Uri source = result.getData().getData();
+        String displayName = "model.gguf";
+        Cursor cursor = null;
+        try {
+            cursor = getContext().getContentResolver().query(source, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null);
+            if (cursor != null && cursor.moveToFirst()) {
+                int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                if (nameIndex >= 0) displayName = cursor.getString(nameIndex);
+            }
+        } catch (Exception ignored) {
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        if (displayName == null || !displayName.toLowerCase(Locale.ROOT).endsWith(".gguf")) {
+            call.reject("Choose a GGUF model file (.gguf).");
+            return;
+        }
+        File destination = null;
+        try {
+            File directory = modelDirectory();
+            String safeName = UUID.randomUUID().toString() + "-" + displayName.replaceAll("[^a-zA-Z0-9._-]", "_");
+            destination = new File(directory, safeName);
+            long copied = 0;
+            byte[] buffer = new byte[1024 * 1024];
+            try (InputStream input = getContext().getContentResolver().openInputStream(source);
+                 FileOutputStream output = new FileOutputStream(destination)) {
+                if (input == null) throw new Exception("Unable to open the selected model file.");
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    output.write(buffer, 0, read);
+                    copied += read;
+                }
+                output.getFD().sync();
+            }
+            if (copied <= 0 || !destination.isFile() || destination.length() != copied) {
+                destination.delete();
+                throw new Exception("The selected model file is empty or could not be copied completely.");
+            }
+            JSObject response = new JSObject();
+            response.put("path", destination.getAbsolutePath());
+            response.put("fileName", displayName);
+            response.put("sizeBytes", copied);
+            call.resolve(response);
+        } catch (Exception error) {
+            if (destination != null && destination.exists()) destination.delete();
+            call.reject("Unable to import the selected GGUF model into AFG AI storage.", error);
+        }
     }
 
     @PluginMethod

@@ -1,12 +1,13 @@
 // Trigger the repository's Android APK build workflow; no runtime behavior change.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownToLine, Cpu, HardDrive, MessageSquare, Search, ShieldCheck, Sparkles, WifiOff, X } from 'lucide-react';
+import { ArrowDownToLine, Cpu, FolderOpen, HardDrive, MessageSquare, Search, ShieldCheck, Sparkles, WifiOff, X } from 'lucide-react';
 import type { Language } from '../../types/afg';
 import { searchHuggingFaceGGUF, getHuggingFaceRepository, getPrimaryGgufFile, formatModelCategory, type HuggingFaceModel, type HuggingFaceRepository } from '../../lib/huggingFaceOfflineCatalog';
 import { assessOfflineModelFit, scanOfflineDevice, type OfflineDeviceProfile, type ModelFit } from '../../lib/offlineDevice';
 import { downloadGGUF, listOfflineDownloads, pauseGGUFDownload, removeOfflineModel, usesNativeOfflineDownloads, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
 import { clearOfflineChatMessages, loadOfflineChatMessages, saveOfflineChatMessages, type OfflineChatMessage } from '../../lib/offlineChatStorage';
-import { generateNativeLlamaResponse, getNativeLlamaRuntimeInfo, loadNativeLlamaModel, unloadNativeLlamaModel } from '../../lib/offlineLlamaRuntime';
+import { generateNativeLlamaResponse, getNativeLlamaRuntimeInfo, loadNativeLlamaModel, pickNativeGgufModel, unloadNativeLlamaModel } from '../../lib/offlineLlamaRuntime';
+import { generateDesktopLocalResponse, getDesktopLocalRuntimeInfo } from '../../lib/offlineDesktopRuntime';
 
 type CatalogModel = {
   model_id: string;
@@ -75,6 +76,11 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
   const [webGpuAvailable, setWebGpuAvailable] = useState(false);
   const [runtimeBannerDismissed, setRuntimeBannerDismissed] = useState(false);
   const [nativeRuntimeAvailable, setNativeRuntimeAvailable] = useState(false);
+  const [desktopRuntimeAvailable, setDesktopRuntimeAvailable] = useState(false);
+  const [desktopModelId, setDesktopModelId] = useState('');
+  const [desktopConnectBusy, setDesktopConnectBusy] = useState(false);
+  const [pickedModelFile, setPickedModelFile] = useState<{ path: string; fileName: string; sizeBytes: number } | null>(null);
+  const [filePickerBusy, setFilePickerBusy] = useState(false);
   const [activeOfflineModelLabel, setActiveOfflineModelLabel] = useState('');
   const [runtimeMessage, setRuntimeMessage] = useState('');
   const [storage, setStorage] = useState<{ usage?: number; quota?: number }>({});
@@ -99,7 +105,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
 
   const copy = locale === 'dari' ? {
     title: 'مرکز هوش مصنوعی آفلاین', subtitle: 'مدل را یک‌بار دانلود کن و در همین دستگاه، بدون اینترنت از آن استفاده کن.',
-    runtime: 'وضعیت موتور محلی', compatible: 'این دستگاه از WebGPU پشتیبانی می‌کند.', unsupported: 'WebGPU در این مرورگر در دسترس نیست. می‌توانی مدل‌ها را ببینی و دانلود کنی؛ برای اجرای آفلاین بومی از APK اندروید استفاده کن.',
+    runtime: 'وضعیت موتور محلی', compatible: 'این دستگاه از WebGPU پشتیبانی می‌کند.', unsupported: 'WebGPU در این مرورگر در دسترس نیست. در کمپیوتر به موتور محلی llama.cpp وصل شو؛ در اندروید از APK بومی استفاده کن.',
     checking: 'در حال بررسی سخت‌افزار…', catalog: 'مدل‌های سازگار', search: 'جست‌وجوی مدل…', unknown: 'نامشخص', unknownCompatibility: 'سازگاری در وب نامشخص است؛ مشخصات دقیق RAM/GPU در مرورگر در دسترس نیست.', install: 'دانلود و نصب', installed: 'ذخیره‌شده در دستگاه', downloading: 'در حال دانلود مدل…',
     minMemory: 'حداقل حافظه گرافیکی', downloadSize: 'حجم تقریبی مخزن مدل', unknownSize: 'اندازه دقیق در دسترس نیست', storage: 'فضای ذخیره‌سازی دستگاه',
     chat: 'گفت‌وگوی آفلاین', chatHint: 'مدل نصب‌شده را بارگذاری کن و بدون اتصال به سرور پیام بده.', choose: 'یک مدل انتخاب کن', load: 'بارگذاری مدل', send: 'ارسال', input: 'پیام خود را بنویس…',
@@ -110,7 +116,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     deviceTitle: 'اسکن هوشمند دستگاه', deviceUnknown: 'در حال بررسی مشخصات…', deviceRam: 'حافظه RAM کل', deviceAvailableRam: 'RAM آزاد فعلی', deviceCpu: 'هسته‌های پردازنده', deviceGpu: 'پردازنده گرافیکی', deviceStorage: 'فضای قابل استفاده', devicePlatform: 'سیستم و دستگاه', recommended: 'پیشنهادشده', limited: 'با محدودیت', incompatible: 'ناسازگار', allModels: 'همه', privacyScan: 'اسکن فقط مشخصات سخت‌افزاری و قابلیت‌های مرورگر را بررسی می‌کند.', rescan: 'اسکن دوباره',
   } : locale === 'pashto' ? {
     title:'نالیکي AI مرکز',subtitle:'ماډل یو ځل ښکته کړئ او بیا یې په همدې وسیله بې له انټرنېټه وکاروئ.',
-    runtime:'د ځایي انجن حالت',compatible:'دا وسیله د WebGPU ملاتړ کوي.',unsupported:'په دې براوزر کې WebGPU نشته. ماډلونه کتل او ښکته کولای شئ؛ د اصلي نالیکي اجرا لپاره د Android APK وکاروئ.',
+    runtime:'د ځایي انجن حالت',compatible:'دا وسیله د WebGPU ملاتړ کوي.',unsupported:'په دې براوزر کې WebGPU نشته. په کمپیوټر کې ځايي llama.cpp انجن سره وصل شئ؛ په Android کې اصلي APK وکاروئ.',
     checking:'د وسیلې وړتیاوې کتل کېږي…',catalog:'جوړېدونکي ماډلونه',search:'ماډلونه ولټوئ…',unknown:'ناڅرګند',unknownCompatibility:'په وېب کې سازګاري نه ده معلومه؛ براوزر د RAM/GPU کره معلومات نه ښيي.',install:'ښکته کول او نصب',installed:'په وسیله کې نصب شوی',downloading:'ماډل ښکته کېږي…',
     minMemory:'لږ تر لږه د GPU حافظه',downloadSize:'د ماډل د زېرمتون اټکلي اندازه',unknownSize:'کره اندازه نشته',storage:'د وسیلې زېرمه',
     chat:'نالیکي خبرې',chatHint:'نصب شوی ماډل پورته کړئ او له سرور پرته خبرې وکړئ.',choose:'ماډل وټاکئ',load:'ماډل پورته کول',send:'لېږل',input:'پیغام ولیکئ…',
@@ -121,7 +127,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     deviceTitle:'د وسیلې هوښیار سکین',deviceUnknown:'د وسیلې معلومات کتل کېږي…',deviceRam:'ټوله RAM',deviceAvailableRam:'اوسنۍ آزاده RAM',deviceCpu:'د CPU هستې',deviceGpu:'ګرافیکي پروسسګر',deviceStorage:'شته زېرمه',devicePlatform:'سیسټم او وسیله',recommended:'سپارښتل شوی',limited:'له محدودیت سره',incompatible:'ناسازګار',allModels:'ټول',privacyScan:'سکین یوازې د هارډویر او براوزر وړتیاوې ګوري.',rescan:'بیا سکین'
   } : locale === 'arabic' ? {
     title:'مركز الذكاء الاصطناعي دون اتصال',subtitle:'نزّل النموذج مرة واحدة ثم استخدمه على هذا الجهاز دون إنترنت.',
-    runtime:'حالة محرك التشغيل المحلي',compatible:'يدعم هذا الجهاز WebGPU.',unsupported:'WebGPU غير متاح في هذا المتصفح. يمكنك تصفح النماذج وتنزيلها؛ استخدم تطبيق Android للتشغيل المحلي الأصلي.',
+    runtime:'حالة محرك التشغيل المحلي',compatible:'يدعم هذا الجهاز WebGPU.',unsupported:'WebGPU غير متاح في هذا المتصفح. على الكمبيوتر اتصل بمحرك llama.cpp المحلي؛ وعلى Android استخدم تطبيق APK الأصلي.',
     checking:'جارٍ فحص إمكانات الجهاز…',catalog:'النماذج المتوافقة',search:'ابحث عن النماذج…',unknown:'غير معروف',unknownCompatibility:'التوافق غير معروف على الويب؛ لا يعرض المتصفح تفاصيل RAM/GPU الدقيقة.',install:'تنزيل وتثبيت',installed:'مثبّت على الجهاز',downloading:'جارٍ تنزيل النموذج…',
     minMemory:'الحد الأدنى لذاكرة GPU',downloadSize:'الحجم التقريبي لمستودع النموذج',unknownSize:'الحجم الدقيق غير متاح',storage:'مساحة تخزين الجهاز',
     chat:'محادثة دون اتصال',chatHint:'حمّل نموذجاً مثبتاً وتحدث دون إرسال طلبات إلى الخادم.',choose:'اختر نموذجاً',load:'تحميل النموذج',send:'إرسال',input:'اكتب رسالة…',
@@ -132,7 +138,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     deviceTitle:'فحص ذكي للجهاز',deviceUnknown:'جارٍ التحقق من تفاصيل الجهاز…',deviceRam:'إجمالي RAM',deviceAvailableRam:'RAM المتاحة حالياً',deviceCpu:'أنوية المعالج',deviceGpu:'معالج الرسومات',deviceStorage:'مساحة التخزين المتاحة',devicePlatform:'النظام والجهاز',recommended:'موصى به',limited:'بقيود',incompatible:'غير متوافق',allModels:'الكل',privacyScan:'يفحص الاختبار قدرات الأجهزة ومعلومات المتصفح فقط.',rescan:'إعادة الفحص'
   } : {
     title: 'Offline AI Hub', subtitle: 'Download a model once, then use it on this device without an internet connection.',
-    runtime: 'Local runtime status', compatible: 'This device supports WebGPU.', unsupported: 'WebGPU is unavailable in this browser. You can still browse and download models; use the Android APK for native offline inference.',
+    runtime: 'Local runtime status', compatible: 'This device supports WebGPU.', unsupported: 'WebGPU is unavailable in this browser. On desktop, connect a local llama.cpp engine; on Android, use the native APK.',
     checking: 'Checking device capabilities…', catalog: 'Compatible models', search: 'Search models…', unknown: 'Unknown', unknownCompatibility: 'Compatibility is unknown for Web; this browser does not expose exact RAM/GPU details.', install: 'Download & install', installed: 'Installed locally', downloading: 'Downloading model…',
     minMemory: 'Minimum GPU memory', downloadSize: 'Approx. repository size', unknownSize: 'Exact size unavailable', storage: 'Device storage',
     chat: 'Offline chat', chatHint: 'Load an installed model and chat without sending requests to a server.', choose: 'Choose a model', load: 'Load model', send: 'Send', input: 'Write a message…',
@@ -182,7 +188,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       'GGUF files are stored locally, but the native llama.cpp runtime is unavailable in this app build or on this device.':'GGUF فایلونه ځایي خوندي دي، خو په دې نسخه یا وسیله کې د llama.cpp اصلي انجن نشته.',
       'Downloaded':'ښکته شوی','hash verified':'هش تایید شو','hash calculated; source not verified':'هش محاسبه شو؛ سرچینه تایید نه ده',
       'Resume':'دوام ورکول','Waiting for network; auto-resumes':'شبکې ته انتظار؛ په خپله دوام کوي','Load model':'ماډل بارول',
-      'Native runtime unavailable in this build':'په دې نسخه کې اصلي انجن نشته'
+      'Native runtime unavailable in this build':'په دې نسخه کې اصلي انجن نشته',
+      'Desktop local AI engine':'د کمپیوټر ځايي AI انجن','Browse model files':'د ماډل فایلونه وپلټئ','Choose a GGUF file from internal storage, Downloads or SD card. A copy is imported into AFG AI private storage.':'د داخلي زېرمې، ډاونلوډونو یا SD کارت څخه GGUF فایل وټاکئ؛ یوه کاپي یې د AFG AI شخصي زېرمې ته لېږدول کېږي.','Browse GGUF file':'د GGUF فایل وپلټئ','Opening files…':'فایلونه پرانیستل کېږي…','File selected. Press “Activate model” to load it.':'فایل وټاکل شو؛ د بارولو لپاره «ماډل فعال کړئ» کېکاږئ.','Ready to activate':'فعالولو ته چمتو','Activate model':'ماډل فعال کړئ','Loading…':'بارېږي…','The native llama.cpp engine is not included in this APK build.':'د llama.cpp اصلي انجن په دې APK کې نشته.','Choose a GGUF file':'د GGUF فایل وټاکئ','Use a llama.cpp server running locally on this PC. No cloud API is used.':'په همدې کمپیوټر کې ځايي llama.cpp سرور وچلوئ؛ کلاوډ API نه کارېږي.','Fixed endpoint: 127.0.0.1:8080. Start a llama-server with a GGUF model and allow only your AFG AI origin in CORS.':'ثابت پته 127.0.0.1:8080 ده. llama-server د GGUF ماډل سره وچلوئ او یوازې د AFG AI پته په CORS کې اجازه کړئ.','Connect local model':'ځايي ماډل سره نښلول','Connecting…':'نښلېږي…','Detected':'وموندل شو','Not connected':'نه دی نښلول شوی','Detected model:':'موندل شوی ماډل:','Local desktop runtime connected; prompts stay on this computer.':'ځايي انجن ونښلول شو؛ پیغامونه له کمپیوټر نه وځي.'
     };
     const ar:Record<string,string>={
       'Not enough estimated browser storage. Free up space before downloading.':'مساحة التخزين المقدّرة غير كافية. أفرغ مساحة قبل التنزيل.',
@@ -220,7 +227,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       'GGUF files are stored locally, but the native llama.cpp runtime is unavailable in this app build or on this device.':'ملفات GGUF محفوظة محلياً، لكن محرك llama.cpp الأصلي غير متاح في هذا الإصدار أو على الجهاز.',
       'Downloaded':'تم التنزيل','hash verified':'تم التحقق من البصمة','hash calculated; source not verified':'تم حساب البصمة؛ المصدر غير موثّق',
       'Resume':'استئناف','Waiting for network; auto-resumes':'بانتظار الشبكة؛ سيُستأنف تلقائياً','Load model':'تحميل النموذج',
-      'Native runtime unavailable in this build':'محرك التشغيل الأصلي غير متاح في هذا الإصدار'
+      'Native runtime unavailable in this build':'محرك التشغيل الأصلي غير متاح في هذا الإصدار',
+      'Desktop local AI engine':'محرك الذكاء الاصطناعي المحلي للكمبيوتر','Browse model files':'استعراض ملفات النماذج','Choose a GGUF file from internal storage, Downloads or SD card. A copy is imported into AFG AI private storage.':'اختر ملف GGUF من التخزين الداخلي أو التنزيلات أو بطاقة SD. سيتم استيراد نسخة إلى مساحة AFG AI الخاصة.','Browse GGUF file':'استعراض ملف GGUF','Opening files…':'جارٍ فتح الملفات…','File selected. Press “Activate model” to load it.':'تم اختيار الملف. اضغط «تفعيل النموذج» لتحميله.','Ready to activate':'جاهز للتفعيل','Activate model':'تفعيل النموذج','Loading…':'جارٍ التحميل…','The native llama.cpp engine is not included in this APK build.':'محرك llama.cpp الأصلي غير مضمّن في إصدار APK هذا.','Choose a GGUF file':'اختر ملف GGUF','Use a llama.cpp server running locally on this PC. No cloud API is used.':'شغّل خادم llama.cpp محلياً على هذا الكمبيوتر؛ لا تُستخدم واجهة سحابية.','Fixed endpoint: 127.0.0.1:8080. Start a llama-server with a GGUF model and allow only your AFG AI origin in CORS.':'العنوان الثابت 127.0.0.1:8080. شغّل llama-server مع نموذج GGUF واسمح فقط بعنوان AFG AI في CORS.','Connect local model':'اتصال بالنموذج المحلي','Connecting…':'جارٍ الاتصال…','Detected':'متصل','Not connected':'غير متصل','Detected model:':'النموذج المكتشف:','Local desktop runtime connected; prompts stay on this computer.':'تم الاتصال بالمحرك المحلي؛ تبقى الرسائل على هذا الكمبيوتر.'
     };
     return locale === 'pashto' ? (ps[englishText] || englishText) : locale === 'arabic' ? (ar[englishText] || englishText) : englishText;
   };
@@ -238,6 +246,14 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       } catch { if (active) setNativeRuntimeAvailable(false); }
       if (!active) return;
       const nativeMessage = locale === 'dari' ? 'موتور بومی llama.cpp آماده است؛ مدل‌های GGUF روی همین دستگاه اجرا می‌شوند.' : 'Native llama.cpp CPU runtime is ready for local GGUF inference.';
+      let desktopAvailable = false;
+      const desktopBrowser = /Windows NT|Win32|Macintosh|X11|Linux x86_64/i.test((navigator.userAgent || '') + ' ' + (navigator.platform || '')) && !/Android|iPhone|iPad/i.test(navigator.userAgent || '');
+      if (!nativeAvailable && desktopBrowser) {
+        const desktopInfo = await getDesktopLocalRuntimeInfo();
+        desktopAvailable = desktopInfo.available;
+        if (active) { setDesktopRuntimeAvailable(desktopAvailable); setDesktopModelId(desktopInfo.models[0]?.id || ''); }
+      }
+      const desktopMessage = locale === 'dari' ? 'موتور محلی ویندوز شناسایی شد؛ گفتگو روی همین کمپیوتر اجرا می‌شود.' : 'A local Windows llama.cpp server was detected on this computer.';
       const { prebuiltAppConfig } = await import('@mlc-ai/web-llm');
       if (!active) return;
       const catalog = (prebuiltAppConfig.model_list || []) as CatalogModel[];
@@ -246,8 +262,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       const gpu = (navigator as unknown as { gpu?: { requestAdapter: () => Promise<unknown> } }).gpu;
       if (!gpu) {
         setWebGpuAvailable(false);
-        setRuntime(nativeAvailable ? 'ready' : 'unsupported');
-        setRuntimeMessage(nativeAvailable ? nativeMessage : copy.unsupported);
+        setRuntime(nativeAvailable || desktopAvailable ? 'ready' : 'unsupported');
+        setRuntimeMessage(nativeAvailable ? nativeMessage : desktopAvailable ? desktopMessage : copy.unsupported);
         if (navigator.storage?.estimate) { const estimate = await navigator.storage.estimate(); if (active) setStorage({ usage: estimate.usage, quota: estimate.quota }); }
         return;
       }
@@ -256,17 +272,17 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
         if (!active) return;
         if (!adapter) {
           setWebGpuAvailable(false);
-          setRuntime(nativeAvailable ? 'ready' : 'unsupported');
-          setRuntimeMessage(nativeAvailable ? nativeMessage : copy.unsupported);
+          setRuntime(nativeAvailable || desktopAvailable ? 'ready' : 'unsupported');
+          setRuntimeMessage(nativeAvailable ? nativeMessage : desktopAvailable ? desktopMessage : copy.unsupported);
           return;
         }
         setWebGpuAvailable(true);
         setRuntime('ready');
-        setRuntimeMessage(nativeAvailable ? nativeMessage + ' WebGPU is also available.' : copy.compatible);
+        setRuntimeMessage(nativeAvailable ? nativeMessage + ' WebGPU is also available.' : desktopAvailable ? desktopMessage + ' WebGPU is also available.' : copy.compatible);
       } catch {
         setWebGpuAvailable(false);
-        setRuntime(nativeAvailable ? 'ready' : 'unsupported');
-        setRuntimeMessage(nativeAvailable ? nativeMessage : copy.unsupported);
+        setRuntime(nativeAvailable || desktopAvailable ? 'ready' : 'unsupported');
+        setRuntimeMessage(nativeAvailable ? nativeMessage : desktopAvailable ? desktopMessage : copy.unsupported);
       }
       if (navigator.storage?.estimate) { const estimate = await navigator.storage.estimate(); if (active) setStorage({ usage: estimate.usage, quota: estimate.quota }); }
     })();
@@ -478,6 +494,28 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     } finally { setBusy(false); setProgress(0); setProgressText(''); }
   }, [busy, runtime, webGpuAvailable, copy, dari, models, device, modelSizes, storage]);
 
+  const browseNativeGgufModel = async () => {
+    if (filePickerBusy || busy) return;
+    setFilePickerBusy(true);
+    try {
+      const selected = await pickNativeGgufModel();
+      setPickedModelFile(selected);
+      setRuntimeMessage(offlineText('فایل انتخاب شد. اکنون «فعال‌سازی مدل» را بزن.','File selected. Press “Activate model” to load it.'));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : copy.failed;
+      if (!message.toLowerCase().includes('cancel')) setRuntimeMessage(message);
+    } finally { setFilePickerBusy(false); }
+  };
+
+  const activatePickedModel = async () => {
+    if (!pickedModelFile || busy) return;
+    await loadNativeGgufModel({
+      id: 'local-import/' + pickedModelFile.fileName, repoId: 'local-import', fileName: pickedModelFile.fileName,
+      revision: 'local', url: '', expectedBytes: pickedModelFile.sizeBytes, downloadedBytes: pickedModelFile.sizeBytes,
+      expectedSha256: null, localPath: pickedModelFile.path, status: 'installed', updatedAt: Date.now(),
+    });
+  };
+
   const loadNativeGgufModel = async (task: OfflineDownloadState) => {
     if (!nativeRuntimeAvailable || !task.localPath || busy || task.status !== 'installed') return;
     setBusy(true); setProgressText(offlineText('در حال بارگذاری مدل GGUF…','Loading local GGUF model…'));
@@ -499,6 +537,27 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     } catch (error) { setRuntimeMessage(error instanceof Error ? error.message : copy.failed); }
     finally { setBusy(false); setProgressText(''); }
   };
+  const connectDesktopRuntime = async () => {
+    if (desktopConnectBusy) return;
+    setDesktopConnectBusy(true);
+    try {
+      const info = await getDesktopLocalRuntimeInfo();
+      if (!info.available || !info.models.length) throw new Error(info.reason || 'No local model is loaded.');
+      const modelId = info.models[0].id;
+      if (engineRef.current) await engineRef.current.unload().catch(() => undefined);
+      engineRef.current = {
+        chat: { completions: { create: async (request: { messages: Array<{ role: string; content: string }>; max_tokens?: number }) => ({ choices: [{ message: { content: await generateDesktopLocalResponse(modelId, request.messages, request.max_tokens || 384) } }] }) } },
+        unload: async () => undefined,
+      };
+      engineModelIdRef.current = 'desktop-local:' + modelId;
+      setDesktopRuntimeAvailable(true); setDesktopModelId(modelId); setSelectedId('desktop-local:' + modelId);
+      setActiveOfflineModelLabel('Windows local · ' + modelId); setRuntime('ready');
+      setRuntimeMessage(offlineText('موتور محلی وصل شد؛ پیام‌ها از کمپیوتر خارج نمی‌شوند.','Local desktop runtime connected; prompts stay on this computer.'));
+      setViewMode('chat');
+    } catch (error) { setDesktopRuntimeAvailable(false); setRuntimeMessage(error instanceof Error ? error.message : copy.failed); }
+    finally { setDesktopConnectBusy(false); }
+  };
+
   const clearCurrentOfflineChat = async () => {
     setMessages([]);
     await clearOfflineChatMessages(selectedId).catch(() => undefined);
@@ -550,6 +609,20 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       <div className="rounded-2xl border p-3 text-end"><div className="flex items-center gap-2 text-xs opacity-70"><HardDrive size={15}/>{copy.storage}</div><div className="mt-1 text-sm font-bold">{formatBytes(storage.usage)} / {formatBytes(storage.quota)}</div></div>
     </header>
 
+    {device?.platform === 'android' && <section className="space-y-3 rounded-[24px] border border-cyan-400/25 bg-cyan-400/5 p-4">
+      <div><h2 className="font-bold">{offlineText('انتخاب مدل از حافظه گوشی','Browse model files')}</h2><p className="mt-1 text-xs opacity-70">{offlineText('فایل GGUF را از حافظه داخلی، پوشه دانلودها یا کارت حافظه انتخاب کن. فایل به فضای خصوصی AFG AI کاپی می‌شود.','Choose a GGUF file from internal storage, Downloads or SD card. A copy is imported into AFG AI private storage.')}</p></div>
+      <button type="button" onClick={() => void browseNativeGgufModel()} disabled={filePickerBusy || busy || !nativeRuntimeAvailable} className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/40 px-4 py-2.5 text-sm font-bold disabled:opacity-50"><FolderOpen size={16}/>{filePickerBusy ? offlineText('در حال بازکردن فایل‌ها…','Opening files…') : offlineText('مرور و انتخاب فایل GGUF','Browse GGUF file')}</button>
+      {pickedModelFile && <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3"><p className="break-all text-sm font-semibold">{pickedModelFile.fileName}</p><p className="mt-1 text-xs opacity-70">{formatBytes(pickedModelFile.sizeBytes)} · {offlineText('آماده فعال‌سازی','Ready to activate')}</p><button type="button" onClick={() => void activatePickedModel()} disabled={busy || !nativeRuntimeAvailable} className="mt-3 rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50">{busy ? offlineText('در حال بارگذاری…','Loading…') : offlineText('فعال‌سازی مدل','Activate model')}</button></div>}
+      {!nativeRuntimeAvailable && <p className="text-xs text-amber-600">{offlineText('موتور بومی llama.cpp در این APK موجود نیست.','The native llama.cpp engine is not included in this APK build.')}</p>}
+    </section>}
+
+    {device?.platform === 'desktop' && <section className="space-y-3 rounded-[24px] border border-cyan-400/25 bg-cyan-400/5 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><h2 className="font-bold">{offlineText('موتور آفلاین کمپیوتر','Desktop local AI engine')}</h2><p className="mt-1 text-xs opacity-70">{offlineText('از llama.cpp server روی همین کمپیوتر استفاده کن.','Use a llama.cpp server running locally on this PC. No cloud API is used.')}</p></div><span className={'rounded-full px-2 py-1 text-[10px] font-semibold ' + (desktopRuntimeAvailable ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-700')}>{desktopRuntimeAvailable ? offlineText('موجود','Detected') : offlineText('قطع','Not connected')}</span></div>
+      <p className="text-xs opacity-65">{offlineText('آدرس ثابت: 127.0.0.1:8080. llama-server را با مدل GGUF اجرا کن و CORS را فقط برای نشانی AFG AI اجازه بده.','Fixed endpoint: 127.0.0.1:8080. Start llama-server with a GGUF model and allow only your AFG AI origin in CORS.')}</p>
+      <button type="button" onClick={() => void connectDesktopRuntime()} disabled={desktopConnectBusy} className="rounded-xl bg-cyan-500 px-4 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-50">{desktopConnectBusy ? offlineText('در حال اتصال…','Connecting…') : offlineText('اتصال به مدل محلی','Connect local model')}</button>
+      {desktopRuntimeAvailable && desktopModelId && <p className="text-xs text-emerald-600">{offlineText('مدل شناسایی‌شده:','Detected model:')} {desktopModelId}</p>}
+    </section>}
+
     <nav className="flex gap-2 rounded-xl border p-1" aria-label={offlineText("بخش‌های آفلاین","Offline sections")}><button type="button" onClick={() => setViewMode("chat")} className={"flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold " + (viewMode === "chat" ? "bg-cyan-500 text-slate-950" : "opacity-65")}>{offlineText("گفت‌وگوی آفلاین","Offline Chat")}</button><button type="button" onClick={() => setViewMode("models")} className={"flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold " + (viewMode === "models" ? "bg-cyan-500 text-slate-950" : "opacity-65")}>{offlineText("مدیریت مدل‌ها","Models")}</button></nav>
 
     <section className="space-y-4 rounded-[28px] border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 dark:border-white/10 dark:bg-[#0d1729]">
@@ -564,7 +637,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       </>}
     </section>
 
-    {runtime !== 'checking' && !webGpuAvailable && !runtimeBannerDismissed && <div role="status" className="rounded-[24px] border border-amber-500/30 bg-amber-50 p-4 text-slate-900 shadow-sm dark:bg-amber-950/25 dark:text-amber-100">
+    {runtime !== 'checking' && !webGpuAvailable && !nativeRuntimeAvailable && !desktopRuntimeAvailable && !runtimeBannerDismissed && <div role="status" className="rounded-[24px] border border-amber-500/30 bg-amber-50 p-4 text-slate-900 shadow-sm dark:bg-amber-950/25 dark:text-amber-100">
       <div className="flex items-start gap-3">
         <Cpu size={20} className="mt-1 shrink-0 text-amber-600 dark:text-amber-300"/>
         <div className="min-w-0 flex-1">

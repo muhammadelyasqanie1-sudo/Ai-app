@@ -44,7 +44,7 @@ Migration `0007_offline_pack_registry.sql` adds pack registry/version metadata a
 2. Implement resumable downloads with exact progress and disk quota checks; verify signature before install and hashes before load.
 3. Ship a licensed English learning pack and validate its references, quiz content and model license.
 4. Implement WebLLM or llama.cpp WASM model execution, model loading/health checks and strict network isolation.
-5. Implement a desktop app and localhost-only Ollama bridge; do not point cloud servers at localhost.
+5. The Windows browser-to-loopback llama.cpp bridge is documented in [JARVIS_WINDOWS_OFFLINE.md](./JARVIS_WINDOWS_OFFLINE.md). A packaged/tested Windows 8 llama.cpp executable and Windows OS-control bridge are still missing; do not point cloud servers at localhost.
 6. Add offline tutor chat, lesson browser, quiz, flashcards, progress dashboard, pack manager and uninstall confirmation.
 7. Implement exact out-of-scope refusal, high-stakes refusal, answer language enforcement and lesson citation validation around the runtime.
 8. Implement per-user consent UX, revocation, export and server sync APIs. No phone-home behavior before consent.
