@@ -214,11 +214,12 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
 
   // --- Translation Tool State ---
   const [sourceLang, setSourceLang] = useState<'auto' | 'fa' | 'ps' | 'en' | 'ar'>('auto');
-  const [targetLang, setTargetLang] = useState<'fa' | 'ps' | 'en' | 'ar'>('en');
+  const [targetLang, setTargetLang] = useState<'fa' | 'ps' | 'en' | 'ar'>(language === 'dari' ? 'fa' : language === 'pashto' ? 'ps' : language === 'arabic' ? 'ar' : 'en');
   const [transInput, setTransInput] = useState(
     toolText('سلام، من از افغانستان هستم و از هوش مصنوعی استفاده می‌کنم.','Hello, I am using the smart AFG AI assistant.')
   );
   const [transOutput, setTransOutput] = useState('');
+  useEffect(() => { setTargetLang(language === 'dari' ? 'fa' : language === 'pashto' ? 'ps' : language === 'arabic' ? 'ar' : 'en'); setWritingLanguage(language === 'dari' ? 'dari' : language === 'pashto' ? 'pashto' : language === 'arabic' ? 'arabic' : 'english'); setVoiceLanguage(language === 'dari' ? 'fa' : language === 'pashto' ? 'ps' : language === 'arabic' ? 'ar' : 'en'); }, [language]);
   const [translationFileName, setTranslationFileName] = useState('');
   const [isTranslating, setIsTranslating] = useState(false);
   const [copiedTrans, setCopiedTrans] = useState(false);
@@ -251,7 +252,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   const [writingTemplate, setWritingTemplate] = useState('article');
   const [writingTone, setWritingTone] = useState('professional');
   const [writingStyle, setWritingStyle] = useState('clear');
-  const [writingLanguage, setWritingLanguage] = useState(language === 'dari' ? 'dari' : 'english');
+  const [writingLanguage, setWritingLanguage] = useState(language === 'dari' ? 'dari' : language === 'pashto' ? 'pashto' : language === 'arabic' ? 'arabic' : 'english');
   const [writingLength, setWritingLength] = useState('medium');
   const [researchQuery, setResearchQuery] = useState('');
   const [researchLoading, setResearchLoading] = useState(false);
@@ -259,7 +260,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   const [researchSources, setResearchSources] = useState<Array<{ title: string; url: string; snippet: string }>>([]);
   const [voiceText, setVoiceText] = useState('');
   const [voiceId, setVoiceId] = useState('');
-  const [voiceLanguage, setVoiceLanguage] = useState<'auto' | 'en' | 'fa' | 'ps' | 'ar'>(language === 'dari' ? 'fa' : 'en');
+  const [voiceLanguage, setVoiceLanguage] = useState<'auto' | 'en' | 'fa' | 'ps' | 'ar'>(language === 'dari' ? 'fa' : language === 'pashto' ? 'ps' : language === 'arabic' ? 'ar' : 'en');
   const [voiceAudioUrl, setVoiceAudioUrl] = useState('');
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [voiceError, setVoiceError] = useState('');
