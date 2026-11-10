@@ -11,29 +11,33 @@ interface Props { language: Language; onContinueGuest: () => void; onAuthenticat
 
 const copy = {
   dari: {
-    title:'به AFG AI خوش آمدید', subtitle:'برای ادامه، روش ورود خود را انتخاب کنید',
-    google:'ادامه با Google', email:'ادامه با ایمیل', guest:'ادامه به‌عنوان مهمان',
-    login:'ورود به حساب', register:'ایجاد حساب جدید', name:'نام نمایشی', emailLabel:'آدرس ایمیل',
-    password:'رمز عبور', submitLogin:'ورود', submitRegister:'ایجاد حساب',
-    verifyTitle:'تأیید ایمیل', verifyText:'کد شش‌رقمی ارسال‌شده به ایمیل خود را وارد کنید',
-    code:'کد تأیید', verify:'تأیید و ادامه', back:'بازگشت', switchLogin:'حساب دارید؟ ورود',
-    switchRegister:'حساب ندارید؟ ثبت‌نام', loading:'لطفاً صبر کنید…', error:'درخواست انجام نشد. اطلاعات را بررسی و دوباره تلاش کنید.',
-    passwordHint:'حداقل ۱۲ کاراکتر', brand:'یک هوش مصنوعی، توانایی‌های بی‌پایان'
+    title:'به AFG AI خوش آمدید', subtitle:'برای ادامه، روش ورود خود را انتخاب کنید', google:'ادامه با Google', email:'ادامه با ایمیل', guest:'ادامه به‌عنوان مهمان',
+    login:'ورود به حساب', register:'ایجاد حساب جدید', name:'نام نمایشی', emailLabel:'آدرس ایمیل', password:'رمز عبور', submitLogin:'ورود', submitRegister:'ایجاد حساب',
+    verifyTitle:'تأیید ایمیل', verifyText:'کد شش‌رقمی ارسال‌شده به ایمیل خود را وارد کنید', code:'کد تأیید', verify:'تأیید و ادامه', back:'بازگشت', switchLogin:'حساب دارید؟ ورود',
+    switchRegister:'حساب ندارید؟ ثبت‌نام', loading:'لطفاً صبر کنید…', error:'درخواست انجام نشد. اطلاعات را بررسی و دوباره تلاش کنید.', passwordHint:'حداقل ۱۲ کاراکتر', brand:'یک هوش مصنوعی، توانایی‌های بسیار'
   },
   english: {
-    title:'Welcome to AFG AI', subtitle:'Choose how you want to continue',
-    google:'Continue with Google', email:'Continue with email', guest:'Continue as guest',
-    login:'Sign in to your account', register:'Create your account', name:'Display name', emailLabel:'Email address',
-    password:'Password', submitLogin:'Sign in', submitRegister:'Create account',
-    verifyTitle:'Verify your email', verifyText:'Enter the six-digit code sent to your email',
-    code:'Verification code', verify:'Verify and continue', back:'Back', switchLogin:'Already have an account? Sign in',
-    switchRegister:'New here? Create an account', loading:'Please wait…', error:'Request failed. Check your details and try again.',
-    passwordHint:'At least 12 characters', brand:'One AI. Many capabilities.'
+    title:'Welcome to AFG AI', subtitle:'Choose how you want to continue', google:'Continue with Google', email:'Continue with email', guest:'Continue as guest',
+    login:'Sign in to your account', register:'Create your account', name:'Display name', emailLabel:'Email address', password:'Password', submitLogin:'Sign in', submitRegister:'Create account',
+    verifyTitle:'Verify your email', verifyText:'Enter the six-digit code sent to your email', code:'Verification code', verify:'Verify and continue', back:'Back', switchLogin:'Already have an account? Sign in',
+    switchRegister:'New here? Create an account', loading:'Please wait…', error:'Request failed. Check your details and try again.', passwordHint:'At least 12 characters', brand:'One AI. Many capabilities.'
+  },
+  pashto: {
+    title:'AFG AI ته ښه راغلاست',subtitle:'د دوام لپاره د ننوتلو لاره وټاکئ',google:'له Google سره دوام',email:'له برېښنالیک سره دوام',guest:'د مېلمه په توګه دوام',
+    login:'خپل حساب ته ننوځئ',register:'نوی حساب جوړ کړئ',name:'ښکاره کېدونکی نوم',emailLabel:'برېښنالیک پته',password:'پټنوم',submitLogin:'ننوتل',submitRegister:'حساب جوړول',
+    verifyTitle:'برېښنالیک تایید کړئ',verifyText:'خپل برېښنالیک ته لېږل شوی شپږ عددي کوډ ولیکئ',code:'د تایید کوډ',verify:'تایید او دوام',back:'شاته',switchLogin:'حساب لرئ؟ ننوتل',
+    switchRegister:'نوی یاست؟ حساب جوړ کړئ',loading:'مهرباني وکړئ تم شئ…',error:'غوښتنه ناکامه شوه. معلومات وګورئ او بیا هڅه وکړئ.',passwordHint:'لږ تر لږه ۱۲ توري',brand:'یو AI، ډېرې وړتیاوې.'
+  },
+  arabic: {
+    title:'مرحباً بك في AFG AI',subtitle:'اختر طريقة المتابعة',google:'المتابعة باستخدام Google',email:'المتابعة بالبريد الإلكتروني',guest:'المتابعة كضيف',
+    login:'تسجيل الدخول إلى حسابك',register:'إنشاء حساب جديد',name:'الاسم الظاهر',emailLabel:'عنوان البريد الإلكتروني',password:'كلمة المرور',submitLogin:'تسجيل الدخول',submitRegister:'إنشاء الحساب',
+    verifyTitle:'تأكيد البريد الإلكتروني',verifyText:'أدخل الرمز المكوّن من ستة أرقام الذي أُرسل إلى بريدك',code:'رمز التحقق',verify:'تحقق وتابع',back:'رجوع',switchLogin:'لديك حساب؟ سجّل الدخول',
+    switchRegister:'مستخدم جديد؟ أنشئ حساباً',loading:'يرجى الانتظار…',error:'فشل الطلب. تحقق من بياناتك وحاول مرة أخرى.',passwordHint:'12 حرفاً على الأقل',brand:'ذكاء واحد. قدرات متعددة.'
   }
 };
 
 export const AfgAuthGate: React.FC<Props> = ({ language, onContinueGuest, onAuthenticated }) => {
-  const t = language === 'dari' ? copy.dari : copy.english;
+  const t = copy[language === 'dari' || language === 'pashto' || language === 'arabic' ? language : 'english'];
   const [mode,setMode] = useState<Mode>(() => {
     const requested = sessionStorage.getItem('afg_auth_mode_after_signout');
     sessionStorage.removeItem('afg_auth_mode_after_signout');
