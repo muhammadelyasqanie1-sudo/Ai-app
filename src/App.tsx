@@ -67,7 +67,7 @@ const detectDeviceLanguage = (): Language => {
   if (first.startsWith('fa-ir')) return 'persian';
   const code = first.split('-')[0];
   const languageMap: Record<string, Language> = {
-    en:'english', fa:'persian', prs:'dari', ps:'pashto', ar:'arabic', ur:'urdu',
+    en:'english', fa:'dari', prs:'dari', ps:'pashto', ar:'arabic', ur:'urdu',
     tr:'turkish', ru:'russian', fr:'french', es:'spanish', de:'german',
     zh:'chinese', hi:'hindi', bn:'bengali', id:'indonesian', pt:'portuguese',
     ja:'japanese', ko:'korean',
