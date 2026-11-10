@@ -602,7 +602,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       </>}
     </section>
 
-    {runtime !== 'checking' && !webGpuAvailable && !runtimeBannerDismissed && <div role="status" className="rounded-[24px] border border-amber-500/30 bg-amber-50 p-4 text-slate-900 shadow-sm dark:bg-amber-950/25 dark:text-amber-100">
+    {runtime !== 'checking' && !webGpuAvailable && !nativeRuntimeAvailable && !desktopRuntimeAvailable && !runtimeBannerDismissed && <div role="status" className="rounded-[24px] border border-amber-500/30 bg-amber-50 p-4 text-slate-900 shadow-sm dark:bg-amber-950/25 dark:text-amber-100">
       <div className="flex items-start gap-3">
         <Cpu size={20} className="mt-1 shrink-0 text-amber-600 dark:text-amber-300"/>
         <div className="min-w-0 flex-1">
