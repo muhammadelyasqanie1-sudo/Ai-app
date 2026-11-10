@@ -163,7 +163,7 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
       'Retry':'بیا هڅه','Loading models from Hugging Face…':'له Hugging Face څخه ماډلونه راځي…','Featured: Spark X2.6':'ځانګړی: Spark X2.6',
       'Live results from Hugging Face':'د Hugging Face ژوندۍ پایلې','GGUF size:':'د GGUF اندازه:','File size unavailable':'د فایل اندازه نشته',
       'No GGUF file':'GGUF فایل نشته','Size unavailable':'اندازه نشته','Fetching size…':'اندازه ترلاسه کېږي…',
-      'Loading Spark results…':'د Spark پایلې ترلاسه کېږي…','Recommended for your device':'ستاسو د وسیلې لپاره سپارښتنه',
+      'Loading Spark results…':'د Spark پایلې ترلاسه کېږي…',
       'All Models':'ټول ماډلونه','No models found.':'ماډل ونه موندل شو.','Load more':'نور ماډلونه',
       'Select GGUF file / quantization':'د GGUF فایل او Quantization وټاکئ',
       'This repository has no GGUF file. Other formats are discoverable, but download and inference remain disabled until a compatible runtime is implemented.':'په دې زېرمتون کې GGUF فایل نشته. نورې بڼې لیدل کېدای شي، خو تر سازګار انجن پورې ښکته کول او اجرا بند دي.',
