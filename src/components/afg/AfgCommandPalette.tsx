@@ -58,7 +58,6 @@ export const AfgCommandPalette: React.FC<AfgCommandPaletteProps> = (props) => {
   } = props;
   const features = props.features || defaults;
   const locale=language==='dari'||language==='pashto'||language==='arabic'?language:'english';
-  const dari=locale==='dari';
   const rtl=['dari','pashto','persian','arabic','urdu'].includes(language);
   const ps:Record<string,string>={
 'Thinking level':'د فکر کچه','Permission level':'د اجازې کچه','Find in chat':'په خبرو کې لټون','Command runner':'د فرمان اجراکوونکی','Command palette':'د فرمانونو پالت','Minimal':'لږ تر لږه','Fast, direct responses':'چټک او مستقیم ځوابونه','Standard':'معیاري','Balanced speed and depth':'د سرعت او ژورتیا توازن','Deep':'ژور','More thorough analysis and checks':'ژوره شننه او بشپړ کتنه','Changes response instructions. Provider/model token caps remain provider-controlled.':'د ځواب لارښوونې بدلوي. د ټوکن حد د برابرونکي او ماډل له خوا ټاکل کېږي.','Ask before actions':'له کړنو مخکې پوښتنه','Request confirmation for consequential actions':'د مهمو کړنو لپاره تایید وغواړئ','Guided':'لارښوول شوی','Explain consequential steps':'مهم ګامونه تشریح کړئ','Full autonomy':'بشپړ خپلواکي','Only tools actually available and authorized':'یوازې شته او مجاز وسایل','This setting does not grant shell or operating-system access.':'دا امستنه د شیل یا عملیاتي سیسټم لاسرسی نه ورکوي.','Find text in this conversation...':'په دې خبرو کې متن ولټوئ...','Searches messages in the current conversation.':'د همدې خبرو پیغامونه لټوي.','Find':'موندل','Search current chat or type a command...':'اوسنۍ خبرې ولټوئ یا فرمان ولیکئ...','COMMANDS':'فرمانونه','QUICK OPEN':'چټک پرانیستل','Quick open':'چټک پرانیستل','Browse conversation history and saved work':'د خبرو تاریخچه او خوندي کارونه وګورئ','Search project':'پروژه ولټوئ','Search workspace and chat history':'کاري ځای او د خبرو تاریخچه ولټوئ','Run supported slash commands':'ملاتړ شوي / فرمانونه اجرا کړئ','TOOLS & MODES':'وسایل او حالتونه','Device assistant, voice commands and local AI':'د وسیلې مرستیال، غږیز فرمانونه او ځایي AI','Connected and health-verified':'وصل او د روغتیا له مخې تایید شوی','Not connected — open Connections in Settings':'وصل نه دی — په امستنو کې نښلونې پرانیزئ','Plan mode':'د پلان حالت','Enabled':'فعال','Plan before implementation':'له پلي کولو مخکې پلان جوړ کړئ','Dual planning':'دوه‌ګونی پلان','Not supported by this backend':'دا سرور یې نه ملاتړ کوي','Search text in this conversation':'په دې خبرو کې متن ولټوئ','Context & limits':'شالید او محدودیتونه','DEVELOPER TOOLS':'د پراختیا وسایل','Terminal':'ترمینل','Admin-enabled read-only terminal':'د مدیر له خوا فعال شوی یوازې-لوست ترمینل','Undo file changes':'د فایل بدلونونه بېرته ګرځول','No reversible AI file edits in this session':'په دې ناسته کې د AI د بېرته ګرځولو وړ بدلون نشته','History':'تاریخچه','Previous conversations':'پخوانۍ خبرې','Settings':'امستنې','Preferences and integrations':'غوره‌توبونه او نښلونې','Export chat':'خبرې صادرول','Download a Markdown transcript':'د خبرو Markdown فایل ښکته کړئ','Clear chat':'خبرې پاکول','Remove messages from this conversation':'د همدې خبرو پیغامونه لرې کړئ','Clear this conversation?':'دا خبرې پاکې شي؟','Navigation menu':'د تګ راتګ مینو','All app sections':'د اپ ټولې برخې'};
@@ -132,11 +131,11 @@ export const AfgCommandPalette: React.FC<AfgCommandPaletteProps> = (props) => {
           : (paletteText('منوی سریع','Command palette'));
 
   return (
-    <div className="afg-command-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div dir={rtl?"rtl":"ltr"} className="afg-command-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="afg-command-panel" role="dialog" aria-modal="true" aria-label={title}>
         <header className="afg-command-heading">
           <div><span className="afg-command-kicker">AFG AI / QUICK OPEN</span><h2>{title}</h2></div>
-          <button type="button" className="afg-command-close" onClick={onClose} aria-label="Close"><X size={19}/></button>
+          <button type="button" className="afg-command-close" onClick={onClose} aria-label={paletteText('بستن','Close')}><X size={19}/></button>
         </header>
 
         {submenu === 'thinking' && (
