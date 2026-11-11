@@ -62,6 +62,7 @@ import { experienceCopy } from "./experienceCopy";
 import { formatLocalizedNumber, getIntlLocale } from "../../utils/i18n";
 import "./jarvis.css";
 import "./intelligence.css";
+import "./desktopWorkspace.css";
 const IntelligenceCore = lazy(() => import("./IntelligenceCore"));
 const ExperiencePanel = lazy(() => import("./ExperiencePanel"));
 const BrandMark = () => (
