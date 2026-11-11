@@ -103,7 +103,7 @@ export type JarvisCapabilityContext = {
 };
 
 export type JarvisCapabilityDecision =
-  | { allowed: true; rule: JarvisCapabilityRule }
+  | { allowed: true; rule: JarvisCapabilityRule; reason?: never }
   | { allowed: false; reason: 'unknown_capability' | 'confirmation_required' | 'permission_required' | 'foreground_required' | 'disabled_by_default' };
 
 const disabledByDefault = new Set<JarvisCapability>([
