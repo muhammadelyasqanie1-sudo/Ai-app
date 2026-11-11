@@ -4,7 +4,7 @@ export interface JarvisStatus {
   supported: boolean; accessibilityEnabled: boolean; serviceConnected: boolean;
   androidVersion: number | null; speechRecognizerAvailable: boolean;
   microphonePermission: boolean; offlinePreferenceSupported: boolean;
-  offlineRecognitionGuaranteed: false; ttsAvailable: boolean;
+  offlineRecognitionGuaranteed: false; voskModelImported: boolean; voskModelReady: boolean; ttsAvailable: boolean;
 }
 export interface JarvisSpeechEvent { state: 'listening' | 'processing' | 'partial' | 'result' | 'error'; text: string; error: string; }
 export interface JarvisBatteryStatus { levelPercent: number; charging: boolean; temperatureC: number | null; }
@@ -34,6 +34,10 @@ export interface AFGJarvisPlugin {
   takePhoto(): Promise<JarvisCameraPreview>;
   getSensors(): Promise<{ sensors: JarvisSensor[]; fingerprintOrBiometricAvailable: boolean; fingerprintDataAccessible: false }>;
   requestMicrophonePermission(): Promise<{ granted: boolean }>;
+  importVoskModel(): Promise<{ imported: boolean; localPath: string; expandedBytes: number }>;
+  loadVoskModel(): Promise<{ loaded: boolean; localPath: string }>;
+  startVoskListening(): Promise<{ started: boolean; offline: true }>;
+  stopVoskListening(): Promise<{ stopped: boolean }>;
   startListening(options?: { language?: JarvisSpeechLanguage }): Promise<{ started: boolean; offlinePreferred: boolean }>;
   stopListening(): Promise<{ stopped: boolean }>;
   speak(options: { text: string; language?: JarvisSpeechLanguage }): Promise<{ started: boolean }>;

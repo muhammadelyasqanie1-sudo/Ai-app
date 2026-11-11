@@ -18,4 +18,7 @@ dependencies {
     // Capacitor's ActivityResult callback type is AndroidX; expose it on this
     // plugin module's compile classpath instead of relying on transitive internals.
     implementation "androidx.activity:activity:$androidxActivityVersion"
+    // On-device Vosk speech recognition; the user imports model weights separately.
+    implementation 'com.alphacephei:vosk-android:0.3.75@aar'
+    implementation 'net.java.dev.jna:jna:5.18.1@aar'
 }

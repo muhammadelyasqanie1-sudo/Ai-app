@@ -298,6 +298,24 @@ export function AfgJarvisView({ language }: { language: Language }) {
       <section className={card}>
         <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-bold text-white">{label('Voice control', 'کنترل صوتی')}</h2><span className="rounded-full border border-cyan-400/20 px-3 py-1 text-xs text-cyan-200">{speechState}</span></div>
         <p className="mt-2 text-xs leading-5 text-slate-400">{label('Android speech recognition is requested with its offline preference. The recognition provider may ignore it or require network access; offline operation is not guaranteed. For Afghan Dari, the app requests the fa-AF locale; actual recognition depends on the speech service and its installed language packs.', 'تشخیص گفتار اندروید با درخواست اولویت آفلاین اجرا می‌شود؛ اما سرویس تشخیص ممکن است این درخواست را نادیده بگیرد یا به اینترنت نیاز داشته باشد. آفلاین بودن تضمین‌شده نیست. برای دری افغانستان، برنامه زبان fa-AF را درخواست می‌کند؛ تشخیص واقعی به پشتیبانی سرویس گفتار و بسته زبان نصب‌شده بستگی دارد.')}</p>
+        {androidNative && (
+          <div className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-emerald-200">{label('Offline Vosk speech engine', 'موتور آفلاین تشخیص گفتار Vosk')}</p>
+                      <span className="text-xs text-emerald-100">{status?.voskModelReady ? label('Model ready', 'مدل آماده') : status?.voskModelImported ? label('Imported · not loaded', 'وارد شده · بارگذاری نشده') : label('Model not imported', 'مدل وارد نشده')}</span>
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">{label('Select the vosk-model-small-fa-0.42.zip file you already downloaded. It is copied into private app storage and recognition runs on-device. The model is Iranian Persian, so Afghan Dari accuracy must be tested.', 'فایل vosk-model-small-fa-0.42.zip را که قبلاً دانلود کرده‌ای انتخاب کن. مدل در حافظهٔ خصوصی برنامه کپی می‌شود و تشخیص روی خود گوشی انجام می‌شود. این مدل فارسی ایران است؛ دقت آن برای دری افغانستان باید آزمایش شود.')}</p>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button type="button" className={button} disabled={!!busy || !androidNative} onClick={() => void run('vosk-import', () => AFGJarvis.importVoskModel())}>{label('Browse Vosk ZIP', 'انتخاب فایل Vosk')}</button>
+                      <button type="button" className={button} disabled={!!busy || !status?.voskModelImported || status?.voskModelReady} onClick={() => void run('vosk-load', () => AFGJarvis.loadVoskModel())}>{label('Load model', 'بارگذاری مدل')}</button>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button type="button" className={button} disabled={!!busy || !status?.voskModelReady} onClick={() => { if (window.confirm(label('Start offline Vosk listening? Microphone permission may be requested.', 'شنیدن آفلاین با Vosk آغاز شود؟ ممکن است مجوز میکروفون درخواست شود.'))) { setTranscript(''); void run('vosk-listen', () => AFGJarvis.startVoskListening()); } }}>{label('Start offline listening', 'شروع شنیدن آفلاین')}</button>
+                      <button type="button" className={button} disabled={!!busy || !status?.voskModelReady} onClick={() => void run('vosk-stop', () => AFGJarvis.stopVoskListening())}>{label('Stop offline listening', 'توقف شنیدن آفلاین')}</button>
+                    </div>
+                  </div>
+                  
+        )}
         <div className="mt-3 flex flex-wrap gap-2">
           <button className={button} disabled={!!busy || !status?.speechRecognizerAvailable} onClick={() => void run('listen', async () => { await AFGJarvis.requestMicrophonePermission(); setSpeechError(''); setTranscript(''); await AFGJarvis.startListening({ language: speechLanguage }); })}>{label('Start listening', 'شروع شنیدن')}</button>
           <button className={button} disabled={!!busy} onClick={() => void run('stop', () => AFGJarvis.stopListening())}>{label('Stop', 'توقف')}</button>

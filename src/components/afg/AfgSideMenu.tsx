@@ -10,10 +10,10 @@ import { translations } from '../../utils/afgTranslations';
 
 
 const MENU_COPY: Record<'dari'|'english'|'pashto'|'arabic', Record<string,string>> = {
-  dari: {overview:'نمای کلی',videoTools:'ابزارهای ویدیو',terminal:'ترمینل',offlineMode:'حالت آفلاین',offlineLearning:'آموزش آفلاین',closeNav:'بستن منو',navMenu:'منوی پیمایش',close:'بستن',tagline:'هوش، همیشه همراه',guest:'حساب مهمان',free:'رایگان',newChat:'گفت‌وگوی جدید',navigation:'پیمایش',main:'اصلی',tools:'ابزارها',filesDocs:'فایل‌ها و اسناد',toolsCenter:'مرکز ابزارها',account:'حساب',adminPortal:'پنل مدیریت',footer:'یک هوش مصنوعی، توانایی‌های بسیار'},
-  english: {overview:'Overview',videoTools:'Video tools',terminal:'Terminal',offlineMode:'Offline mode',offlineLearning:'Offline learning',closeNav:'Close navigation',navMenu:'Navigation menu',close:'Close menu',tagline:'INTELLIGENCE, CONNECTED',guest:'Guest account',free:'Free',newChat:'New chat',navigation:'Navigation',main:'Main',tools:'Tools',filesDocs:'Files & documents',toolsCenter:'Tools center',account:'Account',adminPortal:'Admin portal',footer:'One AI. Many capabilities.'},
-  pashto: {overview:'لنډه کتنه',videoTools:'ویډیويي وسایل',terminal:'ټرمینل',offlineMode:'نالیکي حالت',offlineLearning:'نالیکي زده‌کړه',closeNav:'مینو وتړئ',navMenu:'د تګ راتګ مینو',close:'بندول',tagline:'هوښیارتیا، تل نښلول شوې',guest:'د مېلمه حساب',free:'وړیا',newChat:'نوې خبرې',navigation:'لارښود',main:'اصلي',tools:'وسایل',filesDocs:'فایلونه او سندونه',toolsCenter:'د وسایلو مرکز',account:'حساب',adminPortal:'د مدیر پاڼه',footer:'یو AI، ډېرې وړتیاوې'},
-  arabic: {overview:'نظرة عامة',videoTools:'أدوات الفيديو',terminal:'الطرفية',offlineMode:'وضع عدم الاتصال',offlineLearning:'التعلّم دون اتصال',closeNav:'إغلاق القائمة',navMenu:'قائمة التنقّل',close:'إغلاق القائمة',tagline:'ذكاء متصل دائماً',guest:'حساب ضيف',free:'مجاني',newChat:'محادثة جديدة',navigation:'التنقّل',main:'الرئيسية',tools:'الأدوات',filesDocs:'الملفات والمستندات',toolsCenter:'مركز الأدوات',account:'الحساب',adminPortal:'بوابة المسؤول',footer:'ذكاء اصطناعي واحد، قدرات متعددة'}
+  dari: {overview:'نمای کلی',videoTools:'ابزارهای ویدیو',terminal:'ترمینل',offlineMode:'مرکز هوش مصنوعی آفلاین',offlineLearning:'آموزش آفلاین',closeNav:'بستن منو',navMenu:'منوی پیمایش',close:'بستن',tagline:'هوش، همیشه همراه',guest:'حساب مهمان',free:'رایگان',newChat:'گفت‌وگوی جدید',navigation:'پیمایش',main:'اصلی',tools:'ابزارها',filesDocs:'فایل‌ها و اسناد',toolsCenter:'مرکز ابزارها',account:'حساب',adminPortal:'پنل مدیریت',footer:'یک هوش مصنوعی، توانایی‌های بسیار'},
+  english: {overview:'Overview',videoTools:'Video tools',terminal:'Terminal',offlineMode:'Offline AI Hub',offlineLearning:'Offline learning',closeNav:'Close navigation',navMenu:'Navigation menu',close:'Close menu',tagline:'INTELLIGENCE, CONNECTED',guest:'Guest account',free:'Free',newChat:'New chat',navigation:'Navigation',main:'Main',tools:'Tools',filesDocs:'Files & documents',toolsCenter:'Tools center',account:'Account',adminPortal:'Admin portal',footer:'One AI. Many capabilities.'},
+  pashto: {overview:'لنډه کتنه',videoTools:'ویډیويي وسایل',terminal:'ټرمینل',offlineMode:'د آفلاین AI مرکز',offlineLearning:'نالیکي زده‌کړه',closeNav:'مینو وتړئ',navMenu:'د تګ راتګ مینو',close:'بندول',tagline:'هوښیارتیا، تل نښلول شوې',guest:'د مېلمه حساب',free:'وړیا',newChat:'نوې خبرې',navigation:'لارښود',main:'اصلي',tools:'وسایل',filesDocs:'فایلونه او سندونه',toolsCenter:'د وسایلو مرکز',account:'حساب',adminPortal:'د مدیر پاڼه',footer:'یو AI، ډېرې وړتیاوې'},
+  arabic: {overview:'نظرة عامة',videoTools:'أدوات الفيديو',terminal:'الطرفية',offlineMode:'مركز الذكاء الاصطناعي دون اتصال',offlineLearning:'التعلّم دون اتصال',closeNav:'إغلاق القائمة',navMenu:'قائمة التنقّل',close:'إغلاق القائمة',tagline:'ذكاء متصل دائماً',guest:'حساب ضيف',free:'مجاني',newChat:'محادثة جديدة',navigation:'التنقّل',main:'الرئيسية',tools:'الأدوات',filesDocs:'الملفات والمستندات',toolsCenter:'مركز الأدوات',account:'الحساب',adminPortal:'بوابة المسؤول',footer:'ذكاء اصطناعي واحد، قدرات متعددة'}
 };
 
 interface AfgSideMenuProps {
@@ -63,7 +63,7 @@ export const AfgSideMenu: React.FC<AfgSideMenuProps> = ({
     { id: 'video-gen' as TabType, label: c.videoTools, icon: Video },
     { id: 'tools' as TabType, label: t.navTools, icon: Wrench },
     { id: 'terminal' as TabType, label: c.terminal, icon: Terminal },
-    { id: 'offline-chat' as TabType, label: c.offlineMode, icon: BrainCircuit },
+    { id: 'offline-ai-hub' as TabType, label: c.offlineMode, icon: BrainCircuit },
     { id: 'offline-learning' as TabType, label: c.offlineLearning, icon: BookOpen },
   ];
 

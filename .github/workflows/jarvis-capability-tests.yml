@@ -1,0 +1,52 @@
+name: JARVIS capability safety tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'src/lib/jarvis-capability-policy.ts'
+      - 'src/lib/offlineModelDownloads.ts'
+      - 'src/lib/offlineLlamaRuntime.ts'
+      - 'plugins/capacitor-jarvis/**'
+      - 'scripts/test-jarvis-offline-model.ts'
+      - 'src/components/afg/AfgJarvisView.tsx'
+      - 'scripts/test-jarvis-capability-*.ts'
+      - '.github/workflows/jarvis-capability-tests.yml'
+  push:
+    branches:
+      - 'main'
+      - 'feat/jarvis-complete-capability-foundation'
+    paths:
+      - 'src/lib/jarvis-capability-policy.ts'
+      - 'src/lib/offlineModelDownloads.ts'
+      - 'src/lib/offlineLlamaRuntime.ts'
+      - 'plugins/capacitor-jarvis/**'
+      - 'src/components/afg/AfgJarvisView.tsx'
+      - 'scripts/test-jarvis-offline-model.ts'
+      - 'scripts/test-jarvis-capability-*.ts'
+      - '.github/workflows/jarvis-capability-tests.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jarvis-capability-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy-and-dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test capability authorization policy
+        run: npx --yes tsx@4 scripts/test-jarvis-capability-policy.ts
+      - name: Test existing multilingual JARVIS command engine
+        run: npx --yes tsx@4 scripts/test-jarvis-command-engine.ts
+      - name: Parse JARVIS capability policy and voice screen syntax
+        run: npx --yes esbuild@0.25.0 src/lib/jarvis-capability-policy.ts src/components/afg/AfgJarvisView.tsx --outdir=/tmp/jarvis-syntax-check --format=esm --target=es2022 --jsx=automatic
