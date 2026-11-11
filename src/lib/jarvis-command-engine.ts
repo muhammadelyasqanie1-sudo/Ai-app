@@ -7,6 +7,7 @@ export type JarvisCommand =
   | { kind: 'unknown' };
 
 const appAliases: Array<{ packageName: string; label: string; aliases: string[] }> = [
+  { packageName: 'com.android.chrome', label: 'Google Chrome', aliases: ['chrome', 'google chrome', 'browser', 'کروم', 'گوگل کروم', 'مرورگر', 'براوزر'] },
   { packageName: 'com.android.settings', label: 'Android Settings', aliases: ['settings', 'android settings', 'تنظیمات', 'تنظیمات اندروید', 'تنظیمات گوشی', 'امستنې', 'د اندروید امستنې', 'الإعدادات', 'إعدادات أندرويد'] },
   { packageName: 'com.google.android.youtube', label: 'YouTube', aliases: ['youtube', 'يوتيوب', 'یوتیوب', 'یوټیوب', 'یوتوب'] },
   { packageName: 'org.telegram.messenger', label: 'Telegram', aliases: ['telegram', 'تلگرام', 'ټیلیګرام', 'تيليجرام'] },
