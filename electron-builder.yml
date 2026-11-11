@@ -1,0 +1,25 @@
+appId: ai.afg.desktop
+productName: AFG AI
+asar: true
+directories:
+  output: release
+files:
+  - electron/main.cjs
+  - package.json
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+portable:
+  artifactName: ${productName}-${version}-portable-${arch}.${ext}
