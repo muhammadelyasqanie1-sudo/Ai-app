@@ -2,6 +2,11 @@ package com.afgai.offlinemodels;
 
 import android.app.DownloadManager;
 import android.content.Context;
+import android.content.Intent;
+import android.app.Activity;
+import androidx.activity.result.ActivityResult;
+import java.io.InputStream;
+import java.io.FileOutputStream;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Environment;
@@ -271,6 +276,60 @@ public class AFGOfflineModelsPlugin extends Plugin {
         result.put("reset", true);
         result.put("modelMemoryReleased", false);
         call.resolve(result);
+    }
+
+    @PluginMethod
+    public void pickAndImportModel(PluginCall call) {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/octet-stream", "application/x-gguf"});
+        startActivityForResult(call, intent, "handlePickedModel");
+    }
+
+    @com.getcapacitor.annotation.ActivityCallback
+    public void handlePickedModel(PluginCall call, ActivityResult result) {
+        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) {
+            call.reject("No model file was selected.");
+            return;
+        }
+        Uri source = result.getData().getData();
+        String displayName = "model.gguf";
+        android.database.Cursor cursor = getContext().getContentResolver().query(source, null, null, null, null);
+        if (cursor != null) {
+            try {
+                int nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                if (cursor.moveToFirst() && nameIndex >= 0) displayName = cursor.getString(nameIndex);
+            } finally { cursor.close(); }
+        }
+        if (!displayName.toLowerCase(Locale.ROOT).endsWith(".gguf")) {
+            call.reject("Please select a GGUF (.gguf) model file.");
+            return;
+        }
+        try {
+            File directory = modelDirectory();
+            String safeName = UUID.randomUUID().toString() + "-" + displayName.replaceAll("[^a-zA-Z0-9._-]", "_");
+            File destination = new File(directory, safeName);
+            try (InputStream input = getContext().getContentResolver().openInputStream(source);
+                 FileOutputStream output = new FileOutputStream(destination)) {
+                if (input == null) throw new Exception("Unable to open the selected model file.");
+                byte[] buffer = new byte[256 * 1024];
+                int read;
+                while ((read = input.read(buffer)) != -1) output.write(buffer, 0, read);
+                output.getFD().sync();
+            }
+            if (!destination.isFile() || destination.length() <= 0) {
+                destination.delete();
+                throw new Exception("The selected model file is empty or could not be copied.");
+            }
+            JSObject response = new JSObject();
+            response.put("path", destination.getAbsolutePath());
+            response.put("fileName", displayName);
+            response.put("sizeBytes", destination.length());
+            call.resolve(response);
+        } catch (Exception error) {
+            call.reject("Unable to import the selected GGUF model.", error);
+        }
     }
 
     @PluginMethod

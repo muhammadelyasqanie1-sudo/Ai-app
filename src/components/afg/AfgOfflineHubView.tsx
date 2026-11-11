@@ -6,7 +6,7 @@ import { searchHuggingFaceGGUF, getHuggingFaceRepository, getPrimaryGgufFile, fo
 import { assessOfflineModelFit, scanOfflineDevice, type OfflineDeviceProfile, type ModelFit } from '../../lib/offlineDevice';
 import { downloadGGUF, listOfflineDownloads, pauseGGUFDownload, removeOfflineModel, usesNativeOfflineDownloads, type OfflineDownloadState } from '../../lib/offlineModelDownloads';
 import { clearOfflineChatMessages, loadOfflineChatMessages, saveOfflineChatMessages, type OfflineChatMessage } from '../../lib/offlineChatStorage';
-import { generateNativeLlamaResponse, getNativeLlamaRuntimeInfo, loadNativeLlamaModel, unloadNativeLlamaModel } from '../../lib/offlineLlamaRuntime';
+import { generateNativeLlamaResponse, getNativeLlamaRuntimeInfo, loadNativeLlamaModel, unloadNativeLlamaModel, pickAndImportNativeGgufModel } from '../../lib/offlineLlamaRuntime';
 
 type CatalogModel = {
   model_id: string;
@@ -499,6 +499,38 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     } catch (error) { setRuntimeMessage(error instanceof Error ? error.message : copy.failed); }
     finally { setBusy(false); setProgressText(''); }
   };
+
+  const importAndLoadLocalGguf = async () => {
+    if (!nativeRuntimeAvailable || busy) return;
+    setBusy(true);
+    setRuntimeMessage(offlineText('فایل GGUF را از حافظه گوشی انتخاب کن…','Choose a GGUF file from your phone storage…'));
+    try {
+      const imported = await pickAndImportNativeGgufModel();
+      if (engineRef.current) {
+        const previous = engineRef.current;
+        engineRef.current = null;
+        engineModelIdRef.current = '';
+        await previous.unload().catch(() => undefined);
+      }
+      const contextSize = lowPowerMode ? 512 : 1024;
+      const threads = Math.max(1, Math.min(4, device?.cpuCores || 2));
+      await loadNativeLlamaModel(imported.path, contextSize, threads);
+      const localId = 'local/' + imported.fileName;
+      engineRef.current = {
+        chat: { completions: { create: async (request: { messages: Array<{ role: string; content: string }>; max_tokens?: number }) => ({ choices: [{ message: { content: await generateNativeLlamaResponse(request.messages, request.max_tokens || 128) } }] }) } },
+        unload: async () => unloadNativeLlamaModel(),
+      };
+      engineModelIdRef.current = localId;
+      setSelectedId(localId);
+      setActiveOfflineModelLabel(imported.fileName);
+      setRuntime('ready');
+      setRuntimeMessage(offlineText('مدل انتخاب‌شده از حافظه گوشی بارگذاری شد.','The selected model from phone storage is loaded.'));
+      setViewMode('chat');
+    } catch (error) {
+      setRuntimeMessage(error instanceof Error ? error.message : copy.failed);
+    } finally { setBusy(false); setProgressText(''); }
+  };
+
   const clearCurrentOfflineChat = async () => {
     setMessages([]);
     await clearOfflineChatMessages(selectedId).catch(() => undefined);
@@ -640,6 +672,8 @@ export function AfgOfflineHubView({ language, initialView = 'chat' }: { language
     </section>}
     {viewMode === "models" && <section className="space-y-4 rounded-[28px] border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 dark:border-white/10 dark:bg-[#0d1729]">
       <div className="flex items-center justify-between gap-2"><h2 className="font-bold">{offlineText('فایل‌های GGUF دانلودشده','Downloaded GGUF files')}</h2><span className="text-xs opacity-60">{ggufTasks.filter(task => task.status === 'installed').length}</span></div>
+      {usesNativeOfflineDownloads() && <button type="button" disabled={!nativeRuntimeAvailable || busy} onClick={() => void importAndLoadLocalGguf()} className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-3 text-sm font-bold text-cyan-800 disabled:opacity-40 dark:text-cyan-200">{offlineText('انتخاب مدل دانلودشده از گوشی (Browse)','Browse / Select a downloaded model from phone')}</button>}
+
       {!ggufTasks.length && <p className="text-xs opacity-60">{offlineText('هنوز فایل GGUF دانلود نشده است.','No GGUF files downloaded yet.')}</p>}
       {ggufTasks.some(task => task.status === 'installed') && !nativeRuntimeAvailable && <p className="rounded-lg bg-amber-500/10 p-2.5 text-xs text-amber-700">{offlineText('فایل‌های GGUF ذخیره شده‌اند، اما موتور بومی llama.cpp در این نسخه یا دستگاه در دسترس نیست.','GGUF files are stored locally, but the native llama.cpp runtime is unavailable in this app build or on this device.')}</p>}
       {ggufTasks.map(task => <div key={task.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-500/5 p-3"><div className="min-w-0 flex-1"><div className="break-all text-xs font-semibold">{task.repoId} / {task.fileName}</div><div className="mt-1 text-[11px] opacity-60">{formatBytes(task.downloadedBytes)} · {task.status === 'installed' ? (offlineText('دانلودشده','Downloaded')) : task.status}{task.status === 'installed' ? (task.hashVerified ? (offlineText(' · هش تأیید شد',' · hash verified')) : (offlineText(' · هش محاسبه شد؛ منبع تأیید ندارد',' · hash calculated; source not verified'))) : ''}{task.error ? ' · ' + task.error : ''}</div></div><div className="flex gap-2">{task.status !== 'installed' && !usesNativeOfflineDownloads() && <button type="button" disabled={!!ggufBusyId} onClick={() => {pendingGgufPathRef.current = task.fileName;setHfSelected(task.repoId);setViewMode('models');}} className="rounded-lg border px-2 py-1 text-xs">{offlineText('ادامه','Resume')}</button>}{task.status === 'paused' && usesNativeOfflineDownloads() && <span className="text-[10px] opacity-60">{offlineText('منتظر اتصال شبکه؛ ادامه خودکار','Waiting for network; auto-resumes')}</span>}{task.status === 'error' && usesNativeOfflineDownloads() && <button type="button" disabled={!!ggufBusyId} onClick={() => {pendingGgufPathRef.current = task.fileName;setHfSelected(task.repoId);setViewMode('models');}} className="rounded-lg border px-2 py-1 text-xs">{offlineText('تلاش دوباره','Retry')}</button>}{task.status === 'installed' && nativeRuntimeAvailable && task.localPath && <button type="button" disabled={busy} onClick={() => void loadNativeGgufModel(task)} className="rounded-lg bg-cyan-500 px-2.5 py-1.5 text-xs font-bold text-slate-950 disabled:opacity-40">{offlineText('اجرا','Load model')}</button>}{task.status === 'installed' && usesNativeOfflineDownloads() && !nativeRuntimeAvailable && <span className="text-[10px] text-amber-700">{offlineText('موتور اجرا در این نسخه موجود نیست','Native runtime unavailable in this build')}</span>}<button type="button" onClick={() => void removeGguf(task.id)} className="rounded-lg border px-2 py-1 text-xs">{offlineText('حذف','Delete')}</button></div></div>)}
