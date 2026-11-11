@@ -4,7 +4,7 @@ import android.app.DownloadManager;
 import android.content.Context;
 import android.content.Intent;
 import android.app.Activity;
-import com.getcapacitor.ActivityResult;
+import androidx.activity.result.ActivityResult;
 import java.io.InputStream;
 import java.io.FileOutputStream;
 import android.database.Cursor;
