@@ -114,7 +114,8 @@ export default function App() {
     return (saved === 'dark' || saved === 'light' || saved === 'neon' || saved === 'system') ? saved : 'system';
   });
 
-  const [currentTab, setCurrentTab] = useState<TabType>('home');
+  // Open the device assistant first whenever the user enters AFG AI.
+  const [currentTab, setCurrentTab] = useState<TabType>('jarvis');
   const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
   const [messages, setMessages] = useState<AfgMessage[]>(INITIAL_MESSAGES);
   const [agentActivities, setAgentActivities] = useState<ChatToolActivity[]>([]);
@@ -390,7 +391,7 @@ export default function App() {
       setMessages([]);
       setCurrentSessionId(`chat-${Date.now()}`);
       setUser(DEFAULT_USER);
-      setCurrentTab('chat');
+      setCurrentTab('jarvis');
       setHasEnteredApp(false);
       setAuthCheckResolved(true);
       localStorage.removeItem('afg_entry_mode');
@@ -821,7 +822,7 @@ export default function App() {
 
   if (!hasEnteredApp) {
     if (!authCheckResolved) return <div className="min-h-screen grid place-items-center bg-[var(--bg-main)] text-[var(--text-secondary)]" role="status" aria-live="polite">{appText.checking}</div>;
-    return <AfgAuthGate language={language} onContinueGuest={() => { localStorage.setItem('afg_entry_mode', 'guest'); setHasEnteredApp(true); }} onAuthenticated={() => { localStorage.setItem('afg_entry_mode', 'account'); setHasEnteredApp(true); window.dispatchEvent(new Event('afg-auth-change')); }} />;
+    return <AfgAuthGate language={language} onContinueGuest={() => { localStorage.setItem('afg_entry_mode', 'guest'); setCurrentTab('jarvis'); setHasEnteredApp(true); }} onAuthenticated={() => { localStorage.setItem('afg_entry_mode', 'account'); setCurrentTab('jarvis'); setHasEnteredApp(true); window.dispatchEvent(new Event('afg-auth-change')); }} />;
   }
 
   return (
