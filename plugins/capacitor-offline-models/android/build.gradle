@@ -16,6 +16,7 @@ android {
 }
 
 dependencies {
+    // Build verification trigger for the latest Android GGUF picker.
     implementation project(':capacitor-android')
     implementation 'androidx.activity:activity:1.9.3'
 }
