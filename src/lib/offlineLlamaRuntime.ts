@@ -29,3 +29,8 @@ export async function generateNativeLlamaResponse(messages: Array<{ role: string
 export async function unloadNativeLlamaModel(): Promise<void> {
   if (Capacitor.getPlatform() === 'android') await AFGOfflineModels.unloadModel();
 }
+
+export async function pickAndImportNativeGgufModel(): Promise<{ path: string; fileName: string; sizeBytes: number }> {
+  if (Capacitor.getPlatform() !== 'android') throw new Error('Selecting a local GGUF file is available in the Android app.');
+  return AFGOfflineModels.pickAndImportModel();
+}
