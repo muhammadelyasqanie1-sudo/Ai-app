@@ -293,6 +293,7 @@ export function AfgJarvisView({ language, onOpenOfflineHub }: { language: Langua
       <div className="relative flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-4"><div className="grid h-16 w-16 place-items-center rounded-2xl border border-cyan-300/40 bg-cyan-300/10 text-3xl text-cyan-200">◉</div>
         <div><p className="text-xs font-bold tracking-[.25em] text-cyan-300">AFG AI</p><h1 className="mt-1 text-2xl font-black text-white">{label('JARVIS Voice Assistant', 'دستیار صوتی جارویس')}</h1><p className="mt-1 text-sm text-slate-300">{label('Your voice assistant and device companion.', 'دستیار صوتی و همراه هوشمند دستگاه شما.')}</p></div></div>
         <button type="button" className={button} aria-pressed={showSettings} onClick={() => setShowSettings(value => !value)}>{showSettings ? label('Back to JARVIS', 'بازگشت به جارویس') : label('Assistant settings', 'تنظیمات دستیار')}</button>
+      </div>
     </header>
     {showSettings ? <section className={card}>
       <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">{label('JARVIS assistant settings', 'تنظیمات دستیار جارویس')}</h2><p className="mt-1 text-xs text-slate-400">{label('Choose, import and activate the speech and local command models used by JARVIS.', 'مدل‌های تشخیص گفتار و فهم فرمان جارویس را انتخاب، وارد و فعال کنید.')}</p></div><button type="button" className={button} onClick={() => { void refresh(); void refreshLocalAi(); }}>{label('Refresh', 'تازه‌سازی')}</button></div>
