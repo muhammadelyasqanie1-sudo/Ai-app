@@ -1,0 +1,117 @@
+name: JARVIS Android plugin compile
+# Compile the native GGUF llama.cpp bridge together with the Capacitor plugin.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'plugins/capacitor-jarvis/**'
+      - '.github/workflows/jarvis-android-plugin-build.yml'
+  push:
+    branches:
+      - 'main'
+      - 'feat/jarvis-complete-capability-foundation'
+    paths:
+      - 'plugins/capacitor-jarvis/**'
+      - '.github/workflows/jarvis-android-plugin-build.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jarvis-android-plugin-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile-android-plugin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Locate runner Android SDK and accept licenses
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
+          test -n "$SDKMANAGER"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Install Capacitor 8 Android host module
+        run: |
+          mkdir -p "$RUNNER_TEMP/jarvis-android-harness"
+          cd "$RUNNER_TEMP/jarvis-android-harness"
+          npm init -y
+          npm install --no-save --no-package-lock @capacitor/android@^8.0.0 @capacitor/core@^8.0.0
+          test -f node_modules/@capacitor/android/capacitor/build.gradle
+
+      - name: Create temporary Gradle host
+        shell: bash
+        run: |
+          HARNESS="$RUNNER_TEMP/jarvis-android-harness"
+          CAP_ANDROID="$HARNESS/node_modules/@capacitor/android/capacitor"
+          mkdir -p "$HARNESS"
+          cat > "$HARNESS/settings.gradle" <<EOF
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = 'jarvis-android-plugin-check'
+          include ':capacitor-android'
+          project(':capacitor-android').projectDir = file('$CAP_ANDROID')
+          include ':capacitor-jarvis'
+          project(':capacitor-jarvis').projectDir = file('$GITHUB_WORKSPACE/plugins/capacitor-jarvis/android')
+          EOF
+          cat > "$HARNESS/build.gradle" <<'EOF'
+          buildscript {
+              repositories { google(); mavenCentral(); }
+              dependencies { classpath 'com.android.tools.build:gradle:8.13.0' }
+          }
+          ext {
+              compileSdkVersion = 36
+              minSdkVersion = 24
+              targetSdkVersion = 36
+              androidxActivityVersion = '1.11.0'
+          }
+          allprojects {
+              repositories { google(); mavenCentral(); }
+          }
+          EOF
+          cat > "$HARNESS/gradle.properties" <<'EOF'
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          org.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8
+          EOF
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Compile JARVIS Android plugin against Capacitor 8
+        run: gradle --no-daemon --project-dir "$RUNNER_TEMP/jarvis-android-harness" :capacitor-jarvis:compileDebugJavaWithJavac --stacktrace
