@@ -3,6 +3,8 @@ import { parseJarvisCommand } from '../src/lib/jarvis-command-engine';
 import { buildJarvisLocalCommandPrompt, extractJarvisLocalCommand, buildJarvisNeedleCommandConfig, extractJarvisNeedleCommand } from '../src/lib/jarvis-local-agent';
 
 const cases: Array<{ input: string; expected: ReturnType<typeof parseJarvisCommand> }> = [
+  { input: 'open Chrome', expected: { kind: 'app', packageName: 'com.android.chrome', label: 'Google Chrome' } },
+  { input: 'کروم را باز کن', expected: { kind: 'app', packageName: 'com.android.chrome', label: 'Google Chrome' } },
   { input: 'open Telegram', expected: { kind: 'app', packageName: 'org.telegram.messenger', label: 'Telegram' } },
   { input: 'لطفاً باز کن تلگرام', expected: { kind: 'app', packageName: 'org.telegram.messenger', label: 'Telegram' } },
   { input: 'تلگرام را باز کن', expected: { kind: 'app', packageName: 'org.telegram.messenger', label: 'Telegram' } },
