@@ -910,7 +910,7 @@ export default function App() {
           <LazyAfgToolsCenter language={language} capabilities={capabilitySnapshot.capabilities} onRunTool={(prompt, options) => { setCurrentTab('chat'); void handleSendMessage(prompt, [], messages, options); }} />
         )}
 
-        {currentTab === 'jarvis' && <LazyAfgJarvisView language={language} />}
+        {currentTab === 'jarvis' && <LazyAfgJarvisView language={language} onOpenOfflineHub={() => setCurrentTab('offline-ai-hub')} />}
         {currentTab === 'terminal' && <LazyAfgTerminalView language={language} />}
         {currentTab === 'offline-learning' && <LazyAfgOfflineView language={language} />}
 
