@@ -15,6 +15,7 @@ const actions: Array<{ id: JarvisAction; en: string; fa: string }> = [
   { id: 'scrollForward', en: 'Scroll down', fa: 'پایین رفتن' }, { id: 'scrollBackward', en: 'Scroll up', fa: 'بالا رفتن' },
 ];
 const apps = [
+  { packageName: 'com.android.chrome', en: 'Google Chrome', fa: 'گوگل کروم' },
   { packageName: 'com.android.settings', en: 'Android Settings', fa: 'تنظیمات اندروید' },
   { packageName: 'com.google.android.youtube', en: 'YouTube', fa: 'یوتیوب' },
   { packageName: 'org.telegram.messenger', en: 'Telegram', fa: 'تلگرام' },
