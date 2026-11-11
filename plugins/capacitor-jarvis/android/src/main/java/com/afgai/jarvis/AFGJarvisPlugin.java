@@ -25,6 +25,16 @@ import android.util.Base64;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import java.io.ByteArrayOutputStream;
+import org.vosk.android.SpeechService;
+import org.vosk.Recognizer;
+import org.vosk.Model;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipEntry;
+import java.io.InputStream;
+import java.io.FileOutputStream;
+import java.io.File;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -64,6 +74,12 @@ public class AFGJarvisPlugin extends Plugin {
     private SpeechRecognizer speechRecognizer;
     private TextToSpeech textToSpeech;
     private boolean ttsReady = false;
+    private Model voskModel;
+    private Recognizer voskRecognizer;
+    private SpeechService voskSpeechService;
+    private String importedVoskModelPath = "";
+    private final Object voskLock = new Object();
+    private static final ExecutorService VOSK_EXECUTOR = Executors.newSingleThreadExecutor();
 
     @Override public void load() {
         super.load();
@@ -130,6 +146,7 @@ public class AFGJarvisPlugin extends Plugin {
         result.put("microphonePermission", getContext().checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED);
         result.put("offlinePreferenceSupported", true);
         result.put("offlineRecognitionGuaranteed", false);
+        synchronized (voskLock) { result.put("voskModelImported", !TextUtils.isEmpty(importedVoskModelPath)); result.put("voskModelReady", voskModel != null); }
         result.put("ttsAvailable", textToSpeech != null && ttsReady);
         call.resolve(result);
     }
@@ -146,6 +163,164 @@ public class AFGJarvisPlugin extends Plugin {
         boolean granted = getContext().checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
         result.put("granted", granted);
         if (granted) call.resolve(result); else call.reject("Microphone permission was not granted.");
+    }
+
+    private File voskModelsDirectory() throws Exception {
+        File directory = new File(getContext().getFilesDir(), "jarvis-models");
+        if (!directory.exists() && !directory.mkdirs()) throw new Exception("Could not create private Vosk model storage.");
+        return directory.getCanonicalFile();
+    }
+
+    @PluginMethod public void importVoskModel(PluginCall call) {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/zip");
+        intent.putExtra(Intent.EXTRA_TITLE, "vosk-model-small-fa-0.42.zip");
+        startActivityForResult(call, intent, "voskModelImportResult");
+    }
+
+    @com.getcapacitor.annotation.ActivityCallback
+    private void voskModelImportResult(PluginCall call, ActivityResult result) {
+        if (result == null || result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) {
+            call.reject("Vosk model import was cancelled."); return;
+        }
+        final Uri uri = result.getData().getData();
+        VOSK_EXECUTOR.execute(() -> {
+            File staging = null;
+            try {
+                File models = voskModelsDirectory();
+                staging = new File(models, "vosk-fa-0.42.importing");
+                deleteRecursively(staging);
+                if (!staging.mkdirs()) throw new Exception("Could not create temporary Vosk model storage.");
+                long expandedBytes = 0L;
+                int entryCount = 0;
+                InputStream raw = getContext().getContentResolver().openInputStream(uri);
+                if (raw == null) throw new Exception("Could not read the selected ZIP file.");
+                try (ZipInputStream zip = new ZipInputStream(raw)) {
+                    ZipEntry entry;
+                    byte[] buffer = new byte[64 * 1024];
+                    while ((entry = zip.getNextEntry()) != null) {
+                        if (++entryCount > 20000) throw new Exception("The ZIP contains too many files.");
+                        String name = entry.getName().replace('\\', '/');
+                        if (name.startsWith("/") || name.matches("^[A-Za-z]:.*")) throw new Exception("Unsafe ZIP entry path.");
+                        for (String part : name.split("/")) if ("..".equals(part)) throw new Exception("Unsafe ZIP entry path.");
+                        File output = new File(staging, name).getCanonicalFile();
+                        String stagingPath = staging.getCanonicalPath() + File.separator;
+                        if (!output.getCanonicalPath().startsWith(stagingPath)) throw new Exception("Unsafe ZIP entry path.");
+                        if (entry.isDirectory()) {
+                            if (!output.exists() && !output.mkdirs()) throw new Exception("Could not create model directory.");
+                        } else {
+                            File parent = output.getParentFile();
+                            if (parent != null && !parent.exists() && !parent.mkdirs()) throw new Exception("Could not create model directory.");
+                            try (FileOutputStream stream = new FileOutputStream(output)) {
+                                int count;
+                                while ((count = zip.read(buffer)) != -1) {
+                                    expandedBytes += count;
+                                    if (expandedBytes > 500L * 1024L * 1024L) throw new Exception("Expanded Vosk model exceeds the 500 MB safety limit.");
+                                    stream.write(buffer, 0, count);
+                                }
+                            }
+                        }
+                        zip.closeEntry();
+                    }
+                }
+                File modelRoot = findVoskModelRoot(staging, 0);
+                if (modelRoot == null) throw new Exception("This ZIP is not a valid Vosk model: am/final.mdl and conf/model.conf were not found.");
+                synchronized (voskLock) {
+                    if (voskSpeechService != null) { voskSpeechService.stop(); voskSpeechService.shutdown(); voskSpeechService = null; }
+                    if (voskRecognizer != null) { voskRecognizer.close(); voskRecognizer = null; }
+                    if (voskModel != null) { voskModel.close(); voskModel = null; }
+                    importedVoskModelPath = modelRoot.getCanonicalPath();
+                }
+                JSObject out = new JSObject();
+                out.put("imported", true);
+                out.put("localPath", importedVoskModelPath);
+                out.put("expandedBytes", expandedBytes);
+                call.resolve(out);
+            } catch (Exception error) {
+                if (staging != null) deleteRecursively(staging);
+                call.reject("Could not import the Vosk model: " + (error.getMessage() == null ? "unknown error" : error.getMessage()), error);
+            }
+        });
+    }
+
+    private File findVoskModelRoot(File directory, int depth) {
+        if (directory == null || depth > 5) return null;
+        if (new File(directory, "am/final.mdl").isFile() && new File(directory, "conf/model.conf").isFile()) return directory;
+        File[] children = directory.listFiles();
+        if (children == null) return null;
+        for (File child : children) if (child.isDirectory()) {
+            File found = findVoskModelRoot(child, depth + 1);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private void deleteRecursively(File file) {
+        if (file == null || !file.exists()) return;
+        File[] children = file.listFiles();
+        if (children != null) for (File child : children) deleteRecursively(child);
+        file.delete();
+    }
+
+    @PluginMethod public void loadVoskModel(PluginCall call) {
+        final String path;
+        synchronized (voskLock) { path = importedVoskModelPath; }
+        if (TextUtils.isEmpty(path) || !new File(path, "am/final.mdl").isFile()) {
+            call.reject("Import the Vosk ZIP model before loading it."); return;
+        }
+        VOSK_EXECUTOR.execute(() -> {
+            try {
+                Model loaded = new Model(path);
+                synchronized (voskLock) {
+                    if (voskSpeechService != null) { voskSpeechService.stop(); voskSpeechService.shutdown(); voskSpeechService = null; }
+                    if (voskRecognizer != null) { voskRecognizer.close(); voskRecognizer = null; }
+                    if (voskModel != null) voskModel.close();
+                    voskModel = loaded;
+                }
+                JSObject out = new JSObject(); out.put("loaded", true); out.put("localPath", path); call.resolve(out);
+            } catch (Exception error) {
+                call.reject("Vosk could not load this model: " + (error.getMessage() == null ? "unknown error" : error.getMessage()), error);
+            }
+        });
+    }
+
+    private String extractVoskText(String json, String key) {
+        try { return new JSONObject(json).optString(key, ""); }
+        catch (Exception ignored) { return ""; }
+    }
+
+    @PluginMethod public void startVoskListening(PluginCall call) {
+        synchronized (voskLock) {
+            if (voskModel == null) { call.reject("Load the imported Vosk model first."); return; }
+            if (getContext().checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                call.reject("Grant microphone permission first."); return;
+            }
+            try {
+                if (voskSpeechService != null) { voskSpeechService.stop(); voskSpeechService.shutdown(); voskSpeechService = null; }
+                if (voskRecognizer != null) { voskRecognizer.close(); voskRecognizer = null; }
+                voskRecognizer = new Recognizer(voskModel, 16000.0f);
+                voskSpeechService = new SpeechService(voskRecognizer, 16000.0f);
+                voskSpeechService.startListening(new org.vosk.android.RecognitionListener() {
+                    @Override public void onPartialResult(String hypothesis) { emitSpeech("partial", extractVoskText(hypothesis, "partial"), ""); }
+                    @Override public void onResult(String hypothesis) { emitSpeech("partial", extractVoskText(hypothesis, "text"), ""); }
+                    @Override public void onFinalResult(String hypothesis) { emitSpeech("result", extractVoskText(hypothesis, "text"), ""); }
+                    @Override public void onError(Exception error) { emitSpeech("error", "", error == null ? "Vosk recognition failed." : error.getMessage()); }
+                    @Override public void onTimeout() { emitSpeech("processing", "", ""); }
+                });
+                JSObject out = new JSObject(); out.put("started", true); out.put("offline", true); call.resolve(out);
+            } catch (Exception error) {
+                call.reject("Could not start offline Vosk recognition.", error);
+            }
+        }
+    }
+
+    @PluginMethod public void stopVoskListening(PluginCall call) {
+        synchronized (voskLock) {
+            if (voskSpeechService != null) { voskSpeechService.stop(); voskSpeechService.shutdown(); voskSpeechService = null; }
+            if (voskRecognizer != null) { voskRecognizer.close(); voskRecognizer = null; }
+        }
+        JSObject out = new JSObject(); out.put("stopped", true); call.resolve(out);
     }
 
     @PluginMethod public void startListening(PluginCall call) {
