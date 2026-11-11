@@ -1,0 +1,158 @@
+/* Desktop-first workspace refinements. Mobile navigation and layouts remain owned by jarvis.css. */
+@media (min-width: 1051px) {
+  .jarvis-app {
+    height: 100vh;
+    min-height: 100vh;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at 48% -18%, color-mix(in srgb, var(--j-accent) 8%, transparent), transparent 48%),
+      var(--j-bg);
+  }
+
+  .jarvis-app .j-sidebar {
+    width: 248px;
+    height: 100vh;
+    padding: 27px 17px 16px;
+    border-inline-end-color: color-mix(in srgb, var(--j-accent) 13%, var(--j-border));
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--j-accent) 3%, var(--j-panel)), var(--j-panel) 32%);
+  }
+
+  .jarvis-app .j-sidebar nav {
+    flex: 1;
+    min-height: 0;
+    padding: 4px 2px;
+  }
+
+  .jarvis-app .j-sidebar nav > button {
+    min-height: 42px;
+    margin-block: 3px;
+    padding-inline: 13px;
+    font-size: 0.82rem;
+  }
+
+  .jarvis-app .j-sidebar nav > button.active {
+    background:
+      linear-gradient(100deg, color-mix(in srgb, var(--j-accent) 12%, transparent), color-mix(in srgb, var(--j-violet) 8%, transparent));
+    box-shadow: inset 2px 0 var(--j-accent), 0 7px 22px #0002;
+  }
+
+  .jarvis-app .j-body {
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+    background: transparent;
+  }
+
+  .jarvis-app .j-topbar {
+    height: 72px;
+    flex: 0 0 72px;
+    padding-inline: clamp(26px, 3vw, 52px);
+    border-bottom-color: color-mix(in srgb, var(--j-accent) 12%, var(--j-border));
+    background: color-mix(in srgb, var(--j-panel) 82%, transparent);
+    backdrop-filter: blur(18px);
+  }
+
+  .jarvis-app .j-topbar strong {
+    color: var(--j-text);
+    font-size: 0.88rem;
+    font-weight: 650;
+  }
+
+  .jarvis-app .j-content-row {
+    min-height: 0;
+    overflow: hidden;
+    align-items: stretch;
+  }
+
+  .jarvis-app .j-workspace {
+    min-height: 0;
+    height: 100%;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--j-accent) 24%, transparent) transparent;
+  }
+
+  .jarvis-app .j-existing-view {
+    min-height: 100%;
+    padding-block: 8px 26px;
+  }
+
+  .jarvis-app .j-existing-view > main {
+    width: min(100%, 1440px);
+    max-width: 1440px;
+    padding: 24px clamp(28px, 3.2vw, 54px) 34px !important;
+  }
+
+  .jarvis-app .j-dashboard {
+    width: min(100%, 1480px);
+    max-width: 1480px;
+    padding: 34px clamp(30px, 3.4vw, 58px) 30px;
+  }
+
+  .jarvis-app .j-intelligence {
+    width: clamp(250px, 21vw, 310px);
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    padding: 24px 19px 20px;
+    border-inline-start-color: color-mix(in srgb, var(--j-accent) 12%, var(--j-border));
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--j-violet) 4%, var(--j-panel)), var(--j-panel) 42%);
+    scrollbar-width: thin;
+  }
+
+  .jarvis-app .j-intelligence .j-model-card,
+  .jarvis-app .j-intelligence .j-device-card,
+  .jarvis-app .j-intelligence .j-privacy-card {
+    border-radius: 14px;
+  }
+
+  .jarvis-app .j-composer {
+    border-radius: 18px;
+    box-shadow: 0 16px 46px #0003, inset 0 1px #ffffff08;
+  }
+
+  .jarvis-app .j-hero {
+    border-radius: 24px;
+    overflow: hidden;
+  }
+}
+
+@media (min-width: 1600px) {
+  .jarvis-app .j-sidebar {
+    width: 266px;
+    padding-inline: 20px;
+  }
+
+  .jarvis-app .j-topbar {
+    height: 78px;
+    flex-basis: 78px;
+  }
+
+  .jarvis-app .j-intelligence {
+    width: 320px;
+    padding-inline: 22px;
+  }
+
+  .jarvis-app .j-existing-view > main {
+    padding-inline: 64px !important;
+  }
+}
+
+@media (min-width: 1051px) and (max-width: 1280px) {
+  .jarvis-app .j-sidebar {
+    width: 218px;
+    padding-inline: 12px;
+  }
+
+  .jarvis-app .j-intelligence {
+    width: 238px;
+    padding-inline: 13px;
+  }
+
+  .jarvis-app .j-existing-view > main {
+    padding-inline: 22px !important;
+  }
+}
