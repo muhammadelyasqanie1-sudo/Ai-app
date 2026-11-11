@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { apiFetch, getCsrfToken } from '../../lib/apiClient';
 import type { Language } from '../../types/afg';
+import { AfgJarvisVisualCore } from './AfgJarvisVisualCore';
 
 type Turn = { role: 'user' | 'assistant'; content: string };
 type ModelItem = { id?: string; name?: string };
@@ -98,7 +99,9 @@ export function AfgOpenJarvisPanel({ language }: { language: Language }) {
   const ps:Record<string,string>={'Intelligence engine':'د ځیرکتیا انجن','Full upstream source imported; runtime connects through your AFG AI account.':'د اصلي پروژې بشپړه سرچینه وارد شوې؛ انجن ستاسو د AFG AI حساب له لارې نښلېږي.','Checking…':'حالت کتل کېږي…','Connected':'وصل دی','Not connected':'نه دی وصل','OpenJarvis model':'د OpenJarvis ماډل','Your OpenJarvis conversations will appear here.':'ستاسو د OpenJarvis خبرې به دلته ښکاره شي.','Ask OpenJarvis…':'له OpenJarvis څخه وپوښتئ…','Send':'لېږل','The private OpenJarvis runtime must be deployed and configured on the server.':'د OpenJarvis شخصي انجن باید پر سرور خپور او تنظیم شي.','Retry connection':'بیا نښلېدل'};
   const ar:Record<string,string>={'Intelligence engine':'محرك الذكاء','Full upstream source imported; runtime connects through your AFG AI account.':'تم استيراد المصدر الأصلي بالكامل؛ يتصل محرك التشغيل عبر حساب AFG AI.','Checking…':'جارٍ التحقق…','Connected':'متصل','Not connected':'غير متصل','OpenJarvis model':'نموذج OpenJarvis','Your OpenJarvis conversations will appear here.':'ستظهر محادثات OpenJarvis هنا.','Ask OpenJarvis…':'اسأل OpenJarvis…','Send':'إرسال','The private OpenJarvis runtime must be deployed and configured on the server.':'يجب نشر محرك OpenJarvis الخاص وإعداده على الخادم.','Retry connection':'إعادة الاتصال'};
   const text = (en: string, fa: string) => locale === 'dari' ? fa : locale === 'pashto' ? (ps[en] || en) : locale === 'arabic' ? (ar[en] || en) : en;
-  return <section dir={rtl?'rtl':'ltr'} className="rounded-2xl border border-violet-400/25 bg-slate-950/70 p-4 shadow-[0_0_30px_rgba(124,77,255,.08)]">
+  return <>
+    <AfgJarvisVisualCore active={busy} connected={connected} language={language} />
+    <section dir={rtl?'rtl':'ltr'} className="rounded-2xl border border-violet-400/25 bg-slate-950/70 p-4 shadow-[0_0_30px_rgba(124,77,255,.08)]">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h2 className="font-bold text-white">OpenJarvis · {text('Intelligence engine', 'موتور هوشمند')}</h2>
@@ -127,5 +130,6 @@ export function AfgOpenJarvisPanel({ language }: { language: Language }) {
       <p className="text-xs text-slate-400">{text('The private OpenJarvis runtime must be deployed and configured on the server.', 'موتور خصوصی OpenJarvis باید روی سرور راه‌اندازی و تنظیم شود.')}</p>
       <button type="button" onClick={() => void refresh()} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200">{text('Retry connection', 'تلاش دوباره')}</button>
     </div>}
-  </section>;
+    </section>
+  </>;
 }
