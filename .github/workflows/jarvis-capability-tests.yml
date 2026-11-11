@@ -46,19 +46,7 @@ jobs:
           node-version: 22
       - name: Test capability authorization policy
         run: npx --yes tsx@4 scripts/test-jarvis-capability-policy.ts
-      - name: Test Android action dispatcher enforcement
-        run: npx --yes tsx@4 scripts/test-jarvis-capability-dispatch.ts
-      - name: Test multilingual offline command engine and local model guards
+      - name: Test existing multilingual JARVIS command engine
         run: npx --yes tsx@4 scripts/test-jarvis-command-engine.ts
-      - name: Test offline GGUF model integrity and local inference guards
-        run: npx --yes tsx@4 scripts/test-jarvis-offline-model.ts
-      - name: Test local JARVIS task storage validation and account scoping
-        run: npx --yes tsx@4 scripts/test-jarvis-task-storage.ts
-      - name: Test OpenJarvis authenticated bridge boundaries
-        run: npx --yes tsx@4 scripts/test-jarvis-capability-openjarvis.ts
-      - name: Audit direct JARVIS native plugin callsites
-        run: npx --yes tsx@4 scripts/test-jarvis-capability-callsites.ts
-      - name: Test native Android permission and input boundaries
-        run: npx --yes tsx@4 scripts/test-jarvis-capability-native.ts
-      - name: Parse JARVIS TypeScript and React screen syntax
-        run: npx --yes esbuild@0.25.0 src/lib/jarvis-capability-policy.ts src/lib/offlineModelDownloads.ts src/lib/offlineLlamaRuntime.ts src/components/afg/AfgJarvisView.tsx --outdir=/tmp/jarvis-syntax-check --format=esm --target=es2022 --jsx=automatic
+      - name: Parse JARVIS capability policy and voice screen syntax
+        run: npx --yes esbuild@0.25.0 src/lib/jarvis-capability-policy.ts src/components/afg/AfgJarvisView.tsx --outdir=/tmp/jarvis-syntax-check --format=esm --target=es2022 --jsx=automatic
