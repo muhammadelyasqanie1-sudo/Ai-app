@@ -288,7 +288,7 @@ public class AFGOfflineModelsPlugin extends Plugin {
     }
 
     @com.getcapacitor.annotation.ActivityCallback
-    private void handlePickedModel(PluginCall call, ActivityResult result) {
+    public void handlePickedModel(PluginCall call, ActivityResult result) {
         if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) {
             call.reject("No model file was selected.");
             return;
