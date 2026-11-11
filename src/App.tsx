@@ -12,6 +12,7 @@ import { AfgChatView } from './components/afg/AfgChatView';
 import { AfgSideMenu } from './components/afg/AfgSideMenu';
 import { AfgLanguageModal } from './components/afg/AfgLanguageModal';
 import { AfgCinematicIntro } from './components/afg/AfgCinematicIntro';
+import { AfgBootMotion } from './components/afg/AfgBootMotion';
 import { AfgCommandPalette, type AfgSystemFeatures } from './components/afg/AfgCommandPalette';
 import { AfgAuthGate } from './components/afg/AfgAuthGate';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
@@ -811,6 +812,10 @@ export default function App() {
     setMessages([]);
     setCurrentTab('chat');
   };
+
+  if (!authCheckResolved) {
+    return <AfgBootMotion language={language} />;
+  }
 
   if (isIntroVisible) {
     return <AfgCinematicIntro language={language} onComplete={() => { localStorage.setItem('afg_intro_seen_v2', 'true'); setIsIntroVisible(false); }} />;
