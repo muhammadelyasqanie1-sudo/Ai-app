@@ -1,0 +1,44 @@
+name: AFG AI Windows Desktop
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'electron/**'
+      - 'electron-builder.yml'
+      - '.github/workflows/windows-desktop.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'electron/**'
+      - 'electron-builder.yml'
+      - '.github/workflows/windows-desktop.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-x64:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Windows 8 compatible Electron toolchain
+        run: npm install --no-save --no-audit --no-fund electron@22.3.27 electron-builder@24.13.3
+      - name: Package installer and portable application
+        run: npx electron-builder --config electron-builder.yml --win nsis portable --x64
+      - name: Upload Windows packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: afg-ai-windows-x64
+          path: |
+            release/*.exe
+          if-no-files-found: error
+          retention-days: 14
