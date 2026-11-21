@@ -20,6 +20,14 @@ import { enforceModelSubscription } from './modelAccess.ts';
 import { redactSecret } from '../security/providerVault.ts';
 import { ChatRequestSchema } from '../../packages/shared/src/schemas';
 import { estimateTokenCount, optimizeChatMessages } from '../services/tokenOptimizer.ts';
+import {
+  parseChatPersistenceRequest,
+  resolveChatPersistenceContext,
+  persistAssistantMessage,
+  persistedStreamEvent,
+  failurePersistenceStatus,
+  type ChatPersistenceContext,
+} from './chatPersistence.ts';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system' | 'tool'; content: string; name?: string; tool_call_id?: string; tool_calls?: Array<{id:string;type:'function';function:{name:string;arguments:string}}> };
 const chatRequestSchema = ChatRequestSchema;
@@ -223,6 +231,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
   let timedOut = false;
   let requestUserId: string | null = null;
   let activeModelId = '';
+  let assistantContent = '';
+  let chatPersistenceContext: ChatPersistenceContext | null = null;
   const rateLimitedModels = new Set<string>();
   let usageProviderId = '';
   let usageModelId = '';
@@ -275,6 +285,24 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         [id,requestUserId,usageModelId||null,usageProviderId||null,code,errorClass,
           'AI request failed ('+errorClass+').',JSON.stringify({latencyMs:Date.now()-startedAt})]);
     }catch{console.warn('AFG_ERROR_RECORD_WRITE_FAILED',JSON.stringify({requestId:id}));}
+  };
+  // Phase 3: store the assistant reply server-side (idempotently) and tell the
+  // client over SSE, so a closed tab or dropped connection never loses a reply.
+  const persistAssistantReply = async (outcome: 'success' | 'interrupted') => {
+    if (!pool || !chatPersistenceContext) return;
+    const status = outcome === 'success'
+      ? 'complete' as const
+      : failurePersistenceStatus(abortController.signal.aborted, timedOut);
+    try {
+      const result = await persistAssistantMessage(
+        pool, chatPersistenceContext, assistantContent, status, activeModelId || usageModelId || null,
+      );
+      if (result.persisted && !res.writableEnded && !res.destroyed) {
+        res.write(`data: ${JSON.stringify(persistedStreamEvent(id, 'assistant', result))}\n\n`);
+      }
+    } catch {
+      console.warn('AFG_ASSISTANT_MESSAGE_PERSIST_FAILED', JSON.stringify({ requestId: id, outcome }));
+    }
   };
 
   try {
@@ -441,6 +469,22 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     if (upstreamMessages[upstreamMessages.length - 1]?.role !== 'user') {
       sendJson(req, res, 400, { error: 'The final conversation message must be the new user prompt.', requestId: id }, id);
       return;
+    }
+    // Phase 3 persistence context: only for authenticated callers that pass a
+    // conversation ID they actually own. Guests keep the stateless flow.
+    if (authenticatedUser && pool) {
+      const persistenceRequest = parseChatPersistenceRequest(body);
+      if (persistenceRequest.conversationId) {
+        try {
+          chatPersistenceContext = await resolveChatPersistenceContext(
+            pool, authenticatedUser.id, persistenceRequest,
+            upstreamMessages[upstreamMessages.length - 1],
+          );
+        } catch {
+          chatPersistenceContext = null;
+          console.warn('AFG_CHAT_PERSISTENCE_CONTEXT_FAILED', JSON.stringify({ requestId: id }));
+        }
+      }
     }
     if (toolMode.mode === 'translation') {
       const lastUser = upstreamMessages[upstreamMessages.length - 1];
@@ -620,6 +664,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
           if (chunk.content) {
             emittedContent = true;
             streamedOutputCharacters += chunk.content.length;
+            assistantContent += chunk.content;
             res.write(`data: ${JSON.stringify({ type: 'content', text: chunk.content })}\n\n`);
           }
           for (const delta of chunk.toolCalls || []) {
@@ -694,6 +739,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         res.end();
         return;
       }
+      await persistAssistantReply('success');
       await persistUsage('success');
       console.info('AI_CHAT_COMPLETED', JSON.stringify({
         requestId: id, selectedModel: activeModelId || (prepared.providerId + '::' + prepared.modelId),
@@ -705,6 +751,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       await persistUsage(timedOut?'timeout':'error');
       await persistError(error);
+      await persistAssistantReply('interrupted');
       const streamErrorCode = classifyError(error);
       const streamRetryable = !['invalid_request','content_policy','auth','rate_limit','quota_exhausted','premium_required'].includes(streamErrorCode);
       console.error('AI_PROVIDER_STREAM_FAILED', JSON.stringify({
@@ -733,6 +780,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
   } catch (error) {
     await persistUsage(timedOut?'timeout':'error');
     await persistError(error);
+    await persistAssistantReply('interrupted');
     const providerError = error instanceof ProviderAdapterError ? error : null;
     console.error('AI_CHAT_REQUEST_FAILED', JSON.stringify({
       requestId: id,

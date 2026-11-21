@@ -25,7 +25,8 @@
     "test:jarvis-command": "tsx scripts/test-jarvis-command-engine.ts",
     "test:core-state": "tsx scripts/test-core-state.ts",
     "test:offline-download": "tsx scripts/test-offline-download.ts",
-    "test:osint": "tsx scripts/test-osint-engine.ts"
+    "test:osint": "tsx scripts/test-osint-engine.ts",
+    "test:chat-persistence": "tsx scripts/test-chat-persistence.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
