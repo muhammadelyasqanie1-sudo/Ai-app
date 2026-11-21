@@ -247,3 +247,51 @@ and honestly reported.
   largest open items (3-5 days each per the completion plan).
 - Provider smoke tests, Android APK and Windows packaging verification need
   real provider keys / CI runners (their workflows exist and are wired).
+
+## 2026-11-22 — continuation session: remaining work closed (feature/afg-ai-complete-product)
+
+- **i18n completion** (`4c11d75e`): all 13 secondary locales (urdu, turkish,
+  russian, french, spanish, german, chinese, hindi, bengali, indonesian,
+  portuguese, japanese, korean) fully translated — 908 English-copy keys
+  replaced with native terminology via `src/utils/localeToolsUi.ts`;
+  `i18n:check` now hard-fails on untranslated English copies (documented
+  loanword whitelist); indonesian `attachFile` translated (Berkas) instead of
+  whitelisted; RTL unaffected (direction driven by language list).
+- **Multi-instance live event fan-out** (`7ffcaa8f`): new
+  `src/services/liveEventHub.ts` over PostgreSQL LISTEN/NOTIFY with a
+  dedicated LISTEN client, exponential-backoff reconnect and 8 kB payload
+  guard; `/api/events` pushes fresh per-client authorized snapshots on any
+  instance's catalog change; publishes wired to provider/model/fallback/
+  config/integration mutations; `scripts/test-multi-instance-fanout.ts`
+  boots two real instances and verifies cross-instance delivery, reconnect
+  and authorization; added to CI and the canonical integration runner.
+- **Provider smoke tests** (`266e3a3e`): `scripts/test-provider-smoke.ts`
+  exercises the real adapters — OpenAI-compatible (honest config-required,
+  paginated discovery, inference-probe health, SSE reassembly, rejected keys
+  surface honestly), Ollama (loopback guard, discovery, probe, ndjson
+  streaming, honest unreachable), 9Router proxy (auth 401, config-required
+  503 naming NINEROUTER_BASE_URL, SSRF guards on private targets). Mock
+  upstreams return realistic payloads incl. auth failures; no live provider
+  success is claimed anywhere.
+- **ClamAV reproducibility** (`32681750`): `scripts/setup-clamav.sh`
+  (apt/dnf/Homebrew + freshclam + EICAR verification), `scripts/check-clamav.ts`
+  doctor with exact-fix messages, `docs/CLAMAV_SETUP.md` (fail-closed
+  pipeline, per-environment setup, capability table without ClamAV).
+- **Vendor pruning decision** (`0e7109a9`): `vendor/OpenJarvis` (2203 files,
+  ~107 MB) untracked after verifying zero runtime/build/test/workflow
+  references; the OpenJarvis proxy routes depend on the runtime URL, not the
+  snapshot; restorable via the import-openjarvis workflow.
+- **File tools made real** (`92961043`): the file-tools panel previously read
+  status fields that do not exist in the API and always claimed uploads were
+  disabled; it now consumes the real `/api/files/status` contract and
+  implements real upload (quarantine), private library listing and per-file
+  ClamAV scan actions; pdf-tools copy made truthful (TXT/MD/CSV/JSON works,
+  PDF/Office not implemented) in all four UI locales; card ready-states
+  updated.
+- **Verification** (this session, all green): TypeScript, production build
+  (i18n prebuild), 11 DB-free suites, 5 PostgreSQL integration suites on a
+  fresh PG 18 cluster (57 migrations), runtime boot test (HTTPS 308, CSP,
+  HSTS, static), button dead-handler sweep across all components.
+- **GitHub push**: attempted and blocked by missing credentials — exact error
+  `fatal: could not read Username for 'https://github.com': terminal prompts
+  disabled`; 29 commits preserved locally; authorization steps documented.
