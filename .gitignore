@@ -13,3 +13,5 @@ coverage/
 android/.gradle/
 android/app/build/
 android/build/
+.aistudio/
+public/assets/aistudio/
