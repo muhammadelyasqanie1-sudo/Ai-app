@@ -6,7 +6,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-export DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55432/postgres'
+PGHOST='127.0.0.1'; PGPORT=55432
+export DATABASE_URL="postgres://postgres:postgres@$PGHOST:$PGPORT/afg_agent_test"
 PGDATA=/tmp/afg-pgdata
 TESTS=("$@")
 
@@ -40,7 +41,20 @@ for i in $(seq 1 60); do
   sleep 1
 done
 grep -q PG_READY /tmp/afg-pg-daemon.log || { cat /tmp/afg-pg-daemon.log; exit 1; }
-echo "embedded PostgreSQL ready on 127.0.0.1:55432"
+echo "embedded PostgreSQL ready on $PGHOST:$PGPORT"
+
+# Provision the disposable test database the integration tests expect.
+node - <<'EOF'
+const { Client } = require('pg');
+(async () => {
+  const admin = new Client({ connectionString: 'postgres://postgres:postgres@127.0.0.1:55432/postgres' });
+  await admin.connect();
+  await admin.query('DROP DATABASE IF EXISTS afg_agent_test');
+  await admin.query('CREATE DATABASE afg_agent_test');
+  await admin.end();
+  console.log('test database provisioned');
+})().catch((e) => { console.error('DB_SETUP_FAIL', e.message); process.exit(1); });
+EOF
 
 npx tsx scripts/migrate.ts
 echo "migrations applied"
