@@ -35,6 +35,7 @@ jobs:
           npm run test:chat-stream
           npm run test:chat-persistence
           npm run test:image-adapter
+          npm run test:migrations
 
   integration:
     name: PostgreSQL integration
