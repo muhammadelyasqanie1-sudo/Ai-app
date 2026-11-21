@@ -107,7 +107,7 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
         return true;
       }
       const language = input.language || 'auto';
-      const result = await adapter.transcribe({ audio: new Uint8Array(audio), mimeType, language });
+      const result = await adapter.transcribe({ audio: new Uint8Array(audio), mimeType, language, model: modelId, signal: AbortSignal.timeout(55_000) });
       reply(res, 200, { available: true, text: result.text }, requestId);
       return true;
     }
@@ -133,7 +133,7 @@ export async function handleVoiceApi(req: IncomingMessage, res: ServerResponse):
       return true;
     }
     const language = input.language;
-    const result = await adapter.synthesize({ text, voice, language });
+    const result = await adapter.synthesize({ text, voice, language, model: selectedModel.id, signal: AbortSignal.timeout(55_000) });
     if (!result.audio.length || result.audio.length > MAX_AUDIO_BYTES) {
       reply(res, 502, { error: 'The voice provider returned an invalid audio result.' }, requestId);
       return true;

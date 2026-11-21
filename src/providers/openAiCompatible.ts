@@ -1,5 +1,7 @@
 import { compatibleMedia } from './compatibleMedia.ts';
-import type { ChatChunk, ChatRequest, ChatProviderAdapter, ConfigStatus, HealthStatus, ModelDescriptor, CapabilityFlags } from './providerTypes.ts';
+import type { ChatChunk, ChatRequest, ChatProviderAdapter, ConfigStatus, HealthStatus, ModelDescriptor, CapabilityFlags, AudioRequest, Transcription, TTSRequest, AudioResult, VisionRequest, VisionResult } from './providerTypes.ts';
+import type { MediaRequest } from '../services/media/contracts.ts';
+import { randomUUID } from 'crypto';
 import { ProviderAdapterError } from './providerTypes.ts';
 
 type OpenAIModel = {
@@ -16,6 +18,12 @@ const CAPABILITIES: CapabilityFlags = {
   text: true, streaming: true, vision: false, imageGen: false, imageEdit: false, ocr: false,
   tts: false, stt: false, tools: false, jsonMode: false,
 };
+
+const AUDIO_EXTENSION_BY_MIME = new Map<string, string>([
+  ['audio/webm', 'webm'], ['audio/wav', 'wav'], ['audio/x-wav', 'wav'], ['audio/wave', 'wav'],
+  ['audio/mpeg', 'mp3'], ['audio/mp3', 'mp3'], ['audio/mp4', 'm4a'], ['audio/ogg', 'ogg'],
+  ['audio/aac', 'aac'], ['audio/flac', 'flac'],
+]);
 
 function config() {
   const baseUrl = (process.env.OPENAI_COMPAT_BASE_URL?.trim() || '').replace(/\/+$/, '');
@@ -59,6 +67,88 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
     displayName: initial.displayName,
 
     executeMedia(request, inputs, signal) { return compatibleMedia(currentConfig(), request, inputs, signal); },
+
+    /** Real speech-to-text via the OpenAI-compatible /audio/transcriptions endpoint. */
+    async transcribe(request: AudioRequest): Promise<Transcription> {
+      const current = currentConfig();
+      if (!current.baseUrl || (!current.apiKey && !current.allowEmptyApiKey) || !validBaseUrl(current.baseUrl)) {
+        throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
+      }
+      if (!request.model) throw new ProviderAdapterError('A verified speech-to-text model must be selected.', 400, 'model_required');
+      const mediaRequest: MediaRequest = {
+        type: 'speech_recognize',
+        model: request.model,
+        prompt: '',
+        inputFileIds: [],
+        parameters: request.language && request.language !== 'auto' && /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(request.language)
+          ? { language: request.language }
+          : {},
+        requestKey: randomUUID(),
+        allowExternalProcessing: false,
+      };
+      const extension = AUDIO_EXTENSION_BY_MIME.get(request.mimeType.toLowerCase().split(';')[0].trim()) || 'bin';
+      const output = await compatibleMedia(current, mediaRequest, [
+        { bytes: Buffer.from(request.audio), mime: request.mimeType, name: 'audio.' + extension },
+      ], request.signal ?? AbortSignal.timeout(55_000));
+      if (typeof output.text !== 'string' || !output.text.trim()) {
+        throw new ProviderAdapterError('The speech-to-text provider returned no transcription.', 502, 'invalid_media_output');
+      }
+      return { text: output.text };
+    },
+
+    /** Real text-to-speech via the OpenAI-compatible /audio/speech endpoint. */
+    async synthesize(request: TTSRequest): Promise<AudioResult> {
+      const current = currentConfig();
+      if (!current.baseUrl || (!current.apiKey && !current.allowEmptyApiKey) || !validBaseUrl(current.baseUrl)) {
+        throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
+      }
+      if (!request.model) throw new ProviderAdapterError('A verified text-to-speech model must be selected.', 400, 'model_required');
+      const voice = request.voice && request.voice !== 'default' ? request.voice : undefined;
+      const mediaRequest: MediaRequest = {
+        type: 'speech_generate',
+        model: request.model,
+        prompt: request.text,
+        inputFileIds: [],
+        parameters: voice ? { voice } : {},
+        requestKey: randomUUID(),
+        allowExternalProcessing: false,
+      };
+      const output = await compatibleMedia(current, mediaRequest, [], request.signal ?? AbortSignal.timeout(55_000));
+      if (!output.bytes || !output.bytes.length) {
+        throw new ProviderAdapterError('The text-to-speech provider returned no audio.', 502, 'invalid_media_output');
+      }
+      return { audio: output.bytes, mimeType: output.mime || 'audio/wav' };
+    },
+
+    /** The provider default voice; explicit per-provider voice inventories are not fabricated. */
+    voiceOptions(_modelId: string): Array<{ id: string; label: string }> {
+      return [{ id: 'default', label: 'Provider default voice' }];
+    },
+
+    /** Real image understanding via the OpenAI-compatible /chat/completions vision shape. */
+    async analyzeImage(request: VisionRequest): Promise<VisionResult> {
+      const current = currentConfig();
+      if (!current.baseUrl || (!current.apiKey && !current.allowEmptyApiKey) || !validBaseUrl(current.baseUrl)) {
+        throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
+      }
+      if (!request.model) throw new ProviderAdapterError('A verified vision model must be selected.', 400, 'model_required');
+      const mediaRequest: MediaRequest = {
+        type: 'image_understand',
+        model: request.model,
+        prompt: request.prompt || 'Describe the image. Label interpretations as unverified.',
+        inputFileIds: [],
+        parameters: {},
+        requestKey: randomUUID(),
+        allowExternalProcessing: false,
+      };
+      const output = await compatibleMedia(current, mediaRequest, [
+        { bytes: Buffer.from(request.image), mime: request.mimeType, name: 'image' },
+      ], AbortSignal.timeout(55_000));
+      if (typeof output.text !== 'string' || !output.text.trim()) {
+        throw new ProviderAdapterError('The vision provider returned no description.', 502, 'invalid_media_output');
+      }
+      return { text: output.text };
+    },
 
     async validateConfig(): Promise<ConfigStatus> {
       const current = currentConfig();
