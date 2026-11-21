@@ -284,7 +284,7 @@ const baseTranslations = {
 };
 
 
-const primaryLanguageOverrides: Partial<Record<'pashto' | 'arabic', Partial<typeof baseTranslations.english>>> = {
+const primaryLanguageOverrides: Partial<Record<'pashto' | 'arabic' | 'persian', Partial<typeof baseTranslations.english>>> = {
   pashto: {
     brandName:'AFG AI',brandSubtitle:'د افغانستان لپاره هوښیار مصنوعي ځیرکتیا • ستاسو ملګری',brandTagline:'ستاسو هوښیار AI مرستیال',brandMotto:'د افغانستان لپاره په ویاړ جوړ شوی 🇦🇫',serverReady:'سرور چمتو دی',online:'آنلاین',
     greeting:'سلام!',welcomeBack:'AFG AI ته بېرته ښه راغلاست',premiumUser:'وړیا کارن',askAnythingPlaceholder:'هره پوښتنه وکړئ...',
@@ -314,6 +314,19 @@ const primaryLanguageOverrides: Partial<Record<'pashto' | 'arabic', Partial<type
     settingsTitle:'إعدادات التطبيق',accountSecurity:'الحساب والأمان',appLanguage:'لغة التطبيق',darkMode:'الوضع الداكن',notifications:'الإشعارات',soundEffects:'أصوات النقر والتنبيهات',privacyPolicy:'الخصوصية والشروط',aboutUs:'حول AFG AI',helpSupport:'المساعدة والدعم',logout:'تسجيل الخروج',
     aboutTitle:'حول AFG AI',aboutVersion:'الإصدار 1.0.0',aboutDescription:'AFG AI مساعد ذكي من الجيل الجديد للمستخدمين في أفغانستان والعالم، يسهّل التعلم والمهام اليومية وإنشاء المحتوى والبرمجة.',website:'الموقع الرسمي',telegram:'قناة تيليغرام',github:'المشروع على GitHub',madeWithLove:'صُنع بحب ❤️ من أجل أفغانستان',allRightsReserved:'جميع الحقوق محفوظة لـ AFG AI © 2026',
     adminTitle:'لوحة إدارة النظام',usersManage:'إدارة المستخدمين',servicesControl:'التحكم بالخدمات',providersModels:'نماذج ومزوّدو الذكاء الاصطناعي',reportsAnalytics:'التقارير والتحليلات',userAccessRestrictions:'قيود وصول المستخدمين',dailyLimits:'حد الطلبات اليومي',autoModeration:'الإشراف الآلي الذكي',viewDashboard:'عرض لوحة التحكم الكاملة'
+  },
+  // Persian (fa-IR) completion: keys that previously fell back to the English
+  // copy are translated here; spread order makes them win over coreUi/english.
+  persian: {
+    brandName:'AFG AI',brandSubtitle:'هوش مصنوعی هوشمند برای افغانستان • همراه هوشمند شما',brandMotto:'با افتخار برای افغانستان 🇦🇫',premiumUser:'کاربر رایگان',
+    suggestPrompt1:'آینده هوش مصنوعی را به زبان ساده توضیح بده',suggestPrompt2:'شعری درباره زیبایی کابل و کوه‌های پامیر بنویس',suggestPrompt3:'کد React با TypeScript برای کارت پروفایل مدرن با Tailwind',suggestPrompt4:'۵ ایده استارتاپ خلاقانه برای افغانستان و آسیای مرکزی',
+    smartChatDesc:'گفتگوی هوشمند',createArtDesc:'خلق هنر',makeVideoDesc:'ساخت ویدیو',
+    toolsCenter:'مرکز ابزارهای هوشمند',toolsSubtitle:'مجموعه‌ای از ابزارهای قدرتمند پردازش هوش مصنوعی',toolChat:'گفتگوی هوش مصنوعی',toolChatDesc:'دستیار گفتگویی و پرسش و پاسخ',toolImageGen:'تولید تصویر',toolImageGenDesc:'ساخت تصاویر خیره‌کننده و واقع‌گرایانه',toolVideoGen:'تولید ویدیو',toolVideoGenDesc:'ساخت انیمیشن و ویدیو از متن',toolCodeHelp:'دستیار برنامه‌نویسی',toolCodeHelpDesc:'نوشتن، رفع اشکال و توضیح کد در بیش از ۲۰ زبان',toolTranslate:'ترجمه متن و گفتار',toolTranslateDesc:'ترجمه بین دری، پشتو، انگلیسی و زبان‌های دیگر',toolPdf:'ابزارهای PDF و اسناد',toolPdfDesc:'استخراج، خلاصه‌سازی و ویرایش اسناد',toolVoice:'ابزارهای صدا و گفتار',toolVoiceDesc:'تبدیل گفتار به متن و متن به گفتار',toolFile:'مدیریت فایل و ابزارها',toolFileDesc:'فشرده‌سازی، تبدیل و مدیریت فایل‌ها',toolCalc:'ماشین حساب هوشمند',toolCalcDesc:'محاسبات علمی و تبدیل ارز',toolQr:'اسکنر و سازنده QR',toolQrDesc:'ساخت و اسکن فوری کدهای QR',toolSummarizer:'خلاصه‌ساز متن',toolSummarizerDesc:'خلاصه‌سازی اسناد طولانی به نکات موجز',
+    imgGenTitle:'استودیو تولید تصویر',imgGenSubtitle:'تخیل خود را به تصویرهایی خیره‌کننده تبدیل کنید',imgPromptPlaceholder:'دره باشکوه کوهستانی در افغانستان با دریاچه‌های فیروزه‌ای، قله‌های برفی و شکوفه‌های گیلاس...',imgStyle:'سبک تصویر',imgAspect:'نسبت تصویر',btnGenerateImage:'تولید تصویر 🪄',myCreations:'آثار من',download:'دانلود',share:'اشتراک‌گذاری',save:'ذخیره',
+    videoGenTitle:'استودیو تولید ویدیو',videoGenSubtitle:'تولید ویدیوهای سینمایی هوش مصنوعی از متن توصیفی',videoPromptPlaceholder:'نمای هوایی سینمایی بر فراز ارگ تاریخی افغانستان در غروب طلایی...',btnGenerateVideo:'تولید ویدیو 🎬',myVideos:'ویدیوهای من',
+    historySearchPlaceholder:'جستجوی گفتگوها...',accountSecurity:'حساب کاربری و امنیت',soundEffects:'جلوه‌های صوتی و لرزش',privacyPolicy:'حریم خصوصی و شرایط استفاده',aboutUs:'درباره AFG AI',
+    aboutVersion:'نسخه ۱.۰.۰',aboutDescription:'AFG AI دستیار هوشمند نسل بعدی است که برای کاربران افغان و بین‌المللی ساخته شده است. با معماری‌های مدرن هوش مصنوعی، ارتباط روزمره، یادگیری، تولید محتوا و برنامه‌نویسی را ساده و لذت‌بخش می‌کند.',telegram:'کانال تلگرام',github:'مخزن گیت‌هاب',madeWithLove:'با ❤️ برای افغانستان ساخته شده است',allRightsReserved:'تمام حقوق محفوظ است © 2026 AFG AI',
+    adminTitle:'پنل مدیریت سیستم',usersManage:'مدیریت کاربران',servicesControl:'کنترل سرویس‌ها',providersModels:'مدل‌ها و ارائه‌دهندگان هوش مصنوعی',reportsAnalytics:'گزارش‌ها و تحلیل‌ها',userAccessRestrictions:'محدودیت‌های دسترسی کاربران',dailyLimits:'سقف سهمیه روزانه',autoModeration:'پایش هوشمند خودکار',viewDashboard:'مشاهده داشبورد کامل'
   }
 };
 
@@ -321,7 +334,7 @@ const localized = (language: Language) => ({
   ...baseTranslations.english,
   ...getCoreUi(language),
   ...getMoreCoreUi(language),
-  ...(primaryLanguageOverrides[language as 'pashto' | 'arabic'] || {}),
+  ...(primaryLanguageOverrides[language as 'pashto' | 'arabic' | 'persian'] || {}),
 }) as typeof baseTranslations.english;
 
 export const translations = {
