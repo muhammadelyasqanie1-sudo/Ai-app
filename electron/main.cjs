@@ -1,6 +1,8 @@
 const { app, BrowserWindow, shell } = require('electron');
 
-const APP_URL = 'https://afgai-production-fdfd.up.railway.app';
+// Deployment target is configurable; the packaged default is the production host.
+const DEFAULT_APP_URL = 'https://afgai-production-fdfd.up.railway.app';
+const APP_URL = process.env.AFG_AI_APP_URL || DEFAULT_APP_URL;
 let mainWindow;
 
 function createWindow() {

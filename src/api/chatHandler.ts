@@ -659,7 +659,7 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
               : call.function.name === 'afg_osint_passive_assess'
                 ? await executeOsintTool(requestUserId, args, latestUserPrompt)
               : call.function.name.startsWith('browser_')
-                ? await executeBrowserAutomationTool(requestUserId,call.function.name,args,latestUserPrompt)
+                ? await executeBrowserAutomationTool(requestUserId,call.function.name,args,latestUserPrompt,abortController.signal)
                 : call.function.name.startsWith('mcp_')
                 ? await executeRemoteMcpTool(requestUserId,call.function.name,args)
                 : call.function.name.startsWith('github_')

@@ -28,7 +28,7 @@ function isPublicRoutableAddress(address:string):boolean{
 }
 
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf, verifyUserPassword, requestAdminPasswordReset } from './auth.ts';
-import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors, refreshDatabaseProviderAdapters, recordModelHealthResult, invalidateProviderHealth } from '../services/providerGateway.ts';
+import { getProviderAdapter, getProviderRegistry, getVerifiedModelDescriptors, refreshDatabaseProviderAdapters, recordModelHealthResult } from '../services/providerGateway.ts';
 import { encryptProviderSecret, providerKeyHint } from '../security/providerVault.ts';
 import { ProviderAdapterError } from '../providers/providerTypes.ts';
 import { canAccessAdminRoute, canManageUser } from '../security/adminPermissions.ts';
@@ -61,23 +61,6 @@ async function safeCustomProviderUrl(raw: string): Promise<boolean> {
     const addresses=await lookup(host,{all:true,verbatim:true});
     return addresses.length>0 && addresses.every(result=>isPublicRoutableAddress(result.address));
   } catch { return false; }
-}
-
-async function requireAdmin(req: IncomingMessage, res: ServerResponse) {
-  const user = await authenticateRequest(req);
-  if (!user) {
-    sendAuthJson(res, 401, { error: 'Sign in is required.' });
-    return null;
-  }
-  if (!['admin','superadmin'].includes(user.role)) {
-    sendAuthJson(res, 403, { error: 'Administrator access is required.' });
-    return null;
-  }
-  if (!verifyCsrf(req)) {
-    sendAuthJson(res, 403, { error: 'CSRF validation failed.' });
-    return null;
-  }
-  return user;
 }
 
 export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
@@ -932,26 +915,6 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
           JSON.stringify({title,recipientCount:delivered.rowCount||0}),JSON.stringify({title,recipientCount:delivered.rowCount||0})],
       );
       sendAuthJson(res, 200, { sent: true, recipientCount: delivered.rowCount || 0 });
-      return true;
-    }
-
-    if (req.method === 'GET' && pathname === '/api/admin/providers') {
-      const registry = getProviderRegistry();
-      const settings = await pool.query('SELECT provider_key, enabled, display_name FROM provider_configs');
-      const byId = new Map(settings.rows.map((row) => [row.provider_key, row]));
-      const providers = await Promise.all(registry.map(async (provider) => {
-        const setting = byId.get(provider.id);
-        const adapter = getProviderAdapter(provider.id);
-        const config = await adapter?.validateConfig();
-        return {
-          id: provider.id,
-          displayName: provider.displayName,
-          enabled: setting ? Boolean(setting.enabled) : true,
-          configured: Boolean(config?.valid),
-          configMessage: config?.valid ? null : (config?.message || 'Provider configuration unavailable.'),
-        };
-      }));
-      sendAuthJson(res, 200, { providers });
       return true;
     }
 
