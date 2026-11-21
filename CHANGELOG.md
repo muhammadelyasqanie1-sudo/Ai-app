@@ -17,6 +17,66 @@ and honestly reported.
 | `d924180e` | feat(admin): in-app admin console consuming the real /api/admin surface |
 | `0f1a6da5` | chore(repo): remove unreferenced aistudio assets, ignore generated android/ |
 | `b5797747` | fix(gitignore): anchor /android/ to repo root |
+| `4c956199` | feat(chat): server-side assistant message persistence (Phase 3) |
+| `b8aacdf7` | chore(repo): remove verified-dead mock UI code (audit P0-14 / P1-10) |
+| `41466f8b` | ci: restore broken main triggers, add PostgreSQL integration and ClamAV media jobs |
+| `ab6fc573` | build(deploy): production Dockerfile, Render blueprint and verified boot test |
+| `2ae6caa8` | feat(image): real generateImage/editImage on the OpenAI-compatible adapter |
+| `959de4e6` | chore(db): migration ledger policy, duplicate-number guard, 9999 truth |
+
+## Phase 3 (2026-11-22, this run)
+
+1. **Server-side assistant message persistence — the top persistence gap is
+   closed.** The chat handler now verifies conversation ownership itself,
+   stores the final user message as an idempotent safety net, accumulates the
+   streamed reply and writes it before ending the SSE stream: status
+   `complete` on success, `cancelled` (abort/timeout) or `failed` (provider
+   error) with the partial content on interruption — the case that used to
+   lose the reply forever when the tab closed. Writes go through
+   `src/api/chatPersistence.ts`: insert-or-upgrade semantics where a later
+   successful retry upgrades a partial `cancelled`/`failed` row to
+   `complete`, and a `complete` row is never rewritten or downgraded. A new
+   `persisted` SSE event tells the client, which keeps its own POST only as a
+   fallback for old servers and now treats HTTP 409 (already stored) as
+   success instead of showing a save-failure banner. Image-generation turns
+   are persisted too (they were never saved before). Guests remain stateless
+   by design; no schema change was required.
+2. **Verified-dead mock UI code removed (~3k lines).** `src/workspace` (17
+   files, self-admitted mock, not built or served) and 14 unreferenced
+   components (old ChatGPT-clone skeleton + AfgHeader/AfgNavigation/
+   AfgLlmApiCatalogPanel) were deleted after import-graph verification.
+   `AfgHomeView` and `AfgLanguageModal` were checked and are LIVE — the
+   audit was wrong, they are kept.
+3. **CI was silently dead on main.** `ci.yml` and `i18n-build.yml` contained
+   corrupted triggers (`branches: ain]` instead of `[main]`), so the main CI
+   and i18n workflows could never run — the earlier audit verification that
+   cleared this was mistaken. Fixed byte-exact; ci.yml now also runs all
+   DB-free regression suites, a PostgreSQL 18 service job with real
+   migrations + integration suites (conversation isolation, Phase 3 chat
+   persistence, agent engine) and a ClamAV media-engine job.
+4. **Deployment artifacts grounded in a verified boot.** Multi-stage
+   non-root Dockerfile (migrations on start; tsx moved to production deps
+   because `npm start` executes server.ts with it; full `scripts/` required
+   by the scheduler import) plus a Render Blueprint with the managed TLS
+   PostgreSQL, preDeploy migration, health check and honest `sync:false`
+   secrets. `scripts/test-runtime-boot.sh` verifies the exact runtime path
+   on embedded PostgreSQL: migration, tsx boot, HTTPS-308 policy,
+   X-Forwarded-Proto health 200, dist static serving, CSP/HSTS headers.
+5. **Real image generation/editing on the adapter layer.**
+   `generateImage`/`editImage` were declared but unimplemented, which kept
+   the image-generation capability gates permanently closed. Both are now
+   implemented on the OpenAI-compatible adapter through the existing
+   bounded `compatibleMedia` path (inline base64 only — remote URLs are
+   never fetched, preserving the SSRF-safe policy), with the exact
+   verified model id required (no substitution), aspect→size mapping,
+   style presets as documented prompt suffixes, and mask support forwarded
+   as its own multipart field.
+6. **Migration ledger truth.** Renumbering the eight duplicate-number pairs
+   would break deployed `schema_migrations` ledgers, so they are frozen and
+   documented instead; `9999_settings_hub.sql` was verified to be a LIVE
+   migration (`system_config` is actively read/written by the admin API and
+   9Router — the audit claim was wrong). `npm run test:migrations` guards
+   against new duplicate numbers, byte-identical files and table drops.
 
 ## Fixed (P0)
 
@@ -95,25 +155,43 @@ and honestly reported.
 - `npm run lint` (`tsc --noEmit`): PASS (also fixed the pre-existing failure).
 - `npm run build` (vite production build): PASS.
 - `npm run i18n:check`: PASS (18 locales, 113 keys each).
-- `scripts/test-offline-sha.ts`, `test-database-config.ts`,
-  `test-admin-rbac.ts`, `test-core-state.ts`, `test-chat-stream.ts`,
-  `test-knowledge-engine.ts`, `test-osint-engine.ts`,
-  `test-jarvis-command-engine.ts`, `src/utils/chatLogic.test.ts`: PASS.
-- Not run (requires external resources): database migrations against a live
-  PostgreSQL, provider smoke tests (needs NINEROUTER/APINEX keys), Android APK
-  compilation, Windows electron-builder packaging.
+- DB-free regression scripts: PASS (`offline-sha`, `offline-download`,
+  `database-config`, `admin-rbac`, `core-state`, `chat-stream`,
+  `chat-persistence`, `image-adapter`, `migrations`, `knowledge-engine`,
+  `osint-engine`, `jarvis-command-engine`).
+- PostgreSQL integration suites (user-space embedded PostgreSQL 18 via
+  `scripts/run-integration-tests.sh`): PASS for `conversation-isolation`,
+  `chat-persistence-integration` (new Phase 3 suite) and `agent-engine`.
+- Runtime boot verification (`scripts/test-runtime-boot.sh`): PASS
+  (migrations, production server boot, HTTPS policy, health, static dist,
+  CSP/HSTS).
+- Not run (requires external resources): the media-engine integration suite
+  needs ClamAV (`clamscan`), which cannot be installed without root — the
+  suite fail-closes by design and runs in the dedicated CI job; provider
+  smoke tests need real NINEROUTER/APINEX keys; Android APK compilation and
+  Windows electron-builder packaging run in their existing CI workflows.
+- Not pushed: GitHub push credentials are unavailable; all commits live on
+  the local `feature/afg-ai-complete-product` branch.
 
 ## Known remaining gaps (honest list, from the audit)
 
-- Assistant messages are still persisted client-side; the chat handler does
-  not write to `messages` server-side (guest history remains ephemeral).
-- `src/workspace/*` remains an unbuilt mock prototype; `vendor/OpenJarvis`
-  (83% of tracked files, incl. a 77 MB macOS binary) is dead weight beyond the
-  three authenticated proxy routes.
-- Image `generateImage`/`editImage` adapter methods remain unimplemented; image
-  generation flows through the real Media Studio job pipeline instead.
-- Duplicated migration numbers (8 pairs) and the dead `9999_settings_hub.sql`
-  table remain; renumbering needs a coordinated plan.
-- Light theme coverage on AFG views, deeper i18n coverage, CI PostgreSQL
-  provisioning for the four integration tests, and a deployment manifest
-  (Dockerfile/render.yaml) remain open work.
+- ~~Assistant messages are still persisted client-side~~ CLOSED in Phase 3:
+  the chat handler stores both turns server-side with idempotency keys and
+  the `persisted` SSE event (commit `4c956199`).
+- ~~`src/workspace/*` mock prototype~~ REMOVED after verification in Phase 3
+  (commit `b8aacdf7`). `vendor/OpenJarvis` (83% of tracked files, incl. a
+  77 MB macOS binary) is dead weight beyond the three authenticated proxy
+  routes — kept, because those live routes reference it at runtime; pruning
+  it needs a dedicated packaging decision.
+- ~~Image `generateImage`/`editImage` adapter methods unimplemented~~ CLOSED
+  in Phase 3 (commit `2ae6caa8`) on the OpenAI-compatible adapter; image
+  generation flows through the real Media Studio job pipeline and now also
+  through the studio capability snapshot.
+- ~~Duplicated migration numbers + the "dead" `9999` table~~ RESOLVED in
+  Phase 3 without destructive renames (commit `959de4e6`): duplicates frozen
+  and documented; 9999 verified live and kept.
+- Light theme coverage on AFG views, deeper i18n coverage for the 14
+  non-primary locales, and multi-instance WebSocket/queue fan-out remain
+  open work.
+- Provider smoke tests, Android APK and Windows packaging verification need
+  real provider keys / CI runners (their workflows exist and are wired).

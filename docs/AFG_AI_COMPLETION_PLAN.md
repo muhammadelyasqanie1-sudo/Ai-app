@@ -32,6 +32,26 @@
 - شماره‌گذاری مجدد مایگریشن‌ها (فقط نصب تازه؛ نصب‌های موجود با ledger حفظ می‌شوند).
 - تم روشن کامل، i18n عمیق، WebSocket چندنمونه‌ای، Dockerfile/render.yaml، CI با PostgreSQL.
 
+## وضعیت اجرای فاز ۳ (۲۰۲۶-۱۱-۲۲، همین اجرا)
+| کار | وضعیت | شاهد |
+|---|---|---|
+| ذخیره سمت سرور پیام دستیار | **انجام شد** | `4c956199`؛ `chatPersistence.ts` با درج idempotent و ارتقای cancelled→complete؛ رخداد SSE `persisted`؛ تست DB-free + تست integration با PostgreSQL واقعی |
+| پاک‌سازی کد مرده | **انجام شد (تأییدشده)** | `b8aacdf7`؛ `src/workspace` (۱۷ فایل) + ۱۴ کامپوننت بی‌مصرف حذف شد؛ `AfgHomeView`/`AfgLanguageModal` بررسی و سالم تشخیص داده شد (ادعای ممیزی نادرست بود) |
+| CI با PostgreSQL | **انجام شد** | `41466f8b`؛ تریگرهای خراب `branches: ain]` در ci.yml و i18n-build.yml اصلاح شد؛ jobهای integration با PostgreSQL 18 سرویس و ClamAV اضافه شد |
+| Dockerfile/render.yaml | **انجام شد** | `ab6fc573`؛ تصویر چندمرحله‌ای non-root + Blueprint رندر؛ بوت واقعی runtime با `scripts/test-runtime-boot.sh` وریفای شد |
+| generateImage/editImage روی آداپتر | **انجام شد** | `2ae6caa8`؛ مسیر compatibleMedia واقعی، فقط خروجی inline base64 (بدون fetch URL)؛ تست wire-level |
+| بهداشت مایگریشن‌ها | **انجام شد (بدون تغییر مخرب)** | `959de4e6`؛ اثبات شد که جدول `system_config` زنده است (ادعای ممیزی نادرست بود)؛ شماره‌های تکراری فریز و مستند شد؛ گارد CI |
+
+### اصلاحات مهم در گزارش ممیزی (نتیجه راستی‌آزمایی این اجرا)
+1. «جدول 9999 هرگز استفاده نمی‌شود» نادرست بود — `system_config` توسط API ادمین و ۹Router فعالانه خوانده/نوشته می‌شود.
+2. «AfgHomeView و AfgLanguageModal مرده‌اند» نادرست بود — هر دو در App.tsx سوار می‌شوند و حفظ شدند.
+3. «تریگرهای CI سالم‌اند» نادرست بود — `ci.yml` و `i18n-build.yml` واقعاً `branches: ain]` خراب داشتند و هرگز اجرا نمی‌شدند؛ اصلاح شد.
+
+### بلوکه‌های خارجی (صادقانه)
+- ClamAV (`clamscan`) در این محیط نصب نمی‌شود (بدون دسترسی root) → `test:media-engine` fail-closed است؛ در CI نصب می‌شود.
+- Push به GitHub اعتبار ندارد؛ همه commitها به‌صورت محلی روی شاخه ذخیره می‌شوند.
+- تست‌های provider smoke به کلیدهای واقعی NINEROUTER/APINEX نیاز دارند (بدون جعل).
+
 ## معیار تکمیل فاز ۱ و ۲ در این اجرا
 1. `npm run lint` (tsc --noEmit) پاس.
 2. `npm run build` پاس.
