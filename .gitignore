@@ -9,7 +9,7 @@ coverage/
 
 # Capacitor / Android build outputs
 # Generated Capacitor android/ project (only the plugins and CI own android sources)
-android/
+/android/
 android/.gradle/
 android/app/build/
 android/build/
