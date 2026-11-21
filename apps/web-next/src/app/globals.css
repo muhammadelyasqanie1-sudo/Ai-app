@@ -1,0 +1,277 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/*
+ * AFG AI design system — command-center visual language.
+ * Dark: deep black #05060A, graphite #0B0F17, cyan #0DF2FF, violet #7C4DFF,
+ * amber #FFB86B, white #F4F7FF. Light: clean command surfaces with a
+ * darkened cyan for accessible contrast.
+ */
+
+:root {
+  --radius: 0.75rem;
+  --background: #f4f6fb;
+  --foreground: #0b1220;
+  --card: #ffffff;
+  --card-foreground: #0b1220;
+  --popover: #ffffff;
+  --popover-foreground: #0b1220;
+  --primary: #0a91a8;
+  --primary-foreground: #ffffff;
+  --secondary: #e9eef6;
+  --secondary-foreground: #0b1220;
+  --muted: #edf1f7;
+  --muted-foreground: #5a6478;
+  --accent: #e4ebf5;
+  --accent-foreground: #0b1220;
+  --destructive: #d3284a;
+  --border: rgba(11, 18, 32, 0.1);
+  --input: rgba(11, 18, 32, 0.13);
+  --ring: #0a91a8;
+  --chart-1: #0a91a8;
+  --chart-2: #6d4df6;
+  --chart-3: #d98a2b;
+  --chart-4: #149e6f;
+  --chart-5: #c23f77;
+  --sidebar: #eef2f9;
+  --sidebar-foreground: #0b1220;
+  --sidebar-primary: #0a91a8;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e4ebf5;
+  --sidebar-accent-foreground: #0b1220;
+  --sidebar-border: rgba(11, 18, 32, 0.09);
+  --sidebar-ring: #0a91a8;
+  --afg-glow: rgba(10, 145, 168, 0.25);
+  --afg-amber: #b26a1d;
+  --afg-violet: #6d4df6;
+  --afg-cyan: #0a91a8;
+}
+
+.dark {
+  --background: #05060a;
+  --foreground: #f4f7ff;
+  --card: #0b0f17;
+  --card-foreground: #f4f7ff;
+  --popover: #0b0f17;
+  --popover-foreground: #f4f7ff;
+  --primary: #0df2ff;
+  --primary-foreground: #05060a;
+  --secondary: #131a26;
+  --secondary-foreground: #f4f7ff;
+  --muted: #10151f;
+  --muted-foreground: #8b94a7;
+  --accent: #1a2233;
+  --accent-foreground: #f4f7ff;
+  --destructive: #f04646;
+  --border: rgba(244, 247, 255, 0.09);
+  --input: rgba(244, 247, 255, 0.13);
+  --ring: rgba(13, 242, 255, 0.6);
+  --chart-1: #0df2ff;
+  --chart-2: #7c4dff;
+  --chart-3: #ffb86b;
+  --chart-4: #3ef2b3;
+  --chart-5: #ff5c8a;
+  --sidebar: #07090f;
+  --sidebar-foreground: #f4f7ff;
+  --sidebar-primary: #0df2ff;
+  --sidebar-primary-foreground: #05060a;
+  --sidebar-accent: #131a26;
+  --sidebar-accent-foreground: #f4f7ff;
+  --sidebar-border: rgba(244, 247, 255, 0.08);
+  --sidebar-ring: rgba(13, 242, 255, 0.6);
+  --afg-glow: rgba(13, 242, 255, 0.18);
+  --afg-amber: #ffb86b;
+  --afg-violet: #7c4dff;
+  --afg-cyan: #0df2ff;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01";
+  }
+  /* RTL: sensible default for Persian/Dari/Pashto/Arabic */
+  [dir="rtl"] {
+    letter-spacing: 0 !important;
+  }
+}
+
+/* ---------------- AFG AI custom layers ---------------- */
+
+.afg-gradient-text {
+  background: linear-gradient(120deg, var(--afg-cyan), var(--afg-violet) 60%, var(--afg-amber));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.afg-grid-bg {
+  background-image:
+    linear-gradient(rgba(13, 242, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(13, 242, 255, 0.045) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 75%);
+}
+
+.afg-glow-ring {
+  box-shadow: 0 0 0 1px var(--border), 0 0 24px var(--afg-glow), inset 0 0 18px rgba(13, 242, 255, 0.04);
+}
+
+.afg-core {
+  background:
+    radial-gradient(circle at 30% 30%, rgba(13, 242, 255, 0.28), transparent 55%),
+    radial-gradient(circle at 70% 65%, rgba(124, 77, 255, 0.3), transparent 55%),
+    radial-gradient(circle at 50% 50%, rgba(255, 184, 107, 0.1), transparent 70%);
+  animation: afg-pulse 5.5s ease-in-out infinite;
+}
+
+@keyframes afg-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+@keyframes afg-spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.afg-orbit {
+  animation: afg-spin-slow 14s linear infinite;
+}
+
+@keyframes afg-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.afg-fade-up {
+  animation: afg-fade-up 0.45s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .afg-core, .afg-orbit, .afg-fade-up {
+    animation: none !important;
+  }
+}
+
+/* Markdown content */
+.afg-prose {
+  line-height: 1.7;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.afg-prose h1, .afg-prose h2, .afg-prose h3, .afg-prose h4 {
+  font-weight: 650;
+  margin: 1.1em 0 0.45em;
+  line-height: 1.35;
+}
+.afg-prose h1 { font-size: 1.45rem; }
+.afg-prose h2 { font-size: 1.25rem; }
+.afg-prose h3 { font-size: 1.1rem; }
+.afg-prose p { margin: 0.6em 0; }
+.afg-prose ul, .afg-prose ol { margin: 0.6em 0; padding-inline-start: 1.5em; }
+.afg-prose ul { list-style: disc; }
+.afg-prose ol { list-style: decimal; }
+.afg-prose li { margin: 0.25em 0; }
+.afg-prose a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
+.afg-prose blockquote {
+  border-inline-start: 3px solid var(--primary);
+  padding-inline-start: 0.9em;
+  color: var(--muted-foreground);
+  margin: 0.8em 0;
+}
+.afg-prose table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.9em 0;
+  font-size: 0.92em;
+  display: block;
+  overflow-x: auto;
+}
+.afg-prose th, .afg-prose td {
+  border: 1px solid var(--border);
+  padding: 0.45em 0.7em;
+  text-align: start;
+}
+.afg-prose th { background: var(--muted); font-weight: 600; }
+.afg-prose code:not(pre code) {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.1em 0.4em;
+  font-family: var(--font-mono);
+  font-size: 0.87em;
+}
+.afg-prose pre {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+.afg-prose hr { border-color: var(--border); margin: 1.2em 0; }
+
+/* highlight.js — AFG night palette */
+.hljs { color: var(--foreground); background: transparent; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal { color: #7c4dff; }
+.hljs-string, .hljs-regexp, .hljs-addition { color: #3ef2b3; }
+.hljs-number, .hljs-built_in, .hljs-attr { color: #ffb86b; }
+.hljs-comment, .hljs-quote { color: #8b94a7; font-style: italic; }
+.hljs-title, .hljs-name, .hljs-section { color: #0df2ff; }
+.hljs-deletion { color: #f04646; }
+
+/* Scrollbars */
+.afg-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.afg-scroll::-webkit-scrollbar-thumb {
+  background: rgba(139, 148, 167, 0.35);
+  border-radius: 8px;
+}
+.afg-scroll::-webkit-scrollbar-thumb:hover { background: rgba(139, 148, 167, 0.55); }
+.afg-scroll::-webkit-scrollbar-track { background: transparent; }

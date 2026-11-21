@@ -1,0 +1,287 @@
+// ============================================================
+// AFG AI — One AI. Many capabilities. One intelligent platform.
+// Canonical data model (Prisma / SQLite)
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------
+// Identity & access
+// ------------------------------------------------------------
+
+model User {
+  id              String    @id @default(cuid())
+  email           String?   @unique
+  emailVerifiedAt DateTime?
+  passwordHash    String?
+  name            String?
+  role            String    @default("USER") // USER | STAFF | ADMIN
+  permissions     String    @default("[]") // JSON array of staff permission keys
+  status          String    @default("ACTIVE") // ACTIVE | SUSPENDED
+  isGuest         Boolean   @default(false)
+  locale          String    @default("en") // en | fa | ps | ar
+  theme           String    @default("system") // light | dark | system
+  voiceEnabled    Boolean   @default(true)
+  voiceRate       Float     @default(1)
+  voicePitch      Float     @default(1)
+  memoryEnabled   Boolean   @default(true)
+  systemPrompt    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  lastSeenAt      DateTime?
+
+  sessions          Session[]
+  conversations     Conversation[]
+  attachments       Attachment[]
+  usageLogs         UsageLog[]
+  verificationCodes VerificationCode[]
+  connectors        Connector[]
+
+  @@index([role])
+  @@index([isGuest])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String  @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent String?
+  ip        String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model VerificationCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String // VERIFY_EMAIL | RESET_PASSWORD
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, kind])
+}
+
+// ------------------------------------------------------------
+// Conversations & messages
+// ------------------------------------------------------------
+
+model Conversation {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title         String   @default("New conversation")
+  modelSlug     String   @default("afg-cloud-chat")
+  systemPrompt  String?
+  memoryEnabled Boolean  @default(true)
+  archived      Boolean  @default(false)
+  shareId       String?  @unique
+  messageCount  Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  messages Message[]
+
+  @@index([userId, updatedAt])
+  @@index([archived])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String // user | assistant | system | tool
+  content        String   @default("")
+  modelSlug      String?
+  status         String   @default("COMPLETE") // COMPLETE | ERROR | STOPPED
+  error          String?
+  toolName       String?
+  toolPayload    String? // JSON result of tool execution (rendered in chat)
+  tokensIn       Int      @default(0)
+  tokensOut      Int      @default(0)
+  latencyMs      Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  attachments Attachment[]
+
+  @@index([conversationId, createdAt])
+}
+
+model Attachment {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messageId   String?
+  message     Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  filename    String
+  mimetype    String
+  size        Int
+  storagePath String
+  kind        String   @default("file") // image | text | data | audio
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([messageId])
+}
+
+// ------------------------------------------------------------
+// Providers & models (real health, no fabricated availability)
+// ------------------------------------------------------------
+
+model Provider {
+  id            String    @id @default(cuid())
+  slug          String    @unique // afg-cloud | ninerouter | ollama | openai-compat-*
+  name          String
+  kind          String // afg-cloud | openai-compatible | ollama
+  baseUrl       String?
+  apiKeyEnc     String? // AES-256-GCM encrypted, server-only
+  enabled       Boolean   @default(true)
+  healthStatus  String    @default("UNKNOWN") // HEALTHY | UNREACHABLE | DEGRADED | DISABLED | UNKNOWN
+  healthDetail  String?
+  lastCheckedAt DateTime?
+  config        String    @default("{}") // JSON provider config
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  models Model[]
+
+  @@index([enabled])
+}
+
+model Model {
+  id             String    @id @default(cuid())
+  providerId     String
+  provider       Provider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  modelId        String // provider-native model id
+  slug           String    @unique // canonical client-facing slug
+  displayName    String
+  capabilities   String    @default("[\"chat\"]") // JSON: chat coding vision tools reasoning
+  contextWindow  Int       @default(8192)
+  enabled        Boolean   @default(true)
+  lastVerifiedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([providerId, modelId])
+  @@index([enabled])
+}
+
+// ------------------------------------------------------------
+// Observability: usage, errors, audit
+// ------------------------------------------------------------
+
+model UsageLog {
+  id           String   @id @default(cuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  providerSlug String
+  modelSlug    String
+  kind         String   @default("chat") // chat | tool | tts | asr | image | vision
+  tokensIn     Int      @default(0)
+  tokensOut    Int      @default(0)
+  latencyMs    Int      @default(0)
+  success      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId])
+  @@index([kind])
+}
+
+model ErrorLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  scope     String // chat | auth | admin | tool | system | upload
+  code      String
+  message   String
+  meta      String   @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([scope])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorEmail String?
+  action     String
+  target     String?
+  meta       String   @default("{}")
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([action])
+}
+
+// ------------------------------------------------------------
+// Platform controls
+// ------------------------------------------------------------
+
+model RateLimitHit {
+  id          String   @id @default(cuid())
+  key         String
+  windowStart DateTime
+  count       Int      @default(0)
+
+  @@unique([key, windowStart])
+  @@index([key])
+}
+
+model FeatureFlag {
+  key         String   @id
+  enabled     Boolean  @default(false)
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  level     String   @default("info") // info | warning | critical
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Setting {
+  key       String   @id
+  value     String   @default("{}") // JSON
+  updatedAt DateTime @updatedAt
+}
+
+// ------------------------------------------------------------
+// User API connectors (Universal API Hub vault, encrypted)
+// ------------------------------------------------------------
+
+model Connector {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  baseUrl       String
+  authType      String    @default("none") // none | bearer | header | query
+  authHeader    String?
+  keyEnc        String? // AES-256-GCM encrypted user key
+  status        String    @default("UNVERIFIED") // VERIFIED | UNREACHABLE | UNVERIFIED
+  lastCheckedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
+}
