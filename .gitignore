@@ -15,3 +15,8 @@ android/app/build/
 android/build/
 .aistudio/
 public/assets/aistudio/
+
+# Vendored upstream snapshot (untracked since the 2026-11-22 pruning decision:
+# zero runtime/build/test imports; restored on demand via the
+# import-openjarvis workflow pinned to an upstream ref).
+/vendor/OpenJarvis/
