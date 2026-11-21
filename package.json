@@ -32,7 +32,8 @@
     "test:chat-persistence-integration": "tsx scripts/test-chat-persistence-integration.ts",
     "test:media-engine": "tsx scripts/test-media-engine.ts",
     "test:agent-engine": "tsx scripts/test-agent-engine.ts",
-    "test:image-adapter": "tsx scripts/test-image-adapter.ts"
+    "test:image-adapter": "tsx scripts/test-image-adapter.ts",
+    "test:multi-instance-fanout": "tsx scripts/test-multi-instance-fanout.ts"
   },
   "dependencies": {
     "@afg-ai/capacitor-auth-deeplink": "file:plugins/capacitor-auth-deeplink",

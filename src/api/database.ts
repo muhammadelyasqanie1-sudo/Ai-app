@@ -1,5 +1,5 @@
 import { migrationStatus } from './migrationStatus.ts';
-import { Pool } from 'pg';
+import { Pool, Client } from 'pg';
 import { shouldUseDatabaseTls } from './databaseTls.ts';
 export { shouldUseDatabaseTls } from './databaseTls.ts';
 
@@ -46,6 +46,29 @@ export const pool = connectionString
   : null;
 
 pool?.on('error', () => { console.error('DATABASE_IDLE_CONNECTION_ERROR'); });
+
+/**
+ * Dedicated (non-pooled) client built from the same validated configuration
+ * as the pool. Used by the live event hub for LISTEN/NOTIFY: a LISTEN lease
+ * must never be returned to the pool, so it cannot use a pooled client.
+ */
+export function createDedicatedDatabaseClient(): Client | null {
+  if (!connectionString) return null;
+  return new Client({
+    connectionString,
+    statement_timeout: 15_000,
+    query_timeout: 20_000,
+    connectionTimeoutMillis: 5_000,
+    ...(useDatabaseTls
+      ? {
+          ssl: {
+            rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false',
+            ...(databaseSslCa ? { ca: databaseSslCa } : {}),
+          },
+        }
+      : {}),
+  });
+}
 
 export async function checkDatabase() {
   if (!pool) return { configured: Boolean(configuredUrl), connected: false, message: configuredUrl ? 'DATABASE_URL is invalid' : 'DATABASE_URL is not configured' };

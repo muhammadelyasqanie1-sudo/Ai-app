@@ -60,7 +60,7 @@ npx tsx scripts/migrate.ts
 echo "migrations applied"
 
 if [ "${#TESTS[@]}" -eq 0 ]; then
-  TESTS=(scripts/test-conversation-isolation.ts)
+  TESTS=(scripts/test-conversation-isolation.ts scripts/test-multi-instance-fanout.ts)
 fi
 for test in "${TESTS[@]}"; do
   echo "== $test"

@@ -5,6 +5,7 @@ import { BlockList, isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { publishLiveEvent } from '../services/liveEventHub.ts';
 
 const privateNetworkBlockList = new BlockList();
 for(const [subnet,prefix] of [
@@ -812,6 +813,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         ON CONFLICT(key) DO UPDATE SET value_json=EXCLUDED.value_json,updated_by=EXCLUDED.updated_by,updated_at=now()`,[key,JSON.stringify(value),user.id]);
       await pool.query('INSERT INTO audit_logs(actor_user_id,actor_role,action,target_type,target_id,before_json,after_json,metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)',
         [user.id,user.role,'config.update','config',key,before.rows[0]?JSON.stringify(before.rows[0].value_json):null,JSON.stringify(value),JSON.stringify({key})]);
+      void publishLiveEvent('catalog.updated', { reason: 'config.update', key });
       sendAuthJson(res,200,{key,value});return true;
     }
 
@@ -1028,6 +1030,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
             JSON.stringify({slug:providerId,displayName,enabled}),JSON.stringify({enabled})],
         );
         await client.query('COMMIT');
+        void publishLiveEvent('catalog.updated', { reason: 'provider.toggle', providerId, enabled });
       } catch (error) {
         await client.query('ROLLBACK');
         throw error;
@@ -1097,6 +1100,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
         }
         changed = toUpdate.length;
         await client.query('COMMIT');
+        void publishLiveEvent('catalog.updated', { reason: 'model.bulk_toggle', changed, enabled });
       } catch (error) {
         await client.query('ROLLBACK');
         throw error;
@@ -1184,6 +1188,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
             JSON.stringify({enabled,inputCostPerMillion:inputCost??null,outputCostPerMillion:outputCost??null,requiredTier:requiredTier??null})],
         );
         await client.query('COMMIT');
+        void publishLiveEvent('catalog.updated', { reason: 'model.update', providerId, modelId });
       } catch (error) {
         await client.query('ROLLBACK');
         throw error;
@@ -1232,6 +1237,7 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
             JSON.stringify({capability,orderedModels:uniqueModels}),JSON.stringify({orderedModels:uniqueModels})],
         );
         await client.query('COMMIT');
+        void publishLiveEvent('catalog.updated', { reason: 'fallback.update', capability });
       } catch (error) {
         await client.query('ROLLBACK');
         throw error;

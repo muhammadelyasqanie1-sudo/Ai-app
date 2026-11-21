@@ -72,6 +72,8 @@ jobs:
         run: npm run test:chat-persistence-integration
       - name: Agent lifecycle and isolation
         run: npm run test:agent-engine
+      - name: Multi-instance live event fan-out
+        run: npm run test:multi-instance-fanout
 
   media-engine:
     name: Media engine (ClamAV integration)

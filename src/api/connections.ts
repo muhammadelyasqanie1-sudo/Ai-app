@@ -3,6 +3,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { connect as connectSocket, isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
 import { pool } from './database.ts';
+import { publishLiveEvent } from '../services/liveEventHub.ts';
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './auth.ts';
 
 type Json = Record<string, any>;
@@ -190,6 +191,7 @@ export async function handleConnectionsApi(req: IncomingMessage,res: ServerRespo
         const result=await testIntegration(slug,credentials,row.rows[0].config_json||{});
         await pool.query(`UPDATE integrations SET status='active',enabled=true,config_json=config_json||$2::jsonb,last_checked_at=now(),last_check_ok=true,last_error=NULL,updated_at=now() WHERE id=$1`,[row.rows[0].id,JSON.stringify({last_test:result})]);
         await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',[admin.id,'integration.health.success','integration',slug,JSON.stringify({username:result.username||null})]);
+        void publishLiveEvent('system.health', { reason: 'integration.health', slug, ok: true });
         sendAuthJson(res,200,{ok:true,result});return true;
       } catch(error) {
         const message=redact(error instanceof Error?error.message:'Connection test failed.',Object.values(credentials));
@@ -206,6 +208,7 @@ export async function handleConnectionsApi(req: IncomingMessage,res: ServerRespo
         WHERE slug=$1 AND ($2=false OR (status IN ('active','disabled') AND last_check_ok=true AND last_checked_at IS NOT NULL))
         RETURNING slug,enabled,status`,[slug,body.enabled]);
       if(!result.rows[0]){sendAuthJson(res,409,{error:'Connection cannot be enabled before a successful health check.'});return true;}
+      void publishLiveEvent('system.health', { reason: 'integration.toggle', slug, enabled: result.rows[0].enabled });
       sendAuthJson(res,200,{integration:result.rows[0]});return true;
     }
     if (req.method==='DELETE' && pathname==='/api/admin/connections/credentials') {
@@ -214,6 +217,7 @@ export async function handleConnectionsApi(req: IncomingMessage,res: ServerRespo
       if(!result.rows[0]){sendAuthJson(res,404,{error:'Integration not found.'});return true;}
       await pool.query('DELETE FROM integration_credentials WHERE integration_id=$1',[result.rows[0].id]);
       await pool.query('INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,$5::jsonb)',[admin.id,'integration.credentials.revoke','integration',slug,'{}']);
+      void publishLiveEvent('system.health', { reason: 'integration.credentials.revoked', slug });
       sendAuthJson(res,200,{revoked:true,enabled:false});return true;
     }
     if (req.method==='POST' && pathname==='/api/admin/connections/mcp') {

@@ -8,6 +8,7 @@ import { checkDatabase, pool } from './database.ts';
 import { applyModelAccess } from './modelAccess.ts';
 import { getProviderModelCatalog } from './modelCatalog.ts';
 import { getCapabilitySnapshot, getImageStudioSnapshot, getFileAssistantSnapshot } from '../services/providerGateway.ts';
+import { publishLiveEvent, subscribeLiveEvents, startLiveEventHub, type LiveEvent } from '../services/liveEventHub.ts';
 import { authenticateRequest, handleAuthApi, verifyCsrf } from './auth.ts';
 import { createHash } from 'crypto';
 import { handleAdminApi } from './adminHandler.ts';
@@ -284,11 +285,21 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
           }
         } finally { refreshing = false; }
       };
+      // Cross-instance fan-out: state changes published by ANY application
+      // instance invalidate the local cache and push a fresh snapshot to this
+      // client immediately. Authorization stays per-client: applyModelAccess
+      // re-authenticates this request's session for every emitted snapshot.
+      const unsubscribe = subscribeLiveEvents((event: LiveEvent) => {
+        if (event.kind === 'catalog.updated') {
+          capabilitySnapshotCache = null;
+          void emit();
+        }
+      });
       res.write('retry: 5000\n\n');
       void emit();
       const timer = setInterval(() => { void emit(); }, 60_000);
       const heartbeat = setInterval(() => { if (!closed && !res.writableEnded) res.write(': keepalive\n\n'); }, 15_000);
-      res.on('close', () => { closed = true; clearInterval(timer); clearInterval(heartbeat); });
+      res.on('close', () => { closed = true; unsubscribe(); clearInterval(timer); clearInterval(heartbeat); });
       return;
     }
 
