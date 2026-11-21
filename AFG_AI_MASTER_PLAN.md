@@ -37,14 +37,30 @@ framework, without parallel applications, and without faking any state.
 
 ## Remaining work (ranked, from the completion plan)
 
-1. Secondary-locale i18n — measured: each of the 14 non-primary locales still
-   carries 40-43 of 113 keys as English copies; the four primary mission
-   languages (en, dari, pashto, persian) plus arabic are fully translated
-   (persian completed this run, commit `c3744eb8`).
-2. Multi-instance WebSocket/queue fan-out (3-5 days) — single-instance live state today.
-3. `vendor/OpenJarvis` pruning decision (83% of tracked files; three live proxy routes depend on it).
-4. Provider smoke tests with real NINEROUTER/APINEX/OPENAI_COMPAT keys.
-5. Media-engine integration suite locally (needs ClamAV; runs in CI job today).
+1. ~~Secondary-locale i18n~~ — **Complete.** All 13 secondary locales now
+   carry full native translations (908 English copies replaced); the
+   `i18n:check` gate hard-fails on any untranslated English copy
+   (documented loanword whitelist only).
+2. ~~Multi-instance WebSocket/queue fan-out~~ — **Complete.** Cross-instance
+   live event fan-out over PostgreSQL LISTEN/NOTIFY
+   (`src/services/liveEventHub.ts`), wired into `/api/events` and every
+   catalog/health mutation; verified by
+   `scripts/test-multi-instance-fanout.ts` (two real instances, one cluster).
+3. ~~`vendor/OpenJarvis` pruning decision~~ — **Decided and executed.**
+   Evidence-based: no runtime, build, test, or workflow reference imports
+   `vendor/OpenJarvis` (the three OpenJarvis proxy routes talk to the runtime
+   over HTTP via `OPENJARVIS_INTERNAL_URL`, not to the snapshot); tsconfig
+   already excluded it. 2203 files / ~107 MB untracked (commit `0e7109a9`),
+   restorable on demand via the `import-openjarvis` workflow.
+4. ~~Provider smoke tests~~ — **Complete (simulated upstreams).**
+   `scripts/test-provider-smoke.ts` exercises the real 9Router/Ollama/
+   OpenAI-compatible adapters including honest failure paths. Live smoke
+   tests with real NINEROUTER/APINEX/OPENAI_COMPAT keys remain blocked by
+   external credentials (documented, not fabricated).
+5. ~~Media-engine local suite~~ — **Addressed.** Reproducible local ClamAV
+   setup (`scripts/setup-clamav.sh`, `scripts/check-clamav.ts`,
+   `docs/CLAMAV_SETUP.md`); the integration suite itself runs in the CI
+   media-engine job (sandbox has no root for apt — documented).
 
 ## Execution protocol
 

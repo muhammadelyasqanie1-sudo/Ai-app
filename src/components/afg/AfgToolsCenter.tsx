@@ -27,6 +27,7 @@ import { AfgProductivityCenter } from './AfgProductivityCenter';
 import { AfgApiConnectorPanel } from './AfgApiConnectorPanel';
 import { AfgPublicApiDeveloperTools } from './AfgPublicApiDeveloperTools';
 import { AfgOsintPanel } from './AfgOsintPanel';
+import { getCsrfToken } from '../../lib/apiClient';
 
 interface AfgToolsCenterProps {
   language: Language;
@@ -186,22 +187,73 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   const voiceSttAvailable = voiceEnabled && capabilities['speech-to-text'];
   const voiceTtsAvailable = voiceEnabled && capabilities['text-to-speech'];
   useEffect(() => { const syncVoice = () => setVoiceEnabled(localStorage.getItem('afg_voice_enabled') !== 'false'); window.addEventListener('afg-voice-preference-change', syncVoice); window.addEventListener('afg-preferences-change', syncVoice); return () => { window.removeEventListener('afg-voice-preference-change', syncVoice); window.removeEventListener('afg-preferences-change', syncVoice); }; }, []);
-  const [fileStatus, setFileStatus] = useState<{ available: boolean; acceptedFormats: string[]; message: string } | null>(null);
-  useEffect(() => {
-    if (activeSubTab !== 'file-tools') return;
-    fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/files/status')
-      .then((response) => response.json())
-      .then((data) => setFileStatus({
-        available: data.available === true,
-        acceptedFormats: Array.isArray(data.plannedFormats) ? data.plannedFormats : [],
-        message: typeof data.message === 'string' ? data.message : '',
-      }))
-      .catch(() => setFileStatus({
-        available: false,
-        acceptedFormats: ['PDF', 'TXT', 'DOCX', 'CSV', 'XLSX', 'JSON', 'source files', 'images'],
-        message: toolText('وضعیت سرویس فایل قابل دریافت نیست.','File service status could not be reached.'),
-      }));
-  }, [activeSubTab, language]);
+  const [fileStatus, setFileStatus] = useState<{ privateStorageConfigured: boolean; scannerConfigured: boolean; maxUploadBytes: number } | null>(null);
+  const [fileLibrary, setFileLibrary] = useState<Array<{ id: string; name: string; sizeBytes: number; status: string; createdAt: string }>>([]);
+  const [fileBusy, setFileBusy] = useState(false);
+  const [fileError, setFileError] = useState('');
+  const [fileNotice, setFileNotice] = useState('');
+  const loadFileLibrary = async () => {
+    try {
+      const [statusResponse, listResponse] = await Promise.all([
+        fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/files/status'),
+        fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/files', { credentials: 'include' }),
+      ]);
+      if (statusResponse.ok) {
+        const data = await statusResponse.json();
+        setFileStatus({
+          privateStorageConfigured: data.privateStorageConfigured === true,
+          scannerConfigured: data.scannerConfigured === true,
+          maxUploadBytes: Number(data.maxUploadBytes) || 0,
+        });
+      } else setFileStatus(null);
+      if (listResponse.ok) {
+        const data = await listResponse.json();
+        setFileLibrary(Array.isArray(data.files) ? data.files : []);
+      } else setFileLibrary([]);
+    } catch {
+      setFileStatus(null);
+      setFileLibrary([]);
+    }
+  };
+  useEffect(() => { if (activeSubTab === 'file-tools') void loadFileLibrary(); }, [activeSubTab]);
+  const uploadFile = async (file: File) => {
+    setFileBusy(true); setFileError(''); setFileNotice('');
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('read_failed'));
+        reader.readAsDataURL(file);
+      });
+      const dataBase64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/files', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+        body: JSON.stringify({ name: file.name, dataBase64 }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : (toolText('بارگذاری ناموفق بود.', 'Upload failed.')));
+      setFileNotice(typeof data.message === 'string' ? data.message : 'Stored in quarantine.');
+      await loadFileLibrary();
+    } catch (error) {
+      setFileError(error instanceof Error && error.message !== 'read_failed' ? error.message : toolText('خواندن فایل ناموفق بود.', 'The file could not be read.'));
+    } finally { setFileBusy(false); }
+  };
+  const scanFile = async (id: string) => {
+    setFileBusy(true); setFileError(''); setFileNotice('');
+    try {
+      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + `/api/files/${id}/scan`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'X-CSRF-Token': getCsrfToken() },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : (toolText('اسکن ناموفق بود.', 'Scan failed.')));
+      setFileNotice(data.status === 'approved' ? toolText('فایل تأیید شد.', 'File approved by the security scanner.') : data.status === 'rejected' ? toolText('فایل توسط اسکنر امنیتی رد شد.', 'The file was rejected by the security scanner.') : toolText('وضعیت به‌روزرسانی شد.', 'File status updated.'));
+      await loadFileLibrary();
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : toolText('اسکن ناموفق بود.', 'Scan failed.'));
+    } finally { setFileBusy(false); }
+  };
 
 
   useEffect(() => {
@@ -338,10 +390,10 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
   };
 
   const cardText = {
-    dari:{developer:'ابزارهای توسعه‌دهنده',developerDesc:'JSON، JWT، UUID، Base64، cURL، Cron و ساخت ابزار AI',gatewayDesc:'گفتگو، تصویر، صدا، ویدیو، جستجو و مدل‌های چندرسانه‌ای',api:'مرکز جامع API',apiDesc:'کاتالوگ Public APIs، اتصال سرویس‌ها و ساخت ابزار هوشمند',mcp:'ابزارها و سرورهای MCP',mcpDesc:'اتصال امن ابزارهای استاندارد هوش مصنوعی',productivity:'مرکز بهره‌وری',productivityDesc:'یادداشت، وظایف، آموزش، جلسه و برنامه‌ریزی',translateDesc:'ترجمه با مدل چت تأییدشده',codeDesc:'تولید، توضیح، اشکال‌زدایی و بهینه‌سازی کد',writing:'استودیوی نویسندگی',writingDesc:'ایمیل، مقاله، رزومه و محتوای تبلیغاتی',research:'پژوهش وب',researchDesc:'جستجوی منابع واقعی و لینک‌های اصلی',osintDesc:'تحلیل غیرفعال دامنه و IP مجاز، شواهد و گراف روابط',disabled:'در تنظیمات غیرفعال شده',voiceDesc:'نیازمند ارائه‌دهنده صوتی سازگار',pdfDesc:'بارگذاری و استخراج متن فعال نیست',calcDesc:'محاسبه محلی',qr:'تولیدکننده QR',qrDesc:'با سرویس بیرونی QRServer',summaryDesc:'خلاصه‌سازی با مدل چت تأییدشده',fileDesc:'پردازش فایل هنوز پیاده‌سازی نشده'},
-    english:{developer:'Developer Utilities',developerDesc:'JSON, JWT, UUID, Base64, cURL, Cron and AI tool generation',gatewayDesc:'Chat, image, audio, video, search and multimodal models',api:'Universal API Hub',apiDesc:'Discover Public APIs, connect services and create AI tools',mcp:'MCP Servers & Tools',mcpDesc:'Connect secure, standardized AI tools',productivity:'Productivity Center',productivityDesc:'Notes, tasks, study, meetings and planning',translateDesc:'Uses the verified chat model',codeDesc:'Generate, explain, debug and optimize code',writing:'Writing Studio',writingDesc:'Emails, articles, CVs and marketing content',research:'Web Research',researchDesc:'Search real sources and original URLs',osintDesc:'Authorized passive domain/IP intelligence, evidence and graph',disabled:'Disabled in settings',voiceDesc:'Requires a compatible voice provider',pdfDesc:'Upload and text extraction are unavailable',calcDesc:'Local arithmetic calculator',qr:'QR Generator',qrDesc:'Uses the external QRServer service',summaryDesc:'Summarize text with the verified chat model',fileDesc:'File processing is not implemented'},
-    pashto:{developer:'د پراختیا وسایل',developerDesc:'JSON، JWT، UUID، Base64، cURL، Cron او د AI وسایلو جوړول',gatewayDesc:'خبرې، انځور، غږ، ویډیو، لټون او څو رسنیز ماډلونه',api:'د API جامع مرکز',apiDesc:'عامه API ومومئ، خدمتونه ونښلوئ او هوښیار وسایل جوړ کړئ',mcp:'د MCP سرورونه او وسایل',mcpDesc:'معیاري او خوندي AI وسایل ونښلوئ',productivity:'د ګټورتیا مرکز',productivityDesc:'یادښتونه، دندې، زده‌کړه، غونډې او پلان جوړونه',translateDesc:'د تایید شوي خبرو ماډل کاروي',codeDesc:'کوډ جوړول، تشریح، تېروتنې سمول او ښه کول',writing:'د لیکنې سټوډیو',writingDesc:'برېښنالیکونه، مقالې، ژوندلیکونه او اعلانونه',research:'وېب څېړنه',researchDesc:'اصلي سرچینې او لینکونه ولټوئ',osintDesc:'د مجاز ډومېن او IP غیر فعاله څېړنه، شواهد او اړیکې',disabled:'په امستنو کې بنده ده',voiceDesc:'د سازګار غږ برابرونکي ته اړتیا لري',pdfDesc:'د فایل پورته کول او متن ایستل نشته',calcDesc:'ځایي حسابګر',qr:'د QR جوړوونکی',qrDesc:'د QRServer بهرنی خدمت کاروي',summaryDesc:'متن د تایید شوي خبرو ماډل په وسیله لنډوي',fileDesc:'د فایل پروسس لا نه دی جوړ شوی'},
-    arabic:{developer:'أدوات المطورين',developerDesc:'JSON وJWT وUUID وBase64 وcURL وCron وإنشاء أدوات الذكاء الاصطناعي',gatewayDesc:'المحادثة والصور والصوت والفيديو والبحث والنماذج متعددة الوسائط',api:'مركز API الشامل',apiDesc:'اكتشف واجهات API العامة واربط الخدمات وأنشئ أدوات ذكية',mcp:'خوادم وأدوات MCP',mcpDesc:'ربط أدوات ذكاء اصطناعي آمنة وموحّدة',productivity:'مركز الإنتاجية',productivityDesc:'الملاحظات والمهام والدراسة والاجتماعات والتخطيط',translateDesc:'يستخدم نموذج المحادثة المعتمد',codeDesc:'إنشاء التعليمات البرمجية وشرحها وتصحيحها وتحسينها',writing:'استوديو الكتابة',writingDesc:'رسائل ومقالات وسير ذاتية ومحتوى تسويقي',research:'بحث الويب',researchDesc:'البحث عن مصادر حقيقية وروابط أصلية',osintDesc:'استخبارات سلبية مصرح بها للنطاقات وعناوين IP والأدلة والروابط',disabled:'معطّل في الإعدادات',voiceDesc:'يتطلب مزوداً صوتياً متوافقاً',pdfDesc:'رفع الملفات واستخراج النص غير متاحين',calcDesc:'آلة حاسبة محلية',qr:'منشئ QR',qrDesc:'يستخدم خدمة QRServer الخارجية',summaryDesc:'تلخيص النص باستخدام نموذج المحادثة المعتمد',fileDesc:'لم تتم برمجة معالجة الملفات بعد'}
+    dari:{developer:'ابزارهای توسعه‌دهنده',developerDesc:'JSON، JWT، UUID، Base64، cURL، Cron و ساخت ابزار AI',gatewayDesc:'گفتگو، تصویر، صدا، ویدیو، جستجو و مدل‌های چندرسانه‌ای',api:'مرکز جامع API',apiDesc:'کاتالوگ Public APIs، اتصال سرویس‌ها و ساخت ابزار هوشمند',mcp:'ابزارها و سرورهای MCP',mcpDesc:'اتصال امن ابزارهای استاندارد هوش مصنوعی',productivity:'مرکز بهره‌وری',productivityDesc:'یادداشت، وظایف، آموزش، جلسه و برنامه‌ریزی',translateDesc:'ترجمه با مدل چت تأییدشده',codeDesc:'تولید، توضیح، اشکال‌زدایی و بهینه‌سازی کد',writing:'استودیوی نویسندگی',writingDesc:'ایمیل، مقاله، رزومه و محتوای تبلیغاتی',research:'پژوهش وب',researchDesc:'جستجوی منابع واقعی و لینک‌های اصلی',osintDesc:'تحلیل غیرفعال دامنه و IP مجاز، شواهد و گراف روابط',disabled:'در تنظیمات غیرفعال شده',voiceDesc:'نیازمند ارائه‌دهنده صوتی سازگار',pdfDesc:'استخراج متن TXT/MD/CSV/JSON فعال است؛ PDF و Office پشتیبانی نمی‌شود',calcDesc:'محاسبه محلی',qr:'تولیدکننده QR',qrDesc:'با سرویس بیرونی QRServer',summaryDesc:'خلاصه‌سازی با مدل چت تأییدشده',fileDesc:'آپلود در قرنطینه + اسکن ClamAV؛ استخراج متن TXT/MD/CSV/JSON'},
+    english:{developer:'Developer Utilities',developerDesc:'JSON, JWT, UUID, Base64, cURL, Cron and AI tool generation',gatewayDesc:'Chat, image, audio, video, search and multimodal models',api:'Universal API Hub',apiDesc:'Discover Public APIs, connect services and create AI tools',mcp:'MCP Servers & Tools',mcpDesc:'Connect secure, standardized AI tools',productivity:'Productivity Center',productivityDesc:'Notes, tasks, study, meetings and planning',translateDesc:'Uses the verified chat model',codeDesc:'Generate, explain, debug and optimize code',writing:'Writing Studio',writingDesc:'Emails, articles, CVs and marketing content',research:'Web Research',researchDesc:'Search real sources and original URLs',osintDesc:'Authorized passive domain/IP intelligence, evidence and graph',disabled:'Disabled in settings',voiceDesc:'Requires a compatible voice provider',pdfDesc:'Text extraction for TXT/MD/CSV/JSON works; PDF/Office not supported',calcDesc:'Local arithmetic calculator',qr:'QR Generator',qrDesc:'Uses the external QRServer service',summaryDesc:'Summarize text with the verified chat model',fileDesc:'Quarantined upload + ClamAV scan; text extraction for TXT/MD/CSV/JSON'},
+    pashto:{developer:'د پراختیا وسایل',developerDesc:'JSON، JWT، UUID، Base64، cURL، Cron او د AI وسایلو جوړول',gatewayDesc:'خبرې، انځور، غږ، ویډیو، لټون او څو رسنیز ماډلونه',api:'د API جامع مرکز',apiDesc:'عامه API ومومئ، خدمتونه ونښلوئ او هوښیار وسایل جوړ کړئ',mcp:'د MCP سرورونه او وسایل',mcpDesc:'معیاري او خوندي AI وسایل ونښلوئ',productivity:'د ګټورتیا مرکز',productivityDesc:'یادښتونه، دندې، زده‌کړه، غونډې او پلان جوړونه',translateDesc:'د تایید شوي خبرو ماډل کاروي',codeDesc:'کوډ جوړول، تشریح، تېروتنې سمول او ښه کول',writing:'د لیکنې سټوډیو',writingDesc:'برېښنالیکونه، مقالې، ژوندلیکونه او اعلانونه',research:'وېب څېړنه',researchDesc:'اصلي سرچینې او لینکونه ولټوئ',osintDesc:'د مجاز ډومېن او IP غیر فعاله څېړنه، شواهد او اړیکې',disabled:'په امستنو کې بنده ده',voiceDesc:'د سازګار غږ برابرونکي ته اړتیا لري',pdfDesc:'د متن ایستل TXT/MD/CSV/JSON کار کوي؛ PDF او Office ملاتړ نه کوي',calcDesc:'ځایي حسابګر',qr:'د QR جوړوونکی',qrDesc:'د QRServer بهرنی خدمت کاروي',summaryDesc:'متن د تایید شوي خبرو ماډل په وسیله لنډوي',fileDesc:'قرنطینه پورته کول + د ClamAV کتنه؛ د TXT/MD/CSV/JSON متن ایستل'},
+    arabic:{developer:'أدوات المطورين',developerDesc:'JSON وJWT وUUID وBase64 وcURL وCron وإنشاء أدوات الذكاء الاصطناعي',gatewayDesc:'المحادثة والصور والصوت والفيديو والبحث والنماذج متعددة الوسائط',api:'مركز API الشامل',apiDesc:'اكتشف واجهات API العامة واربط الخدمات وأنشئ أدوات ذكية',mcp:'خوادم وأدوات MCP',mcpDesc:'ربط أدوات ذكاء اصطناعي آمنة وموحّدة',productivity:'مركز الإنتاجية',productivityDesc:'الملاحظات والمهام والدراسة والاجتماعات والتخطيط',translateDesc:'يستخدم نموذج المحادثة المعتمد',codeDesc:'إنشاء التعليمات البرمجية وشرحها وتصحيحها وتحسينها',writing:'استوديو الكتابة',writingDesc:'رسائل ومقالات وسير ذاتية ومحتوى تسويقي',research:'بحث الويب',researchDesc:'البحث عن مصادر حقيقية وروابط أصلية',osintDesc:'استخبارات سلبية مصرح بها للنطاقات وعناوين IP والأدلة والروابط',disabled:'معطّل في الإعدادات',voiceDesc:'يتطلب مزوداً صوتياً متوافقاً',pdfDesc:'استخراج النص لـ TXT/MD/CSV/JSON يعمل؛ PDF وOffice غير مدعومين',calcDesc:'آلة حاسبة محلية',qr:'منشئ QR',qrDesc:'يستخدم خدمة QRServer الخارجية',summaryDesc:'تلخيص النص باستخدام نموذج المحادثة المعتمد',fileDesc:'رفع إلى الحجر الصحي + مسح ClamAV؛ استخراج النص لـ TXT/MD/CSV/JSON'}
   }[toolLocale];
   const toolCards = [
     { id: 'developer-tools' as ToolSubTab, title: cardText.developer, desc: cardText.developerDesc, ready: true, icon: Code2, color: 'text-violet-300', bg: 'bg-violet-500/10', border: 'border-violet-400/40' },
@@ -355,11 +407,11 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
     { id: 'research' as ToolSubTab, title: cardText.research, desc: cardText.researchDesc, ready: Boolean(capabilities.research), icon: Languages, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
     { id: 'osint' as ToolSubTab, title: 'Passive OSINT', desc: cardText.osintDesc, ready: true, icon: ShieldCheck, color: 'text-emerald-300', bg: 'bg-emerald-500/10', border: 'border-emerald-400/40' },
     { id: 'voice-tools' as ToolSubTab, title: t.toolVoice, desc: !voiceEnabled ? (cardText.disabled) : (cardText.voiceDesc), ready: Boolean(voiceSttAvailable || voiceTtsAvailable), icon: Mic, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
-    { id: 'pdf-tools' as ToolSubTab, title: t.toolPdf, desc: cardText.pdfDesc, ready: false, icon: FileText, color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/30' },
+    { id: 'pdf-tools' as ToolSubTab, title: t.toolPdf, desc: cardText.pdfDesc, ready: true, icon: FileText, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/30' },
     { id: 'calculator' as ToolSubTab, title: t.toolCalc, desc: cardText.calcDesc, ready: true, icon: Calculator, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/30' },
     { id: 'qr-scanner' as ToolSubTab, title: cardText.qr, desc: cardText.qrDesc, ready: true, icon: QrCode, color: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30' },
     { id: 'summarizer' as ToolSubTab, title: t.toolSummarizer, desc: cardText.summaryDesc, ready: Boolean(capabilities.chat), icon: FileCheck, color: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30' },
-    { id: 'file-tools' as ToolSubTab, title: t.toolFile, desc: cardText.fileDesc, ready: false, icon: FolderArchive, color: 'text-teal-400', bg: 'bg-teal-500/10', border: 'border-teal-500/30' },
+    { id: 'file-tools' as ToolSubTab, title: t.toolFile, desc: cardText.fileDesc, ready: true, icon: FolderArchive, color: 'text-teal-400', bg: 'bg-teal-500/10', border: 'border-teal-500/30' },
   ];
 
   return (
@@ -694,10 +746,9 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
             <span>{activeSubTab === 'summarizer' ? t.toolSummarizer : t.toolPdf}</span>
           </h2>
 
-          <div className="border-2 border-dashed border-rose-500/30 rounded-2xl p-6 text-center bg-rose-500/5">
-            <Upload className="w-8 h-8 text-rose-400 mx-auto mb-2" />
-            <p className="text-xs sm:text-sm font-semibold text-amber-200">
-              {toolText('بارگذاری و پردازش فایل هنوز فعال نیست.','File upload and document processing are not enabled yet.')}
+          <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-center">
+            <p className="text-xs sm:text-sm font-semibold text-cyan-200">
+              {toolText('استخراج متن برای TXT، MD، CSV و JSON در همین‌جا فعال است؛ استخراج PDF و Office هنوز پیاده‌سازی نشده و آپلود امن در «ابزار فایل» انجام می‌شود.','Text extraction for TXT, MD, CSV and JSON works right here; PDF and Office extraction are not implemented, and secure uploads live in File Tools.')}
             </p>
           </div>
 
@@ -761,7 +812,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
         </div>
       )}
 
-      {/* Tool 7: File Tools */}
+      {/* Tool 7: File Tools — real upload, quarantine status and scanner actions */}
       {activeSubTab === 'file-tools' && (
         <div className="p-4 sm:p-6 rounded-3xl bg-white/90 dark:bg-[#09122c]/90 border border-teal-500/40 shadow-xl space-y-4">
           <h2 className="text-base font-bold text-white flex items-center gap-2">
@@ -775,26 +826,71 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
                 {toolText('دستیار فایل و اسناد','File & Document Assistant')}
               </h3>
               <p className="text-xs text-slate-400 max-w-xl mx-auto">
-                {toolText('قالب‌های هدف: PDF، TXT، DOCX، CSV، XLSX، JSON، فایل‌های کد و تصاویر.','Planned formats: PDF, TXT, DOCX, CSV, XLSX, JSON, source code and images.')}
+                {toolText('آپلود در قرنطینه خصوصی، اسکن امنیتی با ClamAV و استخراج متن برای TXT، MD، CSV و JSON در استودیو رسانه.','Upload to a private quarantine, ClamAV security scanning, and text extraction for TXT, MD, CSV and JSON in Media Studio.')}
               </p>
             </div>
-            <div className="flex flex-wrap justify-center gap-2">
-              {(fileStatus?.acceptedFormats || ['PDF', 'TXT', 'DOCX', 'CSV', 'XLSX', 'JSON', 'Source files', 'Images']).map((format) => (
-                <span key={format} className="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-[11px] text-slate-300">{format}</span>
-              ))}
+            <div className="flex flex-wrap justify-center gap-2 text-[11px]">
+              <span className="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-slate-300">
+                {fileStatus ? (fileStatus.privateStorageConfigured ? toolText('ذخیره‌سازی خصوصی: آماده','Private storage: ready') : toolText('ذخیره‌سازی خصوصی: نامشخص','Private storage: unavailable')) : toolText('وضعیت نامشخص','Status unavailable')}
+              </span>
+              <span className="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-slate-300">
+                {fileStatus ? (fileStatus.scannerConfigured ? toolText('اسکنر امنیتی: متصل','Security scanner: connected') : toolText('اسکنر امنیتی: نیازمند AFG_CLAMSCAN_PATH','Security scanner: requires AFG_CLAMSCAN_PATH')) : toolText('وضعیت اسکنر نامشخص','Scanner status unavailable')}
+              </span>
+              {Boolean(fileStatus?.maxUploadBytes) && (
+                <span className="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-slate-300">
+                  {toolText('سقف حجم:', 'Max size:')} {Math.round((fileStatus!.maxUploadBytes / (1024 * 1024)) * 10) / 10} MB
+                </span>
+              )}
             </div>
-            <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 text-center">
-              <p className="text-sm font-semibold text-amber-200">
-                {fileStatus?.available ? (toolText('سرویس آماده است','File service is ready')) : (toolText('بارگذاری فایل هنوز غیرفعال است','File upload is not enabled yet'))}
-              </p>
-              <p className="mt-2 text-xs leading-6 text-slate-400">
-                {fileStatus?.message || (toolText('تا فعال‌شدن ذخیره‌سازی خصوصی، بررسی نوع و امضای فایل، اسکن بدافزار، استخراج متن و سهمیه‌بندی هر کاربر، فایل‌ها پذیرفته نمی‌شوند.','Files are not accepted until private object storage, MIME and magic-byte validation, malware scanning, text extraction and per-user quotas are implemented.'))}
-              </p>
-            </div>
-            <div className="text-xs text-slate-400">
-              <p className="font-semibold text-slate-300">{toolText('عملیات برنامه‌ریزی‌شده','Planned operations')}</p>
-              <p className="mt-1">{toolText('خلاصه‌سازی، پرسش و پاسخ، استخراج، توضیح، ترجمه، سازمان‌دهی، تحلیل جدول، ساخت گزارش و مقایسه.','Summarize, Q&A, extract, explain, translate, organize, analyze tables, generate reports and compare documents.')}</p>
-            </div>
+            <input
+              type="file"
+              aria-label={toolText('انتخاب فایل برای آپلود','Choose a file to upload')}
+              disabled={fileBusy}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (file) void uploadFile(file);
+              }}
+              className="block w-full text-xs text-slate-300 file:mr-3 file:rounded-xl file:border-0 file:bg-teal-500/20 file:px-4 file:py-2 file:text-xs file:font-bold file:text-teal-200 hover:file:bg-teal-500/30"
+            />
+            {fileError && <p role="alert" className="text-xs text-rose-300">{fileError}</p>}
+            {fileNotice && <p role="status" className="text-xs text-teal-200">{fileNotice}</p>}
+            {fileLibrary.length > 0 && (
+              <ul className="space-y-2 max-h-64 overflow-y-auto">
+                {fileLibrary.map((entry) => (
+                  <li key={entry.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-slate-200">{entry.name}</p>
+                      <p className="text-[10px] text-slate-400">{Math.max(1, Math.round(entry.sizeBytes / 1024))} KB · {entry.createdAt?.slice(0, 10)}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className={'rounded-lg px-2 py-1 text-[10px] font-bold ' + (entry.status === 'approved' ? 'bg-emerald-500/15 text-emerald-300' : entry.status === 'rejected' ? 'bg-rose-500/15 text-rose-300' : 'bg-amber-500/15 text-amber-300')}>{entry.status}</span>
+                      {entry.status === 'quarantined' && (
+                        <button
+                          type="button"
+                          disabled={fileBusy}
+                          onClick={() => void scanFile(entry.id)}
+                          className="rounded-lg border border-teal-500/40 bg-teal-500/10 px-2.5 py-1 text-[10px] font-bold text-teal-200 hover:bg-teal-500/20 disabled:opacity-50"
+                        >
+                          {toolText('اسکن امنیتی','Run security scan')}
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {fileLibrary.length === 0 && fileStatus?.privateStorageConfigured && (
+              <p className="text-center text-xs text-slate-400">{toolText('هنوز فایلی آپلود نشده است.','No files uploaded yet.')}</p>
+            )}
+            {!fileStatus?.privateStorageConfigured && (
+              <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 text-center">
+                <p className="text-sm font-semibold text-amber-200">
+                  {toolText('ذخیره‌سازی خصوصی در سرور تنظیم نشده است؛ آپلود غیرفعال است.','Private quarantine storage is not configured on this server; uploads are disabled.')}
+                </p>
+                <p className="mt-2 text-xs leading-6 text-slate-400">{toolText('مدیر سرور باید AFG_UPLOAD_QUARANTINE_DIR را تنظیم کند. تا آن زمان هیچ فایلی پذیرفته نمی‌شود.','An administrator must configure AFG_UPLOAD_QUARANTINE_DIR. No files are accepted until then.')}</p>
+              </div>
+            )}
           </div>
         </div>
       )}
