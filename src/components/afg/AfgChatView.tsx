@@ -324,11 +324,20 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
               {/* Avatar */}
               <div className="shrink-0 mt-0.5">
                 {isUser ? (
-                  <img
-                    src={user.avatar}
-                    alt={user.name}
-                    className="w-9 h-9 rounded-xl object-cover ring-2 ring-cyan-500/50"
-                  />
+                  user.avatar ? (
+                    <img
+                      src={user.avatar}
+                      alt={user.name}
+                      className="w-9 h-9 rounded-xl object-cover ring-2 ring-cyan-500/50"
+                    />
+                  ) : (
+                    <div
+                      className="w-9 h-9 rounded-xl bg-gradient-to-tr from-slate-600 to-slate-700 flex items-center justify-center ring-2 ring-cyan-500/50 text-sm font-semibold text-white"
+                      aria-hidden="true"
+                    >
+                      {(user.name || 'G').trim().charAt(0).toUpperCase()}
+                    </div>
+                  )
                 ) : (
                   <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-sky-600 flex items-center justify-center p-1.5 shadow-[0_0_12px_rgba(0,229,255,0.4)]">
                     <AfgBrainLogo size="sm" showBadge={false} />
@@ -487,7 +496,7 @@ export const AfgChatView: React.FC<AfgChatViewProps> = ({
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-sky-600 flex items-center justify-center p-1.5 shadow-[0_0_12px_rgba(0,229,255,0.4)]">
               <AfgBrainLogo size="sm" showBadge={false} />
             </div>
-            <div className="p-3.5 rounded-2xl bg-[#0b142c] border border-cyan-900/40 text-cyan-300 flex items-center gap-2 text-xs">
+            <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-[#0b142c] border border-cyan-200 dark:border-cyan-900/40 text-cyan-700 dark:text-cyan-300 flex items-center gap-2 text-xs">
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
               <span>{isSlowResponse ? c.thinking : c.slow}</span>
             </div>

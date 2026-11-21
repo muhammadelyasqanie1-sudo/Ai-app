@@ -7,6 +7,7 @@ import { installConsoleSecretRedaction } from './src/security/redaction.ts';
 import { pool } from './src/api/database.ts';
 import { syncPublicApiCatalog } from './src/services/publicApiCatalog.ts';
 import { getVerifiedModelDescriptors } from './src/services/providerGateway.ts';
+import { startLiveEventHub } from './src/services/liveEventHub.ts';
 import { startProgrammingKnowledgeScheduler } from './scripts/programming-knowledge-scheduler.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -120,6 +121,7 @@ async function bootstrapPublicApiCatalog() {
 
 app.listen(PORT, () => {
   console.info('SERVER_LISTENING', JSON.stringify({ port: PORT, service: 'afg-ai-api' }));
+  startLiveEventHub();
   void bootstrapPublicApiCatalog();
   void bootstrapProviderCatalog();
   startProgrammingKnowledgeScheduler();

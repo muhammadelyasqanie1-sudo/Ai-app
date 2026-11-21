@@ -103,14 +103,17 @@ export interface ImageRequest {
   stylePreset: ImageStyleId;
   aspectRatio: string;
   quality: string;
+  /** Exact verified model ID selected by the caller; adapters must not substitute another model. */
+  model?: string;
+  signal?: AbortSignal;
 }
 export interface ImageResult { url: string; mimeType?: string; }
-export interface ImageEditRequest { image: Uint8Array; mimeType: string; instruction: string; mask?: Uint8Array; }
-export interface VisionRequest { image: Uint8Array; mimeType: string; prompt: string; mode: 'describe' | 'ocr' | 'diagram' | 'screenshot'; }
+export interface ImageEditRequest { image: Uint8Array; mimeType: string; instruction: string; mask?: Uint8Array; /** Exact verified model ID selected by the caller; adapters must not substitute another model. */ model?: string; signal?: AbortSignal; }
+export interface VisionRequest { image: Uint8Array; mimeType: string; prompt: string; mode: 'describe' | 'ocr' | 'diagram' | 'screenshot'; /** Exact verified model ID selected by the caller; adapters must not substitute another model. */ model?: string; signal?: AbortSignal; }
 export interface VisionResult { text: string; }
-export interface AudioRequest { audio: Uint8Array; mimeType: string; language?: string; }
+export interface AudioRequest { audio: Uint8Array; mimeType: string; language?: string; /** Exact verified model ID selected by the caller; adapters must not substitute another model. */ model?: string; signal?: AbortSignal; }
 export interface Transcription { text: string; }
-export interface TTSRequest { text: string; voice?: string; language?: string; }
+export interface TTSRequest { text: string; voice?: string; language?: string; /** Exact verified model ID selected by the caller; adapters must not substitute another model. */ model?: string; signal?: AbortSignal; }
 export interface AudioResult { audio: Uint8Array; mimeType: string; }
 
 export interface ProviderAdapter {

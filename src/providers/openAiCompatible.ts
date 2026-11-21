@@ -1,5 +1,7 @@
 import { compatibleMedia } from './compatibleMedia.ts';
-import type { ChatChunk, ChatRequest, ChatProviderAdapter, ConfigStatus, HealthStatus, ModelDescriptor, CapabilityFlags } from './providerTypes.ts';
+import type { ChatChunk, ChatRequest, ChatProviderAdapter, ConfigStatus, HealthStatus, ModelDescriptor, CapabilityFlags, AudioRequest, Transcription, TTSRequest, AudioResult, VisionRequest, VisionResult, ImageRequest, ImageResult, ImageEditRequest, ImageGenerationOptions } from './providerTypes.ts';
+import type { MediaRequest } from '../services/media/contracts.ts';
+import { randomUUID } from 'crypto';
 import { ProviderAdapterError } from './providerTypes.ts';
 
 type OpenAIModel = {
@@ -16,6 +18,40 @@ const CAPABILITIES: CapabilityFlags = {
   text: true, streaming: true, vision: false, imageGen: false, imageEdit: false, ocr: false,
   tts: false, stt: false, tools: false, jsonMode: false,
 };
+
+const AUDIO_EXTENSION_BY_MIME = new Map<string, string>([
+  ['audio/webm', 'webm'], ['audio/wav', 'wav'], ['audio/x-wav', 'wav'], ['audio/wave', 'wav'],
+  ['audio/mpeg', 'mp3'], ['audio/mp3', 'mp3'], ['audio/mp4', 'm4a'], ['audio/ogg', 'ogg'],
+  ['audio/aac', 'aac'], ['audio/flac', 'flac'],
+]);
+
+const IMAGE_EXTENSION_BY_MIME = new Map<string, string>([
+  ['image/png', 'png'], ['image/jpeg', 'jpg'], ['image/webp', 'webp'],
+]);
+
+/** Aspect ratios the adapter actually maps, to pixel sizes accepted by modern OpenAI-compatible image models. */
+const IMAGE_ASPECT_SIZES: Record<string, string> = {
+  '1:1': '1024x1024',
+  '3:2': '1536x1024',
+  '2:3': '1024x1536',
+};
+
+/** App-side style presets are prompt suffixes, not provider parameters; unlisted presets pass through unchanged. */
+const IMAGE_STYLE_SUFFIX: Record<string, string> = {
+  realistic: 'Photorealistic style, natural lighting, true-to-life detail.',
+  'digital-art': 'Digital art style, rich color, deliberate composition.',
+  anime: 'Anime illustration style, clean line art, cel shading.',
+  '3d': '3D render style, physically based lighting, high detail.',
+  logo: 'Flat vector logo style, simple geometric shapes, minimal palette.',
+  wallpaper: 'Wide scenic wallpaper composition, atmospheric depth.',
+  social: 'Clean social-media post layout, bold focal subject, readable composition.',
+};
+
+function applyImageStylePreset(prompt: string, stylePreset: string): string {
+  const suffix = IMAGE_STYLE_SUFFIX[stylePreset];
+  const trimmed = prompt.trim();
+  return suffix && trimmed ? trimmed + '. ' + suffix : trimmed || suffix || '';
+}
 
 function config() {
   const baseUrl = (process.env.OPENAI_COMPAT_BASE_URL?.trim() || '').replace(/\/+$/, '');
@@ -59,6 +95,165 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
     displayName: initial.displayName,
 
     executeMedia(request, inputs, signal) { return compatibleMedia(currentConfig(), request, inputs, signal); },
+
+    /** Real speech-to-text via the OpenAI-compatible /audio/transcriptions endpoint. */
+    async transcribe(request: AudioRequest): Promise<Transcription> {
+      const current = currentConfig();
+      if (!current.baseUrl || (!current.apiKey && !current.allowEmptyApiKey) || !validBaseUrl(current.baseUrl)) {
+        throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
+      }
+      if (!request.model) throw new ProviderAdapterError('A verified speech-to-text model must be selected.', 400, 'model_required');
+      const mediaRequest: MediaRequest = {
+        type: 'speech_recognize',
+        model: request.model,
+        prompt: '',
+        inputFileIds: [],
+        parameters: request.language && request.language !== 'auto' && /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(request.language)
+          ? { language: request.language }
+          : {},
+        requestKey: randomUUID(),
+        allowExternalProcessing: false,
+      };
+      const extension = AUDIO_EXTENSION_BY_MIME.get(request.mimeType.toLowerCase().split(';')[0].trim()) || 'bin';
+      const output = await compatibleMedia(current, mediaRequest, [
+        { bytes: Buffer.from(request.audio), mime: request.mimeType, name: 'audio.' + extension },
+      ], request.signal ?? AbortSignal.timeout(55_000));
+      if (typeof output.text !== 'string' || !output.text.trim()) {
+        throw new ProviderAdapterError('The speech-to-text provider returned no transcription.', 502, 'invalid_media_output');
+      }
+      return { text: output.text };
+    },
+
+    /** Real text-to-speech via the OpenAI-compatible /audio/speech endpoint. */
+    async synthesize(request: TTSRequest): Promise<AudioResult> {
+      const current = currentConfig();
+      if (!current.baseUrl || (!current.apiKey && !current.allowEmptyApiKey) || !validBaseUrl(current.baseUrl)) {
+        throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
+      }
+      if (!request.model) throw new ProviderAdapterError('A verified text-to-speech model must be selected.', 400, 'model_required');
+      const voice = request.voice && request.voice !== 'default' ? request.voice : undefined;
+      const mediaRequest: MediaRequest = {
+        type: 'speech_generate',
+        model: request.model,
+        prompt: request.text,
+        inputFileIds: [],
+        parameters: voice ? { voice } : {},
+        requestKey: randomUUID(),
+        allowExternalProcessing: false,
+      };
+      const output = await compatibleMedia(current, mediaRequest, [], request.signal ?? AbortSignal.timeout(55_000));
+      if (!output.bytes || !output.bytes.length) {
+        throw new ProviderAdapterError('The text-to-speech provider returned no audio.', 502, 'invalid_media_output');
+      }
+      return { audio: output.bytes, mimeType: output.mime || 'audio/wav' };
+    },
+
+    /** The provider default voice; explicit per-provider voice inventories are not fabricated. */
+    voiceOptions(_modelId: string): Array<{ id: string; label: string }> {
+      return [{ id: 'default', label: 'Provider default voice' }];
+    },
+
+    /**
+     * Honest image-generation options. Aspect ratios map to pixel sizes that
+     * modern OpenAI-compatible image models actually accept; the style preset
+     * is applied as a prompt suffix (an app-side convention, not a provider
+     * parameter). No provider capability is claimed beyond this mapping.
+     */
+    imageGenerationOptions(_modelId: string): ImageGenerationOptions {
+      return {
+        stylePresets: [
+          { id: 'realistic', label: 'Photorealistic' },
+          { id: 'digital-art', label: 'Digital art' },
+          { id: 'anime', label: 'Anime' },
+          { id: '3d', label: '3D render' },
+          { id: 'logo', label: 'Logo / vector' },
+          { id: 'wallpaper', label: 'Wallpaper' },
+          { id: 'social', label: 'Social post' },
+        ],
+        aspectRatios: ['1:1', '3:2', '2:3'],
+        qualityLevels: ['standard', 'high'],
+      };
+    },
+
+    /** Real image generation via the OpenAI-compatible /images/generations endpoint. */
+    async generateImage(request: ImageRequest): Promise<ImageResult> {
+      const current = currentConfig();
+      if (!current.baseUrl || (!current.apiKey && !current.allowEmptyApiKey) || !validBaseUrl(current.baseUrl)) {
+        throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
+      }
+      if (!request.model) throw new ProviderAdapterError('A verified image-generation model must be selected.', 400, 'model_required');
+      const mediaRequest: MediaRequest = {
+        type: 'image_generate',
+        model: request.model,
+        prompt: applyImageStylePreset(request.prompt, request.stylePreset).slice(0, 4000),
+        inputFileIds: [],
+        parameters: {
+          ...(IMAGE_ASPECT_SIZES[request.aspectRatio] ? { size: IMAGE_ASPECT_SIZES[request.aspectRatio] } : {}),
+          ...(request.quality === 'standard' || request.quality === 'high' ? { quality: request.quality } : {}),
+        },
+        requestKey: randomUUID(),
+        allowExternalProcessing: false,
+      };
+      const output = await compatibleMedia(current, mediaRequest, [], request.signal ?? AbortSignal.timeout(120_000));
+      if (!output.bytes || !output.bytes.length || !output.mime) {
+        throw new ProviderAdapterError('The image provider returned no usable image data.', 502, 'invalid_media_output');
+      }
+      return { url: 'data:' + output.mime + ';base64,' + Buffer.from(output.bytes).toString('base64'), mimeType: output.mime };
+    },
+
+    /** Real image editing via the OpenAI-compatible /images/edits endpoint. */
+    async editImage(request: ImageEditRequest): Promise<ImageResult> {
+      const current = currentConfig();
+      if (!current.baseUrl || (!current.apiKey && !current.allowEmptyApiKey) || !validBaseUrl(current.baseUrl)) {
+        throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
+      }
+      if (!request.model) throw new ProviderAdapterError('A verified image-editing model must be selected.', 400, 'model_required');
+      const extension = IMAGE_EXTENSION_BY_MIME.get(request.mimeType.toLowerCase().split(';')[0].trim());
+      if (!extension) throw new ProviderAdapterError('The image format is not supported for editing.', 400, 'unsupported_media_format');
+      const inputs = [
+        { bytes: Buffer.from(request.image), mime: request.mimeType, name: 'image.' + extension },
+        ...(request.mask ? [{ bytes: Buffer.from(request.mask), mime: 'image/png', name: 'mask.png' }] : []),
+      ];
+      const mediaRequest: MediaRequest = {
+        type: 'image_edit',
+        model: request.model,
+        prompt: request.instruction.slice(0, 4000),
+        inputFileIds: [],
+        parameters: {},
+        requestKey: randomUUID(),
+        allowExternalProcessing: false,
+      };
+      const output = await compatibleMedia(current, mediaRequest, inputs, request.signal ?? AbortSignal.timeout(120_000));
+      if (!output.bytes || !output.bytes.length || !output.mime) {
+        throw new ProviderAdapterError('The image provider returned no usable image data.', 502, 'invalid_media_output');
+      }
+      return { url: 'data:' + output.mime + ';base64,' + Buffer.from(output.bytes).toString('base64'), mimeType: output.mime };
+    },
+
+    /** Real image understanding via the OpenAI-compatible /chat/completions vision shape. */
+    async analyzeImage(request: VisionRequest): Promise<VisionResult> {
+      const current = currentConfig();
+      if (!current.baseUrl || (!current.apiKey && !current.allowEmptyApiKey) || !validBaseUrl(current.baseUrl)) {
+        throw new ProviderAdapterError('OpenAI-compatible provider is not configured.', 503, 'provider_not_configured');
+      }
+      if (!request.model) throw new ProviderAdapterError('A verified vision model must be selected.', 400, 'model_required');
+      const mediaRequest: MediaRequest = {
+        type: 'image_understand',
+        model: request.model,
+        prompt: request.prompt || 'Describe the image. Label interpretations as unverified.',
+        inputFileIds: [],
+        parameters: {},
+        requestKey: randomUUID(),
+        allowExternalProcessing: false,
+      };
+      const output = await compatibleMedia(current, mediaRequest, [
+        { bytes: Buffer.from(request.image), mime: request.mimeType, name: 'image' },
+      ], AbortSignal.timeout(55_000));
+      if (typeof output.text !== 'string' || !output.text.trim()) {
+        throw new ProviderAdapterError('The vision provider returned no description.', 502, 'invalid_media_output');
+      }
+      return { text: output.text };
+    },
 
     async validateConfig(): Promise<ConfigStatus> {
       const current = currentConfig();

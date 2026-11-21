@@ -19,6 +19,7 @@ import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { ErrorBoundary } from './components/afg/AfgDesignSystem';
 import { applyDocumentLocale } from './utils/i18n';
 import { apiFetch, getCsrfToken } from './lib/apiClient';
+import { ApiClientError } from './lib/apiErrors';
 import { AfgAuthWebView } from '@afg-ai/capacitor-auth-deeplink';
 import { useAlwaysLiveConnection } from './hooks/useAlwaysLiveConnection';
 
@@ -44,6 +45,7 @@ const LazyAfgVideoGenView = React.lazy(() => import('./components/afg/AfgVideoGe
 const LazyAfgToolsCenter = React.lazy(() => import('./components/afg/AfgToolsCenter').then((module) => ({ default: module.AfgToolsCenter })));
 const LazyAfgHistoryView = React.lazy(() => import('./components/afg/AfgHistoryView').then((module) => ({ default: module.AfgHistoryView })));
 const LazyAfgSettingsView = React.lazy(() => import('./components/afg/AfgSettingsView').then((module) => ({ default: module.AfgSettingsView })));
+const LazyAfgAdminConsole = React.lazy(() => import('./components/afg/AfgAdminConsole').then((module) => ({ default: module.AfgAdminConsole })));
 const LazyAfgTerminalView = React.lazy(() => import('./components/afg/AfgTerminalView').then((module) => ({ default: module.AfgTerminalView })));
 const LazyAfgOfflineView = React.lazy(() => import('./components/afg/AfgOfflineView').then((module) => ({ default: module.AfgOfflineView })));
 const LazyAfgJarvisView = React.lazy(() => import('./components/afg/AfgJarvisView').then((module) => ({ default: module.AfgJarvisView })));
@@ -487,11 +489,19 @@ export default function App() {
     const clientMessageId = messageId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(messageId)
       ? messageId
       : crypto.randomUUID();
-    await apiFetch('/api/conversations/' + encodeURIComponent(conversationId) + '/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getCsrfHeaders() },
-      body: JSON.stringify({ role, content: content.slice(0, 50_000), model: selectedModel || null, status, clientMessageId }),
-    });
+    try {
+      await apiFetch('/api/conversations/' + encodeURIComponent(conversationId) + '/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getCsrfHeaders() },
+        body: JSON.stringify({ role, content: content.slice(0, 50_000), model: selectedModel || null, status, clientMessageId }),
+      });
+    } catch (error) {
+      // HTTP 409 means the server already stores an authoritative row under
+      // this idempotency key (server-side persistence won the race). The
+      // message IS saved, so treat it as success instead of alarming the user.
+      if (error instanceof ApiClientError && error.status === 409) return;
+      throw error;
+    }
   };
 
   // Keyboard shortcuts
@@ -560,6 +570,19 @@ export default function App() {
       const assistantId = crypto.randomUUID();
       setMessages([...baseMessages, userMessage, { id: assistantId, role: 'assistant', content: appText.generatingImage, isStreaming: true, timestamp: Date.now() }]);
       setIsLoading(true);
+      // Phase 3 persistence: image-generation turns belong to the conversation
+      // history too; previously they were never saved server-side.
+      let imageConversationId: string | null = null;
+      if (user.email) {
+        try {
+          imageConversationId = await ensureServerConversation(text, baseMessages);
+          await persistServerMessage(imageConversationId, 'user', text, 'complete', userMessage.id);
+        } catch {
+          setProfileLoadError('Your message could not be saved to your account. Retry storage before sending.');
+          setIsLoading(false);
+          return;
+        }
+      }
       try {
         if (chosenModel.providerId !== '9router') throw new Error(appText.imageRoute);
         const csrf = getCsrfToken();
@@ -575,9 +598,17 @@ export default function App() {
         if (typeof imageUrl !== 'string' || !/^https:\/\//i.test(imageUrl)) throw new Error(appText.imageUrl);
         const resultText = '![Generated image](' + imageUrl + ')';
         setMessages(previous => previous.map(message => message.id === assistantId ? { ...message, content: resultText, isStreaming: false } : message));
+        if (imageConversationId) {
+          try { await persistServerMessage(imageConversationId, 'assistant', resultText, 'complete', assistantId); }
+          catch { console.warn('AFG_CONVERSATION_IMAGE_RESULT_SAVE_FAILED'); }
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Image generation failed.';
         setMessages(previous => previous.map(item => item.id === assistantId ? { ...item, content: message, isStreaming: false, isError: true, retryable: true } : item));
+        if (imageConversationId) {
+          try { await persistServerMessage(imageConversationId, 'assistant', message, 'failed', assistantId); }
+          catch { console.warn('AFG_CONVERSATION_IMAGE_FAILURE_SAVE_FAILED'); }
+        }
       } finally {
         setIsLoading(false);
       }
@@ -637,6 +668,7 @@ export default function App() {
 
     setAgentActivities([]);
     let fullContent = '';
+    let assistantPersistedByServer = false;
     let requestId = '';
     try {
       let streamCompleted = false;
@@ -660,6 +692,14 @@ export default function App() {
               plan_mode: planMode,
               permission_level: permissionLevel,
               dual_planning: dualPlanning && systemFeatures.dual_planning_enabled,
+              // Phase 3 server-side persistence contract: the server stores
+              // both turns itself, so a closed tab no longer loses the reply.
+              // Idempotency keys make the client-side fallback writes no-ops.
+              ...(persistedConversationId && userMessagePersisted ? {
+                conversationId: persistedConversationId,
+                clientMessageId: userMessage.id,
+                assistantClientMessageId: assistantId,
+              } : {}),
             }),
             signal: abortController.signal,
           });
@@ -683,6 +723,7 @@ export default function App() {
                   const activity: ChatToolActivity = { id: parsed.id, requestId: typeof parsed.requestId === 'string' ? parsed.requestId : requestId, name: String(parsed.name || 'tool'), label: parsed.label, detail: typeof parsed.detail === 'string' ? parsed.detail : undefined, url: typeof parsed.url === 'string' ? parsed.url : undefined, sources: activitySources, status: parsed.status as 'running'|'completed'|'failed', startedAt: Number(parsed.startedAt) || undefined, durationMs: Number.isFinite(Number(parsed.durationMs)) ? Number(parsed.durationMs) : undefined, timestamp: Number(parsed.timestamp) || Date.now() };
                   setAgentActivities(previous => { const index = previous.findIndex(item => item.id === activity.id); if (index >= 0) return previous.map((item,i) => i === index ? { ...item, ...activity, startedAt: item.startedAt || activity.startedAt } : item); return [...previous, activity].slice(-30); });
                 }
+                else if (parsed.type === 'persisted' && parsed.scope === 'assistant') { assistantPersistedByServer = true; }
                 else if (parsed.type === 'content' && typeof parsed.text === 'string') {
                   fullContent += parsed.text;
                   setMessages((previous) => previous.map((message) => message.id === assistantId ? { ...message, content: fullContent } : message));
@@ -713,7 +754,7 @@ export default function App() {
           if (!response.ok) console.warn('AFG_PRODUCTIVITY_SAVE_UNAVAILABLE', response.status);
         }).catch(() => console.warn('AFG_PRODUCTIVITY_SAVE_UNAVAILABLE'));
       }
-      if (persistedConversationId && userMessagePersisted && fullContent.trim()) {
+      if (persistedConversationId && userMessagePersisted && fullContent.trim() && !assistantPersistedByServer) {
         try { await persistServerMessage(persistedConversationId, 'assistant', fullContent, 'complete', assistantId); }
         catch { setProfileLoadError('The response was received but could not be saved. Keep this page open and export the conversation before refreshing.'); }
       }
@@ -725,7 +766,7 @@ export default function App() {
       if (abortController.signal.aborted) {
         const cancelledContent = fullContent.trim() || 'Generation cancelled.';
         setMessages(prev => prev.map(message => message.id === assistantId ? { ...message, content: cancelledContent, isStreaming: false, isError: true, isCancelled: true, retryable: true } : message));
-        if (persistedConversationId && userMessagePersisted) {
+        if (persistedConversationId && userMessagePersisted && !assistantPersistedByServer) {
           try { await persistServerMessage(persistedConversationId, 'assistant', cancelledContent, 'cancelled', assistantId); }
           catch { setProfileLoadError('The cancelled response could not be saved.'); }
         }
@@ -734,7 +775,7 @@ export default function App() {
         setMessages(prev => prev.map(m =>
           m.id === assistantId ? { ...m, content: failedContent, isStreaming: false, isError: true, retryable: true } : m
         ));
-        if (persistedConversationId && userMessagePersisted) {
+        if (persistedConversationId && userMessagePersisted && !assistantPersistedByServer) {
           try { await persistServerMessage(persistedConversationId, 'assistant', failedContent, 'failed', assistantId); }
           catch { console.warn('AFG_CONVERSATION_FAILED_MESSAGE_SAVE_FAILED'); }
         }
@@ -916,6 +957,15 @@ export default function App() {
         )}
 
         {currentTab === 'jarvis' && <LazyAfgJarvisView language={language} onOpenOfflineHub={() => setCurrentTab('offline-ai-hub')} />}
+        {currentTab === 'admin' && (
+          ['admin', 'superadmin'].includes(user.role || '') ? (
+            <LazyAfgAdminConsole language={language} />
+          ) : (
+            <div className="mx-auto max-w-md px-6 py-16 text-center">
+              <p className="text-sm text-slate-400">{appText.adminDenied}</p>
+            </div>
+          )
+        )}
         {currentTab === 'terminal' && <LazyAfgTerminalView language={language} />}
         {currentTab === 'offline-learning' && <LazyAfgOfflineView language={language} />}
 

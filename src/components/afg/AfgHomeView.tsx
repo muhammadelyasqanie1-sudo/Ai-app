@@ -333,7 +333,7 @@ export const AfgHomeView: React.FC<AfgHomeViewProps> = ({
               <div
                 key={idx}
                 onClick={() => onChangeTab(tool.id)}
-                className={`p-4 rounded-2xl bg-[#091126]/80 hover:bg-[#0d1838] border ${tool.borderColor} hover:scale-103 cursor-pointer transition-all shadow-[0_4px_15px_rgba(0,0,0,0.4)] group flex flex-col items-center sm:items-start text-center sm:text-left`}
+                className={`p-4 rounded-2xl bg-white/80 hover:bg-slate-50 dark:bg-[#091126]/80 dark:hover:bg-[#0d1838] border ${tool.borderColor} hover:scale-103 cursor-pointer transition-all shadow-[0_4px_15px_rgba(0,0,0,0.4)] group flex flex-col items-center sm:items-start text-center sm:text-left`}
               >
                 <div className={`w-12 h-12 rounded-2xl ${tool.bgColor} flex items-center justify-center ${tool.textColor} mb-3 group-hover:scale-110 transition-transform`}>
                   <Icon className="w-6 h-6" />
