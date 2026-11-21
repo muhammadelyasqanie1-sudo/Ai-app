@@ -140,6 +140,6 @@ Provider toggles, model configuration changes and fallback-chain updates now exe
 
 ### Milestones 6–7 — Database success signal and provider configuration clarity
 
-- `src/api/database.ts` now emits `SUCCESS SUPABASE_DATABASE_CONNECTED` only after a real successful `SELECT 1` through the configured pool. It emits once per process. This is source-reviewed but not live-connection verified.
+- `src/api/database.ts` now emits `SUCCESS DATABASE_CONNECTED host=<hostname>` only after a real successful `SELECT 1` through the configured pool. It emits once per process. This is source-reviewed but not live-connection verified.
 - `.env.example` no longer advertises implicit Gemini selection; provider setup is explicitly opt-in.
 - No database credentials were introduced, and no migration/deployment was performed.

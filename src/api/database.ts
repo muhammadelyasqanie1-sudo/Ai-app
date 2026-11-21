@@ -15,6 +15,16 @@ const databaseSslCa = process.env.DATABASE_SSL_CA?.replace(/\\n/g, '\n').trim();
 export const databaseConfigured = Boolean(configuredUrl);
 
 let databaseConnectionAnnounced = false;
+// Truthful connection banner: the log must reflect the actual configured host.
+// Never log the full URL (it can embed credentials); the hostname alone is safe.
+function databaseConnectionLabel(): string {
+  try {
+    const host = new URL(connectionString || '').hostname;
+    return host ? `SUCCESS DATABASE_CONNECTED host=${host}` : 'SUCCESS DATABASE_CONNECTED';
+  } catch {
+    return 'SUCCESS DATABASE_CONNECTED';
+  }
+}
 
 export const pool = connectionString
   ? new Pool({
@@ -42,7 +52,7 @@ export async function checkDatabase() {
   try {
     await pool.query('SELECT 1');
     if (!databaseConnectionAnnounced) {
-      console.info('SUCCESS SUPABASE_DATABASE_CONNECTED');
+      console.info(databaseConnectionLabel());
       databaseConnectionAnnounced = true;
     }
     const migrations = await migrationStatus(pool);

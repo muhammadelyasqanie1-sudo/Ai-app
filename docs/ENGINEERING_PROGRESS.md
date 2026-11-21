@@ -169,7 +169,7 @@
 
 ### Completed
 
-- The database health check emits `SUCCESS SUPABASE_DATABASE_CONNECTED` only after the configured PostgreSQL pool successfully executes `SELECT 1`.
+- The database health check emits `SUCCESS DATABASE_CONNECTED host=<hostname>` only after the configured PostgreSQL pool successfully executes `SELECT 1`.
 - The success signal is emitted once per server process, not merely because `DATABASE_URL` exists.
 - Failed health checks continue to return a generic connection failure and do not emit the success signal.
 
