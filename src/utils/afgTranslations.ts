@@ -1,4 +1,5 @@
 import { getCoreUi, getMoreCoreUi } from './localeUi';
+import { getToolsUi } from './localeToolsUi';
 import type { Language } from '../types/afg';
 
 const baseTranslations = {
@@ -335,6 +336,9 @@ const localized = (language: Language) => ({
   ...getCoreUi(language),
   ...getMoreCoreUi(language),
   ...(primaryLanguageOverrides[language as 'pashto' | 'arabic' | 'persian'] || {}),
+  // Secondary-locale completion (returns {} for the primary languages and
+  // for english, so existing fully translated dictionaries are untouched).
+  ...getToolsUi(language),
 }) as typeof baseTranslations.english;
 
 export const translations = {
