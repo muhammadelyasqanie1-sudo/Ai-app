@@ -11,21 +11,58 @@ and honestly reported.
 
 | Commit | Summary |
 |---|---|
-| `68387726` | docs: repository audit 2026-11-22 and phased completion plan |
-| `169788bf` | fix(p0): rate-limit regex, shadowed admin route, browser tool abort, UI fixes, repo hygiene |
-| `8ac117df` | feat(voice): real STT/TTS/vision on the OpenAI-compatible adapter |
-| `d924180e` | feat(admin): in-app admin console consuming the real /api/admin surface |
-| `0f1a6da5` | chore(repo): remove unreferenced aistudio assets, ignore generated android/ |
-| `b5797747` | fix(gitignore): anchor /android/ to repo root |
-| `4c956199` | feat(chat): server-side assistant message persistence (Phase 3) |
-| `b8aacdf7` | chore(repo): remove verified-dead mock UI code (audit P0-14 / P1-10) |
-| `41466f8b` | ci: restore broken main triggers, add PostgreSQL integration and ClamAV media jobs |
-| `ab6fc573` | build(deploy): production Dockerfile, Render blueprint and verified boot test |
-| `2ae6caa8` | feat(image): real generateImage/editImage on the OpenAI-compatible adapter |
-| `959de4e6` | chore(db): migration ledger policy, duplicate-number guard, 9999 truth |
-| `80c0fbb2` | docs: Phase 3 execution status, corrected audit claims, honest verification list |
-| `06ae1b33` | chore(repo): ignore regenerated aistudio scratch assets |
-| `1d953de9` | fix(ui): light theme support for AFG tools, chat, history and home views |
+| `5c27f7de` | docs: repository audit 2026-11-22 and phased completion plan |
+| `7dc6ab76` | fix(p0): rate-limit regex, shadowed admin route, browser tool abort, voice-dead-path groundwork, UI fixes, repo hygiene |
+| `41dd10d9` | feat(voice): real STT/TTS/vision on the OpenAI-compatible adapter |
+| `9b25fac6` | feat(admin): in-app admin console consuming the real /api/admin surface |
+| `c51ce5e1` | chore(repo): remove unreferenced aistudio assets, ignore generated android/ |
+| `af8b0a7b` | fix(gitignore): anchor /android/ to repo root |
+| `997f9f9b` | feat(chat): server-side assistant message persistence (Phase 3) |
+| `83b6dbd1` | chore(repo): remove verified-dead mock UI code (audit P0-14 / P1-10) |
+| `6312c543` | ci: restore broken main triggers, add PostgreSQL integration and ClamAV media jobs |
+| `bf36fd2c` | build(deploy): production Dockerfile, Render blueprint and verified boot test |
+| `7da4a2de` | feat(image): real generateImage/editImage on the OpenAI-compatible adapter |
+| `00c8e748` | chore(db): migration ledger policy, duplicate-number guard, 9999 truth |
+| `38a2e7c6` | docs: Phase 3 execution status, corrected audit claims, honest verification list |
+| `f64d4dd9` | chore(repo): ignore regenerated aistudio scratch assets |
+| `9cad056f` | fix(ui): light theme support for AFG tools, chat, history and home views |
+| `99115f70` | fix(db): truthful database connection log reflects the real host |
+| `6b125806` | fix(dev): declare embedded-postgres so local verification scripts run on fresh clones |
+
+## Continuation run (2026-11-22, after session restore)
+
+1. **Branch lineage restored exactly.** The sandbox clone had been refreshed
+   and carried none of the 18 branch commits; the full series was re-applied
+   with `git am` from the preserved format-patches, so every commit above
+   exists again on `feature/afg-ai-complete-product` (hashes rewritten by the
+   replay — the table now lists the real hashes).
+2. **Off-mission parallel port removed from the branch.** A commit that added
+   `apps/web-next` (a complete Next.js 16 port) had been committed by an
+   autonomous session, contradicting the standing constraint "Do not switch
+   from Vite to Next.js. Do not create a parallel application." It was
+   dropped from the branch and preserved as a re-appliable format-patch in
+   the delivery folder (`webnext-port-preserved/`). The Vite app remains the
+   one and only application.
+3. **Truthful database connection log.** `checkDatabase()` logged
+   `SUCCESS SUPABASE_DATABASE_CONNECTED` for any PostgreSQL provider. It now
+   logs `SUCCESS DATABASE_CONNECTED host=<hostname>` — verified live through
+   the embedded-PG suites (commit `99115f70`).
+4. **The repo's own local verification path was broken on fresh clones.**
+   `scripts/run-integration-tests.sh` and `scripts/test-runtime-boot.sh`
+   both `require('embedded-postgres')` without declaring it. Fixed by
+   declaring the devDependency and regenerating the lockfile (commit
+   `6b125806`); all three integration suites and the boot verification were
+   then run through the canonical scripts.
+5. **Disposable-database semantics documented.** Reusing a test database
+   across runs accumulates login rate-limit rows (HTTP 429) and diverges from
+   CI's fresh service container; the integration suites assume a fresh
+   database per run, which the canonical scripts provide via a fresh
+   `/tmp/afg-pgdata` cluster.
+6. **ClamAV remains an honest local blocker.** The media-engine suite
+   fail-closes with a precise setup message when `AFG_CLAMSCAN_PATH` is
+   absent; a user-space ClamAV install was attempted (micromamba/conda-forge)
+   and is not solvable in this sandbox, so the suite runs only in the
+   dedicated CI job. Documented, not faked.
 
 ## Phase 3 (2026-11-22, this run)
 
@@ -180,20 +217,20 @@ and honestly reported.
 
 - ~~Assistant messages are still persisted client-side~~ CLOSED in Phase 3:
   the chat handler stores both turns server-side with idempotency keys and
-  the `persisted` SSE event (commit `4c956199`).
+  the `persisted` SSE event (commit `997f9f9b`).
 - ~~`src/workspace/*` mock prototype~~ REMOVED after verification in Phase 3
-  (commit `b8aacdf7`). `vendor/OpenJarvis` (83% of tracked files, incl. a
+  (commit `83b6dbd1`). `vendor/OpenJarvis` (83% of tracked files, incl. a
   77 MB macOS binary) is dead weight beyond the three authenticated proxy
   routes — kept, because those live routes reference it at runtime; pruning
   it needs a dedicated packaging decision.
 - ~~Image `generateImage`/`editImage` adapter methods unimplemented~~ CLOSED
-  in Phase 3 (commit `2ae6caa8`) on the OpenAI-compatible adapter; image
+  in Phase 3 (commit `7da4a2de`) on the OpenAI-compatible adapter; image
   generation flows through the real Media Studio job pipeline and now also
   through the studio capability snapshot.
 - ~~Duplicated migration numbers + the "dead" `9999` table~~ RESOLVED in
-  Phase 3 without destructive renames (commit `959de4e6`): duplicates frozen
+  Phase 3 without destructive renames (commit `00c8e748`): duplicates frozen
   and documented; 9999 verified live and kept.
-- Light theme coverage on AFG views CLOSED (commit `1d953de9`, 17 surfaces
+- Light theme coverage on AFG views CLOSED (commit `9cad056f`, 17 surfaces
   converted to the bg-white/dark: pattern; terminal and JARVIS stage stay
   intentionally always-dark). Deeper i18n for the 14 non-primary locales
   (~70% English-like) and multi-instance WebSocket/queue fan-out remain the
