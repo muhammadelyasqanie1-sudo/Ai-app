@@ -33,7 +33,8 @@
     "test:media-engine": "tsx scripts/test-media-engine.ts",
     "test:agent-engine": "tsx scripts/test-agent-engine.ts",
     "test:image-adapter": "tsx scripts/test-image-adapter.ts",
-    "test:multi-instance-fanout": "tsx scripts/test-multi-instance-fanout.ts"
+    "test:multi-instance-fanout": "tsx scripts/test-multi-instance-fanout.ts",
+    "test:provider-smoke": "tsx scripts/test-provider-smoke.ts"
   },
   "dependencies": {
     "@afg-ai/capacitor-auth-deeplink": "file:plugins/capacitor-auth-deeplink",

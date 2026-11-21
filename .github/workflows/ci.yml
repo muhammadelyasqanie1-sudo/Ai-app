@@ -35,6 +35,7 @@ jobs:
           npm run test:chat-stream
           npm run test:chat-persistence
           npm run test:image-adapter
+          npm run test:provider-smoke
           npm run test:migrations
 
   integration:
@@ -74,6 +75,8 @@ jobs:
         run: npm run test:agent-engine
       - name: Multi-instance live event fan-out
         run: npm run test:multi-instance-fanout
+      - name: Provider smoke tests (9Router, Ollama, OpenAI-compatible)
+        run: npm run test:provider-smoke
 
   media-engine:
     name: Media engine (ClamAV integration)
