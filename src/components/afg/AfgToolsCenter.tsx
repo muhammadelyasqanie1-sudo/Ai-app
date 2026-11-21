@@ -396,7 +396,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
               <div
                 key={tool.id}
                 onClick={() => setActiveSubTab(tool.id)}
-                className={`p-5 rounded-2xl bg-[#091129]/80 hover:bg-[#0e1b3d] border ${tool.border} hover:scale-103 cursor-pointer transition-all shadow-[0_4px_20px_rgba(0,0,0,0.4)] group flex flex-col justify-between`}
+                className={`p-5 rounded-2xl bg-white/80 hover:bg-slate-50 dark:bg-[#091129]/80 dark:hover:bg-[#0e1b3d] border ${tool.border} hover:scale-103 cursor-pointer transition-all shadow-[0_4px_20px_rgba(0,0,0,0.4)] group flex flex-col justify-between`}
               >
                 <div>
                   <div className={`w-12 h-12 rounded-2xl ${tool.bg} flex items-center justify-center ${tool.color} mb-3 group-hover:scale-110 transition-transform shadow-md`}>
@@ -429,7 +429,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
 
       {/* Tool 1: Interactive Translator (Text & Voice) */}
       {activeSubTab === 'translate' && (
-        <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-cyan-500/40 shadow-xl space-y-4">
+        <div className="p-4 sm:p-6 rounded-3xl bg-white/90 dark:bg-[#09122c]/90 border border-cyan-500/40 shadow-xl space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-cyan-900/40">
             <p className="text-xs text-amber-200">{toolText('ترجمه با مدل چت تأییدشده انجام می‌شود.','Translation uses the selected verified chat model.')}</p>
             <h2 className="text-base font-bold text-white flex items-center gap-2">
@@ -531,7 +531,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
 
       {/* Tool 2: Code Help & Generator */}
       {activeSubTab === 'code-help' && (
-        <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-cyan-500/40 shadow-xl space-y-4">
+        <div className="p-4 sm:p-6 rounded-3xl bg-white/90 dark:bg-[#09122c]/90 border border-cyan-500/40 shadow-xl space-y-4">
           <h2 className="text-base font-bold text-white flex items-center gap-2"><Code2 className="w-5 h-5 text-emerald-400" /><span>{t.toolCodeHelp}</span></h2>
           <label className="block text-xs text-slate-300">{toolText('نوع کار برنامه‌نویسی','Coding task')}
             <select value={codingTask} onChange={e=>setCodingTask(e.target.value)} className="mt-1 w-full rounded-xl bg-slate-900 border border-cyan-700/50 p-3 text-sm text-white">
@@ -544,7 +544,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
         </div>
       )}
       {activeSubTab === 'research' && (
-        <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-blue-500/40 shadow-xl space-y-4">
+        <div className="p-4 sm:p-6 rounded-3xl bg-white/90 dark:bg-[#09122c]/90 border border-blue-500/40 shadow-xl space-y-4">
           <h2 className="text-base font-bold text-white">{toolText('پژوهش وب با منابع واقعی','Web Research with real sources')}</h2>
           <p className="text-xs text-slate-400">{toolText('جستجو فقط با TAVILY_API_KEY تنظیم‌شده در سرور کار می‌کند. لینک‌ها عیناً از نتیجه جستجو گرفته می‌شوند.','Search runs only when TAVILY_API_KEY is configured on the server. Source URLs are passed through from the search response.')}</p>
           <div className="flex gap-2"><input value={researchQuery} onChange={(e) => setResearchQuery(e.target.value)} maxLength={500} placeholder={toolText('موضوع پژوهش را بنویسید...','What would you like to research?')} className="min-w-0 flex-1 rounded-xl bg-slate-900 border border-blue-900/50 p-3 text-sm text-white" /><button onClick={handleResearch} disabled={!researchQuery.trim() || researchLoading} className="rounded-xl bg-blue-500 px-4 text-sm font-bold text-white disabled:opacity-40">{researchLoading ? '…' : (toolText('جستجو','Search'))}</button></div>
@@ -554,7 +554,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
       )}
 
       {activeSubTab === 'writing-studio' && (
-        <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-fuchsia-500/40 shadow-xl space-y-4">
+        <div className="p-4 sm:p-6 rounded-3xl bg-white/90 dark:bg-[#09122c]/90 border border-fuchsia-500/40 shadow-xl space-y-4">
           <h2 className="text-base font-bold text-white flex items-center gap-2"><FileText className="w-5 h-5 text-fuchsia-400" />{cardText.writing}</h2>
           <textarea rows={5} value={writingPrompt} onChange={(e) => setWritingPrompt(e.target.value)} placeholder={toolText('موضوع، اطلاعات و خواسته‌های خود را بنویسید...','Describe what you want written and provide the key facts...')} className="w-full rounded-2xl bg-slate-900 border border-fuchsia-900/50 p-3 text-sm text-white" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -570,7 +570,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
 
       {/* Tool 3: Smart Calculator & Currency Converter */}
       {activeSubTab === 'calculator' && (
-        <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-purple-500/40 shadow-xl space-y-4">
+        <div className="p-4 sm:p-6 rounded-3xl bg-white/90 dark:bg-[#09122c]/90 border border-purple-500/40 shadow-xl space-y-4">
           <h2 className="text-base font-bold text-white flex items-center gap-2">
             <Calculator className="w-5 h-5 text-purple-400" />
             <span>{toolText('محاسبه‌گر ساده','Basic Calculator')}</span>
@@ -651,7 +651,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
 
       {/* Tool 4: QR Code Generator & Scanner */}
       {activeSubTab === 'qr-scanner' && (
-        <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-cyan-500/40 shadow-xl space-y-4">
+        <div className="p-4 sm:p-6 rounded-3xl bg-white/90 dark:bg-[#09122c]/90 border border-cyan-500/40 shadow-xl space-y-4">
           <h2 className="text-base font-bold text-white flex items-center gap-2">
             <QrCode className="w-5 h-5 text-cyan-400" />
             <span>{toolText('تولیدکننده کد QR','QR Code Generator')}</span>
@@ -688,7 +688,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
 
       {/* Tool 5: PDF & Summarizer */}
       {(activeSubTab === 'pdf-tools' || activeSubTab === 'summarizer') && (
-        <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-rose-500/40 shadow-xl space-y-4">
+        <div className="p-4 sm:p-6 rounded-3xl bg-white/90 dark:bg-[#09122c]/90 border border-rose-500/40 shadow-xl space-y-4">
           <h2 className="text-base font-bold text-white flex items-center gap-2">
             <FileText className="w-5 h-5 text-rose-400" />
             <span>{activeSubTab === 'summarizer' ? t.toolSummarizer : t.toolPdf}</span>
@@ -734,7 +734,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
 
       {/* Tool 6: Voice Tools */}
       {activeSubTab === 'voice-tools' && (
-        <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-amber-500/40 shadow-xl space-y-4">
+        <div className="p-4 sm:p-6 rounded-3xl bg-white/90 dark:bg-[#09122c]/90 border border-amber-500/40 shadow-xl space-y-4">
           <h2 className="text-base font-bold text-white flex items-center gap-2"><Mic className="w-5 h-5 text-amber-400" /><span>{t.toolVoice}</span></h2>
           {!voiceEnabled && <p className="rounded-xl border border-amber-800/50 bg-amber-950/20 p-3 text-xs text-amber-200">{toolText('قابلیت‌های صوتی در تنظیمات حساب غیرفعال شده‌اند.','Voice features are disabled in your account settings.')}</p>}
           <label className="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" checked={voiceConversationMode} onChange={(e) => setVoiceConversationMode(e.target.checked)} disabled={!voiceSttAvailable} />{toolText('حالت مکالمه: متن تشخیص‌شده را خودکار به چت بفرست','Conversation mode: automatically send recognized speech to Chat')}</label>
@@ -763,7 +763,7 @@ export const AfgToolsCenter: React.FC<AfgToolsCenterProps> = ({ language, onRunT
 
       {/* Tool 7: File Tools */}
       {activeSubTab === 'file-tools' && (
-        <div className="p-4 sm:p-6 rounded-3xl bg-[#09122c]/90 border border-teal-500/40 shadow-xl space-y-4">
+        <div className="p-4 sm:p-6 rounded-3xl bg-white/90 dark:bg-[#09122c]/90 border border-teal-500/40 shadow-xl space-y-4">
           <h2 className="text-base font-bold text-white flex items-center gap-2">
             <FolderArchive className="w-5 h-5 text-teal-400" />
             <span>{t.toolFile}</span>

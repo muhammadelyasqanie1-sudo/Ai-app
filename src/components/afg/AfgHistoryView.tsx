@@ -266,7 +266,7 @@ export const AfgHistoryView: React.FC<AfgHistoryViewProps> = ({
             <div
               key={session.id}
               onClick={() => { void handleSelect(session); }}
-              className="p-4 rounded-2xl bg-[#09122c]/80 hover:bg-[#0e1b3d] border border-cyan-900/40 hover:border-cyan-500/50 cursor-pointer transition-all flex items-center justify-between gap-4 shadow-md group"
+              className="p-4 rounded-2xl bg-white/80 hover:bg-slate-50 dark:bg-[#09122c]/80 dark:hover:bg-[#0e1b3d] border border-cyan-200 dark:border-cyan-900/40 hover:border-cyan-500/50 cursor-pointer transition-all flex items-center justify-between gap-4 shadow-md group"
             >
               <div className="flex items-start gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 transition-transform">
