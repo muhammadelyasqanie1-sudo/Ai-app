@@ -1,0 +1,26 @@
+# Keep the build context small; nothing here is needed to build or run.
+.git
+.github
+node_modules
+dist
+android
+apps/admin-terminal
+apps/cli
+apps/web
+docs
+examples
+mini-services
+tests
+upload
+download
+vendor/OpenJarvis
+*.md
+!README.md
+.env
+.env.*
+!.env.example
+dev.log
+bun.lock
+tool-results
+.aistudio
+public/assets

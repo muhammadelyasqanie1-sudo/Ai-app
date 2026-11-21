@@ -1,0 +1,65 @@
+# Render Blueprint for AFG AI (web service + managed PostgreSQL).
+#
+# Deploy: push this branch to GitHub, then "New -> Blueprint" in Render and
+# point it at the repository. Fill in every sync:false value in the Render
+# dashboard; nothing is hardcoded here. See .env.example for what each
+# variable does and docs/DEPLOYMENT.md for the full guide.
+
+databases:
+  - name: afg-ai-db
+    databaseName: afgai
+    user: afgai
+    plan: basic-1gb
+    # Render managed PostgreSQL enforces TLS automatically, which matches the
+    # server-side DATABASE_TLS policy (no DATABASE_SSL override needed).
+
+services:
+  - type: web
+    name: afg-ai
+    runtime: node
+    plan: starter
+    region: frankfurt
+    healthCheckPath: /api/health
+    autoDeploy: true
+    buildCommand: npm ci --include=dev --no-audit --no-fund && npm run build
+    preDeployCommand: npm run db:migrate
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: afg-ai-db
+          property: connectionString
+      # Provider credential vault master key (AES-256-GCM). Generated once and
+      # kept stable; losing it makes stored provider keys unreadable.
+      - key: PROVIDER_KEYS_MASTER_KEY
+        generateValue: true
+      # One-time admin bootstrap token; the bootstrap endpoint closes itself
+      # after the first active admin exists.
+      - key: AFG_ADMIN_BOOTSTRAP_TOKEN
+        sync: false
+      # Canonical HTTPS origin (also used for OAuth redirects and HSTS).
+      # Example: https://afg-ai.onrender.com
+      - key: APP_ORIGIN
+        sync: false
+      # Public API base for native APK builds; blank means same-origin web.
+      # Must be set BEFORE the first build if a native app depends on it
+      # (Vite inlines it into the bundle at build time).
+      - key: VITE_API_BASE_URL
+        sync: false
+      # Private persistent disk for the quarantined upload library.
+      # Required for the file library; uploads stay quarantined until a
+      # malware scanner is configured (fail-closed by design).
+      - key: AFG_UPLOAD_QUARANTINE_DIR
+        value: /var/data/afg-uploads
+      # Optional integrations — leave unset until you actually have them:
+      # NINEROUTER_BASE_URL / NINEROUTER_API_KEY (self-hosted 9Router gateway)
+      # APINEX_API_KEYS (JSON array), GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET,
+      # RESEND_API_KEY/EMAIL_FROM, TAVILY_API_KEY, OPENJARVIS_INTERNAL_URL/
+      # OPENJARVIS_API_KEY, OLLAMA_BASE_URL (loopback only).
+      # All secrets stay server-side; never configure them as VITE_* variables.
+    disk:
+      name: afg-uploads
+      mountPath: /var/data
+      sizeGB: 1
