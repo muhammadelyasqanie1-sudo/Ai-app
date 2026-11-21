@@ -63,6 +63,14 @@ and honestly reported.
    absent; a user-space ClamAV install was attempted (micromamba/conda-forge)
    and is not solvable in this sandbox, so the suite runs only in the
    dedicated CI job. Documented, not faked.
+7. **Persian dictionary completed (69 keys translated).** Measured per-key
+   depth (previously estimated as "~70% English-like") showed persian carried
+   70/113 English copies while dari, pashto and arabic were fully translated.
+   All 69 untranslated keys now have real fa-IR translations via the primary
+   overrides pattern (`c3744eb8`); post-fix measurement: 1/113 identical
+   (brand name only). The four primary mission languages + arabic are now
+   fully translated; the 14 secondary locales still carry 40-43 English
+   copies each and remain the largest open item.
 
 ## Phase 3 (2026-11-22, this run)
 
@@ -232,8 +240,10 @@ and honestly reported.
   and documented; 9999 verified live and kept.
 - Light theme coverage on AFG views CLOSED (commit `9cad056f`, 17 surfaces
   converted to the bg-white/dark: pattern; terminal and JARVIS stage stay
-  intentionally always-dark). Deeper i18n for the 14 non-primary locales
-  (~70% English-like) and multi-instance WebSocket/queue fan-out remain the
+  intentionally always-dark). Secondary-locale i18n depth is now precisely
+  measured (each of the 14 non-primary locales still has 40-43 of 113 keys
+  as English copies; primary languages + arabic are fully translated) and
+  multi-instance WebSocket/queue fan-out remain the
   largest open items (3-5 days each per the completion plan).
 - Provider smoke tests, Android APK and Windows packaging verification need
   real provider keys / CI runners (their workflows exist and are wired).

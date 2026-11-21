@@ -37,7 +37,10 @@ framework, without parallel applications, and without faking any state.
 
 ## Remaining work (ranked, from the completion plan)
 
-1. Deep i18n for the 14 non-primary locales (~70% English-like content) — largest open item.
+1. Secondary-locale i18n — measured: each of the 14 non-primary locales still
+   carries 40-43 of 113 keys as English copies; the four primary mission
+   languages (en, dari, pashto, persian) plus arabic are fully translated
+   (persian completed this run, commit `c3744eb8`).
 2. Multi-instance WebSocket/queue fan-out (3-5 days) — single-instance live state today.
 3. `vendor/OpenJarvis` pruning decision (83% of tracked files; three live proxy routes depend on it).
 4. Provider smoke tests with real NINEROUTER/APINEX/OPENAI_COMPAT keys.
