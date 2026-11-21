@@ -26,7 +26,12 @@
     "test:core-state": "tsx scripts/test-core-state.ts",
     "test:offline-download": "tsx scripts/test-offline-download.ts",
     "test:osint": "tsx scripts/test-osint-engine.ts",
-    "test:chat-persistence": "tsx scripts/test-chat-persistence.ts"
+    "test:chat-persistence": "tsx scripts/test-chat-persistence.ts",
+    "test:chat-stream": "tsx scripts/test-chat-stream.ts",
+    "test:conversation-isolation": "tsx scripts/test-conversation-isolation.ts",
+    "test:chat-persistence-integration": "tsx scripts/test-chat-persistence-integration.ts",
+    "test:media-engine": "tsx scripts/test-media-engine.ts",
+    "test:agent-engine": "tsx scripts/test-agent-engine.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
