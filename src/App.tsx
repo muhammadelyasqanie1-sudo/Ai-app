@@ -44,6 +44,7 @@ const LazyAfgVideoGenView = React.lazy(() => import('./components/afg/AfgVideoGe
 const LazyAfgToolsCenter = React.lazy(() => import('./components/afg/AfgToolsCenter').then((module) => ({ default: module.AfgToolsCenter })));
 const LazyAfgHistoryView = React.lazy(() => import('./components/afg/AfgHistoryView').then((module) => ({ default: module.AfgHistoryView })));
 const LazyAfgSettingsView = React.lazy(() => import('./components/afg/AfgSettingsView').then((module) => ({ default: module.AfgSettingsView })));
+const LazyAfgAdminConsole = React.lazy(() => import('./components/afg/AfgAdminConsole').then((module) => ({ default: module.AfgAdminConsole })));
 const LazyAfgTerminalView = React.lazy(() => import('./components/afg/AfgTerminalView').then((module) => ({ default: module.AfgTerminalView })));
 const LazyAfgOfflineView = React.lazy(() => import('./components/afg/AfgOfflineView').then((module) => ({ default: module.AfgOfflineView })));
 const LazyAfgJarvisView = React.lazy(() => import('./components/afg/AfgJarvisView').then((module) => ({ default: module.AfgJarvisView })));
@@ -916,6 +917,15 @@ export default function App() {
         )}
 
         {currentTab === 'jarvis' && <LazyAfgJarvisView language={language} onOpenOfflineHub={() => setCurrentTab('offline-ai-hub')} />}
+        {currentTab === 'admin' && (
+          ['admin', 'superadmin'].includes(user.role || '') ? (
+            <LazyAfgAdminConsole language={language} />
+          ) : (
+            <div className="mx-auto max-w-md px-6 py-16 text-center">
+              <p className="text-sm text-slate-400">{appText.adminDenied}</p>
+            </div>
+          )
+        )}
         {currentTab === 'terminal' && <LazyAfgTerminalView language={language} />}
         {currentTab === 'offline-learning' && <LazyAfgOfflineView language={language} />}
 

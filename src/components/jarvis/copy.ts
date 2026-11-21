@@ -16,6 +16,7 @@ export const english = {
   history: "Activity History",
   settings: "Settings",
   "offline-models": "Local Models",
+  admin: "Admin Console",
 };
 const nav: Partial<Record<Language, Partial<typeof english>>> = {
   dari: {
@@ -35,6 +36,7 @@ const nav: Partial<Record<Language, Partial<typeof english>>> = {
     history: "تاریخچه",
     settings: "تنظیمات",
     "offline-models": "مدل‌های محلی",
+    admin: "کنسول مدیریت",
   },
   persian: {
     home: "نمای کلی",
@@ -53,6 +55,7 @@ const nav: Partial<Record<Language, Partial<typeof english>>> = {
     history: "تاریخچه",
     settings: "تنظیمات",
     "offline-models": "مدل‌های محلی",
+    admin: "کنسول مدیریت",
   },
   pashto: {
     home: "کتنه",
@@ -71,6 +74,7 @@ const nav: Partial<Record<Language, Partial<typeof english>>> = {
     history: "تاریخچه",
     settings: "تنظیمات",
     "offline-models": "محلي ماډلونه",
+    admin: "د مدیریت کنسول",
   },
   arabic: {
     home: "نظرة عامة",
@@ -89,6 +93,7 @@ const nav: Partial<Record<Language, Partial<typeof english>>> = {
     history: "السجل",
     settings: "الإعدادات",
     "offline-models": "النماذج المحلية",
+    admin: "لوحة المسؤول",
   },
 };
 export function navigationCopy(language: Language) {

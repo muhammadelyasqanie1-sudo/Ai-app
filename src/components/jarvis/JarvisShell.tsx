@@ -31,6 +31,7 @@ import {
   Plus,
   Search,
   Settings2,
+  Shield,
   ShieldCheck,
   Sparkles,
   Square,
@@ -116,6 +117,7 @@ const navItems = [
   ["tasks", ListTodo],
   ["history", Activity],
 ] as const;
+const adminNavItems = [["admin", Shield]] as const;
 const localTabs = [
   "home",
   "tasks",
@@ -511,6 +513,18 @@ export function JarvisShell(p: Props) {
               </button>
             </React.Fragment>
           ))}
+          {["admin", "superadmin"].includes(p.user.role || "") &&
+            adminNavItems.map(([id, Icon]) => (
+              <button
+                key={id}
+                aria-current={p.tab === id ? "page" : undefined}
+                className={p.tab === id ? "active" : ""}
+                onClick={() => go(id as TabType)}
+              >
+                <Icon size={17} />
+                <span>{labels[id]}</span>
+              </button>
+            ))}
         </nav>
         <div className="j-sidebar-footer">
           <button className="j-local-link" onClick={() => go("offline-models")}>
