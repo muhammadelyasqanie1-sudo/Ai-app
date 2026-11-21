@@ -61,7 +61,12 @@ export async function compatibleMedia(
   const model = request.model!;
   if (request.type === "image_generate") {
     route = "/images/generations";
-    body = JSON.stringify({ model, prompt: request.prompt });
+    body = JSON.stringify({
+      model,
+      prompt: request.prompt,
+      ...(request.parameters.size ? { size: request.parameters.size } : {}),
+      ...(request.parameters.quality ? { quality: request.parameters.quality } : {}),
+    });
   } else if (request.type === "image_edit") {
     route = "/images/edits";
     const form = new FormData();
@@ -72,6 +77,13 @@ export async function compatibleMedia(
       new Blob([new Uint8Array(inputs[0].bytes)], { type: inputs[0].mime }),
       inputs[0].name,
     );
+    if (inputs[1]) {
+      form.set(
+        "mask",
+        new Blob([new Uint8Array(inputs[1].bytes)], { type: inputs[1].mime }),
+        inputs[1].name,
+      );
+    }
     body = form;
     headers = config.apiKey ? { Authorization: "Bearer " + config.apiKey } : {};
   } else if (request.type === "speech_recognize") {
