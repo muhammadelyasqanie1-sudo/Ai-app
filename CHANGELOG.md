@@ -23,6 +23,9 @@ and honestly reported.
 | `ab6fc573` | build(deploy): production Dockerfile, Render blueprint and verified boot test |
 | `2ae6caa8` | feat(image): real generateImage/editImage on the OpenAI-compatible adapter |
 | `959de4e6` | chore(db): migration ledger policy, duplicate-number guard, 9999 truth |
+| `80c0fbb2` | docs: Phase 3 execution status, corrected audit claims, honest verification list |
+| `06ae1b33` | chore(repo): ignore regenerated aistudio scratch assets |
+| `1d953de9` | fix(ui): light theme support for AFG tools, chat, history and home views |
 
 ## Phase 3 (2026-11-22, this run)
 
@@ -190,8 +193,10 @@ and honestly reported.
 - ~~Duplicated migration numbers + the "dead" `9999` table~~ RESOLVED in
   Phase 3 without destructive renames (commit `959de4e6`): duplicates frozen
   and documented; 9999 verified live and kept.
-- Light theme coverage on AFG views, deeper i18n coverage for the 14
-  non-primary locales, and multi-instance WebSocket/queue fan-out remain
-  open work.
+- Light theme coverage on AFG views CLOSED (commit `1d953de9`, 17 surfaces
+  converted to the bg-white/dark: pattern; terminal and JARVIS stage stay
+  intentionally always-dark). Deeper i18n for the 14 non-primary locales
+  (~70% English-like) and multi-instance WebSocket/queue fan-out remain the
+  largest open items (3-5 days each per the completion plan).
 - Provider smoke tests, Android APK and Windows packaging verification need
   real provider keys / CI runners (their workflows exist and are wired).
