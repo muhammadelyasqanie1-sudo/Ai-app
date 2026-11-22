@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @CapacitorPlugin(name = "AFGOfflineModels")
+// Rebuild trigger: verify latest main APK after local GGUF picker fix.
 public class AFGOfflineModelsPlugin extends Plugin {
     private static final String PREFS = "afg_ai_offline_downloads";
     private static final String PREFIX = "download_";
