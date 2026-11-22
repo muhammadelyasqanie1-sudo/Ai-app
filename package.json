@@ -35,6 +35,7 @@
     "test:image-adapter": "tsx scripts/test-image-adapter.ts",
     "test:multi-instance-fanout": "tsx scripts/test-multi-instance-fanout.ts",
     "test:provider-smoke": "tsx scripts/test-provider-smoke.ts",
+    "test:migrations": "tsx scripts/test-migrations.ts",
     "check:clamav": "tsx scripts/check-clamav.ts",
     "setup:clamav": "bash scripts/setup-clamav.sh"
   },

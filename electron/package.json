@@ -1,0 +1,9 @@
+{
+  "name": "afg-ai-desktop",
+  "productName": "AFG AI",
+  "version": "1.0.0",
+  "description": "AFG AI desktop shell",
+  "author": "AFG AI",
+  "private": true,
+  "main": "main.cjs"
+}

@@ -1,10 +1,12 @@
 appId: ai.afg.desktop
 productName: AFG AI
 asar: true
+electronVersion: 22.3.27
 directories:
+  app: electron
   output: release
 files:
-  - electron/main.cjs
+  - main.cjs
   - package.json
 win:
   target:
