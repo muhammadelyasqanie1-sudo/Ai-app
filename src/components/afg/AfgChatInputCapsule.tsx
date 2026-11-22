@@ -293,7 +293,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
 
       {/* File selection stays disabled until a verified upload endpoint is configured. */}
       {isMenuOpen && (
-        <div ref={menuRef} className="absolute -top-24 right-4 z-50 w-72 rounded-2xl bg-[#091126]/95 border border-amber-500/40 p-4 shadow-xl">
+        <div ref={menuRef} className="absolute -top-24 right-4 z-50 w-72 rounded-2xl bg-white/95 dark:bg-[#091126]/95 border border-amber-500/40 p-4 shadow-xl">
           <p className="text-xs leading-6 text-amber-100">
             {c.uploads}
           </p>
@@ -346,7 +346,7 @@ export const AfgChatInputCapsule: React.FC<AfgChatInputCapsuleProps> = ({
       </div>
 
       {/* The Signature AFG AI Capsule Input Container (Matching Screenshot 1) */}
-      <div className="relative flex items-center gap-2 sm:gap-3 p-1.5 sm:p-2 rounded-full bg-[#08112b]/90 border border-cyan-500/40 backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.6),0_0_20px_rgba(0,229,255,0.18)] focus-within:border-cyan-400 focus-within:shadow-[0_0_25px_rgba(0,229,255,0.35)] transition-all">
+      <div className="relative flex items-center gap-2 sm:gap-3 p-1.5 sm:p-2 rounded-full bg-white/90 dark:bg-[#08112b]/90 border border-cyan-500/40 backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.6),0_0_20px_rgba(0,229,255,0.18)] focus-within:border-cyan-400 focus-within:shadow-[0_0_25px_rgba(0,229,255,0.35)] transition-all">
         
         {/* Big '+' Attachment Button (Left in LTR, Right in RTL or consistent with Screenshot 1) */}
         <button

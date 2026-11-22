@@ -33,7 +33,7 @@ This document records what the repository actually contains. Source presence is 
 | Area | Current status | Evidence and limitations |
 |---|---|---|
 | PostgreSQL integration | IMPLEMENTED BUT NOT VERIFIED | Server uses `DATABASE_URL` with `pg`. Supabase PostgreSQL TLS is now enabled by default for `.supabase.co` and `.supabase.com` hosts when `DATABASE_SSL` is unset. Regression tests for TLS policy passed in PR #10 CI. |
-| Supabase live connection | BLOCKED BY EXTERNAL REQUIREMENT | No database credential/connection was supplied to this editing session. The `SUCCESS SUPABASE_DATABASE_CONNECTED` log is emitted only after a real successful `SELECT 1`, but that live path was not exercised here. |
+| Supabase live connection | BLOCKED BY EXTERNAL REQUIREMENT | No database credential/connection was supplied to this editing session. The `SUCCESS DATABASE_CONNECTED host=<hostname>` log (hostname-aware since 2026-11-22) is emitted only after a real successful `SELECT 1`, but that live path was not exercised here. |
 | Database migrations | PARTIALLY IMPLEMENTED | Migration files 0000–0007 and a migration runner exist. No migration was run during this mission. Production schema state is not inferred from repository files. |
 | Render deployment | BLOCKED BY EXTERNAL REQUIREMENT | No Render deployment was triggered or verified in this mission. |
 | Provider credentials | BLOCKED BY EXTERNAL REQUIREMENT | Provider keys must be configured as server-side environment variables. No credentials were created, exposed, or invented. |

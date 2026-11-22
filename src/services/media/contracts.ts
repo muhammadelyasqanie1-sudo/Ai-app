@@ -28,6 +28,13 @@ export const mediaRequest = z
           .string()
           .regex(/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/)
           .optional(),
+        // OpenAI-compatible image generation: pixel dimensions and provider
+        // quality tier. Only forwarded when the caller supplies them.
+        size: z
+          .string()
+          .regex(/^\d{3,4}x\d{3,4}$/)
+          .optional(),
+        quality: z.string().trim().min(1).max(40).optional(),
       })
       .strict()
       .default({}),

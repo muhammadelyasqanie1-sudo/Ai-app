@@ -189,3 +189,24 @@ Apply with `npm run db:migrate` after taking a database backup. This is an addit
 ## Passive OSINT evidence graph
 
 Migration `0053_passive_osint_cases.sql` adds owner-scoped cases, entities, observations and graph edges, enables backend-only RLS and seeds the `osint` feature flag. Back up the database before applying with `npm run db:migrate`. All API queries are owner-scoped; no client-side or anonymous policy is added.
+
+## Migration numbering policy (2026-11-22 audit follow-up)
+
+The ledger in `schema_migrations` is keyed by the full filename and its SHA-256
+checksum. Renaming an already-applied migration therefore makes the renamed
+file re-run on existing installations and is forbidden. Eight historical
+number pairs share a number (0003, 0004, 0005, 0006, 0007, 0013, 0014, 0034);
+they are applied in lexical file order and stay untouched for compatibility
+with deployed databases.
+
+Rules for new migrations:
+1. Pick the next free number; never reuse an existing number, including the
+   eight legacy duplicate numbers.
+2. Never rename or edit an applied file (the migrate script rejects checksum
+   changes).
+3. `9999_settings_hub.sql` is intentionally last-named but is a live, required
+   migration: `system_config` is read and written by the admin API and the
+   9Router gateway. Do not delete it.
+
+`npm run test:migrations` reports duplicate numbers and ledger conflicts
+(checksum drift) as an early-warning check.

@@ -29,7 +29,7 @@ if ! curl --fail --location --silent --show-error \
   TMP_DIR="$(mktemp -d)"
   trap 'rm -rf "$TMP_DIR"' EXIT
   python -m pip install --disable-pip-version-check --quiet 'huggingface_hub[hf_xet]>=0.34'
-  HF_ENDPOINT="https://gethologram.ai" hf download Cactus-Compute/needle3 \
+  HF_ENDPOINT="https://gethologram.ai" python -m huggingface_hub.commands.huggingface_cli download Cactus-Compute/needle3 \
     android-arm64/libneedle.a android-arm64/needle.h \
     --repo-type model --revision "$REVISION" --local-dir "$TMP_DIR" --quiet
   cp "$TMP_DIR/android-arm64/libneedle.a" "$LIB"

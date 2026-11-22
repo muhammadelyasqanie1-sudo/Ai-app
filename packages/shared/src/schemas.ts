@@ -13,6 +13,13 @@ export const ChatRequestSchema = z.object({
   no_fallback: z.boolean().optional(),
   token_saver: z.boolean().optional(),
   context_compression: z.boolean().optional(),
+  // Optional server-side persistence contract (authenticated users only).
+  // When conversationId is supplied and owned by the caller, the server stores
+  // the final user message and the streamed assistant reply itself, so a
+  // disconnected client no longer loses the response.
+  conversationId: z.string().uuid().optional(),
+  clientMessageId: z.string().uuid().optional(),
+  assistantClientMessageId: z.string().uuid().optional(),
 }).passthrough();
 export type SharedChatRequest = z.infer<typeof ChatRequestSchema>;
 export const ApiErrorSchema = z.object({

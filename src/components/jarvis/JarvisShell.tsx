@@ -31,6 +31,7 @@ import {
   Plus,
   Search,
   Settings2,
+  Shield,
   ShieldCheck,
   Sparkles,
   Square,
@@ -116,6 +117,7 @@ const navItems = [
   ["tasks", ListTodo],
   ["history", Activity],
 ] as const;
+const adminNavItems = [["admin", Shield]] as const;
 const localTabs = [
   "home",
   "tasks",
@@ -259,12 +261,8 @@ export function JarvisShell(p: Props) {
   useEffect(() => {
     const shortcut = (e: KeyboardEvent) => {
       if (document.querySelector(".afg-experience-dialog[open]")) return;
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        p.onTab("home");
-        window.setTimeout(() => composer.current?.focus(), 50);
-      }
+      // Ctrl/⌘+K is owned by the app-level command palette (App.tsx); the shell
+      // must not capture it in the capture phase or the palette can never open.
       if (e.key === "Escape") {
         setDrawer(false);
         setNotice(false);
@@ -273,7 +271,7 @@ export function JarvisShell(p: Props) {
     };
     window.addEventListener("keydown", shortcut, true);
     return () => window.removeEventListener("keydown", shortcut, true);
-  }, [p.onTab]);
+  }, []);
   const voice = () => {
     if (listening) {
       recognition.current?.stop();
@@ -515,6 +513,18 @@ export function JarvisShell(p: Props) {
               </button>
             </React.Fragment>
           ))}
+          {["admin", "superadmin"].includes(p.user.role || "") &&
+            adminNavItems.map(([id, Icon]) => (
+              <button
+                key={id}
+                aria-current={p.tab === id ? "page" : undefined}
+                className={p.tab === id ? "active" : ""}
+                onClick={() => go(id as TabType)}
+              >
+                <Icon size={17} />
+                <span>{labels[id]}</span>
+              </button>
+            ))}
         </nav>
         <div className="j-sidebar-footer">
           <button className="j-local-link" onClick={() => go("offline-models")}>
