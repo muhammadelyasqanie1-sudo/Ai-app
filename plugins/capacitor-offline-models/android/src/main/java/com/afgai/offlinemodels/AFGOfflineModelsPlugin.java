@@ -8,7 +8,7 @@ import android.net.Uri;
 import android.os.Environment;
 import android.os.Build;
 import android.provider.OpenableColumns;
-import com.getcapacitor.ActivityResult;
+import androidx.activity.result.ActivityResult;
 import com.getcapacitor.annotation.ActivityCallback;
 import java.io.InputStream;
 import java.io.FileOutputStream;
