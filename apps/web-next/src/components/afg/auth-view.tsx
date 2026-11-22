@@ -254,7 +254,12 @@ export function AuthView({ onAuthed }: { onAuthed: () => void }) {
             className="w-full"
             disabled={busy !== null}
             title={googleEnabled ? t.auth.googleSignIn : t.auth.googleNotConfigured}
-            onClick={() => { window.location.href = "/api/auth/google-start"; }}
+            onClick={() => {
+              // Intentional full-page navigation: /api/auth/google-start is a server
+              // route that 302-redirects to Google's OAuth consent page.
+              // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+              window.location.href = "/api/auth/google-start";
+            }}
           >
             <Chrome className="h-4 w-4" />
             <span className="ms-2">{t.auth.googleSignIn}</span>

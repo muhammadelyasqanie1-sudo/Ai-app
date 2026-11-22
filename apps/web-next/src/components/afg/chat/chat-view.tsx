@@ -122,12 +122,23 @@ export function ChatView({
     }
   }, []);
 
-  useEffect(() => {
-    if (conversationId) loadConversation(conversationId);
-    else {
+  // Reset transient chat state when leaving a conversation. This is a render-time
+  // guard (react.dev/learn/you-might-not-need-an-effect) so no state is set
+  // synchronously inside an effect body.
+  const [prevConvId, setPrevConvId] = useState<string | null>(conversationId);
+  if (conversationId !== prevConvId) {
+    setPrevConvId(conversationId);
+    if (!conversationId) {
       setMessages([]);
       setConvTitle("");
     }
+  }
+
+  useEffect(() => {
+    if (!conversationId) return;
+    void (async () => {
+      await loadConversation(conversationId);
+    })();
   }, [conversationId, loadConversation]);
 
   // Auto-scroll
@@ -148,6 +159,34 @@ export function ChatView({
     onConversationCreated(res.conversation.id);
     return res.conversation.id;
   }, [conversationId, onConversationCreated]);
+
+  // ------------------------------------------------------------------
+  // TTS (server voice first, browser fallback) — declared before send()
+  // because send() speaks completed replies.
+  // ------------------------------------------------------------------
+  const speak = async (text: string) => {
+    try {
+      const res = await api.post<{ ok: boolean; audioBase64?: string; format?: string; error?: string }>("/api/voice", { text });
+      if (res.ok && res.audioBase64) {
+        const audio = new Audio(`data:audio/${res.format || "wav"};base64,${res.audioBase64}`);
+        audioRef.current = audio;
+        audio.play().catch(() => browserSpeak(text));
+        return;
+      }
+      browserSpeak(text);
+    } catch {
+      browserSpeak(text);
+    }
+  };
+
+  const browserSpeak = (text: string) => {
+    if (typeof speechSynthesis === "undefined") return;
+    speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = speechLang;
+    utter.rate = 1;
+    speechSynthesis.speak(utter);
+  };
 
   // ------------------------------------------------------------------
   // Send / stream
@@ -332,33 +371,6 @@ export function ChatView({
     } catch {
       toast({ title: t.tools.speechUnavailable });
     }
-  };
-
-  // ------------------------------------------------------------------
-  // TTS (server voice first, browser fallback)
-  // ------------------------------------------------------------------
-  const speak = async (text: string) => {
-    try {
-      const res = await api.post<{ ok: boolean; audioBase64?: string; format?: string; error?: string }>("/api/voice", { text });
-      if (res.ok && res.audioBase64) {
-        const audio = new Audio(`data:audio/${res.format || "wav"};base64,${res.audioBase64}`);
-        audioRef.current = audio;
-        audio.play().catch(() => browserSpeak(text));
-        return;
-      }
-      browserSpeak(text);
-    } catch {
-      browserSpeak(text);
-    }
-  };
-
-  const browserSpeak = (text: string) => {
-    if (typeof speechSynthesis === "undefined") return;
-    speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = speechLang;
-    utter.rate = 1;
-    speechSynthesis.speak(utter);
   };
 
   const stopSpeaking = () => {

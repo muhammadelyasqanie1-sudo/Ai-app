@@ -44,6 +44,13 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "off",
   },
 }, {
+  // Vendored shadcn/ui primitives (carousel, etc.): keep the upstream implementation
+  // as-is; the react-hooks v7 setState-in-effect advisory is addressed upstream.
+  files: ["src/components/ui/**"],
+  rules: {
+    "react-hooks/set-state-in-effect": "off",
+  },
+}, {
   ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills", "afg-ai-repo/**", "scripts/**", "download/**", "upload/**", "db/**"]
 }];
 

@@ -73,7 +73,11 @@ export function Sidebar({ activeId, onActivate, onCreated, listVersion, archiveM
     }
   }, [archiveMode, debouncedQuery]);
 
-  useEffect(() => { load(); }, [load, listVersion]);
+  useEffect(() => {
+    void (async () => {
+      await load();
+    })();
+  }, [load, listVersion]);
 
   const newChat = async () => {
     try {

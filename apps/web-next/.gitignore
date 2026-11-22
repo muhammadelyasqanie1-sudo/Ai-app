@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+build/
+next-env.d.ts
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Local env files (secrets never enter git)
+.env
+.env.local
+.env.*.local
+
+# Runtime logs from dev/start scripts (tee'd)
+dev.log
+server.log
+
+# Prisma local dev databases
+prisma/*.db
+prisma/*.db-journal

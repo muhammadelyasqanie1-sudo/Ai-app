@@ -259,9 +259,13 @@ function VoiceTab({ user, onSaved }: { user: SafeUser; onSaved: () => Promise<vo
   const [sttAvailable, setSttAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
-    setTtsAvailable(typeof speechSynthesis !== "undefined" && speechSynthesis.getVoices().length >= 0);
-    const W = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
-    setSttAvailable(!!(W.SpeechRecognition || W.webkitSpeechRecognition));
+    // Browser capability probe — deferred to a microtask so no state is set
+    // synchronously inside the effect body.
+    queueMicrotask(() => {
+      setTtsAvailable(typeof speechSynthesis !== "undefined" && speechSynthesis.getVoices().length >= 0);
+      const W = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
+      setSttAvailable(!!(W.SpeechRecognition || W.webkitSpeechRecognition));
+    });
   }, []);
 
   const save = async () => {
@@ -343,6 +347,10 @@ function AccountTab({ user }: { user: SafeUser }) {
       // Deleting the session server-side revokes all sessions except current is not
       // directly supported, so we re-sign-in is needed on other devices. Sign out here.
       await api.post("/api/auth/logout", {});
+      // Intentional full-page navigation: signing out must wipe every in-memory
+      // client state (caches, stores, open views) — a client-side route change
+      // would not be sufficient.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = "/";
     } catch {
       toast({ title: t.errors.generic, variant: "destructive" });

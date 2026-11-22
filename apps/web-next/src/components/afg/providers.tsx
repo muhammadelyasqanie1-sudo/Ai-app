@@ -79,22 +79,31 @@ export function AfgProviders({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refresh();
-    const stored = (localStorage.getItem("afg_locale") as Locale) || null;
-    if (stored && LOCALES.some((l) => l.id === stored)) setLocaleState(stored);
+    void (async () => {
+      await refresh();
+    })();
+    queueMicrotask(() => {
+      // Locale restore runs after mount so no state is set synchronously inside
+      // the effect body (hydration-safe: server rendered with the default).
+      const stored = (localStorage.getItem("afg_locale") as Locale) || null;
+      if (stored && LOCALES.some((l) => l.id === stored)) setLocaleState(stored);
+    });
     // PWA service worker (offline shell)
     if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
       navigator.serviceWorker.register("/sw.js").catch(() => undefined);
     }
   }, [refresh]);
 
-  // Apply user's saved locale once session loads (signed-in preference wins over localStorage)
-  useEffect(() => {
-    const u = bootstrap?.user;
-    if (u?.locale && LOCALES.some((l) => l.id === u.locale)) {
-      setLocaleState(u.locale as Locale);
+  // Apply user's saved locale once session loads (signed-in preference wins over
+  // localStorage). Render-time guard per react.dev/learn/you-might-not-need-an-effect.
+  const sessionLocale = bootstrap?.user?.locale;
+  const [prevSessionLocale, setPrevSessionLocale] = useState<string | undefined>(undefined);
+  if (sessionLocale !== prevSessionLocale) {
+    setPrevSessionLocale(sessionLocale);
+    if (sessionLocale && LOCALES.some((l) => l.id === sessionLocale)) {
+      setLocaleState(sessionLocale as Locale);
     }
-  }, [bootstrap?.user?.locale]);
+  }
 
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);

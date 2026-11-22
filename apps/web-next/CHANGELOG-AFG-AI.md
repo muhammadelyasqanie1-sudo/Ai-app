@@ -55,8 +55,13 @@ Complete product build: the original Vite/Express prototype was re-implemented a
 ### Tests
 - 18 automated tests (bun test): vault roundtrip + tamper rejection, scrypt, math engine (arithmetic, functions, injection rejection), CSV analysis, share-token forgery rejection, safe-user projection, DB-backed rate limiter, i18n parity + placeholder preservation
 
-### Verified (live browser session)
-Registration → admin bootstrap; streaming chat; web-search grounding with citations (Wikipedia/Britannica links); admin dashboard real stats; AFG Cloud health check → HEALTHY; Persian RTL rendering; light/dark themes; mobile 390px layout; lint + tsc clean.
+### Fixed — lint & release hygiene (2026-11-22)
+- eslint-plugin-react-hooks v7 (pinned by the new committed `bun.lock`) flagged 8 errors that the earlier "lint clean" claim missed: synchronous setState in effect bodies (chat-view, providers, sidebar, settings-view, use-mobile) and a `speak()` reference used before declaration in chat-view. All fixed with behavior-preserving patterns: render-time guards for prop-change adjustments (react.dev/learn/you-might-not-need-an-effect), explicit async boundaries for data loaders, microtask deferral for browser capability probes, and `useSyncExternalStore` for the mobile media query. The two `window.location.href` navigation warnings were confirmed intentional (OAuth start route; post-logout full reload) and are now documented in code.
+- Vendored shadcn/ui primitives (`src/components/ui/**`) keep the upstream implementation and carry a scoped eslint override.
+- Added `apps/web-next/.gitignore` (build output, local env files, dev logs, local SQLite) and committed `bun.lock` so future installs resolve the exact verified dependency set.
+
+### Verified (re-verification after merge, 2026-11-22)
+18/18 tests pass; `eslint .` → 0 problems; `tsc --noEmit` → clean; production `next build` succeeds with all 15 routes. The 2026-11-21 live browser verification of the previous build (streaming chat, citations, provider health=HEALTHY, Persian RTL, themes, mobile layout) remains recorded, but the lint fixes above were verified statically and by build only — the UI paths they touch (conversation reset, locale restore, voice probes, TTS) have not been re-verified in a live browser session in this pass.
 
 ### Known limitations (honest)
 - SQLite via Prisma: for multi-instance production, switch the Prisma datasource to PostgreSQL (schema is portable; `db:push` on Postgres).
