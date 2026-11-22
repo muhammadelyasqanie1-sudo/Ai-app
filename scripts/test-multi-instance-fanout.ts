@@ -126,7 +126,7 @@ async function waitForServer(name: string, port: number, timeoutMs = 60_000): Pr
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/health`);
+      const res = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(2_000) });
       if (res.ok) return;
     } catch { /* not up yet */ }
     await new Promise((r) => setTimeout(r, 500));
@@ -135,6 +135,32 @@ async function waitForServer(name: string, port: number, timeoutMs = 60_000): Pr
 }
 
 const children: ReturnType<typeof spawn>[] = [];
+
+/** Terminate a child and wait for its real exit; escalate to SIGKILL; release its pipes. */
+async function stopChild(child: ReturnType<typeof spawn>, graceMs = 5_000): Promise<void> {
+  if (child.exitCode === null && child.signalCode === null) {
+    const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+    child.kill('SIGTERM');
+    const timedOut = await Promise.race([
+      exited.then(() => false),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(true), graceMs)),
+    ]);
+    if (timedOut) {
+      child.kill('SIGKILL');
+      await Promise.race([exited, new Promise<void>((resolve) => setTimeout(resolve, 2_000))]);
+    }
+  }
+  child.stdout?.destroy();
+  child.stderr?.destroy();
+}
+
+// Watchdog: a hung step must fail the job loudly instead of idling until the CI timeout.
+// unref() so it never keeps a healthy process alive.
+setTimeout(() => {
+  console.error('FANOUT_TEST_WATCHDOG: test exceeded 240s; terminating instances and failing.');
+  for (const child of children) child.kill('SIGKILL');
+  process.exit(1);
+}, 240_000).unref();
 const adminId = randomUUID();
 const nonAdminId = randomUUID();
 
@@ -156,7 +182,10 @@ try {
 
   // Boot two real application instances on the same database.
   for (const [name, port] of [['A', PORT_A], ['B', PORT_B]] as const) {
-    const child = spawn('npx', ['tsx', 'server.ts'], {
+    // Spawn Node directly (not `npx tsx`): npx/tsx are wrapper processes, and
+    // signalling a wrapper leaves the real server running as an orphan that keeps
+    // the piped stdio open, so this test process could never exit.
+    const child = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
       cwd: process.cwd(),
       env: { ...process.env, PORT: String(port), DATABASE_URL: process.env.DATABASE_URL },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -188,6 +217,7 @@ try {
   const csrf = randomBytes(32).toString('hex');
   const mutation = await fetch(`http://127.0.0.1:${PORT_A}/api/admin/config/live.fanout.probe`, {
     method: 'PUT',
+    signal: AbortSignal.timeout(15_000),
     headers: {
       Cookie: `afg_session=${adminToken}; afg_csrf=${csrf}`,
       'X-CSRF-Token': csrf,
@@ -221,6 +251,7 @@ try {
 
   const guestMutation = await fetch(`http://127.0.0.1:${PORT_A}/api/admin/config/live.fanout.probe`, {
     method: 'PUT',
+    signal: AbortSignal.timeout(15_000),
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ value: { hacked: true } }),
   });
@@ -237,6 +268,7 @@ try {
   );
   const userMutation = await fetch(`http://127.0.0.1:${PORT_A}/api/admin/config/live.fanout.probe`, {
     method: 'PUT',
+    signal: AbortSignal.timeout(15_000),
     headers: {
       Cookie: `afg_session=${userToken}; afg_csrf=${csrf}`,
       'X-CSRF-Token': csrf,
@@ -249,11 +281,7 @@ try {
   clientA.close(); clientB.close();
   console.log('Multi-instance fan-out tests passed: cross-instance delivery, reconnect, guest/admin authorization.');
 } finally {
-  for (const child of children) {
-    child.kill('SIGTERM');
-  }
-  await new Promise((r) => setTimeout(r, 1000));
-  for (const child of children) if (child.exitCode === null) child.kill('SIGKILL');
+  await Promise.all(children.map((child) => stopChild(child)));
   await pool!.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [[adminId, nonAdminId]]).catch(() => {});
   await pool!.end();
 }
