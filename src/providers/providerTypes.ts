@@ -86,9 +86,17 @@ export interface ChatRequest {
   onModelSelected?: (providerId: string, modelId: string) => void | Promise<void>;
 }
 
+/** Provider-reported token usage for a completed chat stream, when the upstream exposes it. */
+export interface ChatUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+}
+
 export interface ChatChunk {
   content: string;
   toolCalls?: ChatToolCallDelta[];
+  /** Present when the provider reports final token usage; content is empty on usage-only chunks. */
+  usage?: ChatUsage;
 }
 
 export type ImageStyleId = 'realistic' | 'digital-art' | 'anime' | '3d' | 'logo' | 'wallpaper' | 'social';

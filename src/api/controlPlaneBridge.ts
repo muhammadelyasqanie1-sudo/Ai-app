@@ -13,6 +13,30 @@ function matchesSecret(candidate: string, expected: string): boolean {
   return timingSafeEqual(candidateDigest, expectedDigest);
 }
 
+
+/**
+ * Shared bearer-token gate for every /api/internal/9router/* handler.
+ *
+ * The bridge is a server-to-server credential: the 9Router control plane and
+ * AFG AI must both hold AFG_AI_9ROUTER_BRIDGE_TOKEN server-side. The
+ * x-9router-actor-* headers are attribution/permission scoping ONLY — they are
+ * client-supplied and must never be treated as authentication on their own.
+ */
+function assertBridgeToken(req: IncomingMessage, res: ServerResponse, extraBody: Record<string, unknown> = {}): boolean {
+  const expected = process.env.AFG_AI_9ROUTER_BRIDGE_TOKEN || '';
+  if (expected.length < 32) {
+    reply(res, 503, { ...extraBody, error: 'The private management bridge is not configured.' });
+    return false;
+  }
+  const authorization = req.headers.authorization || '';
+  const candidate = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!candidate || candidate.length > 512 || !matchesSecret(candidate, expected)) {
+    reply(res, 401, { ...extraBody, error: 'Unauthorized.' });
+    return false;
+  }
+  return true;
+}
+
 function reply(res: ServerResponse, status: number, body: Record<string, unknown>) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -42,6 +66,7 @@ function bridgeActorHas(actor: ReturnType<typeof readBridgeActor>, permission: s
 }
 
 async function handleUserList(req: IncomingMessage, res: ServerResponse) {
+  if (!assertBridgeToken(req, res)) return true;
   const actor = readBridgeActor(req);
   if (!actor) {
     reply(res, 401, { error: 'A valid control-plane actor is required.' });
@@ -61,6 +86,7 @@ async function handleUserList(req: IncomingMessage, res: ServerResponse) {
 }
 
 async function handleUserStatusUpdate(req: IncomingMessage, res: ServerResponse) {
+  if (!assertBridgeToken(req, res)) return true;
   const actor = readBridgeActor(req);
   if (!actor) {
     reply(res, 401, { error: 'A valid control-plane actor is required.' });
@@ -154,6 +180,7 @@ async function handleUserStatusUpdate(req: IncomingMessage, res: ServerResponse)
 
 
 async function handleSubscriptionsRead(req: IncomingMessage, res: ServerResponse) {
+  if (!assertBridgeToken(req, res)) return true;
   const actor = readBridgeActor(req);
   if (!actor) {
     reply(res, 401, { error: 'A valid control-plane actor is required.' });
@@ -182,6 +209,7 @@ async function handleSubscriptionsRead(req: IncomingMessage, res: ServerResponse
 }
 
 async function handleSubscriptionAssign(req: IncomingMessage, res: ServerResponse) {
+  if (!assertBridgeToken(req, res)) return true;
   const actor = readBridgeActor(req);
   if (!actor) {
     reply(res, 401, { error: 'A valid control-plane actor is required.' });
@@ -273,17 +301,7 @@ export async function handleControlPlaneBridgeApi(
     return true;
   }
 
-  const expected = process.env.AFG_AI_9ROUTER_BRIDGE_TOKEN || '';
-  if (expected.length < 32) {
-    reply(res, 503, { available: false, error: 'The private management bridge is not configured.' });
-    return true;
-  }
-  const authorization = req.headers.authorization || '';
-  const candidate = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
-  if (!candidate || candidate.length > 512 || !matchesSecret(candidate, expected)) {
-    reply(res, 401, { available: false, error: 'Unauthorized.' });
-    return true;
-  }
+  if (!assertBridgeToken(req, res, { available: false })) return true;
   if (!pool) {
     reply(res, 503, { available: false, error: 'AFG AI database is unavailable.' });
     return true;

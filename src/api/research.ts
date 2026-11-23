@@ -394,7 +394,7 @@ export async function handleResearchApi(req: IncomingMessage, res: ServerRespons
     return true;
   }
   if (activeSearches >= 3) {
-    reply(res, 503, { available: true, error: 'Research is busy. Please retry shortly.' }, requestId);
+    reply(res, 503, { available: false, error: 'Research is busy. Please retry shortly.' }, requestId);
     return true;
   }
   activeSearches += 1;

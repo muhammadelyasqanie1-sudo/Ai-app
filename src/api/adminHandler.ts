@@ -511,7 +511,13 @@ export async function handleAdminApi(req: IncomingMessage, res: ServerResponse, 
       if(unpricedRequests>0)alertItems.push({kind:'cost_incomplete',severity:'warning',message:'Some requests have no published pricing; displayed cost is a partial known-cost total.',count:unpricedRequests});
       for(const row of problemModels.rows)alertItems.push({kind:'problem_model',severity:'critical',message:'Model has more than 10 errors in the last five minutes: '+row.model_id,count:Number(row.errors)});
       sendAuthJson(res,200,{
-        usage:usage.rows,requests:requests.rows[0],users:users.rows,
+        usage:usage.rows,requests:requests.rows[0],
+        // AfgAdminConsole reads users.total/users.active/users.suspended as object fields.
+        users:{
+          total:Number(users.rows[0]?.total||0),
+          active:Number(users.rows[0]?.active||0),
+          suspended:Number(users.rows[0]?.suspended||0),
+        },
         dashboard:{
           activeUsersToday:Number(today.rows[0]?.active_request_users||0),aiRequestsToday:totalRequests,
           errorRatePercent:Number(errorRate.toFixed(2)),todayCostUsd:todayCost,

@@ -238,6 +238,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
   let usageModelId = '';
   let estimatedInputTokens = 0;
   let streamedOutputCharacters = 0;
+  let reportedPromptTokens: number | null = null;
+  let reportedCompletionTokens: number | null = null;
   const classifyError = (error: unknown): string => {
     if (timedOut || (error instanceof Error && error.name === 'TimeoutError')) return 'timeout';
     if (abortController.signal.aborted) return 'network';
@@ -255,8 +257,12 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
   };
   const persistUsage = async (status:'success'|'error'|'timeout') => {
     if(!pool)return;
-    const tokensIn=estimatedInputTokens;
-    const tokensOut=Math.ceil(streamedOutputCharacters/4);
+    // Prefer provider-reported token counts when the adapter surfaced them;
+    // otherwise fall back to the conservative character/4 estimate.
+    const hasReportedUsage=reportedPromptTokens!==null&&reportedCompletionTokens!==null;
+    const tokensIn=hasReportedUsage?Math.max(0,Math.round(reportedPromptTokens as number)):estimatedInputTokens;
+    const tokensOut=hasReportedUsage?Math.max(0,Math.round(reportedCompletionTokens as number)):Math.ceil(streamedOutputCharacters/4);
+    const tokenCountSource=hasReportedUsage?'reported':'estimated';
     const latency=Date.now()-startedAt;
     const [providerKey,modelKey]=usageProviderId && usageModelId ? [usageProviderId,usageModelId] : [null,null];
     try{
@@ -268,8 +274,8 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
         }
       }
       await pool.query(`INSERT INTO usage_records(user_id,model_id,provider_key,model_key,request_id,tokens_in,tokens_out,cost_usd,latency_ms,status,token_count_source)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'estimated')`,
-        [requestUserId,providerKey&&modelKey?providerKey+'::'+modelKey:null,providerKey,modelKey,id,tokensIn,tokensOut,cost,latency,status]);
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [requestUserId,providerKey&&modelKey?providerKey+'::'+modelKey:null,providerKey,modelKey,id,tokensIn,tokensOut,cost,latency,status,tokenCountSource]);
       if(providerKey)await pool.query(`UPDATE provider_keys k SET last_used_at=now() FROM providers p WHERE p.id=k.provider_id AND p.slug=$1 AND k.status='active'`,[providerKey]).catch(()=>{});
     }catch{console.warn('AFG_USAGE_RECORD_WRITE_FAILED',JSON.stringify({requestId:id}));}
   };
@@ -661,6 +667,11 @@ export async function handleChatApi(req: IncomingMessage, res: ServerResponse) {
       while (!completedNormally) {
         const toolCalls = new Map<number,{id:string;type:'function';function:{name:string;arguments:string}}>();
         for await (const chunk of prepared.stream) {
+          const reportedPrompt=Number(chunk.usage?.prompt_tokens),reportedCompletion=Number(chunk.usage?.completion_tokens);
+          if(chunk.usage&&Number.isFinite(reportedPrompt)&&Number.isFinite(reportedCompletion)){
+            reportedPromptTokens=Math.max(0,(reportedPromptTokens||0)+reportedPrompt);
+            reportedCompletionTokens=Math.max(0,(reportedCompletionTokens||0)+reportedCompletion);
+          }
           if (chunk.content) {
             emittedContent = true;
             streamedOutputCharacters += chunk.content.length;

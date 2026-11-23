@@ -29,7 +29,8 @@ export async function postChat(input: SharedChatRequest, signal?: AbortSignal): 
   if (!parsed.success) throw new TypeError('Invalid chat request payload.');
   return apiFetch('/api/chat', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    // Cookie-authenticated POST requests must include the matching double-submit CSRF token.
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
     body: JSON.stringify(parsed.data),
     signal,
   });

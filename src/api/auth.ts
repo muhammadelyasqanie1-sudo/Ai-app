@@ -1,10 +1,11 @@
-import { createHash, randomBytes, randomInt, scrypt as scryptCallback, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, randomBytes, randomInt, scrypt as scryptCallback, timingSafeEqual } from 'crypto';
 import { promisify } from 'util';
 import bcrypt from 'bcryptjs';
 import argon2 from 'argon2';
 import { z } from 'zod';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { pool } from './database.ts';
+import { redactSecrets } from '../security/redaction.ts';
 
 const scrypt = promisify(scryptCallback);
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -46,9 +47,36 @@ function parseAuthInput<T extends z.ZodTypeAny>(schema: T, body: Record<string, 
   return result.success ? result.data : null;
 }
 
+// Email-code pepper is resolved once at module load so every code hash uses the
+// same secret: AFG_EMAIL_CODE_PEPPER, then PROVIDER_KEYS_MASTER_KEY, then an
+// ephemeral process-lifetime fallback. The pepper value is never logged.
+const configuredAuthPepper = (process.env.AFG_EMAIL_CODE_PEPPER || '').trim() || (process.env.PROVIDER_KEYS_MASTER_KEY || '').trim();
+const authPepper = configuredAuthPepper || randomBytes(32).toString('hex');
+if (!configuredAuthPepper) {
+  console.warn('AFG_AUTH_PEPPER_EPHEMERAL_FALLBACK', JSON.stringify({
+    detail: 'AFG_EMAIL_CODE_PEPPER and PROVIDER_KEYS_MASTER_KEY are unset; an ephemeral pepper is active. Email verification and reset codes will not validate across process restarts.',
+  }));
+}
+
 function hashEmailCode(value: string): string {
-  const pepper = process.env.AFG_EMAIL_CODE_PEPPER || process.env.RESEND_API_KEY || '';
-  return createHash('sha256').update(pepper + ':' + value).digest('hex');
+  return createHmac('sha256', authPepper).update(value).digest('hex');
+}
+
+/**
+ * Uniform failure handling for the authentication endpoints. Malformed request
+ * bodies remain client errors (400); database, mail-delivery and other
+ * infrastructure faults return a generic 503 so internal error details never
+ * leak through the auth surface.
+ */
+function respondAuthFailure(res: ServerResponse, error: unknown, validationMessage: string): void {
+  const detail = error instanceof Error ? error.message : '';
+  const requestFault = error instanceof SyntaxError || detail.startsWith('Request body');
+  if (requestFault) {
+    sendAuthJson(res, 400, { error: validationMessage });
+    return;
+  }
+  console.error('AFG_AUTH_INFRASTRUCTURE_UNAVAILABLE', JSON.stringify({ detail: String(redactSecrets(detail || 'unknown_error')).slice(0, 300) }));
+  sendAuthJson(res, 503, { error: 'The authentication service is temporarily unavailable. Please try again shortly.' });
 }
 
 export async function recordAuthSecurityEvent(req: IncomingMessage, userId: string | null, eventType: string, severity = 'info'): Promise<void> {
@@ -286,6 +314,42 @@ async function isLoginRateLimited(req: IncomingMessage): Promise<boolean> {
   return current.count > LOGIN_MAX_ATTEMPTS;
 }
 
+// The whole bootstrap-admin endpoint is throttled to 5 attempts per hour per IP
+// (successful or not) using the shared distributed counter plus a conservative
+// in-process fallback for database outages.
+const bootstrapAttempts = new Map<string, { count: number; resetAt: number }>();
+const BOOTSTRAP_WINDOW_SECONDS = 60 * 60;
+const BOOTSTRAP_WINDOW_MS = BOOTSTRAP_WINDOW_SECONDS * 1000;
+const BOOTSTRAP_MAX_ATTEMPTS = 5;
+
+async function isBootstrapRateLimited(req: IncomingMessage): Promise<boolean> {
+  const address = (req as IncomingMessage & { ip?: string }).ip || req.socket.remoteAddress || 'unknown';
+  const key = 'bootstrap:' + createHash('sha256').update(address).digest('hex');
+  if (pool) {
+    try {
+      const result = await pool.query(
+        `INSERT INTO rate_limit_counters(scope_type,scope_key,window_start,request_count)
+         VALUES('auth_ip',$1,to_timestamp((floor(extract(epoch FROM now())/$2)*$2)::double precision),1)
+         ON CONFLICT(scope_type,scope_key,window_start)
+         DO UPDATE SET request_count=rate_limit_counters.request_count+1
+         RETURNING request_count`,
+        [key, BOOTSTRAP_WINDOW_SECONDS],
+      );
+      return Number(result.rows[0]?.request_count || 0) > BOOTSTRAP_MAX_ATTEMPTS;
+    } catch {
+      // Retain a conservative local fallback if the database limiter cannot be reached.
+    }
+  }
+  const now = Date.now();
+  const current = bootstrapAttempts.get(key);
+  if (!current || current.resetAt <= now) {
+    bootstrapAttempts.set(key, { count: 1, resetAt: now + BOOTSTRAP_WINDOW_MS });
+    return false;
+  }
+  current.count += 1;
+  return current.count > BOOTSTRAP_MAX_ATTEMPTS;
+}
+
 
 async function sendEmailCode(email: string, code: string, purpose: 'verify_email' | 'password_reset'): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY || '';
@@ -444,7 +508,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'verify_email',$2,now()+interval '10 minutes')",[created.rows[0].id,hashEmailCode(code)]);
       if(!await sendEmailCode(email,code,'verify_email')){await pool.query('DELETE FROM users WHERE id=$1',[created.rows[0].id]);sendAuthJson(res,502,{error:'Could not send the verification email. Check the email provider configuration.'});return true;}
       await recordAuthSecurityEvent(req,created.rows[0].id,'auth.register');sendAuthJson(res,201,{verificationRequired:true});return true;
-    }catch{sendAuthJson(res,400,{error:'Could not create the account.'});return true;}
+    }catch(error){respondAuthFailure(res,error,'Could not create the account.');return true;}
   }
 
   if (pathname === '/api/auth/verify-email/resend' && req.method === 'POST') {
@@ -457,7 +521,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       await pool.query("INSERT INTO email_verification_codes(user_id,purpose,code_hash,expires_at) VALUES($1,'verify_email',$2,now()+interval '10 minutes')",[found.rows[0].id,hashEmailCode(code)]);
       if(!await sendEmailCode(email,code,'verify_email')){sendAuthJson(res,502,{error:'Could not send a new verification email.'});return true;}
       sendAuthJson(res,200,{message:'A new verification code was sent if the account is awaiting verification.'});return true;
-    } catch { sendAuthJson(res,400,{error:'Could not resend the verification code.'});return true; }
+    } catch (error) { respondAuthFailure(res,error,'Could not resend the verification code.');return true; }
   }
 
   if (pathname === '/api/auth/verify-email' && req.method === 'POST') {
@@ -470,7 +534,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
       await pool.query('UPDATE users SET email_verified=true,updated_at=now() WHERE id=$1',[row.id]);
       await createSession(row.id,res);await recordAuthSecurityEvent(req,row.id,'auth.email_verified');await recordSecurityNotification(row.id,'security.email_verified','Email verified','Your AFG AI email address was verified.');sendAuthJson(res,200,{verified:true});return true;
-    }catch{sendAuthJson(res,400,{error:'Could not verify this email.'});return true;}
+    }catch(error){respondAuthFailure(res,error,'Could not verify this email.');return true;}
   }
 
   if (pathname === '/api/auth/password-reset/request' && req.method === 'POST') {
@@ -484,7 +548,11 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
         await sendEmailCode(email,code,'password_reset');
       }
       sendAuthJson(res,200,{message:'If the account exists and email delivery is configured, a reset code will be sent.'});return true;
-    }catch{sendAuthJson(res,200,{message:'If the account exists and email delivery is configured, a reset code will be sent.'});return true;}
+    }catch(error){
+      // Anti-enumeration: reset requests always answer 200, even on infrastructure faults.
+      console.warn('AFG_AUTH_INFRASTRUCTURE_UNAVAILABLE', JSON.stringify({ route: 'password-reset/request', detail: String(redactSecrets(error instanceof Error ? error.message : 'unknown_error')).slice(0, 300) }));
+      sendAuthJson(res,200,{message:'If the account exists and email delivery is configured, a reset code will be sent.'});return true;
+    }
   }
 
   if (pathname === '/api/auth/password-reset/confirm' && req.method === 'POST') {
@@ -497,7 +565,7 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       await pool.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[await hashPassword(next),row.id]);
       await pool.query('UPDATE email_verification_codes SET consumed_at=now() WHERE id=$1',[row.code_id]);
       await revokeUserSessions(row.id);clearSessionCookies(res);await recordAuthSecurityEvent(req,row.id,'auth.password_reset','warning');await recordSecurityNotification(row.id,'security.password_reset','Password reset','Your AFG AI account password was reset. All previous sessions were revoked.');sendAuthJson(res,200,{reset:true});return true;
-    }catch{sendAuthJson(res,400,{error:'Could not reset the password.'});return true;}
+    }catch(error){respondAuthFailure(res,error,'Could not reset the password.');return true;}
   }
 
   if (pathname === '/api/auth/login' && req.method === 'POST') {
@@ -534,13 +602,18 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       await recordSecurityNotification(row.id, 'security.sign_in', 'New sign-in', 'Your AFG AI account was signed in successfully.');
       sendAuthJson(res, 200, { authenticated: true });
       return true;
-    } catch {
-      sendAuthJson(res, 400, { error: 'Unable to process the sign-in request.' });
+    } catch (error) {
+      respondAuthFailure(res, error, 'Unable to process the sign-in request.');
       return true;
     }
   }
 
   if (pathname === '/api/auth/bootstrap-admin' && req.method === 'POST') {
+    if (await isBootstrapRateLimited(req)) {
+      res.setHeader('Retry-After', String(BOOTSTRAP_WINDOW_SECONDS));
+      sendAuthJson(res, 429, { error: 'Too many administrator bootstrap attempts. Try again later.' });
+      return true;
+    }
     try {
       const configuredToken = process.env.AFG_ADMIN_BOOTSTRAP_TOKEN || '';
       const parsed = parseAuthInput(AUTH_INPUT.bootstrap, await readJsonBody(req));
@@ -615,8 +688,8 @@ export async function handleAuthApi(req: IncomingMessage, res: ServerResponse, p
       await createSession(adminUserId, res);
       await recordAuthSecurityEvent(req,adminUserId,recovered?'auth.admin_recovery':'auth.admin_bootstrap','warning');
       sendAuthJson(res, recovered ? 200 : 201, { authenticated: true, bootstrapped: !recovered, recovered });
-    } catch {
-      sendAuthJson(res, 400, { error: 'Could not complete administrator bootstrap or recovery.' });
+    } catch (error) {
+      respondAuthFailure(res, error, 'Could not complete administrator bootstrap or recovery.');
     }
     return true;
   }
