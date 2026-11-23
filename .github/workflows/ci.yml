@@ -6,6 +6,13 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,8 +22,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - name: Install dependencies
-        run: npm install --include=dev
+        run: npm ci
       - name: Type check
         run: npm run lint
       - name: Locale dictionaries
@@ -30,6 +38,7 @@ jobs:
           npm run test:osint
           npm run test:database-config
           npm run test:admin-rbac
+          npm run test:bridge-auth
           npm run test:jarvis-command
           npm run test:core-state
           npm run test:chat-stream
@@ -37,6 +46,48 @@ jobs:
           npm run test:image-adapter
           npm run test:provider-smoke
           npm run test:migrations
+
+  web-next:
+    name: web-next (Next.js 16 app)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies (bun lockfile)
+        working-directory: apps/web-next
+        run: bun install --frozen-lockfile
+      - name: Prisma client generate
+        working-directory: apps/web-next
+        run: bun run db:generate
+      - name: Lint (eslint)
+        working-directory: apps/web-next
+        run: bun run lint
+      - name: Type check (tsc)
+        working-directory: apps/web-next
+        run: npx tsc --noEmit
+      - name: Unit tests
+        working-directory: apps/web-next
+        run: bun run test
+      - name: i18n parity check
+        working-directory: apps/web-next
+        run: bun run i18n:parity
+      - name: Production build
+        working-directory: apps/web-next
+        env:
+          DATABASE_URL: file:./prisma/build-check.db
+          AFG_SESSION_SECRET: ci-build-only-secret-0123456789abcdef0123456789abcdef
+          AFG_VAULT_KEY: ci-build-only-vaultkey-0123456789abcdef0123456789ab
+        run: bun run build
+      - name: Cleanup build database
+        if: always()
+        working-directory: apps/web-next
+        run: rm -f prisma/build-check.db
 
   integration:
     name: PostgreSQL integration
@@ -63,8 +114,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Apply database migrations
         run: npm run db:migrate
       - name: Conversation ownership, CSRF and idempotency
@@ -104,8 +156,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Apply database migrations
         run: npm run db:migrate
       - name: Install ClamAV and update signatures

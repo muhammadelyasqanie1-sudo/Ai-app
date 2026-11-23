@@ -30,6 +30,7 @@
   "exclude": [
     "dist",
     "vendor/OpenJarvis",
-    "services/openjarvis"
+    "services/openjarvis",
+    "apps"
   ]
 }

@@ -36,7 +36,9 @@
     "test:multi-instance-fanout": "tsx scripts/test-multi-instance-fanout.ts",
     "test:provider-smoke": "tsx scripts/test-provider-smoke.ts",
     "check:clamav": "tsx scripts/check-clamav.ts",
-    "setup:clamav": "bash scripts/setup-clamav.sh"
+    "setup:clamav": "bash scripts/setup-clamav.sh",
+    "test:bridge-auth": "tsx scripts/test-control-plane-bridge-auth.ts",
+    "test:migrations": "tsx scripts/test-migrations.ts"
   },
   "dependencies": {
     "@afg-ai/capacitor-auth-deeplink": "file:plugins/capacitor-auth-deeplink",
