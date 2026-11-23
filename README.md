@@ -79,7 +79,6 @@ See [.env.example](.env.example) for the complete variable list. Main groups:
 | Variables | Purpose |
 |---|---|
 | `DATABASE_URL`, `DATABASE_SSL`, `DATABASE_SSL_REJECT_UNAUTHORIZED`, `DATABASE_POOL_MAX` | PostgreSQL connection and pool settings |
-| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | Cloudflare Workers AI provider |
 | `BEATAPI_API_KEY`, `BEATAPI_BASE_URL` | BeatAPI model provider and authenticated read-only catalog; default base URL is `https://api.beatapi.io` |
 | `OPENAI_COMPAT_BASE_URL`, `OPENAI_COMPAT_API_KEY`, `OPENAI_COMPAT_PROVIDER_ID`, `OPENAI_COMPAT_DISPLAY_NAME` | Optional OpenAI-compatible provider |
 | `NINEROUTER_BASE_URL`, `NINEROUTER_API_KEY` | Optional separate 9Router gateway; API key only when 9Router `requireApiKey` is enabled |
@@ -96,17 +95,17 @@ See [.env.example](.env.example) for the complete variable list. Main groups:
 | `AFG_UNKNOWN_CONTEXT_BUDGET` | Conservative context budget for models without context metadata |
 | `VITE_API_BASE_URL` | Optional public API base for a separately hosted native APK; never put secrets here |
 
-Cloudflare credentials are obtained from the Cloudflare dashboard/API Tokens with the account permissions required for Workers AI. OpenAI-compatible credentials and base URL are obtained from the selected provider. Google OAuth credentials are created in Google Cloud Console and must use the exact callback URL `https://YOUR_APP_ORIGIN/api/auth/google/callback`. Resend credentials and a verified sender address are managed in the Resend dashboard. Configure these values only in the server host's secret/environment settings.
+OpenAI-compatible credentials and base URL are obtained from the selected provider. Google OAuth credentials are created in Google Cloud Console and must use the exact callback URL `https://YOUR_APP_ORIGIN/api/auth/google/callback`. Resend credentials and a verified sender address are managed in the Resend dashboard. Configure these values only in the server host's secret/environment settings.
 
 ## Provider behavior
 
-- The gateway registers Cloudflare Workers AI, an optional OpenAI-compatible adapter, GPT-OSS proxy, BeatAPI when `BEATAPI_API_KEY` is configured, and 9Router when `NINEROUTER_BASE_URL` is configured. 9Router's API key is optional only when its own `requireApiKey` setting is disabled.
+- The gateway registers 9Router when `NINEROUTER_BASE_URL` is configured, the APInex key pool when `APINEX_API_KEYS` is configured, and local Ollama adapters from the database provider catalog. 9Router's API key is optional only when its own `requireApiKey` setting is disabled. The `OPENAI_COMPAT_*` adapter configuration is exercised by `scripts/test-provider-smoke.ts` only.
 - A model is selectable only after live catalog discovery and a recent successful health check, and when the model is enabled and advertises streaming text capability.
 - The gateway can fall back to another verified text model unless the request disables fallback.
 - BeatAPI uses its OpenAI-compatible `/v1/chat/completions` text endpoint and `/v1/models` catalog. BeatAPI health verification is catalog-only so routine model discovery never sends a billable generation probe.
 - Authenticated read-only integration routes expose `/api/beatapi/status`, `/api/beatapi/models`, `/api/beatapi/workflows`, `/api/beatapi/capabilities/search`, and `/api/beatapi/capabilities/inspect`. No capability-run route is exposed by this integration yet.
 - A configured provider key alone is not evidence that a model or optional capability works.
-- The currently implemented Cloudflare and OpenAI-compatible adapters declare chat/streaming only. Do not assume image, vision, OCR, voice, tools or video support from these adapters.
+- The currently implemented OpenAI-compatible adapters declare chat/streaming only. Do not assume image, vision, OCR, voice, tools or video support from these adapters.
 - Provider calls and secrets remain server-side.
 
 ## Universal API Hub, Public APIs and 9Router

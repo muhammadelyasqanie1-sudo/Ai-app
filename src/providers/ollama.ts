@@ -56,6 +56,12 @@ export function createOllamaAdapter(id='ollama',displayName='Ollama (Local)',con
       }catch{throw new ProviderAdapterError('Could not contact local Ollama.',502,'provider_unreachable');}
       if(!response.ok||!response.body)throw new ProviderAdapterError('Ollama rejected the request.',response.status>=400&&response.status<500?response.status:502,'provider_request_rejected');
       const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
+      // Ollama emits usage counters (prompt_eval_count/eval_count) on its final done row.
+      const usageFromRow=(row:any)=>{
+        const prompt=Number(row?.prompt_eval_count),completion=Number(row?.eval_count);
+        return Number.isFinite(prompt)&&Number.isFinite(completion)&&prompt>=0&&completion>=0
+          ?{prompt_tokens:prompt,completion_tokens:completion}:null;
+      };
       try{
         while(true){
           const {done,value}=await reader.read();if(done)break;
@@ -64,9 +70,19 @@ export function createOllamaAdapter(id='ollama',displayName='Ollama (Local)',con
           for(const line of lines){if(!line.trim())continue;let row:any;try{row=JSON.parse(line);}catch{continue;}
             if(row.error)throw new ProviderAdapterError('Ollama stream returned an error.',502,'provider_stream_error');
             if(typeof row.message?.content==='string'&&row.message.content)yield{content:row.message.content};
+            const usage=usageFromRow(row);if(usage)yield{content:'',usage};
           }
         }
-        if(buffer.trim()){const row=JSON.parse(buffer);if(typeof row.message?.content==='string'&&row.message.content)yield{content:row.message.content};}
+        // The trailing NDJSON line can be a partial or malformed write; skip it instead of
+        // misreporting a malformed tail as provider_stream_interrupted.
+        if(buffer.trim()){
+          let row:any=null;try{row=JSON.parse(buffer);}catch{row=null;}
+          if(row){
+            if(row.error)throw new ProviderAdapterError('Ollama stream returned an error.',502,'provider_stream_error');
+            if(typeof row.message?.content==='string'&&row.message.content)yield{content:row.message.content};
+            const usage=usageFromRow(row);if(usage)yield{content:'',usage};
+          }
+        }
       }catch(error){if(error instanceof ProviderAdapterError)throw error;throw new ProviderAdapterError('Ollama response stream was interrupted.',502,'provider_stream_interrupted');}
       finally{reader.releaseLock();}
     }

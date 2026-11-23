@@ -461,6 +461,12 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      // Final SSE chunks may carry provider-reported token usage (prompt_tokens/completion_tokens).
+      const usageFromEvent=(event:any)=>{
+        const prompt=Number(event?.usage?.prompt_tokens),completion=Number(event?.usage?.completion_tokens);
+        return Number.isFinite(prompt)&&Number.isFinite(completion)&&prompt>=0&&completion>=0
+          ?{prompt_tokens:prompt,completion_tokens:completion}:null;
+      };
       try {
         while (true) {
           const { done, value } = await reader.read();
@@ -489,6 +495,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
             })):[];
             if(typeof content==='string'&&content)yield {content};
             if(toolCalls.length)yield {content:'',toolCalls};
+            const usage=usageFromEvent(event);if(usage)yield {content:'',usage};
           }
         }
         buffer += decoder.decode();
@@ -512,6 +519,7 @@ export function createOpenAICompatibleAdapter(options?: OpenAICompatibleAdapterO
             })):[];
             if(typeof content==='string'&&content)yield {content};
             if(toolCalls.length)yield {content:'',toolCalls};
+            const usage=usageFromEvent(event);if(usage)yield {content:'',usage};
           }
         }
       } catch (error) {

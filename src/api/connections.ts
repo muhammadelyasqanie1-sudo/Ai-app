@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { connect as connectSocket, isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
+import { isPublicAddress } from '../security/publicUrl.ts';
 import { pool } from './database.ts';
 import { publishLiveEvent } from '../services/liveEventHub.ts';
 import { authenticateRequest, readJsonBody, sendAuthJson, verifyCsrf } from './auth.ts';
@@ -49,17 +50,8 @@ async function jsonFetch(url: string, init: RequestInit, secrets: string[]) {
 async function tcpProbe(host: string, port: number): Promise<void> {
   const addresses = await lookup(host,{all:true,verbatim:true});
   if (!addresses.length) throw new Error('Host did not resolve.');
-  const isPrivate = (address:string) => {
-    if (address.includes(':')) {
-      const value=address.toLowerCase();
-      if(value.startsWith('::ffff:')) return isPrivate(value.slice(7));
-      return value==='::1'||value==='::'||value.startsWith('fc')||value.startsWith('fd')||value.startsWith('fe80:');
-    }
-    const parts=address.split('.').map(Number);
-    return parts.length!==4||parts[0]===0||parts[0]===10||parts[0]===127||parts[0]>=224||
-      (parts[0]===169&&parts[1]===254)||(parts[0]===172&&parts[1]>=16&&parts[1]<=31)||(parts[0]===192&&parts[1]===168);
-  };
-  if (addresses.some(item=>isPrivate(item.address))) throw new Error('Private, loopback and link-local FTP/SFTP targets are blocked.');
+  // Shared SSRF guard: reject every resolved address that is not public and routable.
+  if (addresses.some(item=>!isPublicAddress(item.address))) throw new Error('Private, loopback and link-local FTP/SFTP targets are blocked.');
   const target=addresses[0].address;
   if (!isIP(target)) throw new Error('Resolved host address is invalid.');
   await new Promise<void>((resolve,reject) => {
@@ -75,7 +67,7 @@ async function requireAdmin(req: IncomingMessage, res: ServerResponse) {
     sendAuthJson(res,503,{error:'Could not verify administrator session.'}); return null;
   }
   if (!user) { sendAuthJson(res,401,{error:'Sign in is required.'}); return null; }
-  if (user.role !== 'admin') { sendAuthJson(res,403,{error:'Administrator access is required.'}); return null; }
+  if (!['admin','superadmin'].includes(user.role)) { sendAuthJson(res,403,{error:'Administrator access is required.'}); return null; }
   if (req.method !== 'GET' && !verifyCsrf(req)) { sendAuthJson(res,403,{error:'CSRF validation failed.'}); return null; }
   return user;
 }

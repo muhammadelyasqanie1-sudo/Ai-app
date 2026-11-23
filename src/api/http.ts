@@ -11,6 +11,7 @@ import { getCapabilitySnapshot, getImageStudioSnapshot, getFileAssistantSnapshot
 import { publishLiveEvent, subscribeLiveEvents, startLiveEventHub, type LiveEvent } from '../services/liveEventHub.ts';
 import { authenticateRequest, handleAuthApi, verifyCsrf } from './auth.ts';
 import { createHash } from 'crypto';
+import { redactSecrets } from '../security/redaction.ts';
 import { handleAdminApi } from './adminHandler.ts';
 import { handleConnectionsApi, handleUserIntegrationApi } from './connections.ts';
 import { handleResearchApi } from './research.ts';
@@ -209,7 +210,7 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
   try {
     if (req.method === 'GET' && pathname === '/api/announcements') {
       if (!pool) {
-        sendJson(res, 200, { announcements: [] }, requestId);
+        sendJson(res, 200, { announcements: [], items: [], degraded: true }, requestId);
         return;
       }
       try {
@@ -218,9 +219,12 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
           WHERE enabled=true AND starts_at<=now()
             AND (expires_at IS NULL OR expires_at>now())
           ORDER BY created_at DESC LIMIT 5`);
-        sendJson(res, 200, { announcements: result.rows }, requestId);
-      } catch {
-        sendJson(res, 200, { announcements: [] }, requestId);
+        sendJson(res, 200, { announcements: result.rows, items: result.rows, degraded: false }, requestId);
+      } catch (error) {
+        // Announcements are non-critical content; degrade to an empty payload so
+        // the UI keeps working when the database schema is unavailable.
+        console.warn('AFG_ANNOUNCEMENTS_DEGRADED', JSON.stringify({ requestId, detail: String(redactSecrets(error instanceof Error ? error.message : 'unknown_error')).slice(0, 300) }));
+        sendJson(res, 200, { announcements: [], items: [], degraded: true }, requestId);
       }
       return;
     }
@@ -443,8 +447,11 @@ export async function handleApiRequest(req: ApiRequest, res: ServerResponse): Pr
     }
 
     sendJson(res, 404, { error: 'API route not found.' }, requestId);
-  } catch {
-    console.error('API_EDGE_FAILURE', JSON.stringify({ requestId, method: req.method, path: pathname }));
+  } catch (error) {
+    console.error('API_EDGE_FAILURE', JSON.stringify({
+      requestId, method: req.method, path: pathname,
+      detail: String(redactSecrets(error instanceof Error ? error.message : 'unknown_error')).slice(0, 300),
+    }));
     if (!res.headersSent) {
       sendJson(res, 500, { error: 'The API request failed unexpectedly.' }, requestId);
     } else {
