@@ -1,10 +1,11 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { handler, json, fail, readJson } from "@/lib/afg/api";
-import { requireStaff, toSafeUser, clientIp, AuthError } from "@/lib/afg/auth";
+import { requireStaff, toSafeUser, clientIp, AuthError, isAdmin } from "@/lib/afg/auth";
 import { encryptSecret, decryptSecret, maskSecret } from "@/lib/afg/crypto";
 import { logAudit, logError } from "@/lib/afg/logs";
 import { config, STAFF_PERMISSIONS, StaffPermission } from "@/lib/afg/config";
+import { assertPublicHttpUrl } from "@/lib/afg/urlGuard";
 import {
   ensureProvidersSeeded,
   checkProviderHealth,
@@ -16,6 +17,7 @@ import {
   providerCreateSchema,
   providerUpdateSchema,
   adminUserUpdateSchema,
+  adminModelUpdateSchema,
   flagUpdateSchema,
   announcementSchema,
   formatZodError,
@@ -37,16 +39,39 @@ const WRITE_PERMS: Record<string, StaffPermission> = {
 const READ_PERMS: Record<string, StaffPermission> = {
   users: "users.read",
   providers: "providers.read",
+  models: "providers.read",
   usage: "usage.read",
   errors: "errors.read",
   audit: "audit.read",
   stats: "usage.read",
   "system-health": "health.read",
+  // No dedicated read permissions exist for these sections, so viewing them
+  // requires the corresponding management permission (granular, not any-staff).
+  flags: "flags.write",
+  announcements: "announcements.write",
 };
 
 function requirePerm(section: string, write: boolean) {
   if (write) return requireStaff(WRITE_PERMS[section] || "settings.write");
   return requireStaff(READ_PERMS[section]);
+}
+
+/**
+ * SSRF guard for provider base URLs: must resolve to a public HTTP(S) host.
+ * Bypass for local/Ollama-style deployments only with AFG_ALLOW_LOCAL_PROVIDER_URLS=1.
+ */
+async function providerBaseUrlError(baseUrl: string): Promise<Response | null> {
+  if (process.env.AFG_ALLOW_LOCAL_PROVIDER_URLS === "1") return null;
+  try {
+    await assertPublicHttpUrl(baseUrl);
+    return null;
+  } catch (err) {
+    return fail(
+      "PROVIDER_URL_BLOCKED",
+      `${err instanceof Error ? err.message : "Provider base URL is not allowed."} (Set AFG_ALLOW_LOCAL_PROVIDER_URLS=1 to allow local addresses.)`,
+      400
+    );
+  }
 }
 
 /** GET /api/admin/<section>[/<id>] */
@@ -186,13 +211,13 @@ export const GET = handler(async (req: NextRequest, ctx: Ctx) => {
     }
 
     case "flags": {
-      await requireStaff();
+      await requireStaff("flags.write");
       const flags = await db.featureFlag.findMany({ orderBy: { key: "asc" } });
       return json({ flags });
     }
 
     case "announcements": {
-      await requireStaff();
+      await requireStaff("announcements.write");
       const items = await db.announcement.findMany({ orderBy: { createdAt: "desc" } });
       return json({ announcements: items.map((a) => ({ ...a, createdAt: a.createdAt.toISOString(), updatedAt: a.updatedAt.toISOString() })) });
     }
@@ -240,6 +265,8 @@ export const POST = handler(async (req: NextRequest, ctx: Ctx) => {
         if (!body.success) return fail("INVALID_INPUT", formatZodError(body.error), 400);
         const existing = await db.provider.findUnique({ where: { slug: body.data.slug } });
         if (existing) return fail("SLUG_TAKEN", "A provider with this slug already exists.", 409);
+        const urlError = await providerBaseUrlError(body.data.baseUrl);
+        if (urlError) return urlError;
         const provider = await db.provider.create({
           data: {
             slug: body.data.slug,
@@ -306,6 +333,12 @@ export const PATCH = handler(async (req: NextRequest, ctx: Ctx) => {
     case "users": {
       const body = adminUserUpdateSchema.safeParse(await readJson(req));
       if (!body.success) return fail("INVALID_INPUT", formatZodError(body.error), 400);
+      // Role and permission changes are ADMIN-only. A STAFF actor with
+      // users.write may edit name/status but never escalate privileges —
+      // including indirect escalation via permission edits.
+      if (!isAdmin(actor) && (body.data.role !== undefined || body.data.permissions !== undefined)) {
+        return fail("FORBIDDEN", "Only administrators can change roles or permissions.", 403);
+      }
       const target = await db.user.findUnique({ where: { id } });
       if (!target) return fail("NOT_FOUND", "User not found.", 404);
       const data: Record<string, unknown> = {};
@@ -332,6 +365,10 @@ export const PATCH = handler(async (req: NextRequest, ctx: Ctx) => {
     case "providers": {
       const body = providerUpdateSchema.safeParse(await readJson(req));
       if (!body.success) return fail("INVALID_INPUT", formatZodError(body.error), 400);
+      if (body.data.baseUrl !== undefined) {
+        const urlError = await providerBaseUrlError(body.data.baseUrl);
+        if (urlError) return urlError;
+      }
       const provider = await db.provider.findUnique({ where: { id } });
       if (!provider) return fail("NOT_FOUND", "Provider not found.", 404);
       const data: Record<string, unknown> = {};
@@ -359,18 +396,19 @@ export const PATCH = handler(async (req: NextRequest, ctx: Ctx) => {
     }
 
     case "models": {
-      const body = await readJson<{ enabled?: boolean; displayName?: string; capabilities?: string[]; contextWindow?: number }>(req);
+      const body = adminModelUpdateSchema.safeParse(await readJson(req));
+      if (!body.success) return fail("INVALID_INPUT", formatZodError(body.error), 400);
       const model = await db.model.findUnique({ where: { id } });
       if (!model) return fail("NOT_FOUND", "Model not found.", 404);
       const data: Record<string, unknown> = {};
-      if (typeof body.enabled === "boolean") data.enabled = body.enabled;
-      if (typeof body.displayName === "string" && body.displayName.trim()) data.displayName = body.displayName.slice(0, 120);
-      if (Array.isArray(body.capabilities)) {
-        const validCaps = body.capabilities.filter((c) => ["chat", "coding", "vision", "reasoning", "tools"].includes(c));
+      if (typeof body.data.enabled === "boolean") data.enabled = body.data.enabled;
+      if (typeof body.data.displayName === "string" && body.data.displayName.trim()) data.displayName = body.data.displayName.slice(0, 120);
+      if (Array.isArray(body.data.capabilities)) {
+        const validCaps = body.data.capabilities.filter((c) => ["chat", "coding", "vision", "reasoning", "tools"].includes(c));
         data.capabilities = JSON.stringify(validCaps.length ? validCaps : ["chat"]);
       }
-      if (typeof body.contextWindow === "number" && body.contextWindow > 512 && body.contextWindow <= 2_000_000) {
-        data.contextWindow = Math.round(body.contextWindow);
+      if (typeof body.data.contextWindow === "number" && body.data.contextWindow > 512 && body.data.contextWindow <= 2_000_000) {
+        data.contextWindow = Math.round(body.data.contextWindow);
       }
       const updated = await db.model.update({ where: { id }, data });
       await logAudit({ actorId: actor.id, actorEmail: actor.email, action: "admin.model_update", target: model.slug, meta: { fields: Object.keys(data) }, ip });

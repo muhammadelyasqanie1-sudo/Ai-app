@@ -690,6 +690,40 @@ function ToolResult({ m }: { m: ChatMessage }) {
   return null;
 }
 
+function AttachmentThumb({ id, filename, mimetype }: { id: string; filename: string; mimetype: string }) {
+  // Images are fetched (credentials included) and rendered via a blob URL so
+  // no inline src= request ever depends on the download endpoint serving
+  // renderable content — that endpoint is attachment-only (octet-stream) by
+  // design; the declared upload mimetype decides whether a thumb applies.
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const isImage = mimetype.startsWith("image/");
+  useEffect(() => {
+    if (!isImage) return;
+    let alive = true;
+    let url: string | null = null;
+    (async () => {
+      try {
+        const res = await fetch(`/api/files/${id}`, { credentials: "same-origin", cache: "force-cache" });
+        if (!res.ok) throw new Error("thumb fetch failed");
+        const blob = await res.blob();
+        url = URL.createObjectURL(blob);
+        if (alive) setBlobUrl(url);
+        else URL.revokeObjectURL(url);
+      } catch {
+        if (alive) setFailed(true);
+      }
+    })();
+    return () => {
+      alive = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [id, isImage]);
+  if (!isImage || failed) return <FileText className="h-3.5 w-3.5" />;
+  if (blobUrl) return <img src={blobUrl} alt={filename} className="h-8 w-8 object-cover rounded" />;
+  return <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />;
+}
+
 function MessageRow({
   m, t, onCopy, onRegenerate, onEdit, onSpeak,
 }: {
@@ -731,9 +765,9 @@ function MessageRow({
           {m.attachments && m.attachments.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
               {m.attachments.map((a) => (
-                <a key={a.id} href={`/api/files/${a.id}`} target="_blank" rel="noopener noreferrer"
+                <a key={a.id} href={`/api/files/${a.id}`} download
                   className="flex items-center gap-1 rounded border bg-muted/60 px-1.5 py-0.5 text-xs hover:border-primary">
-                  {a.kind === "image" ? <img src={`/api/files/${a.id}`} alt={a.filename} className="h-8 w-8 object-cover rounded" /> : <FileText className="h-3.5 w-3.5" />}
+                  {a.kind === "image" ? <AttachmentThumb id={a.id} filename={a.filename} mimetype={a.mimetype} /> : <FileText className="h-3.5 w-3.5" />}
                   <span className="max-w-32 truncate">{a.filename}</span>
                 </a>
               ))}

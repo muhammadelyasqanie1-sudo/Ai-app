@@ -4,6 +4,8 @@
  * Tool availability is capability-gated and permission-aware.
  */
 
+import { assertPublicHttpUrl } from "./urlGuard";
+
 export type ToolResult =
   | { ok: true; tool: string; data: unknown; summary: string }
   | { ok: false; tool: string; error: string };
@@ -72,14 +74,13 @@ export async function webSearch(query: string, num = 6, recencyDays?: number): P
 }
 
 export async function pageReader(url: string): Promise<ToolResult> {
+  // SSRF guard: public HTTP(S) only, credentials rejected, DNS must resolve
+  // outside private/reserved ranges. No bypass for any caller.
   let parsed: URL;
   try {
-    parsed = new URL(url);
-  } catch {
-    return { ok: false, tool: "page_reader", error: "Invalid URL" };
-  }
-  if (!/^https?:$/.test(parsed.protocol)) {
-    return { ok: false, tool: "page_reader", error: "Only http(s) URLs are supported" };
+    parsed = await assertPublicHttpUrl(url);
+  } catch (err) {
+    return { ok: false, tool: "page_reader", error: err instanceof Error ? err.message : "URL blocked" };
   }
   try {
     const { default: ZAI } = await import("z-ai-web-dev-sdk");

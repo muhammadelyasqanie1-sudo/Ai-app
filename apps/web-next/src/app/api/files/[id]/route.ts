@@ -24,10 +24,14 @@ export const GET = handler(async (req: NextRequest, ctx: { params: Promise<{ id:
   }
   try {
     const buf = await readFile(resolved);
+    // Download-only hardening: never render stored content inline in the browser.
+    // Fixed octet-stream type + nosniff + sandboxed CSP neutralize stored XSS.
     return new NextResponse(new Uint8Array(buf), {
       headers: {
-        "Content-Type": attachment.mimetype,
-        "Content-Disposition": `inline; filename="${encodeURIComponent(attachment.filename)}"`,
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": `attachment; filename="${encodeURIComponent(attachment.filename)}"`,
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "sandbox; default-src 'none'",
         "Cache-Control": "private, max-age=3600",
       },
     });

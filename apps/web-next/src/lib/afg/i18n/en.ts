@@ -81,7 +81,7 @@ export const en = {
     googleNotConfigured: "Google sign-in is not configured on this deployment.",
     guestNotice: "Guest sessions are temporary. Create an account to keep your history.",
     passwordMismatch: "Passwords must match",
-    weakPassword: "Password must be at least 8 characters",
+    weakPassword: "Password must be at least 12 characters",
     invalidEmail: "Enter a valid email address",
     accountSuspended: "This account is suspended. Contact the administrator.",
     loggedOut: "You have been signed out.",

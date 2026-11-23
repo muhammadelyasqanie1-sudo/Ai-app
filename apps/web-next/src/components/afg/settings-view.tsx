@@ -144,7 +144,7 @@ function GuestUpgradeCard() {
         <Input type="email" dir="ltr" placeholder={t.auth.email} value={email} onChange={(e) => setEmail(e.target.value)} />
         <Input type="password" dir="ltr" placeholder={t.auth.password} value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>
-      <Button size="sm" onClick={claim} disabled={busy || !email || password.length < 8}>
+      <Button size="sm" onClick={claim} disabled={busy || !email || password.length < 12}>
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
         <span className="ms-1.5">{t.settings.upgrade}</span>
       </Button>
@@ -365,7 +365,7 @@ function AccountTab({ user }: { user: SafeUser }) {
           <Input type="password" dir="ltr" placeholder={t.settings.currentPassword} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
           <Input type="password" dir="ltr" placeholder={t.auth.newPassword} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
         </div>
-        <Button onClick={changePassword} disabled={busy || !currentPassword || newPassword.length < 8}>
+        <Button onClick={changePassword} disabled={busy || !currentPassword || newPassword.length < 12}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           <span className="ms-1.5">{t.settings.changePassword}</span>
         </Button>

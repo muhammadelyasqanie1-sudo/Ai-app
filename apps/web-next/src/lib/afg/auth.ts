@@ -6,7 +6,7 @@ import { generateToken, sha256Hex, safeEqual } from "./crypto";
 import { config, StaffPermission } from "./config";
 import type { User } from "@prisma/client";
 
-export const SESSION_COOKIE = "afg_session";
+export const SESSION_COOKIE = "afg_next_session";
 
 export type SafeUser = {
   id: string;
@@ -136,13 +136,23 @@ export async function requireStaff(permission?: StaffPermission): Promise<User> 
   throw new AuthError("FORBIDDEN", 403);
 }
 
+/**
+ * Resolve the client IP for rate limiting and audit logs.
+ * Proxy headers (x-forwarded-for / x-real-ip) are trusted ONLY when
+ * AFG_TRUST_PROXY=1 is set; otherwise the raw socket address is used so a
+ * client cannot spoof its way past rate limits.
+ */
 export function clientIp(req: NextRequest | Request): string {
-  const h = req.headers;
-  return (
-    h.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    h.get("x-real-ip") ||
-    "unknown"
-  );
+  if (process.env.AFG_TRUST_PROXY === "1") {
+    const h = req.headers;
+    return (
+      h.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      h.get("x-real-ip") ||
+      "unknown"
+    );
+  }
+  const raw = (req as { ip?: string }).ip;
+  return raw || "unknown";
 }
 
 /** Signed share tokens for public conversation sharing. */

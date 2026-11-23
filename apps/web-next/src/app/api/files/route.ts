@@ -14,8 +14,18 @@ export const dynamic = "force-dynamic";
 const ALLOWED_MIME = [
   "image/png", "image/jpeg", "image/webp", "image/gif",
   "text/plain", "text/markdown", "text/csv", "application/json",
-  "application/pdf", "text/x-python", "text/javascript", "application/x-yaml", "text/html",
+  "application/pdf", "text/x-python", "application/x-yaml",
 ];
+
+/** Active content that must never be stored or served, regardless of extension. */
+const BLOCKED_MIME = new Set([
+  "text/html", "application/xhtml+xml", "image/svg+xml",
+  "application/javascript", "text/javascript", "application/x-javascript",
+  "text/ecmascript", "application/ecmascript",
+]);
+
+/** Extensions excluded from the allowlist (active/script content). */
+const BLOCKED_EXT = new Set([".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".html", ".htm", ".xhtml", ".svg"]);
 
 function kindForMime(mime: string): "image" | "text" | "data" | "file" {
   if (mime.startsWith("image/")) return "image";
@@ -34,6 +44,18 @@ function hasValidMagic(buf: Buffer, mime: string): boolean {
   return true;
 }
 
+/**
+ * Content sniffing: reject HTML/SVG/script payloads even when the declared
+ * type or extension looks benign (active content is never accepted).
+ */
+function looksLikeActiveContent(buf: Buffer): boolean {
+  const head = buf.subarray(0, Math.min(buf.length, 4096)).toString("latin1").toLowerCase();
+  if (/^\s*(<\?xml|<!doctype\s+html)/.test(head)) return true;
+  if (/<\s*(html|head|body|script|svg|iframe|object|embed)\b/.test(head)) return true;
+  if (/\bjavascript\s*:|<\s*\/\s*script\s*>/.test(head)) return true;
+  return false;
+}
+
 /** POST /api/files — validated upload pipeline (private storage, quarantined names). */
 export const POST = handler(async (req: NextRequest) => {
   const user = await requireUser();
@@ -50,13 +72,20 @@ export const POST = handler(async (req: NextRequest) => {
   }
   const mimetype = (file.type || "application/octet-stream").toLowerCase();
   const ext = path.extname(file.name || "").toLowerCase();
-  const allowedByExt = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".txt", ".md", ".csv", ".json", ".pdf", ".py", ".js", ".ts", ".yaml", ".yml", ".html"]
+  // Active content is rejected before any allowlist logic can accept it.
+  if (BLOCKED_MIME.has(mimetype) || BLOCKED_EXT.has(ext)) {
+    return fail("UNSUPPORTED_TYPE", `File type ${mimetype || ext || "unknown"} is not supported.`, 415);
+  }
+  const allowedByExt = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".txt", ".md", ".csv", ".json", ".pdf", ".py", ".yaml", ".yml"]
     .includes(ext);
   if (!ALLOWED_MIME.includes(mimetype) && !allowedByExt) {
     return fail("UNSUPPORTED_TYPE", `File type ${mimetype || ext || "unknown"} is not supported.`, 415);
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
+  if (looksLikeActiveContent(buf)) {
+    return fail("BLOCKED_CONTENT", "File content looks like active HTML/SVG/script and is not allowed.", 415);
+  }
   if (!hasValidMagic(buf, mimetype)) {
     return fail("INVALID_FILE", "File content does not match its declared type.", 415);
   }

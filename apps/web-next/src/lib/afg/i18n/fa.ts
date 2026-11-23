@@ -82,7 +82,7 @@ export const fa: Dictionary = {
     googleNotConfigured: "ورود با Google در این استقرار تنظیم نشده است.",
     guestNotice: "نشست‌های مهمان موقت اند. برای حفظ تاریخچه تان حساب بسازید.",
     passwordMismatch: "پاسوردها باید یکسان باشند",
-    weakPassword: "پاسورد باید حداقل ۸ حرف باشد",
+    weakPassword: "پاسورد باید حداقل ۱۲ حرف باشد",
     invalidEmail: "یک ایمیل معتبر وارد کنید",
     accountSuspended: "این حساب معلق شده است. با مدیر تماس بگیرید.",
     loggedOut: "از حساب تان خارج شدید.",

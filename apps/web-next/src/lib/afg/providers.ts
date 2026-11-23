@@ -128,7 +128,29 @@ class AfgCloudAdapter implements ProviderAdapter {
     try {
       const zai = await getZAI();
       if (!zai?.chat?.completions) throw new Error("SDK chat interface unavailable");
-      return { status: "HEALTHY" as HealthStatus, detail: "AFG Cloud backend connected.", latencyMs: Date.now() - start };
+      // Real minimal probe: a 1-token completion with a hard 5s budget.
+      // A configured SDK is not evidence of a working backend — only a
+      // successful completion proves the backend is reachable.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      try {
+        const result = await Promise.race([
+          zai.chat.completions.create({
+            messages: [{ role: "user", content: "ping" }],
+            max_tokens: 1,
+            stream: false,
+          } as never),
+          new Promise<never>((_, reject) =>
+            controller.signal.addEventListener("abort", () => reject(new Error("Health probe timed out after 5s")), { once: true })
+          ),
+        ]);
+        const content = (result as { choices?: { message?: { content?: string } }[] })?.choices?.[0]?.message?.content;
+        if (typeof content !== "string") throw new Error("Malformed probe response from AFG Cloud backend");
+      } finally {
+        clearTimeout(timer);
+        controller.abort(); // release the abort listener
+      }
+      return { status: "HEALTHY" as HealthStatus, detail: "AFG Cloud backend responded to a real completion probe.", latencyMs: Date.now() - start };
     } catch (err) {
       return {
         status: "UNREACHABLE" as HealthStatus,
@@ -143,35 +165,43 @@ class AfgCloudAdapter implements ProviderAdapter {
     const thinking = opts.thinking || /reasoning/.test(opts.model);
     const zai = await getZAI();
     const body = {
-    messages: opts.messages,
-    stream: true,
-    thinking: { type: (thinking ? "enabled" : "disabled") as "enabled" | "disabled" },
-  };
-  let stream: ReadableStream<Uint8Array> | null = null;
+      messages: opts.messages,
+      stream: true,
+      thinking: { type: (thinking ? "enabled" : "disabled") as "enabled" | "disabled" },
+    };
+    let stream: ReadableStream<Uint8Array> | null = null;
     let sawFirstToken = false;
     let tokensIn = 0;
     let tokensOut = 0;
 
-    const firstTokenGuard = (async () => {
-      await new Promise((r) => setTimeout(r, FIRST_TOKEN_TIMEOUT_MS));
+    // First-token timer: armed until the FIRST delta arrives (not just
+    // response headers); aborts the stream when the backend goes silent.
+    let raceReject: ((err: Error) => void) | null = null;
+    const firstTokenTimer = setTimeout(() => {
+      if (sawFirstToken) return;
       const s = stream as ReadableStream<Uint8Array> | null;
-      if (!sawFirstToken && s) {
-        try { await s.cancel(); } catch { /* noop */ }
+      if (s) {
+        try { void s.cancel(); } catch { /* noop */ }
       }
-    })();
-    firstTokenGuard.catch(() => undefined);
+      raceReject?.(new Error(`No first token within ${FIRST_TOKEN_TIMEOUT_MS / 1000}s`));
+    }, FIRST_TOKEN_TIMEOUT_MS);
 
     let completion: unknown;
     try {
-      completion = vision
-        ? await zai.chat.completions.createVision({ model: "glm-4.5v", ...body, messages: opts.messages as never })
-        : await zai.chat.completions.create(body);
+      completion = await Promise.race([
+        vision
+          ? zai.chat.completions.createVision({ model: "glm-4.5v", ...body, messages: opts.messages as never })
+          : zai.chat.completions.create(body),
+        new Promise<never>((_, rej) => { raceReject = rej; }),
+      ]);
     } catch (err) {
+      clearTimeout(firstTokenTimer);
       yield { type: "error", message: err instanceof Error ? err.message : "AFG Cloud request failed" };
       return;
     }
     if (!(completion instanceof ReadableStream)) {
       // Non-streaming fallback: treat as single delta
+      clearTimeout(firstTokenTimer);
       const content = (completion as { choices?: { message?: { content?: string } }[] })?.choices?.[0]?.message?.content;
       if (typeof content === "string" && content.length > 0) {
         yield { type: "delta", text: content };
@@ -183,23 +213,28 @@ class AfgCloudAdapter implements ProviderAdapter {
       return;
     }
     stream = completion;
-    for await (const evt of iterateSSE(stream)) {
-      if (opts.signal?.aborted) return;
-      if (evt.error) {
-        yield { type: "error", message: evt.error };
-        return;
+    try {
+      for await (const evt of iterateSSE(stream)) {
+        if (opts.signal?.aborted) return;
+        if (evt.error) {
+          yield { type: "error", message: evt.error };
+          return;
+        }
+        if (evt.usage) {
+          tokensIn = evt.usage.in || tokensIn;
+          tokensOut = evt.usage.out || tokensOut;
+        }
+        if (evt.delta) {
+          sawFirstToken = true;
+          clearTimeout(firstTokenTimer);
+          tokensOut += Math.ceil(evt.delta.length / 4);
+          yield { type: "delta", text: evt.delta };
+        }
       }
-      if (evt.usage) {
-        tokensIn = evt.usage.in || tokensIn;
-        tokensOut = evt.usage.out || tokensOut;
-      }
-      if (evt.delta) {
-        sawFirstToken = true;
-        tokensOut += Math.ceil(evt.delta.length / 4);
-        yield { type: "delta", text: evt.delta };
-      }
+      yield { type: "usage", tokensIn, tokensOut };
+    } finally {
+      clearTimeout(firstTokenTimer);
     }
-    yield { type: "usage", tokensIn, tokensOut };
   }
 }
 
@@ -265,6 +300,12 @@ class OpenAICompatAdapter implements ProviderAdapter {
     const controller = new AbortController();
     const onAbort = () => controller.abort();
     opts.signal?.addEventListener("abort", onAbort, { once: true });
+    // First-token timer: armed from request start until the FIRST delta
+    // arrives; headers alone are not proof of a working stream.
+    let sawFirstDelta = false;
+    const firstTokenTimer = setTimeout(() => {
+      if (!sawFirstDelta) controller.abort();
+    }, FIRST_TOKEN_TIMEOUT_MS);
     let res: Response;
     try {
       res = await fetchWithTimeout(
@@ -283,12 +324,14 @@ class OpenAICompatAdapter implements ProviderAdapter {
         FIRST_TOKEN_TIMEOUT_MS
       );
     } catch (err) {
+      clearTimeout(firstTokenTimer);
       opts.signal?.removeEventListener("abort", onAbort);
       if (opts.signal?.aborted) return;
       yield { type: "error", message: err instanceof Error ? err.message : "Request failed" };
       return;
     }
     if (!res.ok || !res.body) {
+      clearTimeout(firstTokenTimer);
       opts.signal?.removeEventListener("abort", onAbort);
       let detail = `HTTP ${res.status}`;
       try {
@@ -305,10 +348,15 @@ class OpenAICompatAdapter implements ProviderAdapter {
           yield { type: "error", message: evt.error };
           return;
         }
+        if (evt.delta) {
+          sawFirstDelta = true;
+          clearTimeout(firstTokenTimer);
+        }
         if (evt.usage) yield { type: "usage", tokensIn: evt.usage.in || 0, tokensOut: evt.usage.out || 0 };
         if (evt.delta) yield { type: "delta", text: evt.delta };
       }
     } finally {
+      clearTimeout(firstTokenTimer);
       opts.signal?.removeEventListener("abort", onAbort);
     }
   }
@@ -526,11 +574,51 @@ export async function resolveModelBySlug(slug: string): Promise<ModelRef | null>
   return { model, provider: model.provider };
 }
 
+// ---------------------------------------------------------------------------
+// Lazy health probing (honesty: never trust an UNKNOWN status silently)
+// ---------------------------------------------------------------------------
+
+const HEALTH_PROBE_TTL_MS = 60_000;
+const healthProbeCache = new Map<string, { at: number; promise: Promise<HealthStatus> }>();
+
+/**
+ * Probe a provider's health at most once per 60s (in-flight calls share the
+ * same promise). Returns the real observed status.
+ */
+export function probeProviderCached(p: Provider): Promise<HealthStatus> {
+  const now = Date.now();
+  const cached = healthProbeCache.get(p.id);
+  if (cached && now - cached.at < HEALTH_PROBE_TTL_MS) return cached.promise;
+  const promise = (async () => {
+    try {
+      return (await checkProviderHealth(p)).status;
+    } catch {
+      return "UNREACHABLE" as HealthStatus;
+    }
+  })();
+  healthProbeCache.set(p.id, { at: now, promise });
+  // Opportunistic cache trim
+  if (healthProbeCache.size > 64) {
+    for (const [k, v] of healthProbeCache) {
+      if (now - v.at >= HEALTH_PROBE_TTL_MS) healthProbeCache.delete(k);
+    }
+  }
+  return promise;
+}
+
 /** Build a fallback chain: preferred model first, then other healthy enabled chat models. */
 export async function buildModelChain(preferredSlug: string, allowFallback = true, needsVision = false): Promise<ModelRef[]> {
   const preferred = await resolveModelBySlug(preferredSlug);
   const chain: ModelRef[] = [];
-  if (preferred && preferred.model.enabled && preferred.provider.enabled) chain.push(preferred);
+  if (preferred && preferred.model.enabled && preferred.provider.enabled) {
+    // UNKNOWN health is never silently trusted: lazily probe once (cached).
+    if (preferred.provider.healthStatus === "UNKNOWN") {
+      const status = await probeProviderCached(preferred.provider);
+      if (status !== "UNREACHABLE" && status !== "DISABLED") chain.push(preferred);
+    } else {
+      chain.push(preferred);
+    }
+  }
   if (!allowFallback) return chain;
 
   const candidates = await db.model.findMany({
@@ -545,6 +633,10 @@ export async function buildModelChain(preferredSlug: string, allowFallback = tru
     const caps: string[] = JSON.parse(c.capabilities || "[]");
     if (needsVision && !caps.includes("vision")) continue;
     if (c.provider.healthStatus === "UNREACHABLE") continue;
+    if (c.provider.healthStatus === "UNKNOWN") {
+      const status = await probeProviderCached(c.provider);
+      if (status === "UNREACHABLE" || status === "DISABLED") continue;
+    }
     chain.push({ model: c, provider: c.provider });
   }
   return chain;
@@ -553,6 +645,27 @@ export async function buildModelChain(preferredSlug: string, allowFallback = tru
 /** Refresh catalog for one provider: real discovery, replaces stale entries. */
 export async function refreshProviderCatalog(p: Provider): Promise<{ discovered: number; error?: string }> {
   try {
+    // AFG Cloud has a fixed static catalog. Its models are seeded UNVERIFIED
+    // and disabled; only a real successful completion probe (checkProviderHealth)
+    // flips them. Discovery alone is not evidence of a working backend.
+    if (p.kind === "afg-cloud") {
+      for (const dm of AFG_CLOUD_MODELS) {
+        const slug = `${p.slug}:${dm.modelId}`;
+        await db.model.upsert({
+          where: { slug },
+          create: {
+            providerId: p.id, modelId: dm.modelId, slug,
+            displayName: dm.displayName,
+            capabilities: JSON.stringify(dm.capabilities),
+            contextWindow: dm.contextWindow || config.unknownContextBudget,
+            enabled: false,
+            lastVerifiedAt: null,
+          },
+          update: {},
+        });
+      }
+      return { discovered: AFG_CLOUD_MODELS.length };
+    }
     const adapter = await getProviderAdapter(p);
     const discovered = await adapter.listModels();
     const existing = await db.model.findMany({ where: { providerId: p.id } });
@@ -587,18 +700,7 @@ export async function refreshProviderCatalog(p: Provider): Promise<{ discovered:
         await db.model.delete({ where: { id: old.id } });
       }
     }
-    // Seed AFG Cloud models on first discovery
-    if (p.kind === "afg-cloud" && discovered.length === 0) {
-      for (const dm of AFG_CLOUD_MODELS) {
-        const slug = `${p.slug}:${dm.modelId}`;
-        await db.model.upsert({
-          where: { slug },
-          create: { providerId: p.id, modelId: dm.modelId, slug, displayName: dm.displayName, capabilities: JSON.stringify(dm.capabilities), contextWindow: dm.contextWindow || config.unknownContextBudget, enabled: true, lastVerifiedAt: new Date() },
-          update: { lastVerifiedAt: new Date() },
-        });
-      }
-    }
-    return { discovered: discovered.length || (p.kind === "afg-cloud" ? AFG_CLOUD_MODELS.length : 0) };
+    return { discovered: discovered.length };
   } catch (err) {
     await logError({ scope: "system", code: "MODEL_DISCOVERY_FAILED", message: err instanceof Error ? err.message : String(err), meta: { provider: p.slug } });
     return { discovered: 0, error: err instanceof Error ? err.message : "Discovery failed" };
@@ -616,6 +718,13 @@ export async function checkProviderHealth(p: Provider): Promise<{ status: Health
     if (cat.error) {
       health.status = "DEGRADED";
       health.detail = `Endpoint reachable but catalog refresh failed: ${cat.error}`;
+    }
+    // A real successful probe is the only thing that verifies AFG Cloud models.
+    if (p.kind === "afg-cloud") {
+      await db.model.updateMany({
+        where: { providerId: p.id, modelId: { in: AFG_CLOUD_MODELS.map((m) => m.modelId) } },
+        data: { enabled: true, lastVerifiedAt: new Date() },
+      });
     }
   }
   await db.provider.update({

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { fail } from "@/lib/afg/api";
+import { handler, fail } from "@/lib/afg/api";
 import { requireUser, clientIp } from "@/lib/afg/auth";
 import { rateLimit } from "@/lib/afg/rate-limit";
 import { config } from "@/lib/afg/config";
@@ -31,7 +31,10 @@ function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
-export async function POST(req: NextRequest) {
+// Wrapped in handler(): Prisma/rate-limit failures before the stream starts
+// return the shared JSON error envelope instead of an unhandled crash.
+// Once the SSE stream has started, its own error handling is unchanged.
+export const POST = handler(async function chatHandler(req: NextRequest) {
   let user;
   try {
     user = await requireUser();
@@ -366,4 +369,4 @@ export async function POST(req: NextRequest) {
       "X-Accel-Buffering": "no",
     },
   });
-}
+});

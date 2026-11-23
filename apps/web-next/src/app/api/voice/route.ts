@@ -37,12 +37,12 @@ export const POST = handler(async (req: NextRequest) => {
       const b64 = Buffer.from(await audio.arrayBuffer()).toString("base64");
       const result = await zai.audio.asr.create({ file_base64: b64 });
       const text = result?.text || result?.data?.text || "";
-      if (!text) return json({ ok: false, error: "No speech detected in the recording." }, { status: 422 });
+      if (!text) return fail("NO_SPEECH", "No speech detected in the recording.", 422);
       await db.usageLog.create({ data: { userId: user.id, providerSlug: "afg-cloud", modelSlug: "tool:asr", kind: "asr", success: true } });
       return json({ ok: true, text });
     } catch (err) {
       await logError({ userId: user.id, scope: "system", code: "ASR_FAILED", message: err instanceof Error ? err.message : String(err) });
-      return json({ ok: false, error: "Speech recognition is unavailable right now." }, { status: 503 });
+      return fail("ASR_UNAVAILABLE", "Speech recognition is unavailable right now.", 503);
     }
   }
 
@@ -67,12 +67,12 @@ export const POST = handler(async (req: NextRequest) => {
     } else if (result?.data) {
       audioBase64 = Buffer.from(result.data).toString("base64");
     }
-    if (!audioBase64) return json({ ok: false, error: "Speech synthesis returned no audio." }, { status: 502 });
+    if (!audioBase64) return fail("TTS_EMPTY", "Speech synthesis returned no audio.", 502);
     await db.usageLog.create({ data: { userId: user.id, providerSlug: "afg-cloud", modelSlug: "tool:tts", kind: "tts", tokensIn: estimateTokens(text), success: true } });
     return json({ ok: true, audioBase64, format: "wav" });
   } catch (err) {
     await logError({ userId: user.id, scope: "system", code: "TTS_FAILED", message: err instanceof Error ? err.message : String(err) });
-    return json({ ok: false, error: "Speech synthesis is unavailable right now. Browser voice will be used if present." }, { status: 503 });
+    return fail("TTS_UNAVAILABLE", "Speech synthesis is unavailable right now. Browser voice will be used if present.", 503);
   }
 });
 

@@ -36,12 +36,12 @@ describe("crypto vault", () => {
     expect(maskSecret("")).toBe("");
   });
 
-  test("scrypt password hash & verify", () => {
-    const hash = hashPassword("Correct-Horse-9");
+  test("scrypt password hash & verify", async () => {
+    const hash = await hashPassword("Correct-Horse-9");
     expect(hash.startsWith("scrypt$")).toBe(true);
-    expect(verifyPassword("Correct-Horse-9", hash)).toBe(true);
-    expect(verifyPassword("wrong-password", hash)).toBe(false);
-    expect(verifyPassword("anything", null)).toBe(false);
+    expect(await verifyPassword("Correct-Horse-9", hash)).toBe(true);
+    expect(await verifyPassword("wrong-password", hash)).toBe(false);
+    expect(await verifyPassword("anything", null)).toBe(false);
   });
 
   test("numeric codes and constant-time compare", () => {

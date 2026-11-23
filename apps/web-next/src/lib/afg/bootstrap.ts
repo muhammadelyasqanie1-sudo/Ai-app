@@ -38,6 +38,12 @@ const AFG_CLOUD_MODELS = [
   { modelId: "afg-cloud-reasoning", displayName: "AFG Cloud — Reasoning", capabilities: ["chat", "reasoning", "coding"] },
 ];
 
+/**
+ * Seed the static AFG Cloud catalog. Models start DISABLED and UNVERIFIED:
+ * only a real successful completion probe (checkProviderHealth, triggered by
+ * the models route and the chat cold path through the cached probe) flips
+ * them to enabled with a fresh lastVerifiedAt. Honesty over availability.
+ */
 export async function ensureAfgCloudModels(): Promise<void> {
   if (modelsSeeded) return;
   const provider = await db.provider.findUnique({ where: { slug: "afg-cloud" } });
@@ -53,10 +59,10 @@ export async function ensureAfgCloudModels(): Promise<void> {
         displayName: m.displayName,
         capabilities: JSON.stringify(m.capabilities),
         contextWindow: 32768,
-        enabled: true,
-        lastVerifiedAt: new Date(),
+        enabled: false,
+        lastVerifiedAt: null,
       },
-      update: { lastVerifiedAt: new Date() },
+      update: {},
     });
   }
   modelsSeeded = true;

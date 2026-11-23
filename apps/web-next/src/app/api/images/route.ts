@@ -30,11 +30,11 @@ export const POST = handler(async (req: NextRequest) => {
     const zai = await ZAI.create();
     const result = await zai.images.generations.create({ prompt: prompt.slice(0, 1000), size: size as (typeof sizes)[number] });
     const b64 = result?.data?.[0]?.base64;
-    if (!b64) return json({ ok: false, error: "Image generation returned no image." }, { status: 502 });
+    if (!b64) return fail("IMAGE_GEN_EMPTY", "Image generation returned no image.", 502);
     await db.usageLog.create({ data: { userId: user.id, providerSlug: "afg-cloud", modelSlug: "tool:image-gen", kind: "image", latencyMs: Date.now() - started, success: true } });
     return json({ ok: true, imageBase64: b64, size });
   } catch (err) {
     await logError({ userId: user.id, scope: "system", code: "IMAGE_GEN_FAILED", message: err instanceof Error ? err.message : String(err) });
-    return json({ ok: false, error: "Image generation is unavailable right now." }, { status: 503 });
+    return fail("IMAGE_GEN_UNAVAILABLE", "Image generation is unavailable right now.", 503);
   }
 });

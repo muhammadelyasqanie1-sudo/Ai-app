@@ -52,20 +52,27 @@ export function safeEqual(a: string, b: string): boolean {
 
 const SCRYPT_OPTS: crypto.ScryptOptions = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 
-export function hashPassword(password: string): string {
+/** Non-blocking scrypt (the sync variant stalls the event loop for ~100ms). */
+function scryptAsync(password: string, salt: Buffer, keylen: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(password, salt, keylen, SCRYPT_OPTS, (err, key) => (err ? reject(err) : resolve(key)));
+  });
+}
+
+export async function hashPassword(password: string): Promise<string> {
   const salt = crypto.randomBytes(16);
-  const hash = crypto.scryptSync(password, salt, 64, SCRYPT_OPTS);
+  const hash = await scryptAsync(password, salt, 64);
   return `scrypt$${salt.toString("base64")}$${hash.toString("base64")}`;
 }
 
-export function verifyPassword(password: string, stored: string | null): boolean {
+export async function verifyPassword(password: string, stored: string | null): Promise<boolean> {
   if (!stored) return false;
   try {
     const [scheme, saltB, hashB] = stored.split("$");
     if (scheme !== "scrypt") return false;
     const salt = Buffer.from(saltB, "base64");
     const expected = Buffer.from(hashB, "base64");
-    const actual = crypto.scryptSync(password, salt, expected.length, SCRYPT_OPTS);
+    const actual = await scryptAsync(password, salt, expected.length);
     return crypto.timingSafeEqual(expected, actual);
   } catch {
     return false;

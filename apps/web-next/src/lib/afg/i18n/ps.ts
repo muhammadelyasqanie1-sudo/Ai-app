@@ -82,7 +82,7 @@ export const ps: Dictionary = {
     googleNotConfigured: "د Google ننوتل په دې سیسټم کې تنظیم شوی نه دی.",
     guestNotice: "د مېلمانه ناستې لنډمهاله دي. د خپلې پېښلیکنې د ساتلو لپاره حساب جوړ کړئ.",
     passwordMismatch: "پټ نومونه باید یو شان وي",
-    weakPassword: "پټ نوم باید لږ تر لږه ۸ توري وي",
+    weakPassword: "پټ نوم باید لږ تر لږه ۱۲ توري وي",
     invalidEmail: "سم بریښنالیک ولیکئ",
     accountSuspended: "دا حساب ځنډول شوی دی. له مدیر سره اړیکه ونیسئ.",
     loggedOut: "تاسو وتلي یاست.",

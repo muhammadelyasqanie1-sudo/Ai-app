@@ -47,6 +47,6 @@ export const POST = handler(async (req: NextRequest) => {
       success: result.ok,
     },
   });
-  if (!result.ok) return json({ error: result.error }, { status: 502 });
+  if (!result.ok) return fail("TOOL_FAILED", result.error, 502);
   return json(result);
 });

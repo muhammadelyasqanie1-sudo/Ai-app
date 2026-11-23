@@ -82,7 +82,7 @@ export const ar: Dictionary = {
     googleNotConfigured: "تسجيل الدخول عبر Google غير مُهيَّأ في هذا النشر.",
     guestNotice: "جلسات الضيوف مؤقتة. أنشئ حسابًا للاحتفاظ بسجلك.",
     passwordMismatch: "يجب أن تتطابق كلمتا المرور",
-    weakPassword: "يجب ألا تقل كلمة المرور عن ٨ أحرف",
+    weakPassword: "يجب ألا تقل كلمة المرور عن ١٢ حرفا",
     invalidEmail: "أدخل بريدًا إلكترونيًا صحيحًا",
     accountSuspended: "هذا الحساب موقوف. تواصل مع المسؤول.",
     loggedOut: "تم تسجيل خروجك.",

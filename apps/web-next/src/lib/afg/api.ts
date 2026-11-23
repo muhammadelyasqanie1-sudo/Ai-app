@@ -7,7 +7,25 @@ export function json(data: unknown, init?: ResponseInit) {
 }
 
 export function fail(code: string, message: string, status = 400, extra?: Record<string, unknown>) {
-  return NextResponse.json({ error: { code, message, ...(extra || {}) } }, { status });
+  // Nested envelope plus a flat `message` so simple clients can read the error
+  // without unwrapping the nested shape.
+  return NextResponse.json({ error: { code, message, ...(extra || {}) }, message }, { status });
+}
+
+/**
+ * Same-origin guard for state-changing requests: when an Origin header is
+ * present its host must match the Host header (CSRF defense for cookie auth).
+ */
+function sameOrigin(req: Request): boolean {
+  const origin = req.headers.get("origin");
+  if (!origin) return true; // non-browser clients and GETs without Origin
+  const host = req.headers.get("host");
+  if (!host) return false;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -18,6 +36,10 @@ export function handler<T extends unknown[]>(
   fn: (...args: T) => Promise<Response>
 ): (...args: T) => Promise<Response> {
   return async (...args: T) => {
+    const req = args[0] as Request | undefined;
+    if (req && typeof req.method === "string" && req.method !== "GET" && req.method !== "HEAD" && !sameOrigin(req)) {
+      return fail("CROSS_ORIGIN", "Cross-origin request blocked.", 403);
+    }
     try {
       return await fn(...args);
     } catch (err) {

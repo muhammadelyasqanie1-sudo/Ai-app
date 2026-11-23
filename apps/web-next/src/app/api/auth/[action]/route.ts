@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { db } from "@/lib/db";
 import { handler, json, fail, readJson } from "@/lib/afg/api";
 import { AuthError, createSession, destroySession, getSessionUser, toSafeUser, clientIp } from "@/lib/afg/auth";
@@ -65,13 +66,52 @@ async function confirmCode(email: string, code: string, kind: "VERIFY_EMAIL" | "
 }
 
 // ---------------------------------------------------------------------------
-// Google OAuth (enabled only when configured)
+// OTP attempt cap: per-process in-memory window plus the shared DB rate
+// limiter. 6-digit codes get 5 attempts per 15 minutes per email+action.
 // ---------------------------------------------------------------------------
+
+const OTP_ATTEMPT_LIMIT = 5;
+const OTP_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const otpAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function otpAttemptGate(email: string, action: string): { allowed: boolean; resetAt: number } {
+  const key = `${email.toLowerCase()}|${action}`;
+  const now = Date.now();
+  const rec = otpAttempts.get(key);
+  if (!rec || rec.resetAt <= now) {
+    otpAttempts.set(key, { count: 1, resetAt: now + OTP_ATTEMPT_WINDOW_MS });
+    if (otpAttempts.size > 10_000) {
+      for (const [k, v] of otpAttempts) if (v.resetAt <= now) otpAttempts.delete(k);
+    }
+    return { allowed: true, resetAt: now + OTP_ATTEMPT_WINDOW_MS };
+  }
+  rec.count += 1;
+  return { allowed: rec.count <= OTP_ATTEMPT_LIMIT, resetAt: rec.resetAt };
+}
+
+// ---------------------------------------------------------------------------
+// Google OAuth (enabled only when configured; CSRF-protected via state cookie)
+// ---------------------------------------------------------------------------
+
+const OAUTH_STATE_COOKIE = "afg_oauth_state";
+
+function setOAuthStateCookie(res: NextResponse, state: string | null): NextResponse {
+  res.cookies.set(OAUTH_STATE_COOKIE, state || "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: config.isProd && config.appOrigin.startsWith("https"),
+    maxAge: state ? 600 : 0,
+    path: "/api/auth",
+  });
+  return res;
+}
 
 async function googleStart(origin: string): Promise<Response> {
   if (!config.googleOAuth.clientId) {
     return fail("GOOGLE_NOT_CONFIGURED", "Google sign-in is not configured on this deployment.", 400);
   }
+  // Cryptographically random state bound to an httpOnly cookie (CSRF protection).
+  const state = crypto.randomBytes(16).toString("hex");
   const redirectUri = `${config.appOrigin || origin}/api/auth/google-callback`;
   const params = new URLSearchParams({
     client_id: config.googleOAuth.clientId,
@@ -79,14 +119,24 @@ async function googleStart(origin: string): Promise<Response> {
     response_type: "code",
     scope: "openid email profile",
     prompt: "select_account",
+    state,
   });
-  return NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+  return setOAuthStateCookie(NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`), state);
 }
 
 async function googleCallback(req: NextRequest, origin: string): Promise<Response> {
   const code = req.nextUrl.searchParams.get("code");
+  const state = req.nextUrl.searchParams.get("state") || "";
+  const expectedState = req.cookies.get(OAUTH_STATE_COOKIE)?.value || "";
+  const stateValid =
+    !!state && !!expectedState &&
+    state.length === expectedState.length &&
+    safeEqual(state, expectedState);
   if (!code || !config.googleOAuth.clientId) {
-    return NextResponse.redirect(`${origin}/?authError=google_unavailable`);
+    return setOAuthStateCookie(NextResponse.redirect(`${origin}/?authError=google_unavailable`), null);
+  }
+  if (!stateValid) {
+    return setOAuthStateCookie(NextResponse.redirect(`${origin}/?authError=google_state`), null);
   }
   try {
     const redirectUri = `${config.appOrigin || origin}/api/auth/google-callback`;
@@ -101,27 +151,27 @@ async function googleCallback(req: NextRequest, origin: string): Promise<Respons
         grant_type: "authorization_code",
       }),
     });
-    if (!tokenRes.ok) return NextResponse.redirect(`${origin}/?authError=google_token`);
+    if (!tokenRes.ok) return setOAuthStateCookie(NextResponse.redirect(`${origin}/?authError=google_token`), null);
     const tokens = await tokenRes.json();
     const infoRes = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     });
-    if (!infoRes.ok) return NextResponse.redirect(`${origin}/?authError=google_userinfo`);
+    if (!infoRes.ok) return setOAuthStateCookie(NextResponse.redirect(`${origin}/?authError=google_userinfo`), null);
     const info = await infoRes.json();
     const email = String(info.email || "").toLowerCase();
-    if (!email || info.email_verified === false) return NextResponse.redirect(`${origin}/?authError=google_email_unverified`);
+    if (!email || info.email_verified === false) return setOAuthStateCookie(NextResponse.redirect(`${origin}/?authError=google_email_unverified`), null);
 
     let user = await db.user.findUnique({ where: { email } });
     if (!user) {
       user = await db.user.create({ data: { email, name: info.name || email.split("@")[0], emailVerifiedAt: new Date() } });
     }
-    if (user.status !== "ACTIVE") return NextResponse.redirect(`${origin}/?authError=suspended`);
+    if (user.status !== "ACTIVE") return setOAuthStateCookie(NextResponse.redirect(`${origin}/?authError=suspended`), null);
     await createSession(user.id, req.headers.get("user-agent"), clientIp(req));
     await logAudit({ actorId: user.id, actorEmail: user.email, action: "auth.google_login", ip: clientIp(req) });
-    return NextResponse.redirect(`${origin}/`);
+    return setOAuthStateCookie(NextResponse.redirect(`${origin}/`), null);
   } catch (err) {
     await logError({ scope: "auth", code: "GOOGLE_OAUTH_FAILED", message: err instanceof Error ? err.message : String(err) });
-    return NextResponse.redirect(`${origin}/?authError=google_failed`);
+    return setOAuthStateCookie(NextResponse.redirect(`${origin}/?authError=google_failed`), null);
   }
 }
 
@@ -167,14 +217,34 @@ export const POST = handler(async (req: NextRequest, ctx: RouteCtx) => {
       const existing = await db.user.findUnique({ where: { email } });
       if (existing && !existing.isGuest) return fail("EMAIL_TAKEN", "An account with this email already exists.", 409);
 
-      const passwordHash = hashPassword(body.data.password);
+      const passwordHash = await hashPassword(body.data.password);
       const totalUsers = await db.user.count({ where: { isGuest: false } });
+      // Bootstrap admin: in non-production the first account is promoted
+      // automatically; in production it requires a timing-safe match of the
+      // x-bootstrap-token header against AFG_ADMIN_BOOTSTRAP_TOKEN.
+      let bootstrapAdmin = false;
+      if (totalUsers === 0) {
+        if (process.env.NODE_ENV !== "production") {
+          bootstrapAdmin = true;
+        } else {
+          const configuredToken = process.env.AFG_ADMIN_BOOTSTRAP_TOKEN || "";
+          const providedToken = req.headers.get("x-bootstrap-token") || "";
+          if (
+            configuredToken.length < 32 ||
+            providedToken.length !== configuredToken.length ||
+            !safeEqual(providedToken, configuredToken)
+          ) {
+            return fail("BOOTSTRAP_FORBIDDEN", "Admin bootstrap requires a valid x-bootstrap-token in production.", 403);
+          }
+          bootstrapAdmin = true;
+        }
+      }
       let user;
       if (existing) {
         // Upgrade a guest account that registered with its placeholder email
         user = await db.user.update({
           where: { id: existing.id },
-          data: { email, passwordHash, name: body.data.name || existing.name, isGuest: false, role: totalUsers === 0 ? "ADMIN" : existing.role },
+          data: { email, passwordHash, name: body.data.name || existing.name, isGuest: false, role: bootstrapAdmin ? "ADMIN" : existing.role },
         });
       } else {
         user = await db.user.create({
@@ -183,12 +253,12 @@ export const POST = handler(async (req: NextRequest, ctx: RouteCtx) => {
             passwordHash,
             name: body.data.name || email.split("@")[0],
             // Bootstrap: the first registered account becomes platform admin.
-            role: totalUsers === 0 ? "ADMIN" : "USER",
+            role: bootstrapAdmin ? "ADMIN" : "USER",
           },
         });
       }
       await createSession(user.id, req.headers.get("user-agent"), ip);
-      await logAudit({ actorId: user.id, actorEmail: user.email, action: "auth.register", ip, meta: { bootstrapAdmin: totalUsers === 0 } });
+      await logAudit({ actorId: user.id, actorEmail: user.email, action: "auth.register", ip, meta: { bootstrapAdmin } });
       const emailResult = await issueCode(user.id, email, "VERIFY_EMAIL").catch(() => ({ delivered: false as const, devCode: undefined as string | undefined }));
       return json({ user: toSafeUser(user), emailDelivered: emailResult.delivered, devCode: emailResult.devCode }, { status: 201 });
     }
@@ -199,7 +269,7 @@ export const POST = handler(async (req: NextRequest, ctx: RouteCtx) => {
       const body = loginSchema.safeParse(await readJson(req));
       if (!body.success) return fail("INVALID_INPUT", formatZodError(body.error), 400);
       const user = await db.user.findUnique({ where: { email: body.data.email.toLowerCase() } });
-      if (!user || !user.passwordHash || !verifyPassword(body.data.password, user.passwordHash)) {
+      if (!user || !user.passwordHash || !(await verifyPassword(body.data.password, user.passwordHash))) {
         await logAudit({ action: "auth.login_failed", meta: { email: body.data.email.slice(0, 3) + "***" }, ip });
         return fail("INVALID_CREDENTIALS", "Incorrect email or password.", 401);
       }
@@ -240,6 +310,11 @@ export const POST = handler(async (req: NextRequest, ctx: RouteCtx) => {
     case "verify-confirm": {
       const body = codeConfirmSchema.safeParse(await readJson(req));
       if (!body.success) return fail("INVALID_INPUT", formatZodError(body.error), 400);
+      const otpGate = otpAttemptGate(body.data.email, "verify-confirm");
+      const otpRl = await rateLimit(`otp:verify:${body.data.email.toLowerCase()}`, OTP_ATTEMPT_LIMIT, OTP_ATTEMPT_WINDOW_MS);
+      if (!otpGate.allowed || !otpRl.allowed) {
+        return fail("RATE_LIMITED", "Too many verification attempts. Try again later.", 429, { resetAt: otpGate.resetAt });
+      }
       const user = await confirmCode(body.data.email, body.data.code, "VERIFY_EMAIL");
       await db.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
       await logAudit({ actorId: user.id, action: "auth.email_verified", ip });
@@ -261,11 +336,16 @@ export const POST = handler(async (req: NextRequest, ctx: RouteCtx) => {
     case "reset-confirm": {
       const body = codeConfirmSchema.safeParse(await readJson(req));
       if (!body.success) return fail("INVALID_INPUT", formatZodError(body.error), 400);
-      if (!body.data.newPassword || body.data.newPassword.length < 8) {
-        return fail("INVALID_INPUT", "newPassword: must be at least 8 characters", 400);
+      if (!body.data.newPassword || body.data.newPassword.length < 12) {
+        return fail("INVALID_INPUT", "newPassword: must be at least 12 characters", 400);
+      }
+      const otpGate = otpAttemptGate(body.data.email, "reset-confirm");
+      const otpRl = await rateLimit(`otp:reset:${body.data.email.toLowerCase()}`, OTP_ATTEMPT_LIMIT, OTP_ATTEMPT_WINDOW_MS);
+      if (!otpGate.allowed || !otpRl.allowed) {
+        return fail("RATE_LIMITED", "Too many reset attempts. Try again later.", 429, { resetAt: otpGate.resetAt });
       }
       const user = await confirmCode(body.data.email, body.data.code, "RESET_PASSWORD");
-      await db.user.update({ where: { id: user.id }, data: { passwordHash: hashPassword(body.data.newPassword) } });
+      await db.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(body.data.newPassword) } });
       // Revoke all sessions after a password reset
       await db.session.deleteMany({ where: { userId: user.id } });
       await logAudit({ actorId: user.id, action: "auth.password_reset", ip });
@@ -277,10 +357,10 @@ export const POST = handler(async (req: NextRequest, ctx: RouteCtx) => {
       if (!user) throw new AuthError("UNAUTHENTICATED", 401);
       const body = passwordChangeSchema.safeParse(await readJson(req));
       if (!body.success) return fail("INVALID_INPUT", formatZodError(body.error), 400);
-      if (!verifyPassword(body.data.currentPassword, user.passwordHash)) {
+      if (!(await verifyPassword(body.data.currentPassword, user.passwordHash))) {
         return fail("INVALID_CREDENTIALS", "Current password is incorrect.", 401);
       }
-      await db.user.update({ where: { id: user.id }, data: { passwordHash: hashPassword(body.data.newPassword) } });
+      await db.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(body.data.newPassword) } });
       await logAudit({ actorId: user.id, actorEmail: user.email, action: "auth.password_changed", ip });
       return json({ ok: true });
     }

@@ -56,7 +56,7 @@ export function AuthView({ onAuthed }: { onAuthed: () => void }) {
   };
 
   const doSignUp = async () => {
-    if (password.length < 8) { setError(t.auth.weakPassword); return; }
+    if (password.length < 12) { setError(t.auth.weakPassword); return; }
     setBusy("signup"); setError(null);
     try {
       const res = await api.post<{ devCode?: string }>("/api/auth/register", { email, password, name: name || undefined });
@@ -231,7 +231,7 @@ export function AuthView({ onAuthed }: { onAuthed: () => void }) {
                   <Label htmlFor="up-pass">{t.auth.password}</Label>
                   <Input id="up-pass" type="password" dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
                 </div>
-                <Button className="w-full" onClick={doSignUp} disabled={busy !== null || !email || password.length < 8}>
+                <Button className="w-full" onClick={doSignUp} disabled={busy !== null || !email || password.length < 12}>
                   {busy === "signup" ? <><Loader2 className="h-4 w-4 animate-spin" /><span className="ms-2">{t.auth.creatingAccount}</span></> : t.auth.signUp}
                 </Button>
                 <p className="text-xs text-muted-foreground">{t.auth.guestNotice}</p>

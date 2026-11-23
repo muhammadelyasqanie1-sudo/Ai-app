@@ -4,7 +4,7 @@ import { z } from "zod";
 
 export const registerSchema = z.object({
   email: z.string().email().max(320),
-  password: z.string().min(8).max(128),
+  password: z.string().min(12).max(128),
   name: z.string().min(1).max(80).optional(),
 });
 
@@ -20,12 +20,12 @@ export const codeRequestSchema = z.object({ email: z.string().email().max(320) }
 export const codeConfirmSchema = z.object({
   email: z.string().email().max(320),
   code: z.string().regex(/^\d{6}$/),
-  newPassword: z.string().min(8).max(128).optional(),
+  newPassword: z.string().min(12).max(128).optional(),
 });
 
 export const passwordChangeSchema = z.object({
   currentPassword: z.string().min(1).max(128),
-  newPassword: z.string().min(8).max(128),
+  newPassword: z.string().min(12).max(128),
 });
 
 export const profileUpdateSchema = z.object({
@@ -94,6 +94,14 @@ export const adminUserUpdateSchema = z.object({
   name: z.string().max(80).optional(),
 });
 
+/** PATCH /api/admin/models/[id] body. */
+export const adminModelUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
+  displayName: z.string().min(1).max(120).optional(),
+  capabilities: z.array(z.enum(["chat", "coding", "vision", "reasoning", "tools"])).max(10).optional(),
+  contextWindow: z.number().int().min(512).max(2_000_000).optional(),
+});
+
 export const flagUpdateSchema = z.object({ enabled: z.boolean() });
 
 export const announcementSchema = z.object({
@@ -101,14 +109,6 @@ export const announcementSchema = z.object({
   body: z.string().min(1).max(4000),
   level: z.enum(["info", "warning", "critical"]).default("info"),
   active: z.boolean().default(true),
-});
-
-export const connectorSchema = z.object({
-  name: z.string().min(1).max(80),
-  baseUrl: z.string().url().max(400),
-  authType: z.enum(["none", "bearer", "header", "query"]).default("none"),
-  authHeader: z.string().max(80).optional(),
-  apiKey: z.string().max(400).optional(),
 });
 
 /** Formats a zod error into a client-safe message. */
